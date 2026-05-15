@@ -72,6 +72,7 @@ public sealed class NanchesoftDbContext : DbContext
     public DbSet<ProductFolioPattern> ProductFolioPatterns => Set<ProductFolioPattern>();
     public DbSet<EmbroideryPattern> EmbroideryPatterns => Set<EmbroideryPattern>();
     public DbSet<ItemEngineeringProfile> ItemEngineeringProfiles => Set<ItemEngineeringProfile>();
+    public DbSet<ProcessVoucher> ProcessVouchers => Set<ProcessVoucher>();
 
     // Orange / Silvasoft product catalog operations
     public DbSet<MaterialFamily> MaterialFamilies => Set<MaterialFamily>();
