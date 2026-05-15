@@ -77,8 +77,7 @@ public static class ProductCatalogOperationsEndpoints
                 {
                     FinishedProductId = x.Id, CompanyId = x.CompanyId,
                     ProductStyleId = x.ProductStyleId, ProductStyleName = x.ProductStyle != null ? x.ProductStyle.Code : string.Empty,
-                    ItemModelId = x.ItemModelId, Item
-ModelName = x.ItemModel != null ? x.ItemModel.Name : string.Empty,
+                    ItemModelId = x.ItemModelId, ItemModelName = x.ItemModel != null ? x.ItemModel.Name : string.Empty,
                     ItemBrandId = x.ItemBrandId, ItemBrandName = x.ItemBrand != null ? x.ItemBrand.Name : string.Empty,
                     ProductLeatherTypeId = x.ProductLeatherTypeId, ProductLeatherTypeName = x.ProductLeatherType != null ? x.ProductLeatherType.Name : string.Empty,
                     ProductColorId = x.ProductColorId, ProductColorName = x.ProductColor != null ? x.ProductColor.Name : string.Empty,

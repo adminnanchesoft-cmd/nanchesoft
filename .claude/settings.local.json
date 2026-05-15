@@ -2,7 +2,11 @@
   "permissions": {
     "allow": [
       "Bash(docker exec nanchesoft-db *)",
-      "Bash(git *)"
+      "Bash(git *)",
+      "Bash(xargs ls)",
+      "Bash(dotnet build *)",
+      "Bash(dotnet publish *)",
+      "Bash(xargs stat)"
     ]
   }
 }
