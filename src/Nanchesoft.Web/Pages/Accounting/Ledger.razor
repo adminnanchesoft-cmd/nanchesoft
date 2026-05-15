@@ -1,0 +1,118 @@
+@page "/accounting/ledger"
+@using Nanchesoft.Web.Services.Accounting
+@inject AccountingApiService Api
+
+<PageTitle>Auxiliar contable | Nanchesoft</PageTitle>
+
+<h1 class="h3 mb-3">Contabilidad · Auxiliar contable</h1>
+
+<div class="card shadow-sm mb-3">
+    <div class="card-body row g-3 align-items-end">
+        <div class="col-md-5">
+            <label class="form-label">Cuenta</label>
+            <select class="form-select" @bind="_accountId">
+                <option value="">Selecciona...</option>
+                @foreach (var item in _lookups.Accounts)
+                {
+                    <option value="@item.Id">@item.Code - @item.Name</option>
+                }
+            </select>
+        </div>
+        <div class="col-md-2">
+            <label class="form-label">Año</label>
+            <input class="form-control" type="number" @bind="_year" />
+        </div>
+        <div class="col-md-2">
+            <label class="form-label">Mes</label>
+            <input class="form-control" type="number" min="1" max="12" @bind="_month" />
+        </div>
+        <div class="col-md-3">
+            <button class="btn btn-primary" @onclick="LoadAsync">Consultar</button>
+        </div>
+    </div>
+</div>
+
+@if (!string.IsNullOrWhiteSpace(_error))
+{
+    <div class="alert alert-danger">@_error</div>
+}
+
+<div class="card shadow-sm">
+    <div class="table-responsive">
+        <table class="table table-striped align-middle mb-0">
+            <thead>
+                <tr>
+                    <th>Fecha</th>
+                    <th>Folio</th>
+                    <th>Referencia</th>
+                    <th>Concepto</th>
+                    <th>Movimiento</th>
+                    <th class="text-end">Debe</th>
+                    <th class="text-end">Haber</th>
+                    <th class="text-end">Saldo</th>
+                </tr>
+            </thead>
+            <tbody>
+                @if (_rows.Count == 0)
+                {
+                    <tr><td colspan="8" class="text-center text-muted py-4">Sin movimientos para el auxiliar.</td></tr>
+                }
+                else
+                {
+                    @foreach (var row in _rows)
+                    {
+                        <tr>
+                            <td>@row.EntryDate.ToString("dd/MM/yyyy")</td>
+                            <td>@row.Folio</td>
+                            <td>@row.Reference</td>
+                            <td>@row.Concept</td>
+                            <td>@row.LineDescription</td>
+                            <td class="text-end">@row.Debit.ToString("N2")</td>
+                            <td class="text-end">@row.Credit.ToString("N2")</td>
+                            <td class="text-end">@row.RunningBalance.ToString("N2")</td>
+                        </tr>
+                    }
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+@code {
+    private AccountingLookupsDto _lookups = new();
+    private Guid? _accountId;
+    private int _year = DateTime.Today.Year;
+    private int _month = DateTime.Today.Month;
+    private List<LedgerRowDto> _rows = new();
+    private string? _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _lookups = await Api.GetLookupsAsync();
+        if (_lookups.CurrentYear > 0)
+        {
+            _year = _lookups.CurrentYear;
+            _month = _lookups.CurrentMonth;
+        }
+        _accountId = _lookups.Accounts.FirstOrDefault()?.Id;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _error = null;
+        try
+        {
+            if (_accountId is null || _accountId == Guid.Empty)
+            {
+                _rows = new();
+                return;
+            }
+            _rows = await Api.GetLedgerAsync(_accountId.Value, _year, _month);
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+    }
+}

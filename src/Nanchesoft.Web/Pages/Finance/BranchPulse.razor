@@ -1,0 +1,122 @@
+@page "/finance/branch-pulse"
+@using Nanchesoft.Web.Services.Finance
+@inject FinanceApiService FinanceApiService
+
+<PageTitle>Pulso sucursales | Nanchesoft</PageTitle>
+
+<h1 class="h3 mb-3">Pulso sucursales</h1>
+<p class="text-muted">Visión rápida de ventas, compras, caja y capital de trabajo por sucursal.</p>
+
+<div class="row g-2 align-items-end mb-3">
+    <div class="col-md-2">
+        <label class="form-label">Año</label>
+        <input class="form-control" type="number" min="2020" max="2100" @bind="_year" />
+    </div>
+    <div class="col-md-2">
+        <label class="form-label">Mes</label>
+        <select class="form-select" @bind="_month">
+            @for (var month = 1; month <= 12; month++)
+            {
+                <option value="@month">@(new DateTime(2000, month, 1).ToString("MMMM"))</option>
+            }
+        </select>
+    </div>
+    <div class="col-md-8 d-flex gap-2">
+        <button class="btn btn-primary" @onclick="ReloadAsync">Actualizar</button>
+        <a class="btn btn-outline-secondary" href="/finance/executive-dashboard">Centro financiero</a>
+    </div>
+</div>
+
+@if (_loading)
+{
+    <div class="alert alert-info">Cargando pulso por sucursal...</div>
+}
+else if (!string.IsNullOrWhiteSpace(_error))
+{
+    <div class="alert alert-danger">@_error</div>
+}
+else
+{
+    <div class="row g-3 mb-3">
+        <div class="col-md-3"><div class="card shadow-sm h-100"><div class="card-body"><div class="text-muted small">Sucursales</div><div class="fs-4 fw-bold">@_rows.Count</div></div></div></div>
+        <div class="col-md-3"><div class="card shadow-sm h-100"><div class="card-body"><div class="text-muted small">Ventas</div><div class="fs-4 fw-bold text-primary">@_rows.Sum(x => x.SalesAmount).ToString("N2")</div></div></div></div>
+        <div class="col-md-3"><div class="card shadow-sm h-100"><div class="card-body"><div class="text-muted small">Caja</div><div class="fs-4 fw-bold text-success">@_rows.Sum(x => x.CashBalance).ToString("N2")</div></div></div></div>
+        <div class="col-md-3"><div class="card shadow-sm h-100"><div class="card-body"><div class="text-muted small">Capital de trabajo</div><div class="fs-4 fw-bold @GetSignedClass(_rows.Sum(x => x.WorkingCapital))">@_rows.Sum(x => x.WorkingCapital).ToString("N2")</div></div></div></div>
+    </div>
+
+    <div class="table-responsive">
+        <table class="table table-sm table-striped align-middle">
+            <thead>
+                <tr>
+                    <th>Sucursal</th>
+                    <th class="text-end">Ventas</th>
+                    <th class="text-end">Compras</th>
+                    <th class="text-end">Cobros</th>
+                    <th class="text-end">Pagos</th>
+                    <th class="text-end">Flujo caja</th>
+                    <th class="text-end">Caja actual</th>
+                    <th class="text-end">CxC abierta</th>
+                    <th class="text-end">CxP abierta</th>
+                    <th class="text-end">Capital trabajo</th>
+                    <th>Estatus</th>
+                </tr>
+            </thead>
+            <tbody>
+                @if (_rows.Count == 0)
+                {
+                    <tr><td colspan="11" class="text-center text-muted py-4">No hay información.</td></tr>
+                }
+                else
+                {
+                    @foreach (var row in _rows)
+                    {
+                        <tr>
+                            <td>@row.BranchCode · @row.BranchName</td>
+                            <td class="text-end">@row.SalesAmount.ToString("N2")</td>
+                            <td class="text-end">@row.PurchasesAmount.ToString("N2")</td>
+                            <td class="text-end">@row.ReceiptsAmount.ToString("N2")</td>
+                            <td class="text-end">@row.PaymentsAmount.ToString("N2")</td>
+                            <td class="text-end @GetSignedClass(row.NetCashMovement)">@row.NetCashMovement.ToString("N2")</td>
+                            <td class="text-end">@row.CashBalance.ToString("N2")</td>
+                            <td class="text-end">@row.OpenReceivables.ToString("N2")</td>
+                            <td class="text-end">@row.OpenPayables.ToString("N2")</td>
+                            <td class="text-end @GetSignedClass(row.WorkingCapital)">@row.WorkingCapital.ToString("N2")</td>
+                            <td><span class="badge @GetStatusBadge(row.Status)">@row.Status</span></td>
+                        </tr>
+                    }
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+@code {
+    private int _year = DateTime.UtcNow.Year;
+    private int _month = DateTime.UtcNow.Month;
+    private bool _loading = true;
+    private string? _error;
+    private List<FinanceBranchPulseRowDto> _rows = new();
+
+    protected override async Task OnInitializedAsync() => await ReloadAsync();
+
+    private async Task ReloadAsync()
+    {
+        _loading = true;
+        _error = null;
+        try
+        {
+            _rows = await FinanceApiService.GetBranchPulseAsync(_year, _month);
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private static string GetSignedClass(decimal value) => value >= 0m ? "text-success" : "text-danger";
+    private static string GetStatusBadge(string value) => value switch { "Presión" => "text-bg-danger", "Alerta" => "text-bg-warning", _ => "text-bg-success" };
+}

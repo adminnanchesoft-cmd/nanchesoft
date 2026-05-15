@@ -1,0 +1,430 @@
+@using System.IO
+@using System.Net
+@using System.Text
+@using System.Text.Json
+@using Microsoft.JSInterop
+@using Nanchesoft.Web.Services.Administration
+@using Nanchesoft.Web.Services.Branches
+@using Nanchesoft.Web.Services.Catalogs
+@using Nanchesoft.Web.Services.Companies
+@using Nanchesoft.Web.Services.Security
+@using Nanchesoft.Web.Services.Warehouses
+@using Nanchesoft.Web.Services.ThirdPartiesProducts
+@using Nanchesoft.Web.Services.Purchases
+@using Nanchesoft.Web.Services.Inventory
+@using Nanchesoft.Web.Services.Sales
+@using Nanchesoft.Web.Services.HumanResources
+@using Nanchesoft.Web.Services.Products
+@using Nanchesoft.Web.Services.ProfessionalServices
+@using Nanchesoft.Web.Services.Platform
+@implements IAsyncDisposable
+@inject IJSRuntime JS
+@inject CompanyApiService CompanyApiService
+@inject BranchApiService BranchApiService
+@inject WarehouseApiService WarehouseApiService
+@inject UserApiService UserApiService
+@inject RoleApiService RoleApiService
+@inject PermissionApiService PermissionApiService
+@inject SessionApiService SessionApiService
+@inject AccessLogApiService AccessLogApiService
+@inject MasterCatalogApiService MasterCatalogApiService
+@inject ThirdPartiesProductsApiService ThirdPartiesProductsApiService
+@inject PurchaseApiService PurchaseApiService
+@inject InventoryApiService InventoryApiService
+@inject SalesApiService SalesApiService
+@inject HumanResourcesApiService HumanResourcesApiService
+@inject PayrollOperationsApiService PayrollOperationsApiService
+@inject HumanResourcesEnterpriseApiService HumanResourcesEnterpriseApiService
+@inject ProductEngineeringApiService ProductEngineeringApiService
+@inject ServiceBillingApiService ServiceBillingApiService
+@inject TenantApiService TenantApiService
+@inject PlanApiService PlanApiService
+
+<div class="ns-catalog-page">
+    @if (!string.IsNullOrWhiteSpace(_clientError))
+    {
+        <div style="margin-bottom:16px;padding:12px 16px;border-radius:12px;background:#fff1f2;color:#991b1b;border:1px solid #fecdd3;white-space:pre-wrap;">
+            <strong>Error real:</strong>
+            @_clientError
+        </div>
+    }
+
+    @if (_definition is null)
+    {
+        @if (string.IsNullOrWhiteSpace(_clientError))
+        {
+            <div class="ns-catalog-loading">
+                <div class="ns-loader"></div>
+                <span>Cargando catálogo...</span>
+            </div>
+        }
+        else
+        {
+            <div style="padding:16px;border-radius:16px;border:1px solid #fecaca;background:#fff7f7;color:#991b1b;">
+                <h3 style="margin:0 0 8px 0;">No se pudo cargar el catálogo</h3>
+                <div style="white-space:pre-wrap;">@_clientError</div>
+            </div>
+        }
+    }
+    else
+    {
+        <div class="ns-catalog-header">
+            <div>
+                <div class="ns-catalog-eyebrow">Nanchesoft ERP · Implementación actual</div>
+                <h1 class="ns-catalog-title">@_definition.Title</h1>
+                <p class="ns-catalog-subtitle">@_definition.Subtitle</p>
+            </div>
+
+            <div class="ns-catalog-badge">
+                DevExtreme 25.6
+            </div>
+        </div>
+
+        <div class="ns-kpi-grid">
+            <div class="ns-kpi-card">
+                <div class="ns-kpi-label">Total</div>
+                <div class="ns-kpi-value">@_definition.TotalCount</div>
+            </div>
+
+            <div class="ns-kpi-card ns-kpi-card-success">
+                <div class="ns-kpi-label">Activos</div>
+                <div class="ns-kpi-value">@_definition.ActiveCount</div>
+            </div>
+
+            <div class="ns-kpi-card ns-kpi-card-muted">
+                <div class="ns-kpi-label">Inactivos</div>
+                <div class="ns-kpi-value">@_definition.InactiveCount</div>
+            </div>
+
+            <div class="ns-kpi-card">
+                <div class="ns-kpi-label">Catálogo</div>
+                <div class="ns-kpi-value ns-kpi-value-small">@_definition.CatalogKey</div>
+            </div>
+        </div>
+
+        <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin:18px 0 14px 0;">
+            <button class="ns-primary-btn" @onclick="RefreshCatalogAsync">Recargar</button>
+            <a class="ns-secondary-btn" href="@_csvHref" download="@GetExportFileName("csv")">Exportar CSV</a>
+            <a class="ns-secondary-btn" href="@_jsonHref" download="@GetExportFileName("json")">Exportar JSON</a>
+            <a class="ns-secondary-btn" href="@_printHref" target="_blank">Imprimir catálogo</a>
+        </div>
+
+        <div class="ns-grid-shell">
+            <div id="@_containerId" class="ns-grid-host"></div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public string CatalogKey { get; set; } = string.Empty;
+
+    private readonly CatalogAppService _catalogService = CatalogAppService.Instance;
+
+    private CatalogViewDefinition? _definition;
+    private DotNetObjectReference<CatalogCrudPage>? _dotNetReference;
+    private readonly string _containerId = $"ns-grid-{Guid.NewGuid():N}";
+    private bool _gridRendered;
+    private string? _clientError;
+    private string _csvHref = "#";
+    private string _jsonHref = "#";
+    private string _printHref = "#";
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _clientError = null;
+            _definition = await GetDefinitionAsync();
+            RebuildExportArtifacts();
+        }
+        catch (Exception ex)
+        {
+            _clientError = ex.Message;
+            _definition = null;
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_definition is null)
+            return;
+
+        _dotNetReference ??= DotNetObjectReference.Create(this);
+
+        if (firstRender || !_gridRendered)
+        {
+            try
+            {
+                _clientError = null;
+                await JS.InvokeVoidAsync("nsCrudGrid.renderCrudGrid", _containerId, _definition, _dotNetReference);
+                _gridRendered = true;
+            }
+            catch (Exception ex)
+            {
+                _clientError = ex.Message;
+                await InvokeAsync(StateHasChanged);
+            }
+        }
+    }
+
+    [JSInvokable]
+    public async Task<CatalogCrudOperationResult> HandleInsert(JsonElement row)
+    {
+        _clientError = null;
+        try
+        {
+            _definition = await ExecuteWriteAsync("insert", null, row);
+            RebuildExportArtifacts();
+            await InvokeAsync(StateHasChanged);
+            return new CatalogCrudOperationResult { Success = true, Definition = _definition };
+        }
+        catch (Exception ex)
+        {
+            _clientError = ex.Message;
+            await InvokeAsync(StateHasChangeedSafe);
+            return new CatalogCrudOperationResult { Success = false, Error = ex.Message, Definition = _definition ?? await GetDefinitionAsync() };
+        }
+    }
+
+    [JSInvokable]
+    public async Task<CatalogCrudOperationResult> HandleUpdate(string key, JsonElement changes)
+    {
+        _clientError = null;
+        try
+        {
+            _definition = await ExecuteWriteAsync("update", key, changes);
+            RebuildExportArtifacts();
+            await InvokeAsync(StateHasChanged);
+            return new CatalogCrudOperationResult { Success = true, Definition = _definition };
+        }
+        catch (Exception ex)
+        {
+            _clientError = ex.Message;
+            await InvokeAsync(StateHasChanged);
+            return new CatalogCrudOperationResult { Success = false, Error = ex.Message, Definition = _definition ?? await GetDefinitionAsync() };
+        }
+    }
+
+    [JSInvokable]
+    public async Task<CatalogCrudOperationResult> HandleDelete(string key)
+    {
+        _clientError = null;
+        try
+        {
+            _definition = CatalogKey.ToLowerInvariant() switch
+            {
+                "companies" => await CompanyApiService.DeleteAsync(key),
+                "branches" => await BranchApiService.DeleteAsync(key),
+                "warehouses" => await WarehouseApiService.DeleteAsync(key),
+                "users" => await UserApiService.DeleteAsync(key),
+                "roles" => await RoleApiService.DeleteAsync(key),
+                "permissions" => await PermissionApiService.DeleteAsync(key),
+                "sessions" => await SessionApiService.DeleteAsync(key),
+                "accesslogs" => await AccessLogApiService.DeleteAsync(key),
+                "currencies" or "exchange-rates" or "taxes" or "units" or "banks" or
+                "countries" or "states" or "cities" or "document-series" or
+                "document-folios" or "company-settings" => await MasterCatalogApiService.DeleteAsync(CatalogKey, key),
+                "customers" or "suppliers" or "contacts" or "addresses" or "bank-accounts" or
+                "categories" or "brands" or "models" or "items" or "price-lists" or "barcodes" => await ThirdPartiesProductsApiService.DeleteAsync(CatalogKey, key),
+                "purchase-requisitions" or "purchase-orders" or "purchase-receipts" or "purchase-invoices" or "purchase-returns" => await PurchaseApiService.DeleteAsync(CatalogKey, key),
+                "inventory-entries" or "inventory-exits" or "inventory-transfers" or "inventory-adjustments" or "physical-counts" => await InventoryApiService.DeleteAsync(CatalogKey, key),
+                "sales-quotes" or "sales-orders" or "sales-shipments" or "sales-invoices" or "sales-returns" or "credit-notes" => await SalesApiService.DeleteAsync(CatalogKey, key),
+                "service-catalog" or "customer-service-rates" or "service-notes" => await ServiceBillingApiService.DeleteAsync(CatalogKey, key),
+                "tenants" => await TenantApiService.DeleteAsync(key),
+                "plans" => await PlanApiService.DeleteAsync(key),
+                "hr-departments" or "hr-positions" or "hr-employees" or "hr-incidents" or "employee-contracts" or "payroll-periods" or "payroll-concepts" or "payroll-runs" or "payroll-run-lines" or "payroll-run-line-details" => await HumanResourcesApiService.DeleteAsync(CatalogKey, key),
+                "time-clock" or "attendance-daily-summaries" or "payroll-recurring-movements" or "prepayroll-adjustments" or "prepayroll-cutoffs" or "employee-loans" or "employee-loan-deductions" => await PayrollOperationsApiService.DeleteAsync(CatalogKey, key),
+                "hr-shifts" or "hr-work-schedules" or "hr-time-clock-devices" or "hr-leave-types" or "hr-vacation-requests" => await HumanResourcesEnterpriseApiService.DeleteAsync(CatalogKey, key),
+                "colors" or "leather-types" or "soles" or "manufacturing-types" or "toe-caps" or "sole-colors" or "dies" or "quality-control-dies" or "folio-patterns" or "unit-conversions" or "size-runs" or "families" or "lasts" or "lines" or "styles" or "embroidery-patterns" or "item-engineering-profiles" or "material-families" or "material-subfamilies" or "material-items" or "material-suppliers" or "material-supplier-cost-history" or "finished-products" or "product-components" or "finished-product-materials" or "product-consumption-profiles" => await ProductEngineeringApiService.DeleteAsync(CatalogKey, key),
+                _ => await _catalogService.DeleteAsync(CatalogKey, key)
+            };
+            RebuildExportArtifacts();
+            await InvokeAsync(StateHasChanged);
+            return new CatalogCrudOperationResult { Success = true, Definition = _definition };
+        }
+        catch (Exception ex)
+        {
+            _clientError = ex.Message;
+            await InvokeAsync(StateHasChanged);
+            return new CatalogCrudOperationResult { Success = false, Error = ex.Message, Definition = _definition ?? await GetDefinitionAsync() };
+        }
+    }
+
+    [JSInvokable]
+    public async Task<CatalogViewDefinition> HandleRefresh()
+    {
+        _clientError = null;
+        _definition = await GetDefinitionAsync();
+        RebuildExportArtifacts();
+        await InvokeAsync(StateHasChanged);
+        return _definition;
+    }
+
+    private async Task RefreshCatalogAsync()
+    {
+        _definition = await GetDefinitionAsync();
+        RebuildExportArtifacts();
+        _gridRendered = false;
+        await JS.InvokeVoidAsync("nsCrudGrid.disposeCrudGrid", _containerId);
+        await InvokeAsync(StateHasChanged);
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        try { await JS.InvokeVoidAsync("nsCrudGrid.disposeCrudGrid", _containerId); } catch { }
+        _dotNetReference?.Dispose();
+    }
+
+    private async Task<CatalogViewDefinition> ExecuteWriteAsync(string action, string? key, JsonElement row)
+    {
+        return CatalogKey.ToLowerInvariant() switch
+        {
+            "companies" => action == "insert" ? await CompanyApiService.InsertAsync(row) : await CompanyApiService.UpdateAsync(key!, row),
+            "branches" => action == "insert" ? await BranchApiService.InsertAsync(row) : await BranchApiService.UpdateAsync(key!, row),
+            "warehouses" => action == "insert" ? await WarehouseApiService.InsertAsync(row) : await WarehouseApiService.UpdateAsync(key!, row),
+            "users" => action == "insert" ? await UserApiService.InsertAsync(row) : await UserApiService.UpdateAsync(key!, row),
+            "roles" => action == "insert" ? await RoleApiService.InsertAsync(row) : await RoleApiService.UpdateAsync(key!, row),
+            "permissions" => action == "insert" ? await PermissionApiService.InsertAsync(row) : await PermissionApiService.UpdateAsync(key!, row),
+            "sessions" => action == "insert" ? await SessionApiService.InsertAsync(row) : await SessionApiService.UpdateAsync(key!, row),
+            "accesslogs" => action == "insert" ? await AccessLogApiService.InsertAsync(row) : await AccessLogApiService.UpdateAsync(key!, row),
+            "currencies" or "exchange-rates" or "taxes" or "units" or "banks" or "countries" or "states" or "cities" or "document-series" or "document-folios" or "company-settings" => action == "insert" ? await MasterCatalogApiService.InsertAsync(CatalogKey, row) : await MasterCatalogApiService.UpdateAsync(CatalogKey, key!, row),
+            "customers" or "suppliers" or "contacts" or "addresses" or "bank-accounts" or "categories" or "brands" or "models" or "items" or "price-lists" or "barcodes" => action == "insert" ? await ThirdPartiesProductsApiService.InsertAsync(CatalogKey, row) : await ThirdPartiesProductsApiService.UpdateAsync(CatalogKey, key!, row),
+            "purchase-requisitions" or "purchase-orders" or "purchase-receipts" or "purchase-invoices" or "purchase-returns" => action == "insert" ? await PurchaseApiService.InsertAsync(CatalogKey, row) : await PurchaseApiService.UpdateAsync(CatalogKey, key!, row),
+            "inventory-entries" or "inventory-exits" or "inventory-transfers" or "inventory-adjustments" or "physical-counts" => action == "insert" ? await InventoryApiService.InsertAsync(CatalogKey, row) : await InventoryApiService.UpdateAsync(CatalogKey, key!, row),
+            "sales-quotes" or "sales-orders" or "sales-shipments" or "sales-invoices" or "sales-returns" or "credit-notes" => action == "insert" ? await SalesApiService.InsertAsync(CatalogKey, row) : await SalesApiService.UpdateAsync(CatalogKey, key!, row),
+            "service-catalog" or "customer-service-rates" or "service-notes" => action == "insert" ? await ServiceBillingApiService.InsertAsync(CatalogKey, row) : await ServiceBillingApiService.UpdateAsync(CatalogKey, key!, row),
+            "tenants" => action == "insert" ? await TenantApiService.InsertAsync(row) : await TenantApiService.UpdateAsync(key!, row),
+            "plans" => action == "insert" ? await PlanApiService.InsertAsync(row) : await PlanApiService.UpdateAsync(key!, row),
+            "hr-departments" or "hr-positions" or "hr-employees" or "hr-incidents" or "employee-contracts" or "payroll-periods" or "payroll-concepts" or "payroll-runs" or "payroll-run-lines" or "payroll-run-line-details" => action == "insert" ? await HumanResourcesApiService.InsertAsync(CatalogKey, row) : await HumanResourcesApiService.UpdateAsync(CatalogKey, key!, row),
+            "time-clock" or "attendance-daily-summaries" or "payroll-recurring-movements" or "prepayroll-adjustments" or "prepayroll-cutoffs" or "employee-loans" or "employee-loan-deductions" => action == "insert" ? await PayrollOperationsApiService.InsertAsync(CatalogKey, row) : await PayrollOperationsApiService.UpdateAsync(CatalogKey, key!, row),
+            "hr-shifts" or "hr-work-schedules" or "hr-time-clock-devices" or "hr-leave-types" or "hr-vacation-requests" => action == "insert" ? await HumanResourcesEnterpriseApiService.InsertAsync(CatalogKey, row) : await HumanResourcesEnterpriseApiService.UpdateAsync(CatalogKey, key!, row),
+            "colors" or "leather-types" or "soles" or "manufacturing-types" or "toe-caps" or "sole-colors" or "dies" or "quality-control-dies" or "folio-patterns" or "unit-conversions" or "size-runs" or "families" or "lasts" or "lines" or "styles" or "embroidery-patterns" or "item-engineering-profiles" or "material-families" or "material-subfamilies" or "material-items" or "material-suppliers" or "material-supplier-cost-history" or "finished-products" or "product-components" or "finished-product-materials" or "product-consumption-profiles" => action == "insert" ? await ProductEngineeringApiService.InsertAsync(CatalogKey, row) : await ProductEngineeringApiService.UpdateAsync(CatalogKey, key!, row),
+            _ => action == "insert" ? await _catalogService.InsertAsync(CatalogKey, row) : await _catalogService.UpdateAsync(CatalogKey, key!, row)
+        };
+    }
+
+    private Task<CatalogViewDefinition> GetDefinitionAsync()
+    {
+        return CatalogKey.ToLowerInvariant() switch
+        {
+            "companies" => CompanyApiService.GetCatalogAsync(),
+            "branches" => BranchApiService.GetCatalogAsync(),
+            "warehouses" => WarehouseApiService.GetCatalogAsync(),
+            "users" => UserApiService.GetCatalogAsync(),
+            "roles" => RoleApiService.GetCatalogAsync(),
+            "permissions" => PermissionApiService.GetCatalogAsync(),
+            "sessions" => SessionApiService.GetCatalogAsync(),
+            "accesslogs" => AccessLogApiService.GetCatalogAsync(),
+            "currencies" or "exchange-rates" or "taxes" or "units" or "banks" or "countries" or "states" or "cities" or "document-series" or "document-folios" or "company-settings" => MasterCatalogApiService.GetCatalogAsync(CatalogKey),
+            "customers" or "suppliers" or "contacts" or "addresses" or "bank-accounts" or "categories" or "brands" or "models" or "items" or "price-lists" or "barcodes" => ThirdPartiesProductsApiService.GetCatalogAsync(CatalogKey),
+            "purchase-requisitions" or "purchase-orders" or "purchase-receipts" or "purchase-invoices" or "purchase-returns" => PurchaseApiService.GetCatalogAsync(CatalogKey),
+            "inventory-entries" or "inventory-exits" or "inventory-transfers" or "inventory-adjustments" or "physical-counts" => InventoryApiService.GetCatalogAsync(CatalogKey),
+            "sales-quotes" or "sales-orders" or "sales-shipments" or "sales-invoices" or "sales-returns" or "credit-notes" => SalesApiService.GetCatalogAsync(CatalogKey),
+            "service-catalog" or "customer-service-rates" or "service-notes" => ServiceBillingApiService.GetCatalogAsync(CatalogKey),
+            "tenants" => TenantApiService.GetCatalogAsync(),
+            "plans" => PlanApiService.GetCatalogAsync(),
+            "hr-departments" or "hr-positions" or "hr-employees" or "hr-incidents" or "employee-contracts" or "payroll-periods" or "payroll-concepts" or "payroll-runs" or "payroll-run-lines" or "payroll-run-line-details" => HumanResourcesApiService.GetCatalogAsync(CatalogKey),
+            "time-clock" or "attendance-daily-summaries" or "payroll-recurring-movements" or "prepayroll-adjustments" or "prepayroll-cutoffs" or "employee-loans" or "employee-loan-deductions" => PayrollOperationsApiService.GetCatalogAsync(CatalogKey),
+            "hr-shifts" or "hr-work-schedules" or "hr-time-clock-devices" or "hr-leave-types" or "hr-vacation-requests" => HumanResourcesEnterpriseApiService.GetCatalogAsync(CatalogKey),
+            "colors" or "leather-types" or "soles" or "manufacturing-types" or "toe-caps" or "sole-colors" or "dies" or "quality-control-dies" or "folio-patterns" or "unit-conversions" or "size-runs" or "families" or "lasts" or "lines" or "styles" or "embroidery-patterns" or "item-engineering-profiles" or "material-families" or "material-subfamilies" or "material-items" or "material-suppliers" or "material-supplier-cost-history" or "finished-products" or "product-components" or "finished-product-materials" or "product-consumption-profiles" => ProductEngineeringApiService.GetCatalogAsync(CatalogKey),
+            _ => _catalogService.GetAsync(CatalogKey)
+        };
+    }
+
+    private void RebuildExportArtifacts()
+    {
+        if (_definition is null)
+        {
+            _csvHref = _jsonHref = _printHref = "#";
+            return;
+        }
+
+        var visibleColumns = _definition.Columns.Where(x => x.Visible).ToList();
+        var csv = new StringBuilder();
+        csv.AppendLine(string.Join(",", visibleColumns.Select(x => EscapeCsv(x.Caption))));
+        foreach (var row in _definition.Rows)
+        {
+            csv.AppendLine(string.Join(",", visibleColumns.Select(c => EscapeCsv(GetDisplayValue(c, row)))));
+        }
+
+        var json = JsonSerializer.Serialize(_definition.Rows, new JsonSerializerOptions { WriteIndented = true });
+        var html = BuildPrintableHtml(_definition, visibleColumns);
+
+        _csvHref = BuildDataUri("text/csv;charset=utf-8", csv.ToString());
+        _jsonHref = BuildDataUri("application/json;charset=utf-8", json);
+        _printHref = BuildDataUri("text/html;charset=utf-8", html);
+    }
+
+    private static string GetDisplayValue(CatalogColumnDefinition column, Dictionary<string, object?> row)
+    {
+        if (!row.TryGetValue(column.DataField, out var raw) || raw is null)
+            return string.Empty;
+
+        var value = raw.ToString() ?? string.Empty;
+        if (!column.UseLookup || column.LookupItems.Count == 0)
+            return value;
+
+        var match = column.LookupItems.FirstOrDefault(x => string.Equals(x.Id, value, StringComparison.OrdinalIgnoreCase));
+        return match?.Name ?? value;
+    }
+
+    private static string EscapeCsv(string? value)
+    {
+        var normalized = (value ?? string.Empty).Replace("\r", " ").Replace("\n", " ");
+        if (normalized.Contains('"') || normalized.Contains(',') || normalized.Contains(';'))
+            return $"\"{normalized.Replace("\"", "\"\"")}\"";
+        return normalized;
+    }
+
+    private static string BuildDataUri(string mimeType, string content)
+        => $"data:{mimeType},{Uri.EscapeDataString(content)}";
+
+    private string GetExportFileName(string extension)
+        => $"{SanitizeFileName(_definition?.CatalogKey ?? CatalogKey)}-{DateTime.Now:yyyyMMdd-HHmmss}.{extension}";
+
+    private static string SanitizeFileName(string value)
+    {
+        var invalid = Path.GetInvalidFileNameChars();
+        var cleaned = new string(value.Select(c => invalid.Contains(c) ? '-' : c).ToArray());
+        return string.IsNullOrWhiteSpace(cleaned) ? "catalogo" : cleaned;
+    }
+
+    private static string BuildPrintableHtml(CatalogViewDefinition definition, List<CatalogColumnDefinition> columns)
+    {
+        var sb = new StringBuilder();
+        sb.Append("<html><head><meta charset='utf-8'><title>");
+        sb.Append(WebUtility.HtmlEncode(definition.Title));
+        sb.Append("</title><style>");
+        sb.Append("body{font-family:Segoe UI,Arial,sans-serif;margin:24px;color:#0f172a;} h1{margin:0 0 8px 0;} p{margin:0 0 18px 0;color:#475569;} table{width:100%;border-collapse:collapse;font-size:12px;} th,td{border:1px solid #cbd5e1;padding:8px;vertical-align:top;} th{background:#e2e8f0;text-align:left;} .meta{margin-bottom:16px;color:#475569;font-size:12px;} @media print{body{margin:12px;} button{display:none;}} </style></head><body onload='window.print()'>");
+        sb.Append($"<h1>{WebUtility.HtmlEncode(definition.Title)}</h1>");
+        sb.Append($"<p>{WebUtility.HtmlEncode(definition.Subtitle)}</p>");
+        sb.Append($"<div class='meta'>Catálogo: {WebUtility.HtmlEncode(definition.CatalogKey)} · Total: {definition.TotalCount} · Fecha: {DateTime.Now:dd/MM/yyyy HH:mm}</div>");
+        sb.Append("<table><thead><tr>");
+        foreach (var c in columns)
+            sb.Append($"<th>{WebUtility.HtmlEncode(c.Caption)}</th>");
+        sb.Append("</tr></thead><tbody>");
+        foreach (var row in definition.Rows)
+        {
+            sb.Append("<tr>");
+            foreach (var c in columns)
+                sb.Append($"<td>{WebUtility.HtmlEncode(GetDisplayValue(c, row))}</td>");
+            sb.Append("</tr>");
+        }
+        sb.Append("</tbody></table></body></html>");
+        return sb.ToString();
+    }
+
+    private Task StateHasChangeedSafe()
+    {
+        StateHasChanged();
+        return Task.CompletedTask;
+    }
+
+    public sealed class CatalogCrudOperationResult
+    {
+        public bool Success { get; set; }
+        public string? Error { get; set; }
+        public CatalogViewDefinition? Definition { get; set; }
+    }
+}

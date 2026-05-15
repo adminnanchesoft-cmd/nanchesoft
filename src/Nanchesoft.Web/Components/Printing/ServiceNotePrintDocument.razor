@@ -1,0 +1,196 @@
+@using System.Globalization
+@using Nanchesoft.Web.Services.Catalogs
+@using Nanchesoft.Web.Services.ProfessionalServices
+@inject ServiceBillingApiService ServiceBillingApiService
+@inject IJSRuntime JS
+
+@if (_loading)
+{
+    <div class="p-4">Cargando formato...</div>
+}
+else if (!string.IsNullOrWhiteSpace(_error))
+{
+    <div class="alert alert-danger">@_error</div>
+}
+else if (_row is not null)
+{
+    <div class="ns-service-print-toolbar d-print-none">
+        <button class="btn btn-primary" @onclick="PrintAsync">Imprimir</button>
+    </div>
+
+    <div class="ns-service-sheet">
+        <div class="ns-service-header">
+            <div>
+                <div class="ns-service-brand">Nanchesoft ERP</div>
+                <div class="ns-service-company">@CompanyName</div>
+                <div class="ns-service-caption">Nota de servicio</div>
+            </div>
+
+            <div class="ns-service-meta">
+                <div><strong>Fecha:</strong> @FormatDate(GetValue("NoteDate"))</div>
+                <div><strong>No.:</strong> @GetValue("Folio")</div>
+                <div><strong>Estatus:</strong> @NormalizeLabel(GetValue("PaymentStatus"))</div>
+            </div>
+        </div>
+
+        <div class="ns-service-attn">
+            <div><strong>A la atención de:</strong> @CustomerName</div>
+            <div><strong>Servicio:</strong> @ServiceName</div>
+            <div><strong>Método de cobro:</strong> @NormalizeLabel(GetValue("PaymentMethod"))</div>
+        </div>
+
+        <table class="ns-service-table">
+            <thead>
+                <tr>
+                    <th>Descripción</th>
+                    <th class="is-center">Cantidad</th>
+                    <th class="is-right">Precio unitario</th>
+                    <th class="is-right">Precio total</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>
+                        <div class="ns-service-description">@GetDescription()</div>
+                        @if (!string.IsNullOrWhiteSpace(GetScheduleLine()))
+                        {
+                            <div class="ns-service-subline">@GetScheduleLine()</div>
+                        }
+                    </td>
+                    <td class="is-center">@FormatHours(GetValue("HoursWorked"))</td>
+                    <td class="is-right">@FormatMoney(GetValue("HourlyRate"))</td>
+                    <td class="is-right">@FormatMoney(GetValue("Total"))</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <div class="ns-service-bottom">
+            <div class="ns-service-notesbox">
+                <div class="ns-service-box-title">Notas</div>
+                <div>@NotesText</div>
+            </div>
+
+            <div class="ns-service-totalsbox">
+                <div class="ns-service-total-row">
+                    <span>Subtotal</span>
+                    <strong>@FormatMoney(GetValue("Subtotal"))</strong>
+                </div>
+                <div class="ns-service-total-row">
+                    <span>Total</span>
+                    <strong>@FormatMoney(GetValue("Total"))</strong>
+                </div>
+                @if (!string.IsNullOrWhiteSpace(PaymentDestination))
+                {
+                    <div class="ns-service-bankline">@PaymentDestination</div>
+                }
+                @if (!string.IsNullOrWhiteSpace(PaymentDate))
+                {
+                    <div class="ns-service-bankline">Fecha cobro: @PaymentDate</div>
+                }
+            </div>
+        </div>
+    </div>
+}
+
+<style>
+.ns-service-print-toolbar{padding:16px 0}.ns-service-sheet{max-width:980px;margin:0 auto;background:#fff;padding:28px;color:#0f172a}.ns-service-header{display:flex;justify-content:space-between;align-items:flex-start;gap:24px;border-bottom:2px solid #dbe4f0;padding-bottom:18px;margin-bottom:18px}.ns-service-brand{font-size:12px;letter-spacing:.18em;text-transform:uppercase;color:#2563eb;font-weight:700}.ns-service-company{font-size:30px;font-weight:700;line-height:1.1;margin-top:6px}.ns-service-caption{font-size:14px;color:#64748b;margin-top:6px}.ns-service-meta{min-width:240px;background:#f8fbff;border:1px solid #dbe7ff;border-radius:16px;padding:14px 16px;font-size:14px;display:grid;gap:8px}.ns-service-attn{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin-bottom:18px;padding:14px 16px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:16px}.ns-service-table{width:100%;border-collapse:collapse}.ns-service-table th,.ns-service-table td{border:1px solid #cbd5e1;padding:12px 14px;font-size:14px;vertical-align:top}.ns-service-table th{background:#eff6ff;font-weight:700}.ns-service-table .is-center{text-align:center;vertical-align:middle}.ns-service-table .is-right{text-align:right;vertical-align:middle}.ns-service-description{font-weight:600}.ns-service-subline{margin-top:6px;color:#64748b;font-size:13px}.ns-service-bottom{display:grid;grid-template-columns:1.5fr .9fr;gap:18px;margin-top:18px}.ns-service-notesbox,.ns-service-totalsbox{border:1px solid #dbe4f0;border-radius:16px;padding:16px;background:#fff}.ns-service-box-title{font-size:12px;text-transform:uppercase;letter-spacing:.12em;color:#64748b;margin-bottom:10px}.ns-service-total-row{display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-bottom:1px solid #e2e8f0}.ns-service-total-row:last-of-type{border-bottom:none}.ns-service-bankline{margin-top:12px;color:#334155;font-size:13px}@@media print{.ns-service-sheet{max-width:none;padding:0}.ns-service-meta,.ns-service-attn,.ns-service-notesbox,.ns-service-totalsbox{break-inside:avoid}.ns-service-table th{background:#eff6ff !important;-webkit-print-color-adjust:exact;print-color-adjust:exact}}
+</style>
+
+@code {
+    [Parameter, EditorRequired] public Guid Id { get; set; }
+
+    private CatalogViewDefinition? _definition;
+    private Dictionary<string, object?>? _row;
+    private bool _loading = true;
+    private string? _error;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _loading = true;
+        _error = null;
+
+        try
+        {
+            _definition = await ServiceBillingApiService.GetCatalogAsync("service-notes");
+            _row = _definition.Rows.FirstOrDefault(x => GetValueFromRow(x, "ServiceNoteId").Equals(Id.ToString("D"), StringComparison.OrdinalIgnoreCase));
+            if (_row is null)
+            {
+                _error = "No se encontró la nota de servicio.";
+            }
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private string CompanyName => Lookup("CompanyId", GetValue("CompanyId"));
+    private string CustomerName => Lookup("CustomerId", GetValue("CustomerId"));
+    private string ServiceName => Lookup("ServiceCatalogItemId", GetValue("ServiceCatalogItemId"));
+    private string NotesText => string.IsNullOrWhiteSpace(GetValue("Notes")) ? "Sin notas adicionales." : GetValue("Notes");
+    private string PaymentDestination => GetValue("PaymentDestination");
+    private string PaymentDate => FormatDate(GetValue("PaymentDate"));
+
+    private string GetDescription()
+    {
+        var description = GetValue("Description");
+        return string.IsNullOrWhiteSpace(description) ? ServiceName : description;
+    }
+
+    private string GetScheduleLine()
+    {
+        var start = GetValue("StartTimeText");
+        var end = GetValue("EndTimeText");
+        var breakMinutes = GetValue("BreakMinutes");
+
+        var parts = new List<string>();
+        if (!string.IsNullOrWhiteSpace(start) || !string.IsNullOrWhiteSpace(end))
+        {
+            parts.Add($"Horario: {start} a {end}".Trim());
+        }
+
+        if (!string.IsNullOrWhiteSpace(breakMinutes) && breakMinutes != "0")
+        {
+            parts.Add($"Comida: {breakMinutes} min.");
+        }
+
+        return string.Join(" · ", parts);
+    }
+
+    private string Lookup(string dataField, string id)
+    {
+        var column = _definition?.Columns.FirstOrDefault(x => x.DataField.Equals(dataField, StringComparison.OrdinalIgnoreCase));
+        var match = column?.LookupItems.FirstOrDefault(x => x.Id.Equals(id, StringComparison.OrdinalIgnoreCase));
+        return match?.Name ?? string.Empty;
+    }
+
+    private string GetValue(string key)
+        => _row is null ? string.Empty : GetValueFromRow(_row, key);
+
+    private static string GetValueFromRow(Dictionary<string, object?> row, string key)
+        => row.TryGetValue(key, out var value) ? value?.ToString() ?? string.Empty : string.Empty;
+
+    private static string FormatMoney(string raw)
+        => decimal.TryParse(raw, NumberStyles.Any, CultureInfo.InvariantCulture, out var value)
+            ? value.ToString("C", CultureInfo.GetCultureInfo("es-MX"))
+            : raw;
+
+    private static string FormatHours(string raw)
+        => decimal.TryParse(raw, NumberStyles.Any, CultureInfo.InvariantCulture, out var value)
+            ? value.ToString("0.##", CultureInfo.InvariantCulture)
+            : raw;
+
+    private static string FormatDate(string raw)
+        => DateTime.TryParse(raw, CultureInfo.InvariantCulture, DateTimeStyles.None, out var value)
+            ? value.ToString("dd/MM/yyyy")
+            : raw;
+
+    private static string NormalizeLabel(string raw)
+        => raw.Replace('_', ' ').Trim();
+
+    private Task PrintAsync() => JS.InvokeVoidAsync("print").AsTask();
+}

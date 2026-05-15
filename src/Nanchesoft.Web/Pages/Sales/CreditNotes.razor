@@ -1,0 +1,126 @@
+@page "/sales/credit-notes"
+@using Nanchesoft.Web.Services.Cfdi
+@inject CfdiApiService CfdiApiService
+@inject NavigationManager Navigation
+<PageTitle>Notas de crédito | Nanchesoft</PageTitle>
+
+<div class="container-fluid py-3">
+    <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-3">
+        <div>
+            <div class="text-uppercase small text-secondary fw-semibold">Ventas · notas de crédito</div>
+            <h2 class="mb-1">Notas de crédito</h2>
+            <div class="text-secondary">Opera y timbra directo las notas de crédito desde ventas.</div>
+        </div>
+        <div class="d-flex gap-2 flex-wrap">
+            <button class="btn btn-outline-secondary" @onclick='() => Navigation.NavigateTo("/sales/dashboard")'>Dashboard ventas</button>
+            <button class="btn btn-outline-secondary" @onclick='() => Navigation.NavigateTo("/cfdi/documents")'>Documentos CFDI</button>
+            <button class="btn btn-primary" @onclick='() => Navigation.NavigateTo("/sales/credit-notes/detail")'>Nueva nota</button>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(_message))
+    {
+        <div class="alert alert-success">@_message</div>
+    }
+    @if (!string.IsNullOrWhiteSpace(_error))
+    {
+        <div class="alert alert-danger">@_error</div>
+    }
+
+    @if (_loading)
+    {
+        <div class="alert alert-info">Cargando notas de crédito...</div>
+    }
+    else
+    {
+        <div class="card shadow-sm">
+            <div class="table-responsive">
+                <table class="table table-sm table-striped align-middle mb-0">
+                    <thead>
+                        <tr>
+                            <th>Folio</th>
+                            <th>Cliente</th>
+                            <th>Fecha</th>
+                            <th>Total</th>
+                            <th>Venta</th>
+                            <th>CFDI</th>
+                            <th>UUID</th>
+                            <th style="width: 260px;">Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var row in _rows)
+                        {
+                            <tr>
+                                <td>@row.Folio</td>
+                                <td>@row.CustomerName</td>
+                                <td>@row.DocumentDate.ToString("yyyy-MM-dd")</td>
+                                <td>@row.Total.ToString("N2")</td>
+                                <td>@row.BusinessStatus</td>
+                                <td>@row.CfdiStatus</td>
+                                <td>@(string.IsNullOrWhiteSpace(row.Uuid) ? "-" : row.Uuid)</td>
+                                <td>
+                                    <div class="d-flex gap-2 flex-wrap">
+                                        <a class="btn btn-sm btn-outline-secondary" href="@row.EditRoute">Editar</a>
+                                        <button class="btn btn-sm btn-success" disabled="@(row.BusinessStatus is not ("approved" or "posted") || row.CfdiStatus is not ("pending" or "not-generated"))" @onclick='() => StampAsync(row.Id)'>Timbrar</button>
+                                        <button class="btn btn-sm btn-warning" disabled="@(row.CfdiStatus != "stamped")" @onclick='() => CancelAsync(row.Id)'>Cancelar</button>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private bool _loading = true;
+    private string? _message;
+    private string? _error;
+    private List<CfdiSalesSourceDto> _rows = [];
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _message = null;
+        _error = null;
+        _rows = await CfdiApiService.GetCreditNotesAsync();
+        _loading = false;
+    }
+
+    private async Task StampAsync(Guid id)
+    {
+        _message = null;
+        _error = null;
+        try
+        {
+            await CfdiApiService.StampCreditNoteAsync(id);
+            _message = "Nota de crédito timbrada correctamente en modo demo.";
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private async Task CancelAsync(Guid id)
+    {
+        _message = null;
+        _error = null;
+        try
+        {
+            await CfdiApiService.CancelCreditNoteAsync(id);
+            _message = "Nota de crédito cancelada correctamente en modo demo.";
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+    }
+}

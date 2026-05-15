@@ -1,0 +1,15 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Nanchesoft.Api/Nanchesoft.Api.csproj" />
+    <Project Path="src/Nanchesoft.Application/Nanchesoft.Application.csproj" />
+    <Project Path="src/Nanchesoft.Domain/Nanchesoft.Domain.csproj" />
+    <Project Path="src/Nanchesoft.Infrastructure/Nanchesoft.Infrastructure.csproj" />
+    <Project Path="src/Nanchesoft.Persistence/Nanchesoft.Persistence.csproj" />
+    <Project Path="src/Nanchesoft.Shared/Nanchesoft.Shared.csproj" />
+    <Project Path="src/Nanchesoft.Web/Nanchesoft.Web.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Nanchesoft.IntegrationTests/Nanchesoft.IntegrationTests.csproj" />
+    <Project Path="tests/Nanchesoft.UnitTests/Nanchesoft.UnitTests.csproj" />
+  </Folder>
+</Solution>

@@ -1,0 +1,10 @@
+@page "/payroll/print/receipt/{LineId:guid}"
+@layout PrintLayout
+
+<PageTitle>Impresión recibo nómina | Nanchesoft</PageTitle>
+
+<PayrollReceiptPrintDocument LineId="LineId" />
+
+@code {
+    [Parameter] public Guid LineId { get; set; }
+}

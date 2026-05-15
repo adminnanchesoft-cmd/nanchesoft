@@ -1,0 +1,128 @@
+@page "/sales/control-center"
+@attribute [StreamRendering]
+
+<PageTitle>Centro de control de Ventas | Nanchesoft</PageTitle>
+
+<div class="sales-premium-page">
+    <section class="sales-hero">
+        <div class="sales-hero__bg"></div>
+        <div class="sales-hero__content">
+            <div class="sales-badge">NANCHESOFT ERP · SALES LUXURY UI</div>
+            <h1>Ventas</h1>
+            <p class="sales-hero__subtitle">Centro premium para cotizaciones, pedidos, remisiones, facturación y cobranza.</p>
+
+            <div class="sales-kpis">
+                <div class="sales-kpi">
+                    <div class="sales-kpi__value">26</div>
+                    <div class="sales-kpi__label">Cotizaciones activas</div>
+                </div>
+                <div class="sales-kpi">
+                    <div class="sales-kpi__value">14</div>
+                    <div class="sales-kpi__label">Pedidos abiertos</div>
+                </div>
+                <div class="sales-kpi">
+                    <div class="sales-kpi__value">9</div>
+                    <div class="sales-kpi__label">Remisiones por surtir</div>
+                </div>
+                <div class="sales-kpi">
+                    <div class="sales-kpi__value">31</div>
+                    <div class="sales-kpi__label">Facturas del día</div>
+                </div>
+                <div class="sales-kpi sales-kpi--accent">
+                    <div class="sales-kpi__value">$1.8M</div>
+                    <div class="sales-kpi__label">Cobranza proyectada</div>
+                </div>
+            </div>
+
+            <nav class="sales-breadcrumb" aria-label="Breadcrumb">
+                <a href="/dashboard">Inicio</a>
+                <span>›</span>
+                <a href="/sales/invoices">Ventas</a>
+                <span>›</span>
+                <span>Control center</span>
+            </nav>
+        </div>
+
+        <aside class="sales-hero__rail">
+            <div class="sales-panel sales-panel--glow">
+                <div class="sales-panel__title">Quick Access &amp; Recientes</div>
+                <div class="sales-chip-grid">
+                    <a class="sales-chip" href="/sales/quotes">
+                        <span class="sales-chip__code">CO</span>
+                        <span class="sales-chip__text">Cotizaciones</span>
+                    </a>
+                    <a class="sales-chip" href="/sales/orders">
+                        <span class="sales-chip__code">PE</span>
+                        <span class="sales-chip__text">Pedidos</span>
+                    </a>
+                    <a class="sales-chip" href="/sales/shipments">
+                        <span class="sales-chip__code">RE</span>
+                        <span class="sales-chip__text">Remisiones</span>
+                    </a>
+                    <a class="sales-chip" href="/sales/invoices">
+                        <span class="sales-chip__code">FA</span>
+                        <span class="sales-chip__text">Facturas</span>
+                    </a>
+                </div>
+            </div>
+
+            <div class="sales-panel">
+                <div class="sales-panel__title">Focus today</div>
+                <div class="sales-focus-card">
+                    <div class="sales-focus-card__title">Cobranza clave</div>
+                    <div class="sales-focus-card__text">12 facturas vencen hoy y 4 clientes requieren seguimiento inmediato.</div>
+                </div>
+            </div>
+        </aside>
+    </section>
+
+    <section class="sales-map-grid">
+        <a class="sales-map-card" href="/sales/quotes">
+            <img src="/images/hero-ventas-premium.svg" alt="Ilustración premium de ventas" />
+            <div class="sales-map-card__body">
+                <h2>Cotizaciones</h2>
+                <p>Prospección, precios y seguimiento comercial premium.</p>
+            </div>
+        </a>
+
+        <a class="sales-map-card" href="/sales/orders">
+            <img src="/images/hero-ventas-premium.svg" alt="Ilustración premium de pedidos" />
+            <div class="sales-map-card__body">
+                <h2>Pedidos</h2>
+                <p>Control de pedidos confirmados y compromiso de entrega.</p>
+            </div>
+        </a>
+
+        <a class="sales-map-card" href="/sales/shipments">
+            <img src="/images/hero-ventas-premium.svg" alt="Ilustración premium de remisiones" />
+            <div class="sales-map-card__body">
+                <h2>Remisiones</h2>
+                <p>Salida, surtido y evidencia operativa por embarque.</p>
+            </div>
+        </a>
+
+        <a class="sales-map-card" href="/sales/invoices">
+            <img src="/images/hero-ventas-premium.svg" alt="Ilustración premium de facturación" />
+            <div class="sales-map-card__body">
+                <h2>Facturación</h2>
+                <p>CFDI, timbrado y documentos listos para el cliente.</p>
+            </div>
+        </a>
+
+        <a class="sales-map-card" href="/accounts-receivable/applications">
+            <img src="/images/hero-ventas-premium.svg" alt="Ilustración premium de cobranza" />
+            <div class="sales-map-card__body">
+                <h2>Cobranza</h2>
+                <p>Aplicación, seguimiento y visibilidad financiera de clientes.</p>
+            </div>
+        </a>
+
+        <a class="sales-map-card" href="/sales/returns">
+            <img src="/images/hero-ventas-premium.svg" alt="Ilustración premium de devoluciones" />
+            <div class="sales-map-card__body">
+                <h2>Devoluciones</h2>
+                <p>Control de incidencias, notas de crédito y retorno de producto.</p>
+            </div>
+        </a>
+    </section>
+</div>

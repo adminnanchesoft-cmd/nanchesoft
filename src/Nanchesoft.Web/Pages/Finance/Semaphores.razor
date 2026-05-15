@@ -1,0 +1,89 @@
+@page "/finance/semaphores"
+@using Nanchesoft.Web.Services.Finance
+@inject FinanceApiService FinanceApiService
+
+<PageTitle>Semáforos financieros | Nanchesoft</PageTitle>
+
+<h1 class="h3 mb-3">Semáforos financieros</h1>
+<p class="text-muted">Resumen visual de desviaciones, liquidez, vencimientos y flujo proyectado.</p>
+
+@if (_loading)
+{
+    <div class="alert alert-info">Cargando semáforos...</div>
+}
+else if (!string.IsNullOrWhiteSpace(_error))
+{
+    <div class="alert alert-danger">@_error</div>
+}
+else
+{
+    <div class="d-flex gap-2 mb-3">
+        <button class="btn btn-outline-secondary" @onclick="ReloadAsync">Actualizar</button>
+        <a class="btn btn-outline-primary" href="/finance/budget-vs-actual">Real vs presupuesto</a>
+    </div>
+
+    <div class="row g-3">
+        @foreach (var row in _rows)
+        {
+            <div class="col-md-4">
+                <div class="card shadow-sm h-100 border-@GetBorderColor(row.Semaphore)">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-start mb-2">
+                            <div>
+                                <div class="text-muted small">@row.Category</div>
+                                <div class="h5 mb-1">@row.Label</div>
+                            </div>
+                            <span class="badge @GetBadgeClass(row.Semaphore)">@row.Semaphore</span>
+                        </div>
+                        <div class="small text-muted">Actual</div>
+                        <div class="fs-4 fw-bold">@row.CurrentValue.ToString("N2")</div>
+                        <div class="small text-muted">Meta @row.TargetValue.ToString("N2")</div>
+                        <div class="small mt-2">Variación @row.VarianceAmount.ToString("N2") · @row.VariancePercent.ToString("N2")%</div>
+                        <hr />
+                        <div class="small text-muted">@row.SuggestedAction</div>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+}
+
+@code {
+    private bool _loading = true;
+    private string? _error;
+    private List<FinanceSemaphoreRowDto> _rows = new();
+
+    protected override async Task OnInitializedAsync() => await ReloadAsync();
+
+    private async Task ReloadAsync()
+    {
+        _loading = true;
+        _error = null;
+        try
+        {
+            _rows = await FinanceApiService.GetSemaphoresAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private static string GetBadgeClass(string value) => value switch
+    {
+        "Verde" => "bg-success",
+        "Amarillo" => "bg-warning text-dark",
+        _ => "bg-danger"
+    };
+
+    private static string GetBorderColor(string value) => value switch
+    {
+        "Verde" => "success",
+        "Amarillo" => "warning",
+        _ => "danger"
+    };
+}

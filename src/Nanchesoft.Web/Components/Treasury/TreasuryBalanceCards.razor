@@ -1,0 +1,31 @@
+@using Nanchesoft.Web.Services.Treasury
+
+<div class="row g-3 mb-3">
+    <div class="col-md-4 col-xl-2">
+        <div class="card shadow-sm h-100"><div class="card-body"><div class="text-muted small">Cajas</div><div class="fs-3 fw-bold">@Summary.CashAccounts</div></div></div>
+    </div>
+    <div class="col-md-4 col-xl-2">
+        <div class="card shadow-sm h-100"><div class="card-body"><div class="text-muted small">Bancos</div><div class="fs-3 fw-bold">@Summary.BankAccounts</div></div></div>
+    </div>
+    <div class="col-md-4 col-xl-2">
+        <div class="card shadow-sm h-100"><div class="card-body"><div class="text-muted small">Saldo cajas</div><div class="fs-5 fw-bold">@Summary.CashBalance.ToString("C")</div></div></div>
+    </div>
+    <div class="col-md-4 col-xl-2">
+        <div class="card shadow-sm h-100"><div class="card-body"><div class="text-muted small">Saldo bancos</div><div class="fs-5 fw-bold">@Summary.BankBalance.ToString("C")</div></div></div>
+    </div>
+    <div class="col-md-4 col-xl-2">
+        <div class="card shadow-sm h-100 border-success"><div class="card-body"><div class="text-muted small">Entradas periodo</div><div class="fs-5 fw-bold">@Summary.PeriodInflow.ToString("C")</div></div></div>
+    </div>
+    <div class="col-md-4 col-xl-2">
+        <div class="card shadow-sm h-100 border-danger"><div class="card-body"><div class="text-muted small">Salidas periodo</div><div class="fs-5 fw-bold">@Summary.PeriodOutflow.ToString("C")</div></div></div>
+    </div>
+</div>
+
+@if (Summary.PendingReconciliations > 0)
+{
+    <div class="alert alert-warning">Hay <strong>@Summary.PendingReconciliations</strong> conciliaciones pendientes de cierre.</div>
+}
+
+@code {
+    [Parameter, EditorRequired] public TreasuryDashboardSummaryDto Summary { get; set; } = new();
+}

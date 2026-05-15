@@ -1,0 +1,80 @@
+@page "/payroll/receipts/{RunId:guid}"
+@inject Nanchesoft.Web.Services.HumanResources.PayrollOperationsApiService PayrollOperationsApiService
+
+<PageTitle>Recibos del proceso | Nanchesoft</PageTitle>
+
+<div class="container-fluid py-3">
+    <div class="d-flex align-items-center justify-content-between mb-3">
+        <div>
+            <h1>Recibos individuales</h1>
+            <p class="text-secondary mb-0">Imprime el recibo de cada colaborador y aplica movimientos automáticos del periodo.</p>
+        </div>
+        <button class="btn btn-primary" @onclick="ApplySourcesAsync" disabled="@_applying">@(_applying ? "Aplicando..." : "Aplicar movimientos programados")</button>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(_message))
+    {
+        <div class="alert alert-info">@_message</div>
+    }
+
+    <div class="card shadow-sm">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-sm mb-0">
+                    <thead><tr><th>No.</th><th>Colaborador</th><th>Días</th><th>Bruto</th><th>Deducciones</th><th>Neto</th><th></th></tr></thead>
+                    <tbody>
+                    @foreach (var row in _rows)
+                    {
+                        <tr>
+                            <td>@row.EmployeeNumber</td>
+                            <td>@row.EmployeeName</td>
+                            <td>@row.DaysPaid</td>
+                            <td>@row.GrossAmount</td>
+                            <td>@row.DeductionsAmount</td>
+                            <td>@row.NetAmount</td>
+                            <td class="text-end"><a class="btn btn-sm btn-outline-primary" target="_blank" href="/payroll/print/receipt/@row.PayrollRunLineId">Imprimir</a></td>
+                        </tr>
+                    }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter] public Guid RunId { get; set; }
+    private List<Nanchesoft.Web.Services.HumanResources.PayrollReceiptLineRow> _rows = [];
+    private bool _applying;
+    private string? _message;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _rows = await PayrollOperationsApiService.GetPayrollReceiptLinesAsync(RunId);
+    }
+
+    private async Task ApplySourcesAsync()
+    {
+        _applying = true;
+        _message = null;
+        try
+        {
+            await PayrollOperationsApiService.ApplyAdvancedSourcesAsync(RunId);
+            _message = "Se aplicaron movimientos periódicos y descuentos de préstamos a la corrida.";
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            _message = ex.Message;
+        }
+        finally
+        {
+            _applying = false;
+        }
+    }
+}

@@ -1,0 +1,110 @@
+@page "/accounting/balance-sheet"
+@using Nanchesoft.Web.Services.Accounting
+@inject AccountingApiService Api
+
+<PageTitle>Balance general | Nanchesoft</PageTitle>
+
+<h1 class="h3 mb-3">Contabilidad · Balance general</h1>
+
+<div class="card shadow-sm mb-3">
+    <div class="card-body row g-3 align-items-end">
+        <div class="col-md-2">
+            <label class="form-label">Año</label>
+            <input class="form-control" type="number" @bind="_year" />
+        </div>
+        <div class="col-md-2">
+            <label class="form-label">Mes</label>
+            <input class="form-control" type="number" min="1" max="12" @bind="_month" />
+        </div>
+        <div class="col-md-2">
+            <button class="btn btn-primary" @onclick="LoadAsync">Consultar</button>
+        </div>
+    </div>
+</div>
+
+@if (!string.IsNullOrWhiteSpace(_error))
+{
+    <div class="alert alert-danger">@_error</div>
+}
+
+<div class="row g-3">
+    <div class="col-lg-4">
+        <div class="card shadow-sm h-100">
+            <div class="card-header fw-semibold">Activos</div>
+            <div class="table-responsive">
+                <table class="table table-striped table-sm align-middle mb-0">
+                    <tbody>
+                        @foreach (var row in _statement.Assets)
+                        {
+                            <tr><td>@row.Code</td><td>@row.Name</td><td class="text-end">@row.Amount.ToString("N2")</td></tr>
+                        }
+                    </tbody>
+                    <tfoot><tr><th colspan="2">Total activos</th><th class="text-end">@_statement.TotalAssets.ToString("N2")</th></tr></tfoot>
+                </table>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-4">
+        <div class="card shadow-sm h-100">
+            <div class="card-header fw-semibold">Pasivos</div>
+            <div class="table-responsive">
+                <table class="table table-striped table-sm align-middle mb-0">
+                    <tbody>
+                        @foreach (var row in _statement.Liabilities)
+                        {
+                            <tr><td>@row.Code</td><td>@row.Name</td><td class="text-end">@row.Amount.ToString("N2")</td></tr>
+                        }
+                    </tbody>
+                    <tfoot><tr><th colspan="2">Total pasivos</th><th class="text-end">@_statement.TotalLiabilities.ToString("N2")</th></tr></tfoot>
+                </table>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-4">
+        <div class="card shadow-sm h-100">
+            <div class="card-header fw-semibold">Capital</div>
+            <div class="table-responsive">
+                <table class="table table-striped table-sm align-middle mb-0">
+                    <tbody>
+                        @foreach (var row in _statement.Equity)
+                        {
+                            <tr><td>@row.Code</td><td>@row.Name</td><td class="text-end">@row.Amount.ToString("N2")</td></tr>
+                        }
+                    </tbody>
+                    <tfoot><tr><th colspan="2">Total capital</th><th class="text-end">@_statement.TotalEquity.ToString("N2")</th></tr></tfoot>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private int _year = DateTime.Today.Year;
+    private int _month = DateTime.Today.Month;
+    private BalanceSheetDto _statement = new();
+    private string? _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var lookups = await Api.GetLookupsAsync();
+        if (lookups.CurrentYear > 0)
+        {
+            _year = lookups.CurrentYear;
+            _month = lookups.CurrentMonth;
+        }
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _error = null;
+        try
+        {
+            _statement = await Api.GetBalanceSheetAsync(_year, _month);
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+    }
+}

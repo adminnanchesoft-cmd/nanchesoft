@@ -1,0 +1,24 @@
+namespace Nanchesoft.Domain.Entities;
+
+public class InventoryTransfer
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid TenantId { get; set; }
+    public Guid CompanyId { get; set; }
+    public Guid BranchId { get; set; }
+    public Guid SourceWarehouseId { get; set; }
+    public Guid TargetWarehouseId { get; set; }
+    public string Folio { get; set; } = string.Empty;
+    public DateTime TransferDate { get; set; } = DateTime.UtcNow.Date;
+    public string Status { get; set; } = "draft";
+    public string Reason { get; set; } = string.Empty;
+    public string Notes { get; set; } = string.Empty;
+    public DateTime? ApprovedAt { get; set; }
+    public DateTime? PostedAt { get; set; }
+    public bool IsActive { get; set; } = true;
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public string CreatedBy { get; set; } = "system";
+    public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+    public string UpdatedBy { get; set; } = "system";
+    public List<InventoryTransferLine> Lines { get; set; } = [];
+}

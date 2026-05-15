@@ -1,0 +1,107 @@
+@using Nanchesoft.Web.Services
+@using Nanchesoft.Web.State
+@inject NavigationService NavigationService
+@inject NavigationManager NavigationManager
+
+<div class="ns-rail2">
+    <section class="ns-rail2__hero">
+        <div class="ns-rail2__eyebrow">Quick Access &amp; Recientes</div>
+        <div class="ns-rail2__module">@CurrentGroupTitle</div>
+        <div class="ns-rail2__copy">@CurrentItemTitle</div>
+    </section>
+
+    <section class="ns-rail2__card">
+        <div class="ns-rail2__heading">Acceso rápido</div>
+        <div class="ns-rail2__quickgrid">
+            @foreach (var item in QuickAccess)
+            {
+                <button class="ns-rail2__quick" @onclick="() => Open(item.Route)">
+                    <span class="ns-rail2__quick-badge">@ShellNavHelper.GetModuleShortCode(item.Title)</span>
+                    <span class="ns-rail2__quick-title">@item.Title</span>
+                </button>
+            }
+        </div>
+    </section>
+
+    <section class="ns-rail2__card">
+        <div class="ns-rail2__heading">Favoritos</div>
+        <div class="ns-rail2__links">
+            @if (Favorites.Count == 0)
+            {
+                <div class="ns-empty2">Todavía no hay favoritos.</div>
+            }
+            else
+            {
+                @foreach (var fav in Favorites)
+                {
+                    <button class="ns-rail2__link" @onclick="() => Open(fav.Route)">@fav.Title</button>
+                }
+            }
+        </div>
+    </section>
+
+    <section class="ns-rail2__card">
+        <div class="ns-rail2__heading">Focus today</div>
+        <div class="ns-rail2__focus">
+            <div class="ns-rail2__focus-item">
+                <div class="ns-rail2__focus-title">Revisar operación del módulo</div>
+                <div class="ns-rail2__focus-copy">Usa quick access para entrar a las pantallas clave del día.</div>
+            </div>
+        </div>
+    </section>
+
+    <section class="ns-rail2__card">
+        <div class="ns-rail2__heading">Recientes</div>
+        <div class="ns-rail2__recent">
+            @if (Recents.Count == 0)
+            {
+                <div class="ns-empty2">Todavía no hay pantallas recientes.</div>
+            }
+            else
+            {
+                @foreach (var item in Recents)
+                {
+                    <button class="ns-rail2__recent-item" @onclick="() => Open(item.Route)">
+                        <span class="ns-chip2">@ShellNavHelper.GetModuleShortCode(item.Module)</span>
+                        <div>
+                            <div class="ns-rail2__recent-title">@item.Title</div>
+                            <div class="ns-rail2__recent-module">@item.Module</div>
+                        </div>
+                    </button>
+                }
+            }
+        </div>
+    </section>
+</div>
+
+@code {
+    private List<NavigationMenuItem> QuickAccess { get; set; } = new();
+    private IReadOnlyList<ShellBookmark> Favorites { get; set; } = new List<ShellBookmark>();
+    private IReadOnlyList<ShellBookmark> Recents { get; set; } = new List<ShellBookmark>();
+
+    private string CurrentGroupTitle { get; set; } = "Inicio";
+    private string CurrentItemTitle { get; set; } = "Centro de trabajo corporativo, accesos rápidos y contexto del módulo.";
+
+    protected override void OnParametersSet()
+    {
+        var route = NavigationManager.ToBaseRelativePath(NavigationManager.Uri);
+        var group = ShellNavHelper.GetActiveGroup(NavigationService, route);
+        var item = ShellNavHelper.GetActiveItem(NavigationService, route);
+
+        CurrentGroupTitle = group?.Title ?? "Inicio";
+        CurrentItemTitle = item?.Title ?? "Centro de operación premium.";
+        QuickAccess = (group?.Items?.Take(6).ToList()) ?? new List<NavigationMenuItem>();
+        Favorites = ShellMemoryStore.GetFavorites();
+        Recents = ShellMemoryStore.GetRecents();
+
+        if (item is not null)
+        {
+            ShellMemoryStore.Remember(item.Title, ShellNavHelper.NormalizeRoute(item.Route), CurrentGroupTitle);
+        }
+    }
+
+    private void Open(string route)
+    {
+        NavigationManager.NavigateTo("/" + ShellNavHelper.NormalizeRoute(route));
+    }
+}

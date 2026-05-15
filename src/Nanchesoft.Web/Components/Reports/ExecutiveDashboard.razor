@@ -1,0 +1,55 @@
+@using Nanchesoft.Web.Services.Reports
+
+@if (Model is not null)
+{
+    <div class="ns-kpi-grid mb-4">
+        <div class="ns-kpi-card"><div class="ns-kpi-label">Clientes activos</div><div class="ns-kpi-value">@Model.ActiveCustomers</div></div>
+        <div class="ns-kpi-card"><div class="ns-kpi-label">Proveedores activos</div><div class="ns-kpi-value">@Model.ActiveSuppliers</div></div>
+        <div class="ns-kpi-card"><div class="ns-kpi-label">Items activos</div><div class="ns-kpi-value">@Model.ActiveItems</div></div>
+        <div class="ns-kpi-card ns-kpi-card-success"><div class="ns-kpi-label">Compras 30 días</div><div class="ns-kpi-value ns-kpi-value-small">@Model.PurchaseTotal30Days.ToString("C")</div></div>
+        <div class="ns-kpi-card ns-kpi-card-success"><div class="ns-kpi-label">Ventas 30 días</div><div class="ns-kpi-value ns-kpi-value-small">@Model.SalesTotal30Days.ToString("C")</div></div>
+        <div class="ns-kpi-card"><div class="ns-kpi-label">Margen bruto</div><div class="ns-kpi-value ns-kpi-value-small">@Model.GrossMargin30Days.ToString("C")</div></div>
+        <div class="ns-kpi-card"><div class="ns-kpi-label">Valor inventario</div><div class="ns-kpi-value ns-kpi-value-small">@Model.InventoryValue.ToString("C")</div></div>
+        <div class="ns-kpi-card"><div class="ns-kpi-label">Tesorería disponible</div><div class="ns-kpi-value ns-kpi-value-small">@Model.TreasuryAvailable.ToString("C")</div></div>
+        <div class="ns-kpi-card ns-kpi-card-muted"><div class="ns-kpi-label">Conciliaciones pendientes</div><div class="ns-kpi-value">@Model.PendingReconciliations</div></div>
+    </div>
+
+    <div class="row g-3">
+        <div class="col-lg-6">
+            <div class="card shadow-sm h-100">
+                <div class="card-header"><strong>Ventas recientes</strong></div>
+                <div class="card-body p-0">
+                    <table class="table table-sm table-striped mb-0">
+                        <thead><tr><th>Folio</th><th>Cliente</th><th class="text-end">Importe</th></tr></thead>
+                        <tbody>
+                        @foreach (var row in Model.RecentSales)
+                        {
+                            <tr><td>@row.Label</td><td>@row.Secondary</td><td class="text-end">@row.Amount.ToString("C")</td></tr>
+                        }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-6">
+            <div class="card shadow-sm h-100">
+                <div class="card-header"><strong>Compras recientes</strong></div>
+                <div class="card-body p-0">
+                    <table class="table table-sm table-striped mb-0">
+                        <thead><tr><th>Folio</th><th>Proveedor</th><th class="text-end">Importe</th></tr></thead>
+                        <tbody>
+                        @foreach (var row in Model.RecentPurchases)
+                        {
+                            <tr><td>@row.Label</td><td>@row.Secondary</td><td class="text-end">@row.Amount.ToString("C")</td></tr>
+                        }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired] public ExecutiveSummaryDto Model { get; set; } = new();
+}

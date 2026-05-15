@@ -1,0 +1,629 @@
+@using Nanchesoft.Web.Services.Catalogs
+@using Nanchesoft.Web.Services.Cfdi
+@using Nanchesoft.Web.Services.Sales
+@inject SalesApiService SalesApiService
+@inject CfdiApiService CfdiApiService
+@inject NavigationManager Navigation
+
+@if (_loading)
+{
+    <div class="p-4">Cargando documento...</div>
+}
+else if (!string.IsNullOrWhiteSpace(_error))
+{
+    <div class="alert alert-danger">@_error</div>
+}
+else if (_definition is not null)
+{
+    <div class="container-fluid py-3">
+        <div class="d-flex justify-content-between align-items-start mb-3 gap-3 flex-wrap">
+            <div>
+                <div class="text-uppercase small text-secondary fw-semibold">Ventas · detalle documental</div>
+                <h2 class="mb-1">@_definition.Title</h2>
+                <div class="text-secondary">@_definition.Subtitle</div>
+                @if (_cfdiStatus is not null && SupportsCfdi())
+                {
+                    <div class="mt-2 small text-secondary">
+                        CFDI: <strong>@_cfdiStatus.CfdiStatus</strong>
+                        @if (!string.IsNullOrWhiteSpace(_cfdiStatus.Uuid))
+                        {
+                            <span> · UUID: @_cfdiStatus.Uuid</span>
+                        }
+                    </div>
+                }
+            </div>
+            <div class="d-flex gap-2 flex-wrap">
+                <button class="btn btn-outline-secondary" @onclick="BackToList">Volver</button>
+                @if (_definition.Document.Id.HasValue)
+                {
+                    <a class="btn btn-outline-secondary" href="@GetPrintUrl()" target="_blank">Imprimir formato</a>
+                }
+                @if (SupportsCfdi() && _definition.Document.Id.HasValue)
+                {
+                    <button class="btn btn-success" disabled="@(!CanStampCfdi())" @onclick="StampCfdiAsync">Timbrar CFDI</button>
+                    <button class="btn btn-warning" disabled="@(!CanCancelCfdi())" @onclick="CancelCfdiAsync">Cancelar CFDI</button>
+                }
+                <button class="btn btn-outline-primary" @onclick="RecalculateTotals">Recalcular</button>
+                <button class="btn btn-primary" @onclick="SaveAsync">Guardar</button>
+            </div>
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(_message))
+        {
+            <div class="alert alert-success">@_message</div>
+        }
+
+        @if (_cfdiStatus is not null && SupportsCfdi())
+        {
+            <div class="alert @(GetCfdiAlertClass()) mb-3">
+                <div><strong>Estado CFDI:</strong> @_cfdiStatus.CfdiStatus</div>
+                @if (!string.IsNullOrWhiteSpace(_cfdiStatus.Uuid))
+                {
+                    <div><strong>UUID:</strong> @_cfdiStatus.Uuid</div>
+                }
+                @if (_cfdiStatus.StampedAt.HasValue)
+                {
+                    <div><strong>Timbrado:</strong> @_cfdiStatus.StampedAt.Value.ToString("yyyy-MM-dd HH:mm")</div>
+                }
+                @if (_cfdiStatus.CancelledAt.HasValue)
+                {
+                    <div><strong>Cancelado:</strong> @_cfdiStatus.CancelledAt.Value.ToString("yyyy-MM-dd HH:mm")</div>
+                }
+                @if (!string.IsNullOrWhiteSpace(_cfdiStatus.Message))
+                {
+                    <div>@_cfdiStatus.Message</div>
+                }
+            </div>
+        }
+
+        <div class="row g-3 mb-4">
+            <div class="col-md-2">
+                <label class="form-label">Folio</label>
+                <input class="form-control" @bind="_definition.Document.Folio" />
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">Fecha</label>
+                <input class="form-control" type="date" value="@DocumentDateText" @onchange="OnDocumentDateChanged" />
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">Estatus</label>
+                <select class="form-select" @bind="_definition.Document.Status">
+                    @foreach (var status in StatusOptions)
+                    {
+                        <option value="@status.Id">@status.Name</option>
+                    }
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Empresa</label>
+                <select class="form-select" @bind="CompanyIdText">
+                    <option value="">Seleccione...</option>
+                    @foreach (var item in _definition.Lookups.Companies)
+                    {
+                        <option value="@item.Id">@item.Name</option>
+                    }
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Sucursal</label>
+                <select class="form-select" @bind="BranchIdText">
+                    <option value="">Seleccione...</option>
+                    @foreach (var item in _definition.Lookups.Branches)
+                    {
+                        <option value="@item.Id">@item.Name</option>
+                    }
+                </select>
+            </div>
+
+            @if (_definition.RequiresCustomer)
+            {
+                <div class="col-md-4">
+                    <label class="form-label">Cliente</label>
+                    <select class="form-select" @bind="CustomerIdText">
+                        <option value="">Seleccione...</option>
+                        @foreach (var item in _definition.Lookups.Customers)
+                        {
+                            <option value="@item.Id">@item.Name</option>
+                        }
+                    </select>
+                </div>
+            }
+
+            @if (_definition.RequiresWarehouse)
+            {
+                <div class="col-md-4">
+                    <label class="form-label">Almacén</label>
+                    <select class="form-select" @bind="WarehouseIdText">
+                        <option value="">Seleccione...</option>
+                        @foreach (var item in _definition.Lookups.Warehouses)
+                        {
+                            <option value="@item.Id">@item.Name</option>
+                        }
+                    </select>
+                </div>
+            }
+
+            @if (_definition.RequiresCurrency)
+            {
+                <div class="col-md-4">
+                    <label class="form-label">Moneda</label>
+                    <select class="form-select" @bind="CurrencyIdText">
+                        <option value="">Seleccione...</option>
+                        @foreach (var item in _definition.Lookups.Currencies)
+                        {
+                            <option value="@item.Id">@item.Name</option>
+                        }
+                    </select>
+                </div>
+            }
+
+            @if (_definition.RequiresQuote)
+            {
+                <div class="col-md-4">
+                    <label class="form-label">Cotización origen</label>
+                    <select class="form-select" @bind="SalesQuoteIdText">
+                        <option value="">Seleccione...</option>
+                        @foreach (var item in _definition.Lookups.Quotes)
+                        {
+                            <option value="@item.Id">@item.Name</option>
+                        }
+                    </select>
+                </div>
+            }
+
+            @if (_definition.RequiresOrder)
+            {
+                <div class="col-md-4">
+                    <label class="form-label">Pedido origen</label>
+                    <select class="form-select" @bind="SalesOrderIdText">
+                        <option value="">Seleccione...</option>
+                        @foreach (var item in _definition.Lookups.Orders)
+                        {
+                            <option value="@item.Id">@item.Name</option>
+                        }
+                    </select>
+                </div>
+            }
+
+            @if (_definition.RequiresShipment)
+            {
+                <div class="col-md-4">
+                    <label class="form-label">Remisión origen</label>
+                    <select class="form-select" @bind="SalesShipmentIdText">
+                        <option value="">Seleccione...</option>
+                        @foreach (var item in _definition.Lookups.Shipments)
+                        {
+                            <option value="@item.Id">@item.Name</option>
+                        }
+                    </select>
+                </div>
+            }
+
+            @if (_definition.RequiresInvoice)
+            {
+                <div class="col-md-4">
+                    <label class="form-label">Factura origen</label>
+                    <select class="form-select" @bind="SalesInvoiceIdText">
+                        <option value="">Seleccione...</option>
+                        @foreach (var item in _definition.Lookups.Invoices)
+                        {
+                            <option value="@item.Id">@item.Name</option>
+                        }
+                    </select>
+                </div>
+            }
+
+            @if (_definition.UsesValidUntil)
+            {
+                <div class="col-md-3">
+                    <label class="form-label">Vigencia</label>
+                    <input class="form-control" type="date" value="@ValidUntilText" @onchange="OnValidUntilChanged" />
+                </div>
+            }
+
+            @if (_definition.UsesPaymentTermDays)
+            {
+                <div class="col-md-2">
+                    <label class="form-label">Plazo</label>
+                    <input class="form-control" type="number" @bind="_definition.Document.PaymentTermDays" />
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">TC</label>
+                    <input class="form-control" type="number" step="0.0001" @bind="_definition.Document.ExchangeRate" />
+                </div>
+            }
+
+            @if (_definition.UsesReason)
+            {
+                <div class="col-md-6">
+                    <label class="form-label">Motivo</label>
+                    <input class="form-control" @bind="_definition.Document.Reason" />
+                </div>
+            }
+
+            <div class="col-12">
+                <label class="form-label">Notas</label>
+                <textarea class="form-control" rows="2" @bind="_definition.Document.Notes"></textarea>
+            </div>
+        </div>
+
+        <div class="card shadow-sm mb-3">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <strong>@_definition.LinesTitle</strong>
+                <button class="btn btn-sm btn-primary" @onclick="AddLine">Agregar partida</button>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-sm table-striped align-middle mb-0">
+                        <thead>
+                            <tr>
+                                <th style="width:70px;">#</th>
+                                <th style="min-width:220px;">Artículo</th>
+                                <th style="min-width:220px;">Descripción</th>
+                                <th style="width:120px;">Unidad</th>
+                                <th style="width:110px;">Cant.</th>
+                                @if (_definition.UsesShipmentQuantities)
+                                {
+                                    <th style="width:110px;">Remitida</th>
+                                    <th style="width:110px;">Facturada</th>
+                                    <th style="width:110px;">Pendiente</th>
+                                }
+                                @if (_definition.UsesAmounts)
+                                {
+                                    <th style="width:120px;">P.Unit.</th>
+                                    <th style="width:120px;">Desc.</th>
+                                    <th style="width:120px;">Impuesto</th>
+                                    <th style="width:140px;">Importe</th>
+                                }
+                                <th style="width:80px;"></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @for (var i = 0; i < _definition.Document.Lines.Count; i++)
+                            {
+                                var line = _definition.Document.Lines[i];
+                                <tr>
+                                    <td>@line.LineNumber</td>
+                                    <td>
+                                        <select class="form-select form-select-sm" @bind="line.ItemIdString">
+                                            <option value="">Seleccione...</option>
+                                            @foreach (var item in _definition.Lookups.Items)
+                                            {
+                                                <option value="@item.Id">@item.Name</option>
+                                            }
+                                        </select>
+                                    </td>
+                                    <td><input class="form-control form-control-sm" @bind="line.Description" /></td>
+                                    <td>
+                                        <select class="form-select form-select-sm" @bind="line.UnitIdString">
+                                            <option value="">Seleccione...</option>
+                                            @foreach (var item in _definition.Lookups.Units)
+                                            {
+                                                <option value="@item.Id">@item.Name</option>
+                                            }
+                                        </select>
+                                    </td>
+                                    <td><input class="form-control form-control-sm" type="number" step="0.0001" @bind="line.Quantity" /></td>
+                                    @if (_definition.UsesShipmentQuantities)
+                                    {
+                                        <td><input class="form-control form-control-sm" type="number" step="0.0001" @bind="line.ShippedQuantity" /></td>
+                                        <td><input class="form-control form-control-sm" type="number" step="0.0001" @bind="line.InvoicedQuantity" /></td>
+                                        <td><input class="form-control form-control-sm" type="number" step="0.0001" @bind="line.PendingQuantity" /></td>
+                                    }
+                                    @if (_definition.UsesAmounts)
+                                    {
+                                        <td><input class="form-control form-control-sm" type="number" step="0.0001" @bind="line.UnitPrice" /></td>
+                                        <td><input class="form-control form-control-sm" type="number" step="0.01" @bind="line.DiscountAmount" /></td>
+                                        <td><input class="form-control form-control-sm" type="number" step="0.01" @bind="line.TaxAmount" /></td>
+                                        <td><input class="form-control form-control-sm" type="number" step="0.01" @bind="line.LineTotal" /></td>
+                                    }
+                                    <td><button class="btn btn-sm btn-outline-danger" @onclick="(() => RemoveLine(line))">X</button></td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        @if (_definition.UsesAmounts)
+        {
+            <div class="row g-3 justify-content-end">
+                <div class="col-md-2">
+                    <label class="form-label">Subtotal</label>
+                    <input class="form-control" type="number" step="0.01" @bind="_definition.Document.Subtotal" />
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Descuento</label>
+                    <input class="form-control" type="number" step="0.01" @bind="_definition.Document.DiscountAmount" />
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Impuesto</label>
+                    <input class="form-control" type="number" step="0.01" @bind="_definition.Document.TaxAmount" />
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Total</label>
+                    <input class="form-control" type="number" step="0.01" @bind="_definition.Document.Total" />
+                </div>
+            </div>
+        }
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired] public string CatalogKey { get; set; } = string.Empty;
+    [Parameter] public Guid? DocumentId { get; set; }
+    [Parameter] public SalesDocumentModel? InitialDocument { get; set; }
+
+    private SalesDocumentEditorDefinition? _definition;
+    private bool _loading = true;
+    private string? _error;
+    private string? _message;
+    private CfdiDocumentStatusDto? _cfdiStatus;
+
+    private static IReadOnlyList<CatalogLookupItem> StatusOptions { get; } =
+    [
+        new CatalogLookupItem { Id = "draft", Name = "Draft" },
+        new CatalogLookupItem { Id = "pending_approval", Name = "Pending approval" },
+        new CatalogLookupItem { Id = "approved", Name = "Approved" },
+        new CatalogLookupItem { Id = "posted", Name = "Posted" },
+        new CatalogLookupItem { Id = "closed", Name = "Closed" },
+        new CatalogLookupItem { Id = "cancelled", Name = "Cancelled" }
+    ];
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _loading = true;
+        _error = null;
+        _message = null;
+        _cfdiStatus = null;
+        try
+        {
+            _definition = await SalesApiService.GetEditorDefinitionAsync(CatalogKey, DocumentId);
+            if (!DocumentId.HasValue && InitialDocument is not null)
+            {
+                _definition.Document = CloneDocument(InitialDocument);
+            }
+
+            RecalculateTotals();
+            await LoadCfdiStatusAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private string DocumentDateText => _definition?.Document.DocumentDate?.ToString("yyyy-MM-dd") ?? string.Empty;
+    private string ValidUntilText => _definition?.Document.ValidUntil?.ToString("yyyy-MM-dd") ?? string.Empty;
+
+    private void OnDocumentDateChanged(ChangeEventArgs e)
+    {
+        if (_definition is null) return;
+        _definition.Document.DocumentDate = DateTime.TryParse(e.Value?.ToString(), out var parsed) ? parsed : null;
+    }
+
+    private void OnValidUntilChanged(ChangeEventArgs e)
+    {
+        if (_definition is null) return;
+        _definition.Document.ValidUntil = DateTime.TryParse(e.Value?.ToString(), out var parsed) ? parsed : null;
+    }
+
+    private string CompanyIdText { get => GetGuid(_definition?.Document.CompanyId); set => SetGuid(v => _definition!.Document.CompanyId = v, value); }
+    private string BranchIdText { get => GetGuid(_definition?.Document.BranchId); set => SetGuid(v => _definition!.Document.BranchId = v, value); }
+    private string CustomerIdText { get => GetGuid(_definition?.Document.CustomerId); set => SetGuid(v => _definition!.Document.CustomerId = v, value); }
+    private string WarehouseIdText { get => GetGuid(_definition?.Document.WarehouseId); set => SetGuid(v => _definition!.Document.WarehouseId = v, value); }
+    private string CurrencyIdText { get => GetGuid(_definition?.Document.CurrencyId); set => SetGuid(v => _definition!.Document.CurrencyId = v, value); }
+    private string SalesQuoteIdText { get => GetGuid(_definition?.Document.SalesQuoteId); set => SetGuid(v => _definition!.Document.SalesQuoteId = v, value); }
+    private string SalesOrderIdText { get => GetGuid(_definition?.Document.SalesOrderId); set => SetGuid(v => _definition!.Document.SalesOrderId = v, value); }
+    private string SalesShipmentIdText { get => GetGuid(_definition?.Document.SalesShipmentId); set => SetGuid(v => _definition!.Document.SalesShipmentId = v, value); }
+    private string SalesInvoiceIdText { get => GetGuid(_definition?.Document.SalesInvoiceId); set => SetGuid(v => _definition!.Document.SalesInvoiceId = v, value); }
+
+    private static string GetGuid(Guid? value) => value?.ToString() ?? string.Empty;
+    private static void SetGuid(Action<Guid?> setter, string value) => setter(Guid.TryParse(value, out var parsed) ? parsed : null);
+
+    private void AddLine()
+    {
+        if (_definition is null) return;
+        _definition.Document.Lines.Add(new SalesLineModel { LineNumber = _definition.Document.Lines.Count + 1, Quantity = 1m });
+    }
+
+    private void RemoveLine(SalesLineModel line)
+    {
+        if (_definition is null) return;
+        _definition.Document.Lines.Remove(line);
+        for (var i = 0; i < _definition.Document.Lines.Count; i++)
+        {
+            _definition.Document.Lines[i].LineNumber = i + 1;
+        }
+        RecalculateTotals();
+    }
+
+    private void RecalculateTotals()
+    {
+        if (_definition is null) return;
+
+        foreach (var line in _definition.Document.Lines)
+        {
+            if (_definition.UsesShipmentQuantities)
+            {
+                line.PendingQuantity = Math.Max(0, line.Quantity - Math.Max(line.ShippedQuantity, line.InvoicedQuantity));
+            }
+
+            if (_definition.UsesAmounts)
+            {
+                line.LineTotal = (line.Quantity * line.UnitPrice) - line.DiscountAmount + line.TaxAmount;
+            }
+        }
+
+        if (_definition.UsesAmounts)
+        {
+            _definition.Document.Subtotal = _definition.Document.Lines.Sum(x => x.Quantity * x.UnitPrice);
+            _definition.Document.DiscountAmount = _definition.Document.Lines.Sum(x => x.DiscountAmount);
+            _definition.Document.TaxAmount = _definition.Document.Lines.Sum(x => x.TaxAmount);
+            _definition.Document.Total = _definition.Document.Subtotal - _definition.Document.DiscountAmount + _definition.Document.TaxAmount;
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        if (_definition is null) return;
+        try
+        {
+            _message = null;
+            _error = null;
+            RecalculateTotals();
+            var savedId = await SalesApiService.SaveDocumentAsync(CatalogKey, _definition.Document);
+            _message = "Documento guardado correctamente.";
+            if (!_definition.Document.Id.HasValue && savedId != Guid.Empty)
+            {
+                Navigation.NavigateTo($"{Navigation.BaseUri.TrimEnd('/')}/sales/{GetSegment()}/detail/{savedId}", true);
+                return;
+            }
+
+            await LoadCfdiStatusAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private async Task StampCfdiAsync()
+    {
+        if (_definition?.Document.Id is null) return;
+        try
+        {
+            if (CatalogKey == "sales-invoices")
+            {
+                await CfdiApiService.StampSalesInvoiceAsync(_definition.Document.Id.Value);
+            }
+            else if (CatalogKey == "credit-notes")
+            {
+                await CfdiApiService.StampCreditNoteAsync(_definition.Document.Id.Value);
+            }
+
+            _message = "Documento CFDI timbrado correctamente en modo demo.";
+            await LoadCfdiStatusAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private async Task CancelCfdiAsync()
+    {
+        if (_definition?.Document.Id is null) return;
+        try
+        {
+            if (CatalogKey == "sales-invoices")
+            {
+                await CfdiApiService.CancelSalesInvoiceAsync(_definition.Document.Id.Value);
+            }
+            else if (CatalogKey == "credit-notes")
+            {
+                await CfdiApiService.CancelCreditNoteAsync(_definition.Document.Id.Value);
+            }
+
+            _message = "Documento CFDI cancelado correctamente en modo demo.";
+            await LoadCfdiStatusAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private async Task LoadCfdiStatusAsync()
+    {
+        if (!SupportsCfdi() || _definition?.Document.Id is null)
+        {
+            _cfdiStatus = null;
+            return;
+        }
+
+        _cfdiStatus = CatalogKey == "sales-invoices"
+            ? await CfdiApiService.GetSalesInvoiceStatusAsync(_definition.Document.Id.Value)
+            : await CfdiApiService.GetCreditNoteStatusAsync(_definition.Document.Id.Value);
+    }
+
+    private bool SupportsCfdi() => CatalogKey is "sales-invoices" or "credit-notes";
+    private bool CanStampCfdi() => _definition?.Document.Id.HasValue == true && _definition.Document.Status is "approved" or "posted" && _cfdiStatus?.CfdiStatus is "pending" or "not-generated" or null;
+    private bool CanCancelCfdi() => _definition?.Document.Id.HasValue == true && _cfdiStatus?.CfdiStatus == "stamped";
+    private string GetCfdiAlertClass() => _cfdiStatus?.CfdiStatus switch
+    {
+        "stamped" => "alert-success",
+        "cancelled" => "alert-warning",
+        "failed" => "alert-danger",
+        _ => "alert-info"
+    };
+
+    private static SalesDocumentModel CloneDocument(SalesDocumentModel source) => new()
+    {
+        CatalogKey = source.CatalogKey,
+        Id = source.Id,
+        CompanyId = source.CompanyId,
+        BranchId = source.BranchId,
+        WarehouseId = source.WarehouseId,
+        CustomerId = source.CustomerId,
+        CurrencyId = source.CurrencyId,
+        SalesQuoteId = source.SalesQuoteId,
+        SalesOrderId = source.SalesOrderId,
+        SalesShipmentId = source.SalesShipmentId,
+        SalesInvoiceId = source.SalesInvoiceId,
+        Folio = source.Folio,
+        DocumentDate = source.DocumentDate,
+        ValidUntil = source.ValidUntil,
+        Status = source.Status,
+        Notes = source.Notes,
+        Reason = source.Reason,
+        PaymentTermDays = source.PaymentTermDays,
+        ExchangeRate = source.ExchangeRate,
+        Subtotal = source.Subtotal,
+        DiscountAmount = source.DiscountAmount,
+        TaxAmount = source.TaxAmount,
+        Total = source.Total,
+        ApprovedAt = source.ApprovedAt,
+        ClosedAt = source.ClosedAt,
+        PostedAt = source.PostedAt,
+        IsActive = source.IsActive,
+        Lines = source.Lines.Select(line => new SalesLineModel
+        {
+            Id = line.Id,
+            LineNumber = line.LineNumber,
+            SalesOrderLineId = line.SalesOrderLineId,
+            SalesInvoiceLineId = line.SalesInvoiceLineId,
+            SourceLineId = line.SourceLineId,
+            ItemId = line.ItemId,
+            UnitId = line.UnitId,
+            TaxId = line.TaxId,
+            Description = line.Description,
+            Quantity = line.Quantity,
+            ShippedQuantity = line.ShippedQuantity,
+            InvoicedQuantity = line.InvoicedQuantity,
+            PendingQuantity = line.PendingQuantity,
+            UnitPrice = line.UnitPrice,
+            DiscountAmount = line.DiscountAmount,
+            TaxAmount = line.TaxAmount,
+            LineTotal = line.LineTotal
+        }).ToList()
+    };
+
+    private string GetSegment() => CatalogKey switch
+    {
+        "sales-quotes" => "quotes",
+        "sales-orders" => "orders",
+        "sales-shipments" => "shipments",
+        "sales-invoices" => "invoices",
+        "sales-returns" => "returns",
+        _ => "credit-notes"
+    };
+
+    private void BackToList() => Navigation.NavigateTo($"/sales/{GetSegment()}");
+    private string GetPrintUrl() => $"/sales/print/{CatalogKey}/{_definition!.Document.Id}";
+}

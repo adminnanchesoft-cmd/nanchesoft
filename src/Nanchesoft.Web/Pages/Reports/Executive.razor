@@ -1,0 +1,28 @@
+@page "/reports/executive"
+@inject Nanchesoft.Web.Services.Reports.ReportsApiService ReportsApiService
+
+<PageTitle>Reportes ejecutivos | Nanchesoft</PageTitle>
+
+<div class="ns-catalog-page">
+    <div class="ns-catalog-header">
+        <div>
+            <div class="ns-catalog-eyebrow">Nanchesoft ERP · Cierre MVP</div>
+            <h1 class="ns-catalog-title">Reportes ejecutivos</h1>
+            <p class="ns-catalog-subtitle">Resumen consolidado de operación, inventario y tesorería.</p>
+        </div>
+    </div>
+
+    @if (_summary is null)
+    {
+        <div class="ns-catalog-loading"><div class="ns-loader"></div><span>Cargando resumen ejecutivo...</span></div>
+    }
+    else
+    {
+        <ExecutiveDashboard Model="_summary" />
+    }
+</div>
+
+@code {
+    private Nanchesoft.Web.Services.Reports.ExecutiveSummaryDto? _summary;
+    protected override async Task OnInitializedAsync() => _summary = await ReportsApiService.GetExecutiveSummaryAsync();
+}

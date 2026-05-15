@@ -1,0 +1,30 @@
+@page "/organization/tenants"
+@page "/platform/tenants"
+@inject Nanchesoft.Web.State.AuthState AuthState
+@inject NavigationManager Navigation
+
+<PageTitle>Tenants SaaS | Nanchesoft</PageTitle>
+
+@if (_authorized)
+{
+    <CatalogCrudPage CatalogKey="tenants" />
+}
+else
+{
+    <div class="alert alert-warning">Redirigiendo al dashboard. Esta sección solo está disponible para el propietario de la plataforma.</div>
+}
+
+@code {
+    private bool _authorized;
+
+    protected override void OnInitialized()
+    {
+        if (!AuthState.IsPlatformOwner)
+        {
+            Navigation.NavigateTo("/dashboard", forceLoad: false);
+            return;
+        }
+
+        _authorized = true;
+    }
+}

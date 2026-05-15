@@ -1,0 +1,14 @@
+@page "/profile"
+
+@inject AuthState AuthState
+
+<PageTitle>Perfil | Nanchesoft</PageTitle>
+
+<div class="ns-dashboard-grid">
+    <div class="ns-card">
+        <h1>Mi perfil</h1>
+        <p><strong>Usuario:</strong> @AuthState.DisplayName</p>
+        <p><strong>Autenticado:</strong> @AuthState.IsAuthenticated</p>
+        <p><strong>Token cargado:</strong> @(!string.IsNullOrWhiteSpace(AuthState.Token))</p>
+    </div>
+</div>

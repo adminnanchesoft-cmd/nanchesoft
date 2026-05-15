@@ -1,0 +1,199 @@
+@page "/services/print-center"
+@using Nanchesoft.Web.Services.Catalogs
+@using Nanchesoft.Web.Services.ProfessionalServices
+@inject ServiceBillingApiService ServiceBillingApiService
+
+<PageTitle>Impresión servicios | Nanchesoft</PageTitle>
+
+@if (_loading)
+{
+    <div class="ns-service-print">
+        <div class="ns-service-print__loading">Cargando centro de impresión...</div>
+    </div>
+}
+else
+{
+    <div class="ns-service-print">
+        <section class="ns-service-print__hero">
+            <div>
+                <div class="ns-service-print__eyebrow">Servicios profesionales</div>
+                <h1 class="ns-service-print__title">Centro de impresión de notas de servicio</h1>
+                <p class="ns-service-print__subtitle">Encuentra rápido por folio, cliente, servicio o estatus y manda a imprimir en un clic.</p>
+            </div>
+
+            <div class="ns-service-print__hero-actions">
+                <a class="ns-service-print__ghost" href="/services/notes">Ir a notas</a>
+                <a class="ns-service-print__primary" href="/services/customer-rates">Tarifas por cliente</a>
+            </div>
+        </section>
+
+        <section class="ns-service-print__kpis">
+            <article class="ns-service-print__kpi">
+                <div class="ns-service-print__kpi-label">Notas visibles</div>
+                <div class="ns-service-print__kpi-value">@FilteredRows.Count</div>
+            </article>
+            <article class="ns-service-print__kpi">
+                <div class="ns-service-print__kpi-label">Pendientes</div>
+                <div class="ns-service-print__kpi-value">@PendingCount</div>
+            </article>
+            <article class="ns-service-print__kpi">
+                <div class="ns-service-print__kpi-label">Pagadas</div>
+                <div class="ns-service-print__kpi-value">@PaidCount</div>
+            </article>
+            <article class="ns-service-print__kpi">
+                <div class="ns-service-print__kpi-label">Importe visible</div>
+                <div class="ns-service-print__kpi-value">@VisibleTotal.ToString("C")</div>
+            </article>
+        </section>
+
+        <section class="ns-service-print__panel">
+            <div class="ns-service-print__toolbar">
+                <div class="ns-service-print__searchwrap">
+                    <span class="ns-service-print__searchicon">⌕</span>
+                    <input class="ns-service-print__search"
+                           type="text"
+                           placeholder="Buscar por folio, cliente, servicio o estatus..."
+                           @bind="SearchText"
+                           @bind:event="oninput" />
+                </div>
+
+                <select class="ns-service-print__select" @bind="StatusFilter">
+                    <option value="">Todos los estatus</option>
+                    <option value="PENDIENTE">Pendiente</option>
+                    <option value="PAGADA">Pagada</option>
+                    <option value="CANCELADA">Cancelada</option>
+                </select>
+            </div>
+
+            <div class="ns-service-print__tablewrap">
+                <table class="ns-service-print__table">
+                    <thead>
+                        <tr>
+                            <th>Folio</th>
+                            <th>Fecha</th>
+                            <th>Cliente</th>
+                            <th>Servicio</th>
+                            <th>Horas</th>
+                            <th>Total</th>
+                            <th>Estatus</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (FilteredRows.Count == 0)
+                        {
+                            <tr>
+                                <td colspan="8" class="ns-service-print__empty">No hay notas de servicio con esos filtros.</td>
+                            </tr>
+                        }
+                        else
+                        {
+                            @foreach (var row in FilteredRows)
+                            {
+                                var paymentStatus = GetValue(row, "PaymentStatus");
+                                <tr>
+                                    <td class="ns-service-print__folio">@GetValue(row, "Folio")</td>
+                                    <td>@FormatDate(GetValue(row, "NoteDate"))</td>
+                                    <td>
+                                        <div class="ns-service-print__cell-main">@Lookup("CustomerId", GetValue(row, "CustomerId"))</div>
+                                    </td>
+                                    <td>
+                                        <div class="ns-service-print__cell-main">@Lookup("ServiceCatalogItemId", GetValue(row, "ServiceCatalogItemId"))</div>
+                                        <div class="ns-service-print__cell-sub">@GetValue(row, "Description")</div>
+                                    </td>
+                                    <td>@FormatNumber(GetValue(row, "HoursWorked"))</td>
+                                    <td>@FormatMoney(GetValue(row, "Total"))</td>
+                                    <td>
+                                        <span class="ns-service-print__status @GetStatusCss(paymentStatus)">@paymentStatus</span>
+                                    </td>
+                                    <td class="ns-service-print__actions">
+                                        <a class="ns-service-print__printbtn" target="_blank" href="@($"/services/print/{GetValue(row, "ServiceNoteId")}")">Imprimir</a>
+                                    </td>
+                                </tr>
+                            }
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </div>
+}
+
+@code {
+    private CatalogViewDefinition? _definition;
+    private readonly List<Dictionary<string, object?>> _rows = [];
+    private bool _loading = true;
+    private string SearchText { get; set; } = string.Empty;
+    private string StatusFilter { get; set; } = string.Empty;
+
+    private IReadOnlyList<Dictionary<string, object?>> FilteredRows => _rows
+        .Where(MatchesFilters)
+        .ToList();
+
+    private int PendingCount => FilteredRows.Count(x => GetValue(x, "PaymentStatus").Equals("PENDIENTE", StringComparison.OrdinalIgnoreCase));
+    private int PaidCount => FilteredRows.Count(x => GetValue(x, "PaymentStatus").Equals("PAGADA", StringComparison.OrdinalIgnoreCase));
+    private decimal VisibleTotal => FilteredRows.Sum(x => ParseDecimal(GetValue(x, "Total")));
+
+    protected override async Task OnInitializedAsync()
+    {
+        _definition = await ServiceBillingApiService.GetCatalogAsync("service-notes");
+        _rows.AddRange(_definition.Rows
+            .OrderByDescending(x => GetValue(x, "NoteDate"))
+            .ThenByDescending(x => GetValue(x, "Folio")));
+        _loading = false;
+    }
+
+    private bool MatchesFilters(Dictionary<string, object?> row)
+    {
+        if (!string.IsNullOrWhiteSpace(StatusFilter)
+            && !GetValue(row, "PaymentStatus").Equals(StatusFilter, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(SearchText))
+        {
+            return true;
+        }
+
+        var query = SearchText.Trim();
+        var customer = Lookup("CustomerId", GetValue(row, "CustomerId"));
+        var service = Lookup("ServiceCatalogItemId", GetValue(row, "ServiceCatalogItemId"));
+
+        return GetValue(row, "Folio").Contains(query, StringComparison.OrdinalIgnoreCase)
+               || customer.Contains(query, StringComparison.OrdinalIgnoreCase)
+               || service.Contains(query, StringComparison.OrdinalIgnoreCase)
+               || GetValue(row, "Description").Contains(query, StringComparison.OrdinalIgnoreCase)
+               || GetValue(row, "PaymentStatus").Contains(query, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string GetValue(Dictionary<string, object?> row, string key)
+        => row.TryGetValue(key, out var value) ? value?.ToString() ?? string.Empty : string.Empty;
+
+    private string Lookup(string dataField, string id)
+    {
+        var column = _definition?.Columns.FirstOrDefault(x => x.DataField.Equals(dataField, StringComparison.OrdinalIgnoreCase));
+        var match = column?.LookupItems.FirstOrDefault(x => x.Id.Equals(id, StringComparison.OrdinalIgnoreCase));
+        return match?.Name ?? string.Empty;
+    }
+
+    private static decimal ParseDecimal(string raw)
+        => decimal.TryParse(raw, out var value) ? value : 0m;
+
+    private static string FormatMoney(string raw)
+        => decimal.TryParse(raw, out var value) ? value.ToString("C") : raw;
+
+    private static string FormatNumber(string raw)
+        => decimal.TryParse(raw, out var value) ? value.ToString("0.##") : raw;
+
+    private static string FormatDate(string raw)
+        => DateTime.TryParse(raw, out var value) ? value.ToString("dd/MM/yyyy") : raw;
+
+    private static string GetStatusCss(string status)
+        => status.ToUpperInvariant() switch
+        {
+            "PAGADA" => "is-paid",
+            "CANCELADA" => "is-cancelled",
+            _ => "is-pending"
+        };
+}

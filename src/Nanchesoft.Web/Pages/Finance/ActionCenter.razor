@@ -1,0 +1,93 @@
+@page "/finance/action-center"
+@using Nanchesoft.Web.Services.Finance
+@inject FinanceApiService FinanceApiService
+
+<PageTitle>Centro de acciones | Nanchesoft</PageTitle>
+
+<h1 class="h3 mb-3">Centro de acciones</h1>
+<p class="text-muted">Concentra autorizaciones, alertas, compromisos de cobro y programación de pagos en una sola cola priorizada.</p>
+
+@if (_loading)
+{
+    <div class="alert alert-info">Cargando acciones...</div>
+}
+else if (!string.IsNullOrWhiteSpace(_error))
+{
+    <div class="alert alert-danger">@_error</div>
+}
+else
+{
+    <div class="row g-3 mb-3">
+        <div class="col-md-3"><div class="card shadow-sm"><div class="card-body"><div class="text-muted small">Total acciones</div><div class="fs-4 fw-bold">@_rows.Count</div></div></div></div>
+        <div class="col-md-3"><div class="card shadow-sm"><div class="card-body"><div class="text-muted small">Prioridad alta</div><div class="fs-4 fw-bold text-danger">@_rows.Count(x => x.Priority == "Alta")</div></div></div></div>
+        <div class="col-md-3"><div class="card shadow-sm"><div class="card-body"><div class="text-muted small">Sin dueño</div><div class="fs-4 fw-bold text-warning">@_rows.Count(x => string.IsNullOrWhiteSpace(x.Owner) || x.Owner == "Sin asignar")</div></div></div></div>
+        <div class="col-md-3"><div class="card shadow-sm"><div class="card-body"><div class="text-muted small">Monto total</div><div class="fs-4 fw-bold text-primary">@_rows.Sum(x => x.Amount).ToString("N2")</div></div></div></div>
+    </div>
+
+    <div class="card shadow-sm">
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-sm table-striped align-middle mb-0">
+                    <thead>
+                        <tr>
+                            <th>Origen</th>
+                            <th>Categoría</th>
+                            <th>Prioridad</th>
+                            <th>Estatus</th>
+                            <th>Documento</th>
+                            <th>Cliente/Proveedor</th>
+                            <th>Responsable</th>
+                            <th class="text-end">Monto</th>
+                            <th>Vence</th>
+                            <th>Acción sugerida</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var row in _rows)
+                        {
+                            <tr>
+                                <td>@row.Source</td>
+                                <td>@row.Category</td>
+                                <td><span class="badge @GetPriorityBadge(row.Priority)">@row.Priority</span></td>
+                                <td>@row.Status</td>
+                                <td>@row.DocumentNumber</td>
+                                <td>@row.PartyName</td>
+                                <td>@row.Owner</td>
+                                <td class="text-end">@row.Amount.ToString("N2")</td>
+                                <td>@FormatDate(row.DueDate)</td>
+                                <td>@row.RecommendedAction</td>
+                                <td>@if (!string.IsNullOrWhiteSpace(row.Route)) { <a class="btn btn-sm btn-outline-primary" href="@row.Route">Abrir</a> }</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private bool _loading = true;
+    private string? _error;
+    private List<FinanceActionCenterRowDto> _rows = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _rows = await FinanceApiService.GetActionCenterAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private static string FormatDate(DateTime? value) => value?.ToLocalTime().ToString("dd/MM/yyyy") ?? "-";
+    private static string GetPriorityBadge(string value) => value switch { "Alta" => "text-bg-danger", "Media" => "text-bg-warning", _ => "text-bg-secondary" };
+}

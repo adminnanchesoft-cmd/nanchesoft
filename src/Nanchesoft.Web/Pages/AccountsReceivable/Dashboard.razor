@@ -1,0 +1,113 @@
+@page "/accounts-receivable/dashboard"
+@using Nanchesoft.Web.Services.AccountsReceivable
+@inject AccountsReceivableApiService Api
+
+<PageTitle>Dashboard CxC | Nanchesoft</PageTitle>
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+        <div class="text-uppercase text-muted small fw-semibold">CxC · Dashboard</div>
+        <h1 class="h3 mb-1">Dashboard de cobranza</h1>
+        <div class="text-muted">Vista rápida del saldo abierto y los movimientos recientes de cuentas por cobrar.</div>
+    </div>
+    <button class="btn btn-outline-secondary" @onclick="ReloadAsync" disabled="@_loading">Actualizar</button>
+</div>
+
+@if (_loading)
+{
+    <div class="alert alert-info">Cargando dashboard...</div>
+}
+else if (!string.IsNullOrWhiteSpace(_error))
+{
+    <div class="alert alert-danger">@_error</div>
+}
+else
+{
+    <div class="row g-3 mb-4">
+        <div class="col-md-3"><div class="card shadow-sm h-100"><div class="card-body"><div class="text-muted small">Clientes con saldo</div><div class="fs-3 fw-bold">@_summary.ActiveCustomersWithBalance</div></div></div></div>
+        <div class="col-md-3"><div class="card shadow-sm h-100"><div class="card-body"><div class="text-muted small">Saldo abierto</div><div class="fs-3 fw-bold text-danger">@_summary.TotalOpenBalance.ToString("N2")</div></div></div></div>
+        <div class="col-md-3"><div class="card shadow-sm h-100"><div class="card-body"><div class="text-muted small">Saldo corriente</div><div class="fs-3 fw-bold text-primary">@_summary.CurrentBalance.ToString("N2")</div></div></div></div>
+        <div class="col-md-3"><div class="card shadow-sm h-100"><div class="card-body"><div class="text-muted small">Vencido</div><div class="fs-3 fw-bold text-warning">@_summary.OverdueBalance.ToString("N2")</div></div></div></div>
+    </div>
+
+    <div class="row g-3 mb-4">
+        <div class="col-lg-4">
+            <div class="card shadow-sm h-100">
+                <div class="card-header fw-semibold">Acción recomendada</div>
+                <div class="card-body text-muted">
+                    Tienes <strong>@_summary.AppliedReceiptsCount</strong> aplicaciones registradas. Desde esta área puedes revisar saldos, estados de cuenta y aplicar recibos a facturas abiertas.
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-8">
+            <div class="card shadow-sm h-100">
+                <div class="card-header fw-semibold">Movimientos recientes</div>
+                <div class="table-responsive">
+                    <table class="table table-striped align-middle mb-0">
+                        <thead>
+                            <tr>
+                                <th>Fecha</th>
+                                <th>Tipo</th>
+                                <th>Folio</th>
+                                <th>Cliente</th>
+                                <th class="text-end">Cargo</th>
+                                <th class="text-end">Crédito</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @if (_recent.Count == 0)
+                            {
+                                <tr><td colspan="6" class="text-center text-muted py-4">Sin movimientos recientes.</td></tr>
+                            }
+                            else
+                            {
+                                @foreach (var row in _recent)
+                                {
+                                    <tr>
+                                        <td>@row.MovementDate.ToString("dd/MM/yyyy")</td>
+                                        <td>@row.DocumentType</td>
+                                        <td>@row.Folio</td>
+                                        <td>@row.CustomerName</td>
+                                        <td class="text-end">@row.ChargeAmount.ToString("N2")</td>
+                                        <td class="text-end">@row.CreditAmount.ToString("N2")</td>
+                                    </tr>
+                                }
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private bool _loading = true;
+    private string? _error;
+    private ArDashboardSummaryDto _summary = new();
+    private List<ArDashboardRecentRowDto> _recent = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await ReloadAsync();
+    }
+
+    private async Task ReloadAsync()
+    {
+        _loading = true;
+        _error = null;
+        try
+        {
+            _summary = await Api.GetDashboardSummaryAsync();
+            _recent = await Api.GetDashboardRecentAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+}

@@ -1,0 +1,38 @@
+@page "/cfdi/configuration"
+@using Nanchesoft.Web.Services.Cfdi
+@inject CfdiApiService CfdiApiService
+<PageTitle>Configuración CFDI | Nanchesoft</PageTitle>
+
+<div class="container-fluid py-3">
+    <div class="mb-3">
+        <div class="text-uppercase small text-secondary fw-semibold">CFDI · configuración</div>
+        <h2 class="mb-1">Configuración CFDI</h2>
+        <div class="text-secondary">Modo demo ligado a ventas mientras se integra un PAC real.</div>
+    </div>
+
+    @if (_loading)
+    {
+        <div class="alert alert-info">Cargando configuración CFDI...</div>
+    }
+    else
+    {
+        <div class="row g-3">
+            <div class="col-md-3"><div class="card shadow-sm"><div class="card-body"><div class="text-secondary small">Modo</div><div class="fw-bold">@_config.Mode</div></div></div></div>
+            <div class="col-md-3"><div class="card shadow-sm"><div class="card-body"><div class="text-secondary small">Proveedor</div><div class="fw-bold">@_config.Provider</div></div></div></div>
+            <div class="col-md-3"><div class="card shadow-sm"><div class="card-body"><div class="text-secondary small">Ambiente</div><div class="fw-bold">@_config.Environment</div></div></div></div>
+            <div class="col-md-3"><div class="card shadow-sm"><div class="card-body"><div class="text-secondary small">Emisor</div><div class="fw-bold">@_config.Emitter</div></div></div></div>
+        </div>
+        <div class="alert alert-warning mt-3 mb-0">@_config.Notes</div>
+    }
+</div>
+
+@code {
+    private bool _loading = true;
+    private CfdiConfigurationDto _config = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        _config = await CfdiApiService.GetConfigurationAsync();
+        _loading = false;
+    }
+}

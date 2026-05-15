@@ -1,0 +1,32 @@
+@inject Nanchesoft.Web.Services.NavigationService NavigationService
+@inject NavigationManager NavigationManager
+
+<nav class="ns-breadcrumb2" aria-label="breadcrumb">
+    @foreach (var part in Parts.Select((value, index) => new { value, index }))
+    {
+        var isLast = part.index == Parts.Count - 1;
+        if (!isLast)
+        {
+            <button class="ns-breadcrumb2__item" @onclick="() => Go(part.value.Route)">@part.value.Title</button>
+            <span class="ns-breadcrumb2__sep">›</span>
+        }
+        else
+        {
+            <span class="ns-breadcrumb2__item ns-breadcrumb2__item--active">@part.value.Title</span>
+        }
+    }
+</nav>
+
+@code {
+    private IReadOnlyList<(string Title, string Route)> Parts { get; set; } = new List<(string Title, string Route)>();
+
+    protected override void OnParametersSet()
+    {
+        Parts = ShellNavHelper.BuildBreadcrumb(NavigationService, NavigationManager.ToBaseRelativePath(NavigationManager.Uri));
+    }
+
+    private void Go(string route)
+    {
+        NavigationManager.NavigateTo("/" + ShellNavHelper.NormalizeRoute(route));
+    }
+}

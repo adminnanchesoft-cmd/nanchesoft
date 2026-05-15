@@ -1,0 +1,18 @@
+<svg width="1600" height="900" viewBox="0 0 1600 900" fill="none" xmlns="http://www.w3.org/2000/svg">
+<rect width="1600" height="900" fill="#0A1A34"/>
+<g opacity="0.6"><circle cx="220" cy="180" r="180" fill="#1C4C9B"/><circle cx="1380" cy="140" r="220" fill="#102C61"/><circle cx="1240" cy="700" r="260" fill="#214D87"/></g>
+<g opacity="0.8" stroke="#A9C4FF" stroke-width="3">
+<rect x="180" y="220" width="260" height="170" rx="26" fill="#0E2347"/>
+<rect x="520" y="160" width="280" height="170" rx="26" fill="#16325F"/>
+<rect x="900" y="220" width="300" height="170" rx="26" fill="#102C61"/>
+<rect x="620" y="480" width="340" height="190" rx="28" fill="#0F264C"/>
+<path d="M440 305H520"/><path d="M800 245H900"/><path d="M690 330V480"/><path d="M1060 390L960 480"/>
+</g>
+<g fill="#EAF2FF">
+<text x="230" y="278" font-size="32" font-family="Arial" font-weight="700">Familias</text>
+<text x="550" y="218" font-size="32" font-family="Arial" font-weight="700">Subfamilias</text>
+<text x="940" y="278" font-size="32" font-family="Arial" font-weight="700">Materiales</text>
+<text x="670" y="548" font-size="36" font-family="Arial" font-weight="700">Componentes</text>
+<text x="665" y="598" font-size="24" font-family="Arial">Orange → ERP</text>
+</g>
+</svg>

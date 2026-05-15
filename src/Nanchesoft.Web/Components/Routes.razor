@@ -1,0 +1,15 @@
+@using Nanchesoft.Web.Layouts
+@using Nanchesoft.Web.Shared
+
+<Router AppAssembly="@typeof(Program).Assembly">
+    <Found Context="routeData">
+        <RouteView RouteData="@routeData" DefaultLayout="@typeof(Nanchesoft.Web.Layouts.MainLayout)" />
+        <FocusOnNavigate RouteData="@routeData" Selector="h1" />
+    </Found>
+
+    <NotFound>
+        <LayoutView Layout="@typeof(Nanchesoft.Web.Layouts.MainLayout)">
+            <NotFoundPage />
+        </LayoutView>
+    </NotFound>
+</Router>

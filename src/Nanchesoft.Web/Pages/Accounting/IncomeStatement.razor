@@ -1,0 +1,101 @@
+@page "/accounting/income-statement"
+@using Nanchesoft.Web.Services.Accounting
+@inject AccountingApiService Api
+
+<PageTitle>Estado de resultados | Nanchesoft</PageTitle>
+
+<h1 class="h3 mb-3">Contabilidad · Estado de resultados</h1>
+
+<div class="card shadow-sm mb-3">
+    <div class="card-body row g-3 align-items-end">
+        <div class="col-md-2">
+            <label class="form-label">Año</label>
+            <input class="form-control" type="number" @bind="_year" />
+        </div>
+        <div class="col-md-2">
+            <label class="form-label">Mes</label>
+            <input class="form-control" type="number" min="1" max="12" @bind="_month" />
+        </div>
+        <div class="col-md-2">
+            <button class="btn btn-primary" @onclick="LoadAsync">Consultar</button>
+        </div>
+    </div>
+</div>
+
+@if (!string.IsNullOrWhiteSpace(_error))
+{
+    <div class="alert alert-danger">@_error</div>
+}
+
+<div class="row g-3">
+    <div class="col-lg-6">
+        <div class="card shadow-sm h-100">
+            <div class="card-header fw-semibold">Ingresos</div>
+            <div class="table-responsive">
+                <table class="table table-striped table-sm align-middle mb-0">
+                    <tbody>
+                        @foreach (var row in _statement.Income)
+                        {
+                            <tr><td>@row.Code</td><td>@row.Name</td><td class="text-end">@row.Amount.ToString("N2")</td></tr>
+                        }
+                    </tbody>
+                    <tfoot><tr><th colspan="2">Total ingresos</th><th class="text-end">@_statement.TotalIncome.ToString("N2")</th></tr></tfoot>
+                </table>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-6">
+        <div class="card shadow-sm h-100">
+            <div class="card-header fw-semibold">Gastos</div>
+            <div class="table-responsive">
+                <table class="table table-striped table-sm align-middle mb-0">
+                    <tbody>
+                        @foreach (var row in _statement.Expenses)
+                        {
+                            <tr><td>@row.Code</td><td>@row.Name</td><td class="text-end">@row.Amount.ToString("N2")</td></tr>
+                        }
+                    </tbody>
+                    <tfoot><tr><th colspan="2">Total gastos</th><th class="text-end">@_statement.TotalExpense.ToString("N2")</th></tr></tfoot>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card shadow-sm mt-3">
+    <div class="card-body d-flex justify-content-between align-items-center">
+        <span class="fw-semibold">Resultado neto</span>
+        <span class="fs-4 fw-bold @( _statement.NetIncome >= 0 ? "text-success" : "text-danger")">@_statement.NetIncome.ToString("N2")</span>
+    </div>
+</div>
+
+@code {
+    private int _year = DateTime.Today.Year;
+    private int _month = DateTime.Today.Month;
+    private IncomeStatementDto _statement = new();
+    private string? _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var lookups = await Api.GetLookupsAsync();
+        if (lookups.CurrentYear > 0)
+        {
+            _year = lookups.CurrentYear;
+            _month = lookups.CurrentMonth;
+        }
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _error = null;
+        try
+        {
+            _statement = await Api.GetIncomeStatementAsync(_year, _month);
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+    }
+}

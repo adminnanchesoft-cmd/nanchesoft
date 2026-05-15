@@ -1,0 +1,103 @@
+@page "/treasury/dashboard"
+@inject TreasuryApiService TreasuryApiService
+<PageTitle>Dashboard tesorería | Nanchesoft</PageTitle>
+
+@if (_loading)
+{
+    <div class="alert alert-info">Cargando dashboard de tesorería...</div>
+}
+else if (!string.IsNullOrWhiteSpace(_error))
+{
+    <div class="alert alert-danger">@_error</div>
+}
+else
+{
+    <div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-3">
+        <div>
+            <div class="text-muted small">Nanchesoft ERP · Tesorería base</div>
+            <h1 class="h3 mb-1">Dashboard de tesorería</h1>
+            <div class="text-muted">Saldos por caja y banco, flujo del periodo y movimientos recientes.</div>
+        </div>
+        <div class="d-flex gap-2 flex-wrap">
+            <a class="btn btn-outline-secondary" href="/treasury/cash-accounts">Cajas</a>
+            <a class="btn btn-outline-secondary" href="/treasury/bank-accounts">Bancos</a>
+            <a class="btn btn-outline-secondary" href="/treasury/reconciliations">Conciliaciones</a>
+        </div>
+    </div>
+
+    <TreasuryBalanceCards Summary="_summary" />
+
+    <div class="row g-3">
+        <div class="col-lg-6">
+            <div class="card shadow-sm h-100">
+                <div class="card-header"><strong>Saldos</strong></div>
+                <div class="table-responsive">
+                    <table class="table table-sm table-striped align-middle mb-0">
+                        <thead><tr><th>Tipo</th><th>Código</th><th>Nombre</th><th>Estatus</th><th class="text-end">Saldo</th></tr></thead>
+                        <tbody>
+                            @foreach (var row in _balances)
+                            {
+                                <tr>
+                                    <td>@(row.Type == "cash" ? "Caja" : "Banco")</td>
+                                    <td>@row.Code</td>
+                                    <td>@row.Name</td>
+                                    <td>@row.Status</td>
+                                    <td class="text-end">@row.Balance.ToString("C")</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-6">
+            <div class="card shadow-sm h-100">
+                <div class="card-header"><strong>Movimientos recientes</strong></div>
+                <div class="table-responsive">
+                    <table class="table table-sm table-striped align-middle mb-0">
+                        <thead><tr><th>Fecha</th><th>Origen</th><th>Tipo</th><th>Referencia</th><th class="text-end">Entrada</th><th class="text-end">Salida</th></tr></thead>
+                        <tbody>
+                            @foreach (var row in _recent)
+                            {
+                                <tr>
+                                    <td>@row.MovementDate.ToString("dd/MM/yyyy")</td>
+                                    <td>@(row.Source == "cash" ? "Caja" : "Banco")</td>
+                                    <td>@row.MovementType</td>
+                                    <td>@row.Reference</td>
+                                    <td class="text-end">@row.AmountIn.ToString("N2")</td>
+                                    <td class="text-end">@row.AmountOut.ToString("N2")</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private TreasuryDashboardSummaryDto _summary = new();
+    private List<TreasuryBalanceRowDto> _balances = [];
+    private List<TreasuryRecentRowDto> _recent = [];
+    private bool _loading = true;
+    private string? _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _summary = await TreasuryApiService.GetDashboardSummaryAsync();
+            _balances = await TreasuryApiService.GetDashboardBalancesAsync();
+            _recent = await TreasuryApiService.GetDashboardRecentAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+}

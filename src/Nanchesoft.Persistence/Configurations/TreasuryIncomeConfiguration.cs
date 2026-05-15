@@ -1,0 +1,30 @@
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using Nanchesoft.Domain.Entities;
+
+namespace Nanchesoft.Persistence.Configurations;
+
+public sealed class TreasuryIncomeConfiguration : IEntityTypeConfiguration<TreasuryIncome>
+{
+    public void Configure(EntityTypeBuilder<TreasuryIncome> builder)
+    {
+        builder.ToTable("treasury_incomes");
+        builder.HasKey(x => x.Id);
+        builder.Property(x => x.Folio).HasMaxLength(40).IsRequired();
+        builder.Property(x => x.TargetType).HasMaxLength(40).IsRequired();
+        builder.Property(x => x.Status).HasMaxLength(40).IsRequired();
+        builder.Property(x => x.Reference).HasMaxLength(160);
+        builder.Property(x => x.Notes).HasMaxLength(500);
+        builder.Property(x => x.ExchangeRate).HasPrecision(18, 6);
+        builder.Property(x => x.Total).HasPrecision(18, 2);
+        builder.HasIndex(x => new { x.CompanyId, x.Folio }).IsUnique();
+        builder.HasOne(x => x.Tenant).WithMany().HasForeignKey(x => x.TenantId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne(x => x.Company).WithMany().HasForeignKey(x => x.CompanyId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne(x => x.Branch).WithMany().HasForeignKey(x => x.BranchId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne(x => x.Series).WithMany().HasForeignKey(x => x.SeriesId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne(x => x.Currency).WithMany().HasForeignKey(x => x.CurrencyId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne(x => x.CashAccount).WithMany().HasForeignKey(x => x.CashAccountId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne(x => x.BankAccount).WithMany().HasForeignKey(x => x.BankAccountId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasMany(x => x.Lines).WithOne(x => x.TreasuryIncome).HasForeignKey(x => x.TreasuryIncomeId).OnDelete(DeleteBehavior.Cascade);
+    }
+}

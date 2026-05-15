@@ -1,0 +1,175 @@
+@page "/accounts-payable/applications"
+@using Nanchesoft.Web.Services.AccountsPayable
+@inject AccountsPayableApiService AccountsPayableApiService
+
+<PageTitle>Aplicaciones CxP | Nanchesoft</PageTitle>
+
+<h1 class="h3 mb-3">Cuentas por pagar · Aplicación de pagos</h1>
+
+<div class="card shadow-sm mb-3">
+    <div class="card-header fw-semibold">Nueva aplicación</div>
+    <div class="card-body row g-3 align-items-end">
+        <div class="col-md-4">
+            <label class="form-label">Proveedor</label>
+            <select class="form-select" @bind="_request.SupplierIdString">
+                <option value="">Selecciona...</option>
+                @foreach (var item in _lookups.Suppliers)
+                {
+                    <option value="@item.Id">@item.Name</option>
+                }
+            </select>
+        </div>
+        <div class="col-md-4">
+            <label class="form-label">Pago</label>
+            <select class="form-select" @bind="_request.PaymentIdString">
+                <option value="">Selecciona...</option>
+                @foreach (var item in FilteredPayments)
+                {
+                    <option value="@item.Id">@item.Name</option>
+                }
+            </select>
+        </div>
+        <div class="col-md-4">
+            <label class="form-label">Factura</label>
+            <select class="form-select" @bind="_request.PurchaseInvoiceIdString">
+                <option value="">Selecciona...</option>
+                @foreach (var item in FilteredInvoices)
+                {
+                    <option value="@item.Id">@item.Name</option>
+                }
+            </select>
+        </div>
+        <div class="col-md-3">
+            <label class="form-label">Fecha</label>
+            <input class="form-control" type="date" @bind="_applicationDate" />
+        </div>
+        <div class="col-md-3">
+            <label class="form-label">Importe aplicado</label>
+            <input class="form-control" type="number" step="0.01" @bind="_request.AppliedAmount" />
+        </div>
+        <div class="col-md-4">
+            <label class="form-label">Notas</label>
+            <input class="form-control" @bind="_request.Notes" />
+        </div>
+        <div class="col-md-2">
+            <button class="btn btn-primary" @onclick="ApplyAsync" disabled="@_saving">Aplicar</button>
+        </div>
+    </div>
+</div>
+
+@if (!string.IsNullOrWhiteSpace(_message))
+{
+    <div class="alert alert-success">@_message</div>
+}
+@if (!string.IsNullOrWhiteSpace(_error))
+{
+    <div class="alert alert-danger">@_error</div>
+}
+
+<div class="card shadow-sm">
+    <div class="table-responsive">
+        <table class="table table-striped align-middle mb-0">
+            <thead>
+                <tr>
+                    <th>Fecha</th>
+                    <th>Proveedor</th>
+                    <th>Pago</th>
+                    <th>Factura</th>
+                    <th class="text-end">Aplicado</th>
+                    <th>Estatus</th>
+                    <th>Notas</th>
+                </tr>
+            </thead>
+            <tbody>
+                @if (_rows.Count == 0)
+                {
+                    <tr><td colspan="7" class="text-center text-muted py-4">Sin aplicaciones.</td></tr>
+                }
+                else
+                {
+                    @foreach (var row in _rows)
+                    {
+                        <tr>
+                            <td>@row.ApplicationDate.ToString("dd/MM/yyyy")</td>
+                            <td>@row.SupplierName</td>
+                            <td>@row.PaymentFolio</td>
+                            <td>@row.PurchaseInvoiceFolio</td>
+                            <td class="text-end">@row.AppliedAmount.ToString("N2")</td>
+                            <td>@row.Status</td>
+                            <td>@row.Notes</td>
+                        </tr>
+                    }
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+@code {
+    private ApLookupsDto _lookups = new();
+    private List<ApPaymentApplicationRowDto> _rows = new();
+    private ApplyPaymentViewModel _request = new() { AppliedAmount = 0m };
+    private DateTime _applicationDate = DateTime.Today;
+    private string? _message;
+    private string? _error;
+    private bool _saving;
+
+    private IEnumerable<ApLookupItem> FilteredPayments => _lookups.Payments.Where(x => x.SupplierId == _request.SupplierId);
+    private IEnumerable<ApLookupItem> FilteredInvoices => _lookups.PurchaseInvoices.Where(x => x.SupplierId == _request.SupplierId);
+
+    protected override async Task OnInitializedAsync()
+    {
+        await ReloadAsync();
+    }
+
+    private async Task ReloadAsync()
+    {
+        _lookups = await AccountsPayableApiService.GetLookupsAsync();
+        _rows = await AccountsPayableApiService.GetApplicationsAsync();
+    }
+
+    private async Task ApplyAsync()
+    {
+        _saving = true;
+        _message = null;
+        _error = null;
+        try
+        {
+            await AccountsPayableApiService.ApplyPaymentAsync(new ApApplyPaymentRequest
+            {
+                SupplierId = _request.SupplierId,
+                PaymentId = _request.PaymentId,
+                PurchaseInvoiceId = _request.PurchaseInvoiceId,
+                ApplicationDate = _applicationDate,
+                AppliedAmount = _request.AppliedAmount,
+                Notes = _request.Notes
+            });
+
+            _message = "Pago aplicado correctamente.";
+            _request = new ApplyPaymentViewModel { AppliedAmount = 0m };
+            _applicationDate = DateTime.Today;
+            await ReloadAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private sealed class ApplyPaymentViewModel
+    {
+        public string? SupplierIdString { get; set; }
+        public string? PaymentIdString { get; set; }
+        public string? PurchaseInvoiceIdString { get; set; }
+        public decimal AppliedAmount { get; set; }
+        public string? Notes { get; set; }
+
+        public Guid? SupplierId => Guid.TryParse(SupplierIdString, out var parsed) ? parsed : null;
+        public Guid? PaymentId => Guid.TryParse(PaymentIdString, out var parsed) ? parsed : null;
+        public Guid? PurchaseInvoiceId => Guid.TryParse(PurchaseInvoiceIdString, out var parsed) ? parsed : null;
+    }
+}

@@ -1,0 +1,6 @@
+@page "/inventory/transfers/detail"
+@page "/inventory/transfers/detail/{Id:guid}"
+@using Nanchesoft.Web.Components.Inventory
+<PageTitle>Detalle traspaso inventario | Nanchesoft</PageTitle>
+<InventoryDocumentEditor CatalogKey="inventory-transfers" DocumentId="Id" />
+@code { [Parameter] public Guid? Id { get; set; } }

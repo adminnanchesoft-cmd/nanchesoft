@@ -1,0 +1,28 @@
+@page "/monitoring/errors"
+@inject Nanchesoft.Web.Services.Monitoring.MonitoringApiService MonitoringApiService
+
+<PageTitle>Errores del sistema | Nanchesoft</PageTitle>
+
+<div class="ns-catalog-page">
+    <div class="ns-catalog-header">
+        <div>
+            <div class="ns-catalog-eyebrow">Monitoreo</div>
+            <h1 class="ns-catalog-title">Errores del sistema</h1>
+            <p class="ns-catalog-subtitle">Consulta rápida de ErrorLog para revisión operativa.</p>
+        </div>
+    </div>
+
+    @if (_rows is null)
+    {
+        <div class="ns-catalog-loading"><div class="ns-loader"></div><span>Cargando errores...</span></div>
+    }
+    else
+    {
+        <ErrorLogViewer Rows="_rows" />
+    }
+</div>
+
+@code {
+    private List<Nanchesoft.Web.Services.Monitoring.MonitoringErrorRowDto>? _rows;
+    protected override async Task OnInitializedAsync() => _rows = await MonitoringApiService.GetErrorsAsync();
+}

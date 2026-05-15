@@ -1,0 +1,229 @@
+@page "/accounts-receivable/applications"
+@using Nanchesoft.Web.Services.AccountsReceivable
+@inject AccountsReceivableApiService Api
+
+<PageTitle>Aplicaciones CxC | Nanchesoft</PageTitle>
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+        <div class="text-uppercase text-muted small fw-semibold">CxC · Aplicaciones</div>
+        <h1 class="h3 mb-1">Aplicación de recibos</h1>
+        <div class="text-muted">Aplica recibos posteados a facturas abiertas del mismo cliente.</div>
+    </div>
+    <button class="btn btn-outline-secondary" @onclick="ReloadAsync" disabled="@_loading || _saving">Actualizar</button>
+</div>
+
+<div class="card shadow-sm mb-3">
+    <div class="card-header fw-semibold">Nueva aplicación</div>
+    <div class="card-body row g-3 align-items-end">
+        <div class="col-md-4">
+            <label class="form-label">Cliente</label>
+            <select class="form-select" @bind="_selectedCustomerIdString" @bind:after="OnCustomerChangedAsync">
+                <option value="">Selecciona...</option>
+                @foreach (var item in _lookups.Customers)
+                {
+                    <option value="@item.Id">@item.Name</option>
+                }
+            </select>
+        </div>
+        <div class="col-md-4">
+            <label class="form-label">Recibo</label>
+            <select class="form-select" @bind="_request.ReceiptId">
+                <option value="">Selecciona...</option>
+                @foreach (var item in _lookups.Receipts)
+                {
+                    <option value="@item.Id">@item.Name</option>
+                }
+            </select>
+        </div>
+        <div class="col-md-4">
+            <label class="form-label">Factura</label>
+            <select class="form-select" @bind="_request.SalesInvoiceId">
+                <option value="">Selecciona...</option>
+                @foreach (var item in _lookups.SalesInvoices)
+                {
+                    <option value="@item.Id">@item.Name</option>
+                }
+            </select>
+        </div>
+        <div class="col-md-3">
+            <label class="form-label">Fecha</label>
+            <input class="form-control" type="date" @bind="_applicationDate" />
+        </div>
+        <div class="col-md-3">
+            <label class="form-label">Importe aplicado</label>
+            <input class="form-control" type="number" min="0" step="0.01" @bind="_request.AppliedAmount" />
+        </div>
+        <div class="col-md-4">
+            <label class="form-label">Referencia</label>
+            <input class="form-control" @bind="_request.Reference" />
+        </div>
+        <div class="col-md-2 d-grid">
+            <button class="btn btn-primary" @onclick="ApplyAsync" disabled="@_saving">Aplicar</button>
+        </div>
+    </div>
+</div>
+
+@if (!string.IsNullOrWhiteSpace(_message))
+{
+    <div class="alert alert-success">@_message</div>
+}
+@if (!string.IsNullOrWhiteSpace(_error))
+{
+    <div class="alert alert-danger">@_error</div>
+}
+
+<div class="card shadow-sm">
+    <div class="card-header fw-semibold">Aplicaciones registradas</div>
+    <div class="table-responsive">
+        <table class="table table-striped align-middle mb-0">
+            <thead>
+                <tr>
+                    <th>Fecha</th>
+                    <th>Cliente</th>
+                    <th>Recibo</th>
+                    <th>Factura</th>
+                    <th class="text-end">Aplicado</th>
+                    <th>Estatus</th>
+                    <th>Referencia</th>
+                    <th class="text-end">Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                @if (_rows.Count == 0)
+                {
+                    <tr><td colspan="8" class="text-center text-muted py-4">Sin aplicaciones.</td></tr>
+                }
+                else
+                {
+                    @foreach (var row in _rows)
+                    {
+                        <tr>
+                            <td>@row.ApplicationDate.ToString("dd/MM/yyyy")</td>
+                            <td>@row.CustomerName</td>
+                            <td>@row.ReceiptFolio</td>
+                            <td>@row.SalesInvoiceFolio</td>
+                            <td class="text-end">@row.AppliedAmount.ToString("N2")</td>
+                            <td>
+                                <span class="badge @(row.Status == "cancelled" ? "text-bg-secondary" : "text-bg-success")">@row.Status</span>
+                            </td>
+                            <td>@row.Reference</td>
+                            <td class="text-end">
+                                <button class="btn btn-sm btn-outline-danger"
+                                        disabled="@(_saving || row.Status == "cancelled")"
+                                        @onclick="() => CancelAsync(row)">
+                                    Cancelar
+                                </button>
+                            </td>
+                        </tr>
+                    }
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+@code {
+    private bool _loading = true;
+    private bool _saving;
+    private string? _error;
+    private string? _message;
+    private string? _selectedCustomerIdString;
+    private DateTime _applicationDate = DateTime.Today;
+    private ArLookupsDto _lookups = new();
+    private List<ArReceiptApplicationRowDto> _rows = new();
+    private ArApplyReceiptRequest _request = new() { AppliedAmount = 0m };
+
+    protected override async Task OnInitializedAsync()
+    {
+        await ReloadAsync();
+    }
+
+    private async Task ReloadAsync()
+    {
+        _loading = true;
+        _error = null;
+        try
+        {
+            Guid? customerId = Guid.TryParse(_selectedCustomerIdString, out var parsed) ? parsed : null;
+            _lookups = await Api.GetLookupsAsync(customerId);
+            _rows = await Api.GetApplicationsAsync(customerId);
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task OnCustomerChangedAsync()
+    {
+        if (Guid.TryParse(_selectedCustomerIdString, out var customerId))
+        {
+            _request.CustomerId = customerId;
+        }
+        else
+        {
+            _request.CustomerId = null;
+        }
+
+        _request.ReceiptId = null;
+        _request.SalesInvoiceId = null;
+        await ReloadAsync();
+    }
+
+    private async Task ApplyAsync()
+    {
+        _saving = true;
+        _message = null;
+        _error = null;
+        try
+        {
+            if (!Guid.TryParse(_selectedCustomerIdString, out var customerId))
+            {
+                _error = "Debes seleccionar un cliente.";
+                return;
+            }
+
+            _request.CustomerId = customerId;
+            _request.ApplicationDate = _applicationDate;
+            await Api.ApplyReceiptAsync(_request);
+            _message = "Recibo aplicado correctamente.";
+            _request = new ArApplyReceiptRequest { CustomerId = customerId, AppliedAmount = 0m };
+            _applicationDate = DateTime.Today;
+            await ReloadAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private async Task CancelAsync(ArReceiptApplicationRowDto row)
+    {
+        _saving = true;
+        _message = null;
+        _error = null;
+        try
+        {
+            await Api.CancelApplicationAsync(row.ReceiptApplicationId);
+            _message = "Aplicación cancelada correctamente.";
+            await ReloadAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+}

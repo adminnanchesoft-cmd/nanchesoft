@@ -1,0 +1,77 @@
+@page "/sales/shipments"
+@using Nanchesoft.Web.Services.Cfdi
+@inject CfdiApiService CfdiApiService
+@inject NavigationManager Navigation
+<PageTitle>Remisiones | Nanchesoft</PageTitle>
+
+<div class="container-fluid py-3">
+    <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-3">
+        <div>
+            <div class="text-uppercase small text-secondary fw-semibold">Ventas · remisiones</div>
+            <h2 class="mb-1">Remisiones</h2>
+            <div class="text-secondary">Desde aquí puedes abrir la remisión y preparar la factura para timbrarla directo.</div>
+        </div>
+        <div class="d-flex gap-2 flex-wrap">
+            <button class="btn btn-outline-secondary" @onclick='() => Navigation.NavigateTo("/sales/dashboard")'>Dashboard ventas</button>
+            <button class="btn btn-outline-secondary" @onclick='() => Navigation.NavigateTo("/sales/invoices")'>Facturas</button>
+            <button class="btn btn-primary" @onclick='() => Navigation.NavigateTo("/sales/shipments/detail")'>Nueva remisión</button>
+        </div>
+    </div>
+
+    @if (_loading)
+    {
+        <div class="alert alert-info">Cargando remisiones...</div>
+    }
+    else
+    {
+        <div class="card shadow-sm">
+            <div class="table-responsive">
+                <table class="table table-sm table-striped align-middle mb-0">
+                    <thead>
+                        <tr>
+                            <th>Folio</th>
+                            <th>Cliente</th>
+                            <th>Fecha</th>
+                            <th>Estatus</th>
+                            <th>Partidas</th>
+                            <th>Cantidad</th>
+                            <th>Facturas ligadas</th>
+                            <th style="width: 260px;">Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var row in _rows)
+                        {
+                            <tr>
+                                <td>@row.Folio</td>
+                                <td>@row.CustomerName</td>
+                                <td>@row.ShipmentDate.ToString("yyyy-MM-dd")</td>
+                                <td>@row.BusinessStatus</td>
+                                <td>@row.LinesCount</td>
+                                <td>@row.TotalQuantity.ToString("N2")</td>
+                                <td>@row.LinkedInvoices</td>
+                                <td>
+                                    <div class="d-flex gap-2 flex-wrap">
+                                        <a class="btn btn-sm btn-outline-secondary" href="@row.EditRoute">Editar</a>
+                                        <a class="btn btn-sm btn-primary" href="@row.InvoiceRoute">Facturar / timbrar</a>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private bool _loading = true;
+    private List<CfdiShipmentSourceDto> _rows = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        _rows = await CfdiApiService.GetShipmentsAsync();
+        _loading = false;
+    }
+}

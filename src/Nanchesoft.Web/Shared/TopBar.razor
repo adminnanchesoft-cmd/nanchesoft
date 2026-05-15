@@ -1,0 +1,368 @@
+@using Microsoft.AspNetCore.Components.Web
+@using Microsoft.JSInterop
+@using Nanchesoft.Web.Services
+@using Nanchesoft.Web.State
+@implements IDisposable
+@inject NavigationService NavigationService
+@inject NavigationManager NavigationManager
+@inject AuthState AuthState
+@inject AppState AppState
+@inject AuthService AuthService
+@inject IJSRuntime JS
+
+<header class="ns-azure-topbar ns-azure-topbar--enhanced ns-tb3" @onclick:stopPropagation="true">
+    <div class="ns-azure-topbar__left ns-tb3__left">
+        <button type="button" class="ns-tb3__iconbtn ns-tb3__waffle" title="Búsqueda global · Ctrl+K" @onclick="OpenPaletteAsync" aria-label="Abrir buscador global">
+            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+                <rect x="3" y="3" width="7" height="7" rx="1.4"></rect>
+                <rect x="14" y="3" width="7" height="7" rx="1.4"></rect>
+                <rect x="3" y="14" width="7" height="7" rx="1.4"></rect>
+                <rect x="14" y="14" width="7" height="7" rx="1.4"></rect>
+            </svg>
+        </button>
+
+        <a class="ns-tb3__brand" href="/dashboard" @onclick:preventDefault="true" @onclick="GoHome">
+            <span class="ns-tb3__brandmark" aria-hidden="true">
+                <svg viewBox="0 0 32 32" width="22" height="22">
+                    <defs>
+                        <linearGradient id="ns-tb3-grad" x1="0" y1="0" x2="1" y2="1">
+                            <stop offset="0%" stop-color="#ffffff" stop-opacity=".95"></stop>
+                            <stop offset="100%" stop-color="#cfe5ff" stop-opacity=".7"></stop>
+                        </linearGradient>
+                    </defs>
+                    <path d="M6 24 L6 8 L12 8 L20 18 L20 8 L26 8 L26 24 L20 24 L12 14 L12 24 Z" fill="url(#ns-tb3-grad)"></path>
+                </svg>
+            </span>
+            <span class="ns-tb3__brandtext">
+                <span class="ns-tb3__brandtitle">Nanchesoft ERP</span>
+                <span class="ns-tb3__brandtag">Cloud enterprise platform</span>
+            </span>
+        </a>
+    </div>
+
+    <div class="ns-azure-topbar__center ns-tb3__center">
+        <div class="ns-azure-topbar__searchwrap ns-tb3__searchwrap" @onfocusout="HandleBlur">
+            <span class="ns-tb3__searchicon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="16" height="16">
+                    <circle cx="10.5" cy="10.5" r="6.5" fill="none" stroke="currentColor" stroke-width="2"></circle>
+                    <line x1="15.2" y1="15.2" x2="20" y2="20" stroke="currentColor" stroke-width="2" stroke-linecap="round"></line>
+                </svg>
+            </span>
+
+            <input class="ns-azure-topbar__search ns-tb3__search"
+                   type="text"
+                   value="@SearchText"
+                   placeholder="Buscar módulos, pantallas, clientes, acciones del ERP..."
+                   @oninput="HandleSearchChanged"
+                   @onkeydown="HandleSearchKeyDown"
+                   @onfocus="HandleFocus" />
+
+            <button type="button" class="ns-tb3__shortcutpill" @onclick="OpenPaletteAsync" title="Búsqueda avanzada">
+                <kbd>Ctrl</kbd><span>+</span><kbd>K</kbd>
+            </button>
+
+            @if (HasResultsOrSuggestions)
+            {
+                <div class="ns-tb3__results">
+                    @if (SearchResults.Count > 0)
+                    {
+                        <div class="ns-tb3__results-section">
+                            <div class="ns-tb3__results-eyebrow">Resultados · @SearchResults.Count</div>
+                            @foreach (var item in SearchResults.Take(7))
+                            {
+                                <button type="button" class="ns-tb3__result" @onmousedown="() => OpenItem(item)">
+                                    <span class="ns-tb3__result-icon">@ShellNavHelper.GetModuleShortCode(item.Module ?? item.Title)</span>
+                                    <span class="ns-tb3__result-meta">
+                                        <span class="ns-tb3__result-title">@item.Title</span>
+                                        <span class="ns-tb3__result-sub">@(item.Module ?? "General") · @item.Route</span>
+                                    </span>
+                                    <span class="ns-tb3__result-kind">Pantalla</span>
+                                </button>
+                            }
+                        </div>
+                    }
+
+                    @if (SearchResults.Count == 0 && string.IsNullOrWhiteSpace(SearchText) && Recents.Count > 0)
+                    {
+                        <div class="ns-tb3__results-section">
+                            <div class="ns-tb3__results-eyebrow">Recientes</div>
+                            @foreach (var bookmark in Recents.Take(5))
+                            {
+                                <button type="button" class="ns-tb3__result" @onmousedown="() => OpenBookmark(bookmark)">
+                                    <span class="ns-tb3__result-icon">@ShellNavHelper.GetModuleShortCode(bookmark.Module ?? bookmark.Title)</span>
+                                    <span class="ns-tb3__result-meta">
+                                        <span class="ns-tb3__result-title">@bookmark.Title</span>
+                                        <span class="ns-tb3__result-sub">@(bookmark.Module ?? "General") · @bookmark.Route</span>
+                                    </span>
+                                    <span class="ns-tb3__result-kind">Reciente</span>
+                                </button>
+                            }
+                        </div>
+                    }
+
+                    <div class="ns-tb3__results-footer">
+                        <button type="button" class="ns-tb3__results-link" @onmousedown="OpenPaletteAsync">
+                            Búsqueda avanzada · Ctrl + K
+                        </button>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+
+    <div class="ns-azure-topbar__right ns-tb3__right">
+        <div class="ns-tb3__iconcluster" role="toolbar" aria-label="Acciones rápidas">
+            <button type="button" class="ns-tb3__iconbtn" title="Notificaciones" @onclick="ToggleNotifications">
+                <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+                    <path d="M12 3a6 6 0 0 0-6 6v3.2L4 15v1h16v-1l-2-2.8V9a6 6 0 0 0-6-6Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"></path>
+                    <path d="M10 18a2 2 0 0 0 4 0" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"></path>
+                </svg>
+                @if (NotificationCount > 0)
+                {
+                    <span class="ns-tb3__iconbtn-dot">@(NotificationCount > 9 ? "9+" : NotificationCount.ToString())</span>
+                }
+            </button>
+
+            <button type="button" class="ns-tb3__iconbtn" title="Ayuda y soporte">
+                <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+                    <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.7"></circle>
+                    <path d="M9.5 9.2a2.5 2.5 0 1 1 3.6 2.3c-.9.5-1.6 1-1.6 2.1" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"></path>
+                    <circle cx="11.5" cy="17" r="1.1" fill="currentColor"></circle>
+                </svg>
+            </button>
+
+            <button type="button" class="ns-tb3__iconbtn" title="Configuración">
+                <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+                    <path d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7Z" fill="none" stroke="currentColor" stroke-width="1.7"></path>
+                    <path d="M19.4 13.5a7.6 7.6 0 0 0 0-3l1.7-1.3-1.7-3-2 .8a7.5 7.5 0 0 0-2.6-1.5l-.3-2.1h-3.4l-.3 2.1c-.95.32-1.83.83-2.6 1.5l-2-.8-1.7 3 1.7 1.3a7.6 7.6 0 0 0 0 3l-1.7 1.3 1.7 3 2-.8c.77.67 1.65 1.18 2.6 1.5l.3 2.1h3.4l.3-2.1a7.5 7.5 0 0 0 2.6-1.5l2 .8 1.7-3-1.7-1.3Z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"></path>
+                </svg>
+            </button>
+        </div>
+
+        <span class="ns-tb3__divider" aria-hidden="true"></span>
+
+        <div class="ns-tb3__contextchips" role="group" aria-label="Contexto activo">
+            <span class="ns-tb3__contextchip" title="Tenant">
+                <span class="ns-tb3__contextchip-eyebrow">Tenant</span>
+                <span class="ns-tb3__contextchip-value">@TenantName</span>
+            </span>
+            <span class="ns-tb3__contextchip" title="Empresa">
+                <span class="ns-tb3__contextchip-eyebrow">Empresa</span>
+                <span class="ns-tb3__contextchip-value">@CompanyName</span>
+            </span>
+            @if (HasBranch)
+            {
+                <span class="ns-tb3__contextchip" title="Sucursal">
+                    <span class="ns-tb3__contextchip-eyebrow">Sucursal</span>
+                    <span class="ns-tb3__contextchip-value">@BranchName</span>
+                </span>
+            }
+        </div>
+
+        <span class="ns-tb3__divider" aria-hidden="true"></span>
+
+        <button type="button" class="ns-tb3__userpill" @onclick="ToggleUserMenu" title="@DisplayName">
+            <span class="ns-tb3__avatar">@Initial</span>
+            <span class="ns-tb3__userpill-text">
+                <span class="ns-tb3__userpill-name">@DisplayName</span>
+                <span class="ns-tb3__userpill-role">@RoleText</span>
+            </span>
+            <svg class="ns-tb3__userpill-caret" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
+                <path d="M6 9 L12 15 L18 9" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path>
+            </svg>
+        </button>
+
+        @if (UserMenuOpen)
+        {
+            <div class="ns-tb3__usermenu" @onclick:stopPropagation="true">
+                <div class="ns-tb3__usermenu-head">
+                    <div class="ns-tb3__usermenu-avatar">@Initial</div>
+                    <div class="ns-tb3__usermenu-meta">
+                        <div class="ns-tb3__usermenu-name">@DisplayName</div>
+                        <div class="ns-tb3__usermenu-mail">@RoleText</div>
+                        <div class="ns-tb3__usermenu-tenant">@TenantName</div>
+                    </div>
+                </div>
+                <div class="ns-tb3__usermenu-list">
+                    <button type="button" class="ns-tb3__usermenu-item" @onclick="GoToProfile">
+                        <span class="ns-tb3__usermenu-itemicon">
+                            <svg viewBox="0 0 24 24" width="16" height="16"><circle cx="12" cy="8.5" r="3.5" fill="none" stroke="currentColor" stroke-width="1.7"></circle><path d="M5 19a7 7 0 0 1 14 0" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"></path></svg>
+                        </span>
+                        Mi perfil
+                    </button>
+                    <button type="button" class="ns-tb3__usermenu-item" @onclick="GoToTenantSwitch">
+                        <span class="ns-tb3__usermenu-itemicon">
+                            <svg viewBox="0 0 24 24" width="16" height="16"><path d="M4 7h16M4 12h16M4 17h10" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" fill="none"></path></svg>
+                        </span>
+                        Cambiar contexto
+                    </button>
+                    <button type="button" class="ns-tb3__usermenu-item ns-tb3__usermenu-item--danger" @onclick="LogoutAsync">
+                        <span class="ns-tb3__usermenu-itemicon">
+                            <svg viewBox="0 0 24 24" width="16" height="16"><path d="M14 4h4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-4M10 8l-4 4 4 4M6 12h11" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+                        </span>
+                        Cerrar sesión
+                    </button>
+                </div>
+            </div>
+        }
+    </div>
+</header>
+
+@code {
+    private string SearchText { get; set; } = string.Empty;
+    private IReadOnlyList<NavigationMenuItem> SearchResults { get; set; } = Array.Empty<NavigationMenuItem>();
+    private IReadOnlyList<ShellBookmark> Recents { get; set; } = Array.Empty<ShellBookmark>();
+    private bool SearchFocused { get; set; }
+    private bool UserMenuOpen { get; set; }
+    private int NotificationCount { get; set; } = 0;
+
+    private string TenantName => Resolve(AppState.CurrentTenantName, AuthState.TenantName, "Sin tenant");
+    private string CompanyName => Resolve(AppState.CurrentCompanyName, AuthState.CompanyName, "Sin empresa");
+    private string BranchName => Resolve(AppState.CurrentBranchName, AuthState.BranchName, "Sin sucursal");
+    private bool HasBranch => !string.IsNullOrWhiteSpace(BranchName) && !string.Equals(BranchName, "Sin sucursal", StringComparison.OrdinalIgnoreCase);
+    private string DisplayName => Resolve(AuthState.DisplayName, AuthState.Username, "Invitado");
+    private string RoleText => AuthState.IsPlatformOwner ? "Propietario de plataforma" : (string.IsNullOrWhiteSpace(AuthState.RoleName) ? "Tenant admin" : AuthState.RoleName);
+    private string Initial => string.IsNullOrWhiteSpace(DisplayName) ? "?" : DisplayName.Trim()[0].ToString().ToUpperInvariant();
+
+    private bool HasResultsOrSuggestions =>
+        SearchFocused && (SearchResults.Count > 0 || (string.IsNullOrWhiteSpace(SearchText) && Recents.Count > 0));
+
+    protected override void OnInitialized()
+    {
+        AuthState.OnChange += HandleStateChanged;
+        RefreshRecents();
+    }
+
+    public void Dispose()
+    {
+        AuthState.OnChange -= HandleStateChanged;
+    }
+
+    private void HandleStateChanged()
+    {
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    private void RefreshRecents()
+    {
+        Recents = ShellMemoryStore.GetRecents();
+    }
+
+    private async Task OpenPaletteAsync()
+    {
+        SearchText = string.Empty;
+        SearchResults = Array.Empty<NavigationMenuItem>();
+        SearchFocused = false;
+        UserMenuOpen = false;
+        await JS.InvokeVoidAsync("nsShell.open");
+    }
+
+    private void HandleSearchChanged(ChangeEventArgs args)
+    {
+        SearchText = args.Value?.ToString() ?? string.Empty;
+        SearchResults = string.IsNullOrWhiteSpace(SearchText)
+            ? Array.Empty<NavigationMenuItem>()
+            : NavigationService.Search(SearchText).Take(8).ToList();
+    }
+
+    private void HandleSearchKeyDown(KeyboardEventArgs args)
+    {
+        if (args.Key is "Enter" && SearchResults.Count > 0)
+        {
+            OpenItem(SearchResults[0]);
+        }
+        else if (args.Key is "Escape")
+        {
+            SearchText = string.Empty;
+            SearchResults = Array.Empty<NavigationMenuItem>();
+            SearchFocused = false;
+        }
+    }
+
+    private void HandleFocus()
+    {
+        SearchFocused = true;
+        RefreshRecents();
+    }
+
+    private void HandleBlur()
+    {
+        // Delay para que el click en un resultado se procese antes de cerrar
+        _ = InvokeAsync(async () =>
+        {
+            await Task.Delay(180);
+            SearchFocused = false;
+            StateHasChanged();
+        });
+    }
+
+    private void OpenItem(NavigationMenuItem item)
+    {
+        SearchText = string.Empty;
+        SearchResults = Array.Empty<NavigationMenuItem>();
+        SearchFocused = false;
+        var route = NavigationService.Normalize(item.Route);
+        ShellMemoryStore.Remember(item.Title, route, item.Module ?? "General");
+        NavigationManager.NavigateTo(route);
+    }
+
+    private void OpenBookmark(ShellBookmark bookmark)
+    {
+        SearchText = string.Empty;
+        SearchResults = Array.Empty<NavigationMenuItem>();
+        SearchFocused = false;
+        var route = NavigationService.Normalize(bookmark.Route);
+        ShellMemoryStore.Remember(bookmark.Title, route, bookmark.Module);
+        NavigationManager.NavigateTo(route);
+    }
+
+    private void ToggleUserMenu()
+    {
+        UserMenuOpen = !UserMenuOpen;
+    }
+
+    private void ToggleNotifications()
+    {
+        // Placeholder: aquí podrías abrir un panel lateral de notificaciones
+    }
+
+    private void GoHome()
+    {
+        UserMenuOpen = false;
+        NavigationManager.NavigateTo("/dashboard");
+    }
+
+    private void GoToProfile()
+    {
+        UserMenuOpen = false;
+        NavigationManager.NavigateTo("/security/profile");
+    }
+
+    private void GoToTenantSwitch()
+    {
+        UserMenuOpen = false;
+        NavigationManager.NavigateTo("/dashboard");
+    }
+
+    private async Task LogoutAsync()
+    {
+        UserMenuOpen = false;
+        await AuthService.LogoutAsync();
+        NavigationManager.NavigateTo("/login", forceLoad: true);
+    }
+
+    private static string Resolve(string? primary, string? fallback, string emptyText)
+    {
+        if (!string.IsNullOrWhiteSpace(primary) && !primary.Equals(emptyText, StringComparison.OrdinalIgnoreCase))
+        {
+            return primary;
+        }
+
+        if (!string.IsNullOrWhiteSpace(fallback))
+        {
+            return fallback;
+        }
+
+        return emptyText;
+    }
+}

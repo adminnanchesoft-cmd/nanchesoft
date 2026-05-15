@@ -1,0 +1,110 @@
+@using Microsoft.JSInterop
+@inject IJSRuntime JS
+@inject NavigationService NavigationService
+@inject NavigationManager NavigationManager
+@implements IAsyncDisposable
+
+<div id="@_hostId" class="ns-command-palette-host"></div>
+
+@code {
+    private readonly string _hostId = $"ns-shell-popup-{Guid.NewGuid():N}";
+    private DotNetObjectReference<ShellCommandPalette>? _objectReference;
+    private bool _initialized;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+        {
+            return;
+        }
+
+        _objectReference = DotNetObjectReference.Create(this);
+
+        await JS.InvokeVoidAsync(
+            "nsShell.init",
+            _hostId,
+            _objectReference,
+            BuildPaletteItems(),
+            NavigationService.Normalize(NavigationManager.ToBaseRelativePath(NavigationManager.Uri)));
+
+        _initialized = true;
+    }
+
+    [JSInvokable]
+    public Task NavigateTo(string route)
+    {
+        var normalized = NavigationService.Normalize(route);
+        if (NavigationService.GetActiveItem(normalized) is { } item)
+        {
+            ShellMemoryStore.Remember(item.Title, normalized, item.Module ?? "General");
+        }
+
+        NavigationManager.NavigateTo(normalized);
+        return Task.CompletedTask;
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_initialized)
+        {
+            try
+            {
+                await JS.InvokeVoidAsync("nsShell.dispose", _hostId);
+            }
+            catch
+            {
+            }
+        }
+
+        _objectReference?.Dispose();
+    }
+
+    private List<ShellPaletteItem> BuildPaletteItems()
+    {
+        var items = new List<ShellPaletteItem>();
+        var shortcuts = new[]
+        {
+            new ShellPaletteItem { Title = "Ir al dashboard", Route = "/dashboard", Module = "Inicio", Kind = "Acción", Keywords = "inicio home principal panel" },
+            new ShellPaletteItem { Title = "Abrir impresión de servicios", Route = "/services/print-center", Module = "Servicios", Kind = "Acción", Keywords = "imprimir print notas servicio formatos" },
+            new ShellPaletteItem { Title = "Abrir impresión de ventas", Route = "/sales/print-center", Module = "Ventas", Kind = "Acción", Keywords = "imprimir ventas facturas remisiones" },
+            new ShellPaletteItem { Title = "Abrir impresión de compras", Route = "/purchases/print-center", Module = "Compras", Kind = "Acción", Keywords = "imprimir compras órdenes recepciones" },
+            new ShellPaletteItem { Title = "Abrir impresión de inventario", Route = "/inventory/print-center", Module = "Inventario", Kind = "Acción", Keywords = "imprimir inventario salidas entradas" }
+        };
+
+        items.AddRange(shortcuts);
+
+        foreach (var group in NavigationService.GetMenu())
+        {
+            foreach (var item in group.Items)
+            {
+                items.Add(new ShellPaletteItem
+                {
+                    Title = item.Title,
+                    Route = NavigationService.Normalize(item.Route),
+                    Module = item.Module ?? group.Title,
+                    Kind = "Pantalla",
+                    Badge = item.Badge ?? string.Empty,
+                    Keywords = string.Join(' ', new[] { item.Title, item.Route, item.Module, item.Badge, group.Title }.Where(x => !string.IsNullOrWhiteSpace(x)))
+                });
+            }
+        }
+
+        return items
+            .GroupBy(x => $"{x.Kind}|{x.Route}|{x.Title}", StringComparer.OrdinalIgnoreCase)
+            .Select(x => x.First())
+            .OrderBy(x => x.Kind)
+            .ThenBy(x => x.Module)
+            .ThenBy(x => x.Title)
+            .ToList();
+    }
+
+    public sealed class ShellPaletteItem
+    {
+        public string Title { get; set; } = string.Empty;
+        public string Route { get; set; } = string.Empty;
+        public string Module { get; set; } = string.Empty;
+        public string Kind { get; set; } = "Pantalla";
+        public string Badge { get; set; } = string.Empty;
+        public string Keywords { get; set; } = string.Empty;
+    }
+}

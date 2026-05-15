@@ -1,0 +1,139 @@
+@page "/finance/executive-dashboard"
+@using Nanchesoft.Web.Services.Finance
+@inject FinanceApiService FinanceApiService
+
+<PageTitle>Centro financiero | Nanchesoft</PageTitle>
+
+<h1 class="h3 mb-3">Centro financiero</h1>
+<p class="text-muted">Vista ejecutiva consolidada de liquidez, control financiero, analítica y planeación.</p>
+
+@if (_loading)
+{
+    <div class="alert alert-info">Cargando centro financiero...</div>
+}
+else if (!string.IsNullOrWhiteSpace(_error))
+{
+    <div class="alert alert-danger">@_error</div>
+}
+else
+{
+    <div class="row g-3 mb-3">
+        <div class="col-md-3"><div class="card shadow-sm h-100"><div class="card-body"><div class="text-muted small">Liquidez total</div><div class="fs-4 fw-bold text-success">@_dashboard.TotalLiquidity.ToString("N2")</div><div class="small text-muted">Caja @_dashboard.CashBalance.ToString("N2") + bancos @_dashboard.BankBalance.ToString("N2")</div></div></div></div>
+        <div class="col-md-3"><div class="card shadow-sm h-100"><div class="card-body"><div class="text-muted small">Capital de trabajo</div><div class="fs-4 fw-bold @GetSignedClass(_dashboard.WorkingCapital)">@_dashboard.WorkingCapital.ToString("N2")</div><div class="small text-muted">CxC @_dashboard.OpenReceivables.ToString("N2") / CxP @_dashboard.OpenPayables.ToString("N2")</div></div></div></div>
+        <div class="col-md-3"><div class="card shadow-sm h-100"><div class="card-body"><div class="text-muted small">Presupuesto mes</div><div class="fs-4 fw-bold @GetBudgetClass(_dashboard.BudgetVarianceThisMonth)">@_dashboard.BudgetCompliancePercent.ToString("N2")%</div><div class="small text-muted">Presupuesto @_dashboard.BudgetThisMonth.ToString("N2") / real @_dashboard.ActualThisMonth.ToString("N2")</div></div></div></div>
+        <div class="col-md-3"><div class="card shadow-sm h-100"><div class="card-body"><div class="text-muted small">Alertas y control</div><div class="fs-4 fw-bold text-danger">@_dashboard.ActiveAlerts</div><div class="small text-muted">Autorizaciones @_dashboard.PendingApprovals · semáforos rojos @_dashboard.RedSemaphores</div></div></div></div>
+    </div>
+
+    <div class="card shadow-sm mb-3">
+        <div class="card-body">
+            <div class="h5 mb-2">Resumen ejecutivo</div>
+            <ul class="mb-0">
+                <li>Liquidez disponible y capital de trabajo al cierre de hoy.</li>
+                <li>Presupuesto y metas mensuales con seguimiento de cumplimiento.</li>
+                <li>Cobranza, pagos, alertas, autorizaciones y semáforos financieros.</li>
+                <li>Analítica avanzada para rentabilidad, concentración, ciclo de efectivo, forecast y radar financiero.</li>
+            </ul>
+        </div>
+    </div>
+
+    <div class="row g-3">
+        <div class="col-md-2"><a class="card shadow-sm text-decoration-none text-reset h-100 d-block" href="/finance/cash-flow"><div class="card-body"><div class="text-muted small">Planeación</div><div class="h5 mb-1">Flujo proyectado</div><div class="small text-muted">Entradas y salidas por semana.</div></div></a></div>
+        <div class="col-md-2"><a class="card shadow-sm text-decoration-none text-reset h-100 d-block" href="/finance/budgets"><div class="card-body"><div class="text-muted small">Planeación</div><div class="h5 mb-1">Presupuestos</div><div class="small text-muted">Objetivos por cuenta y mes.</div></div></a></div>
+        <div class="col-md-2"><a class="card shadow-sm text-decoration-none text-reset h-100 d-block" href="/finance/budget-vs-actual"><div class="card-body"><div class="text-muted small">Control</div><div class="h5 mb-1">Real vs presupuesto</div><div class="small text-muted">Desviaciones por cuenta.</div></div></a></div>
+        <div class="col-md-2"><a class="card shadow-sm text-decoration-none text-reset h-100 d-block" href="/finance/authorizations"><div class="card-body"><div class="text-muted small">Control</div><div class="h5 mb-1">Autorizaciones</div><div class="small text-muted">Valida documentos sensibles.</div></div></a></div>
+        <div class="col-md-2"><a class="card shadow-sm text-decoration-none text-reset h-100 d-block" href="/finance/alerts"><div class="card-body"><div class="text-muted small">Monitoreo</div><div class="h5 mb-1">Alertas</div><div class="small text-muted">Vencimientos y riesgos.</div></div></a></div>
+        <div class="col-md-2"><a class="card shadow-sm text-decoration-none text-reset h-100 d-block" href="/finance/semaphores"><div class="card-body"><div class="text-muted small">Monitoreo</div><div class="h5 mb-1">Semáforos</div><div class="small text-muted">Rojo, amarillo y verde.</div></div></a></div>
+    </div>
+
+    <div class="row g-3 mt-1">
+        <div class="col-md-3"><a class="card shadow-sm text-decoration-none text-reset h-100 d-block" href="/finance/collections-calendar"><div class="card-body"><div class="text-muted small">Calendario</div><div class="h5 mb-1">Cobranza</div><div class="small text-muted">Facturas por vencer y vencidas.</div></div></a></div>
+        <div class="col-md-3"><a class="card shadow-sm text-decoration-none text-reset h-100 d-block" href="/finance/payments-calendar"><div class="card-body"><div class="text-muted small">Calendario</div><div class="h5 mb-1">Pagos</div><div class="small text-muted">Compromisos por proveedor y semana.</div></div></a></div>
+        <div class="col-md-3"><a class="card shadow-sm text-decoration-none text-reset h-100 d-block" href="/finance/collection-commitments"><div class="card-body"><div class="text-muted small">Operación</div><div class="h5 mb-1">Compromisos de cobro</div><div class="small text-muted">Promesas, responsables y fecha comprometida.</div></div></a></div>
+        <div class="col-md-3"><a class="card shadow-sm text-decoration-none text-reset h-100 d-block" href="/finance/payment-schedule"><div class="card-body"><div class="text-muted small">Operación</div><div class="h5 mb-1">Programación de pagos</div><div class="small text-muted">Agenda pagos con prioridad y autorización.</div></div></a></div>
+    </div>
+
+    <div class="row g-3 mt-1">
+        <div class="col-md-4"><a class="card shadow-sm text-decoration-none text-reset h-100 d-block" href="/finance/weekly-treasury-plan"><div class="card-body"><div class="text-muted small">Tesorería</div><div class="h5 mb-1">Plan semanal</div><div class="small text-muted">Entradas, salidas y saldo proyectado.</div></div></a></div>
+        <div class="col-md-4"><a class="card shadow-sm text-decoration-none text-reset h-100 d-block" href="/finance/commitment-follow-up"><div class="card-body"><div class="text-muted small">Seguimiento</div><div class="h5 mb-1">Seguimiento financiero</div><div class="small text-muted">Pendientes críticos y responsables.</div></div></a></div>
+        <div class="col-md-4"><a class="card shadow-sm text-decoration-none text-reset h-100 d-block" href="/finance/scenarios"><div class="card-body"><div class="text-muted small">Simulación</div><div class="h5 mb-1">Escenarios</div><div class="small text-muted">Qué pasa si cobras antes o pagas después.</div></div></a></div>
+    </div>
+
+    <div class="row g-3 mt-1">
+        <div class="col-md-3"><a class="card shadow-sm text-decoration-none text-reset h-100 d-block" href="/finance/monthly-profitability"><div class="card-body"><div class="text-muted small">Analítica</div><div class="h5 mb-1">Rentabilidad mensual</div><div class="small text-muted">Ventas netas, compras y margen por mes.</div></div></a></div>
+        <div class="col-md-3"><a class="card shadow-sm text-decoration-none text-reset h-100 d-block" href="/finance/collections-performance"><div class="card-body"><div class="text-muted small">Analítica</div><div class="h5 mb-1">Desempeño cobranza</div><div class="small text-muted">Cartera, vencido y efectividad por cliente.</div></div></a></div>
+        <div class="col-md-3"><a class="card shadow-sm text-decoration-none text-reset h-100 d-block" href="/finance/payments-performance"><div class="card-body"><div class="text-muted small">Analítica</div><div class="h5 mb-1">Desempeño pagos</div><div class="small text-muted">Programado, pagado y riesgo por proveedor.</div></div></a></div>
+        <div class="col-md-3"><a class="card shadow-sm text-decoration-none text-reset h-100 d-block" href="/finance/concentration-analysis"><div class="card-body"><div class="text-muted small">Analítica</div><div class="h5 mb-1">Concentración cartera</div><div class="small text-muted">Dependencia comercial y operativa.</div></div></a></div>
+    </div>
+
+    <div class="row g-3 mt-1">
+        <div class="col-md-3"><a class="card shadow-sm text-decoration-none text-reset h-100 d-block" href="/finance/year-over-year"><div class="card-body"><div class="text-muted small">Comparativo</div><div class="h5 mb-1">Comparativo anual</div><div class="small text-muted">Actual vs año anterior por mes.</div></div></a></div>
+        <div class="col-md-3"><a class="card shadow-sm text-decoration-none text-reset h-100 d-block" href="/finance/kpi-scorecard"><div class="card-body"><div class="text-muted small">Control</div><div class="h5 mb-1">Scorecard KPI</div><div class="small text-muted">Cumplimiento contra metas del mes.</div></div></a></div>
+        <div class="col-md-3"><a class="card shadow-sm text-decoration-none text-reset h-100 d-block" href="/finance/working-capital-bridge"><div class="card-body"><div class="text-muted small">Liquidez</div><div class="h5 mb-1">Puente capital trabajo</div><div class="small text-muted">Descomposición del capital de trabajo.</div></div></a></div>
+        <div class="col-md-3"><a class="card shadow-sm text-decoration-none text-reset h-100 d-block" href="/finance/variation-rankings"><div class="card-body"><div class="text-muted small">Analítica</div><div class="h5 mb-1">Rankings variación</div><div class="small text-muted">Clientes y proveedores que más cambian.</div></div></a></div>
+    </div>
+
+    <div class="row g-3 mt-1">
+        <div class="col-md-3"><a class="card shadow-sm text-decoration-none text-reset h-100 d-block" href="/finance/board-pack"><div class="card-body"><div class="text-muted small">Directivo</div><div class="h5 mb-1">Paquete directivo</div><div class="small text-muted">Resumen ejecutivo de 6 meses y cumplimiento.</div></div></a></div>
+        <div class="col-md-3"><a class="card shadow-sm text-decoration-none text-reset h-100 d-block" href="/finance/liquidity-radar"><div class="card-body"><div class="text-muted small">Liquidez</div><div class="h5 mb-1">Radar liquidez</div><div class="small text-muted">Horizontes 7, 14, 30 y 60 días.</div></div></a></div>
+        <div class="col-md-3"><a class="card shadow-sm text-decoration-none text-reset h-100 d-block" href="/finance/cash-conversion-cycle"><div class="card-body"><div class="text-muted small">Operación</div><div class="h5 mb-1">Ciclo conversión efectivo</div><div class="small text-muted">DSO, DIO, DPO y ciclo total.</div></div></a></div>
+        <div class="col-md-3"><a class="card shadow-sm text-decoration-none text-reset h-100 d-block" href="/finance/stress-tests"><div class="card-body"><div class="text-muted small">Riesgo</div><div class="h5 mb-1">Pruebas de estrés</div><div class="small text-muted">Escenarios de liquidez y presión de caja.</div></div></a></div>
+    </div>
+
+    <div class="row g-3 mt-1">
+        <div class="col-md-3"><a class="card shadow-sm text-decoration-none text-reset h-100 d-block" href="/finance/action-center"><div class="card-body"><div class="text-muted small">Gobierno</div><div class="h5 mb-1">Centro de acciones</div><div class="small text-muted">Pendientes priorizados y dueños.</div></div></a></div>
+        <div class="col-md-3"><a class="card shadow-sm text-decoration-none text-reset h-100 d-block" href="/finance/closing-cockpit"><div class="card-body"><div class="text-muted small">Cierre</div><div class="h5 mb-1">Cockpit de cierre</div><div class="small text-muted">Checklist mensual y bloqueos.</div></div></a></div>
+        <div class="col-md-3"><a class="card shadow-sm text-decoration-none text-reset h-100 d-block" href="/finance/covenants"><div class="card-body"><div class="text-muted small">Riesgo</div><div class="h5 mb-1">Covenants</div><div class="small text-muted">Coberturas, presión y alertas.</div></div></a></div>
+        <div class="col-md-3"><a class="card shadow-sm text-decoration-none text-reset h-100 d-block" href="/finance/executive-agreements"><div class="card-body"><div class="text-muted small">Comité</div><div class="h5 mb-1">Acuerdos ejecutivos</div><div class="small text-muted">Compromisos, due date y seguimiento.</div></div></a></div>
+    </div>
+
+    <div class="row g-3 mt-1">
+        <div class="col-md-3"><a class="card shadow-sm text-decoration-none text-reset h-100 d-block" href="/finance/rolling-forecast"><div class="card-body"><div class="text-muted small">Forecast</div><div class="h5 mb-1">Forecast rolling</div><div class="small text-muted">Liquidez móvil con metas, presupuesto y compromisos.</div></div></a></div>
+        <div class="col-md-3"><a class="card shadow-sm text-decoration-none text-reset h-100 d-block" href="/finance/customer-radar"><div class="card-body"><div class="text-muted small">Cliente</div><div class="h5 mb-1">Radar clientes</div><div class="small text-muted">Ventas, cobros, vencido y riesgo por cliente.</div></div></a></div>
+        <div class="col-md-3"><a class="card shadow-sm text-decoration-none text-reset h-100 d-block" href="/finance/supplier-radar"><div class="card-body"><div class="text-muted small">Proveedor</div><div class="h5 mb-1">Radar proveedores</div><div class="small text-muted">Compras, pagos, vencido y cobertura.</div></div></a></div>
+        <div class="col-md-3"><a class="card shadow-sm text-decoration-none text-reset h-100 d-block" href="/finance/branch-pulse"><div class="card-body"><div class="text-muted small">Sucursal</div><div class="h5 mb-1">Pulso sucursales</div><div class="small text-muted">Caja, flujo y capital de trabajo por sucursal.</div></div></a></div>
+    </div>
+
+    <div class="row g-3 mt-1">
+        <div class="col-md-4"><a class="card shadow-sm text-decoration-none text-reset h-100 d-block" href="/finance/monthly-liquidity-bridge"><div class="card-body"><div class="text-muted small">Liquidez</div><div class="h5 mb-1">Puente liquidez mensual</div><div class="small text-muted">Apertura, cobros, pagos y cierre por mes.</div></div></a></div>
+        <div class="col-md-4"><a class="card shadow-sm text-decoration-none text-reset h-100 d-block" href="/finance/credit-policy"><div class="card-body"><div class="text-muted small">Crédito</div><div class="h5 mb-1">Política de crédito</div><div class="small text-muted">Utilización, disponible y promesas por cliente.</div></div></a></div>
+        <div class="col-md-4"><a class="card shadow-sm text-decoration-none text-reset h-100 d-block" href="/finance/recovery-matrix"><div class="card-body"><div class="text-muted small">Cartera</div><div class="h5 mb-1">Matriz recuperación</div><div class="small text-muted">Buckets de riesgo para CxC y CxP.</div></div></a></div>
+    </div>
+
+
+    <div class="row g-3 mt-1">
+        <div class="col-md-4"><a class="card shadow-sm text-decoration-none text-reset h-100 d-block" href="/finance/decision-room"><div class="card-body"><div class="text-muted small">Gobierno</div><div class="h5 mb-1">Sala de decisión</div><div class="small text-muted">Alertas, cierre, covenants y cola priorizada.</div></div></a></div>
+        <div class="col-md-4"><a class="card shadow-sm text-decoration-none text-reset h-100 d-block" href="/finance/customer-control-tower"><div class="card-body"><div class="text-muted small">Cliente</div><div class="h5 mb-1">Cliente 360</div><div class="small text-muted">Cobranza, crédito, radar y promesas.</div></div></a></div>
+        <div class="col-md-4"><a class="card shadow-sm text-decoration-none text-reset h-100 d-block" href="/finance/supplier-control-tower"><div class="card-body"><div class="text-muted small">Proveedor</div><div class="h5 mb-1">Proveedor 360</div><div class="small text-muted">Pagos, riesgo, radar y programación.</div></div></a></div>
+    </div>
+
+    <div class="row g-3 mt-1">
+        <div class="col-md-6"><a class="card shadow-sm text-decoration-none text-reset h-100 d-block" href="/finance/branch-command-center"><div class="card-body"><div class="text-muted small">Sucursal</div><div class="h5 mb-1">Centro de mando sucursales</div><div class="small text-muted">Pulso, tesorería semanal y puente de liquidez.</div></div></a></div>
+        <div class="col-md-6"><a class="card shadow-sm text-decoration-none text-reset h-100 d-block" href="/finance/forecast-committee"><div class="card-body"><div class="text-muted small">Comité</div><div class="h5 mb-1">Comité de forecast</div><div class="small text-muted">Forecast rolling, estrés, radar y escenarios.</div></div></a></div>
+    </div>
+
+}
+
+@code {
+    private bool _loading = true;
+    private string? _error;
+    private FinanceDashboardDto _dashboard = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _dashboard = await FinanceApiService.GetDashboardAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private static string GetSignedClass(decimal value) => value >= 0m ? "text-success" : "text-danger";
+    private static string GetBudgetClass(decimal value) => value >= 0m ? "text-success" : "text-danger";
+}

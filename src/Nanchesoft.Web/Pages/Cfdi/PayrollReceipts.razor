@@ -1,0 +1,196 @@
+@page "/cfdi/payroll-receipts/{RunId:guid}"
+@using Nanchesoft.Web.Services.Cfdi
+@inject CfdiApiService CfdiApiService
+@inject NavigationManager Navigation
+<PageTitle>Recibos CFDI nómina | Nanchesoft</PageTitle>
+
+<div class="container-fluid py-3">
+    <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-3">
+        <div>
+            <div class="text-uppercase small text-secondary fw-semibold">CFDI · nómina · recibos</div>
+            <h2 class="mb-1">Recibos CFDI por colaborador</h2>
+            <div class="text-secondary">Detalle formal del timbrado demo por empleado dentro de una corrida de nómina.</div>
+        </div>
+        <div class="d-flex gap-2 flex-wrap">
+            <button class="btn btn-outline-secondary" @onclick='() => Navigation.NavigateTo("/cfdi/payroll-runs")'>Volver a CFDI nómina</button>
+            <button class="btn btn-outline-secondary" @onclick='() => Navigation.NavigateTo("/payroll/runs")'>Ir a nómina</button>
+            <button class="btn btn-outline-secondary" @onclick="LoadAsync">Actualizar</button>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(_message))
+    {
+        <div class="alert alert-success">@_message</div>
+    }
+    @if (!string.IsNullOrWhiteSpace(_error))
+    {
+        <div class="alert alert-danger">@_error</div>
+    }
+
+    @if (_loading)
+    {
+        <div class="alert alert-info">Cargando recibos CFDI de nómina...</div>
+    }
+    else if (_summary is null)
+    {
+        <div class="alert alert-warning">No se encontró la corrida solicitada.</div>
+    }
+    else
+    {
+        <div class="card shadow-sm mb-4">
+            <div class="card-body">
+                <div class="row g-3 align-items-end">
+                    <div class="col-lg-3 col-md-6">
+                        <div class="text-secondary small">Folio corrida</div>
+                        <div class="fs-5 fw-bold">@_summary.Folio</div>
+                    </div>
+                    <div class="col-lg-3 col-md-6">
+                        <div class="text-secondary small">Periodo</div>
+                        <div class="fs-6 fw-semibold">@_summary.PayrollPeriodName</div>
+                    </div>
+                    <div class="col-lg-2 col-md-4">
+                        <div class="text-secondary small">Estado nómina</div>
+                        <div>@_summary.BusinessStatus</div>
+                    </div>
+                    <div class="col-lg-2 col-md-4">
+                        <div class="text-secondary small">Estado CFDI</div>
+                        <div><span class="badge text-bg-light">@_summary.CfdiStatus</span></div>
+                    </div>
+                    <div class="col-lg-2 col-md-4 text-lg-end">
+                        <div class="d-flex gap-2 justify-content-lg-end flex-wrap">
+                            <button class="btn btn-success" disabled="@(_summary.PendingReceipts <= 0)" @onclick="GenerateAllAsync">Generar CFDI</button>
+                            <button class="btn btn-warning" disabled="@(_summary.StampedReceipts <= 0)" @onclick="CancelAllAsync">Cancelar CFDI</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row g-3 mb-4">
+            <div class="col-md-3"><div class="card shadow-sm"><div class="card-body"><div class="text-secondary small">Empleados</div><div class="display-6 fw-bold">@_summary.EmployeeCount</div></div></div></div>
+            <div class="col-md-3"><div class="card shadow-sm border-success"><div class="card-body"><div class="text-secondary small">Timbrados</div><div class="display-6 fw-bold text-success">@_summary.StampedReceipts</div></div></div></div>
+            <div class="col-md-3"><div class="card shadow-sm border-warning"><div class="card-body"><div class="text-secondary small">Cancelados</div><div class="display-6 fw-bold text-warning">@_summary.CancelledReceipts</div></div></div></div>
+            <div class="col-md-3"><div class="card shadow-sm border-secondary"><div class="card-body"><div class="text-secondary small">Pendientes</div><div class="display-6 fw-bold">@_summary.PendingReceipts</div></div></div></div>
+        </div>
+
+        <div class="card shadow-sm">
+            <div class="table-responsive">
+                <table class="table table-sm table-striped align-middle mb-0">
+                    <thead>
+                        <tr>
+                            <th>Empleado</th>
+                            <th>Departamento</th>
+                            <th>Puesto</th>
+                            <th>Días</th>
+                            <th>Bruto</th>
+                            <th>Deducciones</th>
+                            <th>Neto</th>
+                            <th>CFDI</th>
+                            <th>Serie/Folio</th>
+                            <th>UUID</th>
+                            <th style="width: 340px;">Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var row in _rows)
+                        {
+                            <tr>
+                                <td>
+                                    <div class="fw-semibold">@row.EmployeeName</div>
+                                    <div class="small text-secondary">@row.EmployeeNumber</div>
+                                </td>
+                                <td>@row.DepartmentName</td>
+                                <td>@row.PositionName</td>
+                                <td>@row.DaysPaid.ToString("N2")</td>
+                                <td>@row.GrossAmount.ToString("N2")</td>
+                                <td>@row.DeductionsAmount.ToString("N2")</td>
+                                <td>@row.NetAmount.ToString("N2")</td>
+                                <td><span class="badge text-bg-light">@row.CfdiStatus</span></td>
+                                <td>@(string.IsNullOrWhiteSpace(row.ReceiptSeries) && string.IsNullOrWhiteSpace(row.ReceiptFolio) ? "-" : $"{row.ReceiptSeries}-{row.ReceiptFolio}")</td>
+                                <td class="small">@(string.IsNullOrWhiteSpace(row.Uuid) ? "-" : row.Uuid)</td>
+                                <td>
+                                    <div class="d-flex gap-2 flex-wrap">
+                                        <button class="btn btn-sm btn-success" disabled="@(!row.CanStamp)" @onclick='() => StampLineAsync(row.Id)'>Timbrar</button>
+                                        <button class="btn btn-sm btn-warning" disabled="@(!row.CanCancel)" @onclick='() => CancelLineAsync(row.Id)'>Cancelar</button>
+                                        <a class="btn btn-sm btn-outline-secondary @(row.CfdiStatus is "stamped" or "cancelled" ? string.Empty : "disabled")" href="@row.XmlUrl" target="_blank">XML</a>
+                                        <a class="btn btn-sm btn-outline-secondary @(row.CfdiStatus is "stamped" or "cancelled" ? string.Empty : "disabled")" href="@row.PdfUrl" target="_blank">PDF</a>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public Guid RunId { get; set; }
+
+    private bool _loading = true;
+    private string? _message;
+    private string? _error;
+    private CfdiPayrollReceiptSummaryDto? _summary;
+    private List<CfdiPayrollReceiptDto> _rows = [];
+
+    protected override async Task OnParametersSetAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _message = null;
+        _error = null;
+        try
+        {
+            _summary = await CfdiApiService.GetPayrollReceiptSummaryAsync(RunId);
+            _rows = await CfdiApiService.GetPayrollReceiptsAsync(RunId);
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+            _summary = null;
+            _rows = [];
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task GenerateAllAsync()
+    {
+        await ExecuteAsync(async () => await CfdiApiService.GeneratePayrollReceiptsAsync(RunId), "Recibos CFDI demo generados correctamente.");
+    }
+
+    private async Task CancelAllAsync()
+    {
+        await ExecuteAsync(async () => await CfdiApiService.CancelPayrollReceiptsAsync(RunId), "Recibos CFDI demo cancelados correctamente.");
+    }
+
+    private async Task StampLineAsync(Guid id)
+    {
+        await ExecuteAsync(async () => await CfdiApiService.StampPayrollRunLineAsync(id), "Recibo CFDI demo timbrado correctamente.");
+    }
+
+    private async Task CancelLineAsync(Guid id)
+    {
+        await ExecuteAsync(async () => await CfdiApiService.CancelPayrollRunLineAsync(id), "Recibo CFDI demo cancelado correctamente.");
+    }
+
+    private async Task ExecuteAsync(Func<Task> action, string successMessage)
+    {
+        _message = null;
+        _error = null;
+        try
+        {
+            await action();
+            _message = successMessage;
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+    }
+}

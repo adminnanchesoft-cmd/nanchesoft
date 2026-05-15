@@ -1,0 +1,8 @@
+@page "/sales/quotes/detail"
+@page "/sales/quotes/detail/{Id:guid}"
+<PageTitle>Detalle cotización | Nanchesoft</PageTitle>
+<SalesDocumentEditor CatalogKey="sales-quotes" DocumentId="Id" />
+
+@code {
+    [Parameter] public Guid? Id { get; set; }
+}

@@ -1,0 +1,5 @@
+@page "/treasury/cash-accounts/detail"
+@page "/treasury/cash-accounts/detail/{Id:guid}"
+<PageTitle>Detalle caja | Nanchesoft</PageTitle>
+<TreasuryDocumentEditor CatalogKey="cash-accounts" DocumentId="Id" />
+@code { [Parameter] public Guid? Id { get; set; } }

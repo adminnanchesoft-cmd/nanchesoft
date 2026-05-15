@@ -1,0 +1,37 @@
+@page "/purchases/dashboard"
+@using Nanchesoft.Web.Services.Purchases
+@inject PurchaseApiService PurchaseApiService
+
+<PageTitle>Dashboard compras | Nanchesoft</PageTitle>
+
+<div class="ns-catalog-page">
+    <div class="ns-catalog-header">
+        <div>
+            <div class="ns-catalog-eyebrow">Nanchesoft ERP · Compras</div>
+            <h1 class="ns-catalog-title">Dashboard de compras</h1>
+            <p class="ns-catalog-subtitle">Indicadores base de requisiciones, órdenes, recepciones, facturas y devoluciones.</p>
+        </div>
+        <div class="ns-catalog-badge">DevExtreme 25.1.6</div>
+    </div>
+
+    @if (_summary is null)
+    {
+        <div class="ns-catalog-loading"><div class="ns-loader"></div><span>Cargando dashboard...</span></div>
+    }
+    else
+    {
+        <div class="ns-kpi-grid">
+            <div class="ns-kpi-card"><div class="ns-kpi-label">Requisiciones pendientes</div><div class="ns-kpi-value">@_summary.PendingRequisitions</div></div>
+            <div class="ns-kpi-card ns-kpi-card-success"><div class="ns-kpi-label">Órdenes abiertas</div><div class="ns-kpi-value">@_summary.OpenOrders</div></div>
+            <div class="ns-kpi-card"><div class="ns-kpi-label">Recepciones recientes</div><div class="ns-kpi-value">@_summary.RecentReceipts</div></div>
+            <div class="ns-kpi-card"><div class="ns-kpi-label">Facturas recientes</div><div class="ns-kpi-value">@_summary.RecentInvoices</div></div>
+            <div class="ns-kpi-card ns-kpi-card-success"><div class="ns-kpi-label">Comprado 30 días</div><div class="ns-kpi-value ns-kpi-value-small">@_summary.PeriodPurchased.ToString("C")</div></div>
+            <div class="ns-kpi-card ns-kpi-card-muted"><div class="ns-kpi-label">Devoluciones 30 días</div><div class="ns-kpi-value ns-kpi-value-small">@_summary.ReturnsAmount.ToString("C")</div></div>
+        </div>
+    }
+</div>
+
+@code {
+    private PurchaseDashboardSummaryDto? _summary;
+    protected override async Task OnInitializedAsync() => _summary = await PurchaseApiService.GetDashboardSummaryAsync();
+}

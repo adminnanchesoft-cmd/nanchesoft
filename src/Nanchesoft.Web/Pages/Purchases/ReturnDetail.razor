@@ -1,0 +1,5 @@
+@page "/purchases/returns/detail"
+@page "/purchases/returns/detail/{Id:guid}"
+<PageTitle>Detalle devolución compra | Nanchesoft</PageTitle>
+<PurchaseDocumentEditor CatalogKey="purchase-returns" DocumentId="Id" />
+@code { [Parameter] public Guid? Id { get; set; } }

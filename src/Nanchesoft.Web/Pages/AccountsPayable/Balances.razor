@@ -1,0 +1,83 @@
+@page "/accounts-payable/balances"
+@using Nanchesoft.Web.Services.AccountsPayable
+@inject AccountsPayableApiService AccountsPayableApiService
+
+<PageTitle>Saldos CxP | Nanchesoft</PageTitle>
+
+<h1 class="h3 mb-3">Cuentas por pagar · Saldos</h1>
+
+@if (_loading)
+{
+    <div class="alert alert-info">Cargando saldos...</div>
+}
+else if (!string.IsNullOrWhiteSpace(_error))
+{
+    <div class="alert alert-danger">@_error</div>
+}
+else
+{
+    <div class="row g-3 mb-3">
+        <div class="col-md-4"><div class="card shadow-sm"><div class="card-body"><div class="text-muted small">Proveedores con saldo</div><div class="fs-4 fw-bold">@_rows.Count(x => x.CurrentBalance > 0)</div></div></div></div>
+        <div class="col-md-4"><div class="card shadow-sm"><div class="card-body"><div class="text-muted small">Saldo abierto</div><div class="fs-4 fw-bold text-danger">@_rows.Sum(x => x.CurrentBalance).ToString("N2")</div></div></div></div>
+        <div class="col-md-4"><div class="card shadow-sm"><div class="card-body"><div class="text-muted small">Créditos y pagos</div><div class="fs-4 fw-bold text-success">@_rows.Sum(x => x.TotalCredits).ToString("N2")</div></div></div></div>
+    </div>
+
+    <div class="card shadow-sm">
+        <div class="table-responsive">
+            <table class="table table-striped align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th>Código</th>
+                        <th>Proveedor</th>
+                        <th class="text-end">Cargos</th>
+                        <th class="text-end">Créditos/Pagos</th>
+                        <th class="text-end">Saldo</th>
+                        <th>Último movimiento</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (_rows.Count == 0)
+                    {
+                        <tr><td colspan="6" class="text-center text-muted py-4">Sin registros.</td></tr>
+                    }
+                    else
+                    {
+                        @foreach (var row in _rows)
+                        {
+                            <tr>
+                                <td>@row.SupplierCode</td>
+                                <td>@row.SupplierName</td>
+                                <td class="text-end">@row.TotalCharges.ToString("N2")</td>
+                                <td class="text-end text-success">@row.TotalCredits.ToString("N2")</td>
+                                <td class="text-end fw-bold text-danger">@row.CurrentBalance.ToString("N2")</td>
+                                <td>@(row.LastMovementAt?.ToString("dd/MM/yyyy") ?? "—")</td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+}
+
+@code {
+    private bool _loading = true;
+    private string? _error;
+    private List<ApBalanceRowDto> _rows = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _rows = await AccountsPayableApiService.GetBalancesAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+}

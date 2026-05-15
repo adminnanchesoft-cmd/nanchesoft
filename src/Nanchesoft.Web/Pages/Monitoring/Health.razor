@@ -1,0 +1,64 @@
+@page "/monitoring/health"
+@inject Nanchesoft.Web.Services.Monitoring.MonitoringApiService MonitoringApiService
+
+<PageTitle>Salud del sistema | Nanchesoft</PageTitle>
+
+<div class="ns-catalog-page">
+    <div class="ns-catalog-header">
+        <div>
+            <div class="ns-catalog-eyebrow">Monitoreo</div>
+            <h1 class="ns-catalog-title">Salud del sistema</h1>
+            <p class="ns-catalog-subtitle">Conteos clave y últimas fechas de operación por módulo.</p>
+        </div>
+    </div>
+
+    @if (_model is null)
+    {
+        <div class="ns-catalog-loading"><div class="ns-loader"></div><span>Cargando salud del sistema...</span></div>
+    }
+    else
+    {
+        <div class="row g-3">
+            <div class="col-lg-6">
+                <div class="card shadow-sm h-100">
+                    <div class="card-header"><strong>Conteos base</strong></div>
+                    <div class="card-body">
+                        <ul class="list-group list-group-flush">
+                            <li class="list-group-item d-flex justify-content-between"><span>Empresas</span><strong>@_model.Companies</strong></li>
+                            <li class="list-group-item d-flex justify-content-between"><span>Sucursales</span><strong>@_model.Branches</strong></li>
+                            <li class="list-group-item d-flex justify-content-between"><span>Almacenes</span><strong>@_model.Warehouses</strong></li>
+                            <li class="list-group-item d-flex justify-content-between"><span>Clientes</span><strong>@_model.Customers</strong></li>
+                            <li class="list-group-item d-flex justify-content-between"><span>Proveedores</span><strong>@_model.Suppliers</strong></li>
+                            <li class="list-group-item d-flex justify-content-between"><span>Items</span><strong>@_model.Items</strong></li>
+                            <li class="list-group-item d-flex justify-content-between"><span>Facturas compra</span><strong>@_model.PurchaseInvoices</strong></li>
+                            <li class="list-group-item d-flex justify-content-between"><span>Facturas venta</span><strong>@_model.SalesInvoices</strong></li>
+                            <li class="list-group-item d-flex justify-content-between"><span>Movimientos inventario</span><strong>@_model.InventoryMovements</strong></li>
+                            <li class="list-group-item d-flex justify-content-between"><span>Cajas</span><strong>@_model.CashAccounts</strong></li>
+                            <li class="list-group-item d-flex justify-content-between"><span>Bancos</span><strong>@_model.BankAccounts</strong></li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-6">
+                <div class="card shadow-sm h-100">
+                    <div class="card-header"><strong>Última actividad</strong></div>
+                    <div class="card-body">
+                        <ul class="list-group list-group-flush">
+                            <li class="list-group-item d-flex justify-content-between"><span>Última compra</span><strong>@FormatDate(_model.LastPurchaseDate)</strong></li>
+                            <li class="list-group-item d-flex justify-content-between"><span>Última venta</span><strong>@FormatDate(_model.LastSalesDate)</strong></li>
+                            <li class="list-group-item d-flex justify-content-between"><span>Último mov. inventario</span><strong>@FormatDate(_model.LastInventoryMovementDate)</strong></li>
+                            <li class="list-group-item d-flex justify-content-between"><span>Último mov. tesorería</span><strong>@FormatDate(_model.LastTreasuryMovementDate)</strong></li>
+                            <li class="list-group-item d-flex justify-content-between"><span>Último error</span><strong>@FormatDate(_model.LastErrorDate)</strong></li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private Nanchesoft.Web.Services.Monitoring.MonitoringHealthDto? _model;
+    protected override async Task OnInitializedAsync() => _model = await MonitoringApiService.GetHealthAsync();
+    private static string FormatDate(DateTime? value) => value?.ToLocalTime().ToString("g") ?? "-";
+}

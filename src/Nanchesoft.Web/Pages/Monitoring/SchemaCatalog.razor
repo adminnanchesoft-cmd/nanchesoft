@@ -1,0 +1,161 @@
+@page "/monitoring/schema-catalog"
+@inject Nanchesoft.Web.Services.Monitoring.MonitoringApiService MonitoringApiService
+
+<PageTitle>Catálogo de schemas | Nanchesoft</PageTitle>
+
+<div class="ns-catalog-page">
+    <div class="ns-catalog-header">
+        <div>
+            <div class="ns-catalog-eyebrow">Monitoreo</div>
+            <h1 class="ns-catalog-title">Catálogo de schemas</h1>
+            <p class="ns-catalog-subtitle">Revisión de tablas modeladas, tablas físicas y diferencias por schema.</p>
+        </div>
+    </div>
+
+    @if (_loading)
+    {
+        <div class="ns-catalog-loading"><div class="ns-loader"></div><span>Cargando catálogo de schemas...</span></div>
+    }
+    else
+    {
+        <div class="row g-3 mb-3">
+            @foreach (var summary in _summaries)
+            {
+                <div class="col-md-6 col-xl-4">
+                    <div class="card shadow-sm h-100">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <strong>@summary.SchemaName</strong>
+                            <span class="badge @(summary.MissingTableCount == 0 ? "bg-success" : "bg-warning text-dark")">@summary.ModuleName</span>
+                        </div>
+                        <div class="card-body">
+                            <div class="small text-muted mb-2">Tablas modeladas vs físicas</div>
+                            <div class="d-flex justify-content-between mb-2"><span>Modelo</span><strong>@summary.ModelTableCount</strong></div>
+                            <div class="d-flex justify-content-between mb-2"><span>Base física</span><strong>@summary.PhysicalTableCount</strong></div>
+                            <div class="d-flex justify-content-between mb-2"><span>Faltantes</span><strong class="@(summary.MissingTableCount == 0 ? "text-success" : "text-warning")">@summary.MissingTableCount</strong></div>
+                            <div class="d-flex justify-content-between"><span>Filas estimadas</span><strong>@summary.EstimatedRows.ToString("N0")</strong></div>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+
+        <div class="card shadow-sm mb-3">
+            <div class="card-header"><strong>Diferencias detectadas</strong></div>
+            <div class="card-body">
+                @if (_gaps.Count == 0)
+                {
+                    <div class="alert alert-success mb-0">No se detectaron diferencias entre el modelo y la base física.</div>
+                }
+                else
+                {
+                    <div class="table-responsive">
+                        <table class="table table-sm table-striped align-middle">
+                            <thead>
+                                <tr>
+                                    <th>Tipo</th>
+                                    <th>Schema</th>
+                                    <th>Tabla</th>
+                                    <th>Módulo</th>
+                                    <th>Detalle</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var gap in _gaps)
+                                {
+                                    <tr>
+                                        <td><span class="badge @(gap.GapType == "MissingInDatabase" ? "bg-danger" : "bg-secondary")">@gap.GapType</span></td>
+                                        <td>@gap.SchemaName</td>
+                                        <td>@gap.TableName</td>
+                                        <td>@gap.ModuleName</td>
+                                        <td>@gap.Details</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </div>
+        </div>
+
+        <div class="card shadow-sm">
+            <div class="card-header d-flex flex-column flex-lg-row justify-content-between gap-2 align-items-lg-center">
+                <strong>Inventario de tablas</strong>
+                <div class="d-flex gap-2">
+                    <input class="form-control form-control-sm" style="min-width: 220px;" placeholder="Buscar tabla o entidad" @bind="_search" />
+                    <select class="form-select form-select-sm" style="min-width: 180px;" @bind="_selectedSchema">
+                        <option value="">Todos los schemas</option>
+                        @foreach (var schema in _availableSchemas)
+                        {
+                            <option value="@schema">@schema</option>
+                        }
+                    </select>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover align-middle">
+                        <thead>
+                            <tr>
+                                <th>Schema</th>
+                                <th>Tabla</th>
+                                <th>Entidad</th>
+                                <th>PK</th>
+                                <th>Módulo</th>
+                                <th>Existe</th>
+                                <th>Filas estimadas</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var row in FilteredRows)
+                            {
+                                <tr>
+                                    <td><code>@row.SchemaName</code></td>
+                                    <td><code>@row.TableName</code></td>
+                                    <td>@row.ClrType</td>
+                                    <td>@row.PrimaryKey</td>
+                                    <td>@row.ModuleName</td>
+                                    <td>
+                                        <span class="badge @(row.ExistsInDatabase ? "bg-success" : "bg-danger")">
+                                            @(row.ExistsInDatabase ? "Sí" : "No")
+                                        </span>
+                                    </td>
+                                    <td>@row.EstimatedRows.ToString("N0")</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private bool _loading = true;
+    private string _search = string.Empty;
+    private string _selectedSchema = string.Empty;
+    private List<Nanchesoft.Web.Services.Monitoring.MonitoringSchemaSummaryDto> _summaries = new();
+    private List<Nanchesoft.Web.Services.Monitoring.MonitoringSchemaGapDto> _gaps = new();
+    private List<Nanchesoft.Web.Services.Monitoring.MonitoringSchemaCatalogRowDto> _rows = new();
+
+    private IReadOnlyList<string> _availableSchemas => _rows
+        .Select(x => x.SchemaName)
+        .Distinct(StringComparer.OrdinalIgnoreCase)
+        .OrderBy(x => x)
+        .ToList();
+
+    private IEnumerable<Nanchesoft.Web.Services.Monitoring.MonitoringSchemaCatalogRowDto> FilteredRows => _rows.Where(row =>
+        (string.IsNullOrWhiteSpace(_selectedSchema) || string.Equals(row.SchemaName, _selectedSchema, StringComparison.OrdinalIgnoreCase)) &&
+        (string.IsNullOrWhiteSpace(_search)
+            || row.TableName.Contains(_search, StringComparison.OrdinalIgnoreCase)
+            || row.ClrType.Contains(_search, StringComparison.OrdinalIgnoreCase)
+            || row.ModuleName.Contains(_search, StringComparison.OrdinalIgnoreCase)));
+
+    protected override async Task OnInitializedAsync()
+    {
+        _summaries = await MonitoringApiService.GetSchemaSummaryAsync();
+        _gaps = await MonitoringApiService.GetSchemaGapsAsync();
+        _rows = await MonitoringApiService.GetSchemaCatalogAsync();
+        _loading = false;
+    }
+}

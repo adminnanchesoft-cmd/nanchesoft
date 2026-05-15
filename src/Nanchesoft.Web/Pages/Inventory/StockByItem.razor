@@ -1,0 +1,116 @@
+@page "/inventory/stock-by-item"
+@using Nanchesoft.Web.Services.Inventory
+@inject InventoryApiService InventoryApiService
+
+<PageTitle>Existencia por producto | Nanchesoft</PageTitle>
+
+@if (_loading)
+{
+    <div class="p-4">Cargando...</div>
+}
+else
+{
+    <div class="container-fluid py-3">
+        <div class="d-flex justify-content-between align-items-start mb-3 gap-3 flex-wrap">
+            <div>
+                <div class="text-uppercase small text-secondary fw-semibold">Inventario · existencia por producto</div>
+                <h2 class="mb-1">Existencia por producto</h2>
+                <div class="text-secondary">Consulta lotes, series, disponibilidad y costos por almacén.</div>
+            </div>
+            <div class="d-flex gap-2">
+                <a class="btn btn-outline-secondary" href="/inventory/stock-balances">Volver a existencias</a>
+            </div>
+        </div>
+
+        <div class="card shadow-sm mb-3">
+            <div class="card-body">
+                <div class="row g-3 align-items-end">
+                    <div class="col-md-6">
+                        <label class="form-label">Producto</label>
+                        <select class="form-select" @bind="SelectedItemIdText">
+                            <option value="">Seleccione...</option>
+                            @foreach (var item in _lookups.Items)
+                            {
+                                <option value="@item.Id">@item.Name</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <button class="btn btn-primary w-100" @onclick="LoadRowsAsync" disabled="@(!SelectedItemId.HasValue)">Consultar</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card shadow-sm">
+            <div class="card-header">
+                <strong>Existencias</strong>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-sm table-striped align-middle mb-0">
+                        <thead>
+                            <tr>
+                                <th>Almacén</th>
+                                <th>Lote</th>
+                                <th>Serie</th>
+                                <th>Existencia</th>
+                                <th>Reservado</th>
+                                <th>Disponible</th>
+                                <th>Costo prom.</th>
+                                <th>Último costo</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @if (_rows.Count == 0)
+                            {
+                                <tr><td colspan="8" class="text-center py-4 text-secondary">No hay existencias para mostrar.</td></tr>
+                            }
+                            else
+                            {
+                                @foreach (var row in _rows)
+                                {
+                                    <tr>
+                                        <td>@row.WarehouseName</td>
+                                        <td>@row.LotNumber</td>
+                                        <td>@row.SerialNumber</td>
+                                        <td>@row.QuantityOnHand</td>
+                                        <td>@row.QuantityReserved</td>
+                                        <td>@row.QuantityAvailable</td>
+                                        <td>@row.AverageCost</td>
+                                        <td>@row.LastCost</td>
+                                    </tr>
+                                }
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private InventoryLookups _lookups = new();
+    private List<InventoryStockDetailRow> _rows = [];
+    private bool _loading = true;
+    private Guid? SelectedItemId;
+
+    private string SelectedItemIdText
+    {
+        get => SelectedItemId?.ToString() ?? string.Empty;
+        set => SelectedItemId = Guid.TryParse(value, out var parsed) ? parsed : null;
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _lookups = (await InventoryApiService.GetEditorDefinitionAsync("inventory-entries")).Lookups;
+        _loading = false;
+    }
+
+    private async Task LoadRowsAsync()
+    {
+        if (!SelectedItemId.HasValue) return;
+        _rows = await InventoryApiService.GetStockByItemAsync(SelectedItemId.Value);
+    }
+}

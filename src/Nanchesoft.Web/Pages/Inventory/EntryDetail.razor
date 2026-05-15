@@ -1,0 +1,6 @@
+@page "/inventory/entries/detail"
+@page "/inventory/entries/detail/{Id:guid}"
+@using Nanchesoft.Web.Components.Inventory
+<PageTitle>Detalle entrada inventario | Nanchesoft</PageTitle>
+<InventoryDocumentEditor CatalogKey="inventory-entries" DocumentId="Id" />
+@code { [Parameter] public Guid? Id { get; set; } }

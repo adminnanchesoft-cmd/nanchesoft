@@ -1,0 +1,92 @@
+@page "/cfdi/dashboard"
+@using Nanchesoft.Web.Services.Cfdi
+@inject CfdiApiService CfdiApiService
+@inject NavigationManager Navigation
+<PageTitle>Dashboard CFDI | Nanchesoft</PageTitle>
+
+<div class="container-fluid py-3">
+    <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-3">
+        <div>
+            <div class="text-uppercase small text-secondary fw-semibold">CFDI · operación</div>
+            <h2 class="mb-1">Dashboard CFDI</h2>
+            <div class="text-secondary">Resumen operativo del timbrado y cancelación ligado a ventas.</div>
+        </div>
+        <div class="d-flex gap-2 flex-wrap">
+            <button class="btn btn-outline-secondary" @onclick='() => Navigation.NavigateTo("/cfdi/documents")'>Documentos</button>
+            <button class="btn btn-outline-secondary" @onclick='() => Navigation.NavigateTo("/cfdi/stamp-queue")'>Cola de timbrado</button>
+        </div>
+    </div>
+
+    @if (_loading)
+    {
+        <div class="alert alert-info">Cargando dashboard CFDI...</div>
+    }
+    else
+    {
+        <div class="row g-3 mb-4">
+            <div class="col-md-3"><div class="card shadow-sm"><div class="card-body"><div class="text-secondary small">Pendientes</div><div class="display-6 fw-bold">@_dashboard.Pending</div></div></div></div>
+            <div class="col-md-3"><div class="card shadow-sm border-success"><div class="card-body"><div class="text-secondary small">Timbrados</div><div class="display-6 fw-bold text-success">@_dashboard.Stamped</div></div></div></div>
+            <div class="col-md-3"><div class="card shadow-sm border-warning"><div class="card-body"><div class="text-secondary small">Cancelados</div><div class="display-6 fw-bold text-warning">@_dashboard.Cancelled</div></div></div></div>
+            <div class="col-md-3"><div class="card shadow-sm border-danger"><div class="card-body"><div class="text-secondary small">Fallidos</div><div class="display-6 fw-bold text-danger">@_dashboard.Failed</div></div></div></div>
+        </div>
+
+        <div class="card shadow-sm">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <strong>Recientes</strong>
+                <button class="btn btn-sm btn-outline-secondary" @onclick="LoadAsync">Actualizar</button>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-sm table-striped align-middle mb-0">
+                    <thead>
+                        <tr>
+                            <th>Tipo</th>
+                            <th>Folio</th>
+                            <th>Cliente</th>
+                            <th>Fecha</th>
+                            <th>Total</th>
+                            <th>Venta</th>
+                            <th>CFDI</th>
+                            <th>UUID</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var row in _dashboard.Recent)
+                        {
+                            <tr>
+                                <td>@GetSourceName(row.SourceType)</td>
+                                <td><a href="@row.SourceRoute">@row.Folio</a></td>
+                                <td>@row.CustomerName</td>
+                                <td>@row.DocumentDate.ToString("yyyy-MM-dd")</td>
+                                <td>@row.Total.ToString("N2")</td>
+                                <td>@row.BusinessStatus</td>
+                                <td>@row.CfdiStatus</td>
+                                <td>@(string.IsNullOrWhiteSpace(row.Uuid) ? "-" : row.Uuid)</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private bool _loading = true;
+    private CfdiDashboardDto _dashboard = new();
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _dashboard = await CfdiApiService.GetDashboardAsync();
+        _loading = false;
+    }
+
+    private static string GetSourceName(string sourceType) => sourceType switch
+    {
+        "sales-invoice" => "Factura",
+        "credit-note" => "Nota crédito",
+        _ => sourceType
+    };
+}

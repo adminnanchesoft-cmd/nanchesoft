@@ -1,0 +1,10 @@
+@page "/payroll/print/run/{RunId:guid}"
+@layout PrintLayout
+
+<PageTitle>Impresión nómina | Nanchesoft</PageTitle>
+
+<PayrollRunPrintDocument RunId="RunId" />
+
+@code {
+    [Parameter] public Guid RunId { get; set; }
+}

@@ -1,0 +1,358 @@
+@page "/finance/customer-control-tower"
+@using Nanchesoft.Web.Services.Finance
+@inject FinanceApiService FinanceApiService
+
+<PageTitle>Cliente 360 financiero | Nanchesoft</PageTitle>
+
+<h1 class="h3 mb-3">Cliente 360 financiero</h1>
+<p class="text-muted">Consolida desempeño de cobranza, política de crédito, radar de clientes y promesas de cobro.</p>
+
+<div class="row g-2 align-items-end mb-3">
+    <div class="col-md-2">
+        <label class="form-label">Año</label>
+        <input class="form-control" type="number" min="2020" max="2100" @bind="_year" />
+    </div>
+    <div class="col-md-2">
+        <label class="form-label">Mes</label>
+        <select class="form-select" @bind="_month">
+            @for (var month = 1; month <= 12; month++)
+            {
+                <option value="@month">@(new DateTime(2000, month, 1).ToString("MMMM"))</option>
+            }
+        </select>
+    </div>
+    <div class="col-md-2">
+        <label class="form-label">Desde</label>
+        <input class="form-control" type="date" value="@FormatDateInput(_from)" @onchange="OnFromChanged" />
+    </div>
+    <div class="col-md-2">
+        <label class="form-label">Hasta</label>
+        <input class="form-control" type="date" value="@FormatDateInput(_to)" @onchange="OnToChanged" />
+    </div>
+    <div class="col-md-4 d-flex gap-2 flex-wrap">
+        <button class="btn btn-primary" @onclick="ReloadAsync">Actualizar</button>
+        <a class="btn btn-outline-secondary" href="/finance/collections-performance">Desempeño cobranza</a>
+        <a class="btn btn-outline-secondary" href="/finance/credit-policy">Política de crédito</a>
+    </div>
+</div>
+
+@if (_loading)
+{
+    <div class="alert alert-info">Cargando cliente 360...</div>
+}
+else if (!string.IsNullOrWhiteSpace(_error))
+{
+    <div class="alert alert-danger">@_error</div>
+}
+else
+{
+    <div class="row g-3 mb-3">
+        <div class="col-md-3"><div class="card shadow-sm h-100"><div class="card-body"><div class="text-muted small">Cartera abierta</div><div class="fs-4 fw-bold text-primary">@_collections.Sum(x => x.OpenAmount).ToString("N2")</div><div class="small text-muted">@_collections.Sum(x => x.OpenInvoices) facturas abiertas</div></div></div></div>
+        <div class="col-md-3"><div class="card shadow-sm h-100"><div class="card-body"><div class="text-muted small">Vencido</div><div class="fs-4 fw-bold text-danger">@_collections.Sum(x => x.OverdueAmount).ToString("N2")</div><div class="small text-muted">Riesgo alto @_collections.Count(x => IsRisk(x.RiskLevel)) clientes</div></div></div></div>
+        <div class="col-md-3"><div class="card shadow-sm h-100"><div class="card-body"><div class="text-muted small">Promesas de cobro</div><div class="fs-4 fw-bold text-warning">@_commitments.Where(x => x.PlannedCollectionDate.HasValue).Sum(x => x.OpenAmount).ToString("N2")</div><div class="small text-muted">Compromisos @_commitments.Count(x => x.PlannedCollectionDate.HasValue)</div></div></div></div>
+        <div class="col-md-3"><div class="card shadow-sm h-100"><div class="card-body"><div class="text-muted small">Crédito comprometido</div><div class="fs-4 fw-bold text-success">@_creditPolicy.Where(x => x.UtilizationPercent >= 80m).Count()</div><div class="small text-muted">Clientes arriba de 80% de utilización</div></div></div></div>
+    </div>
+
+    <div class="row g-3">
+        <div class="col-lg-7">
+            <div class="card shadow-sm h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <div>
+                            <div class="h5 mb-0">Desempeño de cobranza</div>
+                            <div class="small text-muted">Top clientes por cartera abierta en el periodo.</div>
+                        </div>
+                        <span class="badge bg-secondary">@_collections.Count filas</span>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-sm align-middle">
+                            <thead>
+                                <tr>
+                                    <th>Cliente</th>
+                                    <th class="text-end">Abierto</th>
+                                    <th class="text-end">Vencido</th>
+                                    <th class="text-end">Cobrado</th>
+                                    <th class="text-end">Efectividad</th>
+                                    <th>Riesgo</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @if (_collections.Count == 0)
+                                {
+                                    <tr><td colspan="7" class="text-center text-muted py-4">No hay desempeño de cobranza.</td></tr>
+                                }
+                                else
+                                {
+                                    @foreach (var row in _collections.OrderByDescending(x => x.OpenAmount).Take(10))
+                                    {
+                                        <tr>
+                                            <td>@row.CustomerName</td>
+                                            <td class="text-end fw-semibold">@row.OpenAmount.ToString("N2")</td>
+                                            <td class="text-end text-danger">@row.OverdueAmount.ToString("N2")</td>
+                                            <td class="text-end text-success">@row.CollectedAmount.ToString("N2")</td>
+                                            <td class="text-end">@row.EffectivenessPercent.ToString("N2")%</td>
+                                            <td><span class="badge @GetRiskClass(row.RiskLevel)">@row.RiskLevel</span></td>
+                                            <td>@if (!string.IsNullOrWhiteSpace(row.Route)) { <a class="btn btn-sm btn-outline-primary" href="@row.Route">Ver</a> }</td>
+                                        </tr>
+                                    }
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-5">
+            <div class="card shadow-sm mb-3">
+                <div class="card-body">
+                    <div class="h5 mb-2">Política de crédito</div>
+                    <div class="table-responsive">
+                        <table class="table table-sm align-middle mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Cliente</th>
+                                    <th class="text-end">Disponible</th>
+                                    <th class="text-end">Uso</th>
+                                    <th>Estatus</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @if (_creditPolicy.Count == 0)
+                                {
+                                    <tr><td colspan="4" class="text-center text-muted py-3">No hay política de crédito calculada.</td></tr>
+                                }
+                                else
+                                {
+                                    @foreach (var row in _creditPolicy.OrderByDescending(x => x.UtilizationPercent).Take(8))
+                                    {
+                                        <tr>
+                                            <td>
+                                                <div class="fw-semibold">@row.CustomerName</div>
+                                                <div class="small text-muted">@row.SuggestedAction</div>
+                                            </td>
+                                            <td class="text-end">@row.AvailableCredit.ToString("N2")</td>
+                                            <td class="text-end">@row.UtilizationPercent.ToString("N2")%</td>
+                                            <td><span class="badge @GetStatusClass(row.Status)">@row.Status</span></td>
+                                        </tr>
+                                    }
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <div class="card shadow-sm">
+                <div class="card-body">
+                    <div class="h5 mb-2">Concentración top clientes</div>
+                    <div class="small text-muted mb-2">HHI @_concentration.CustomerHhi.ToString("N2") · participación top 3 @_concentration.Top3CustomerSharePercent.ToString("N2")%</div>
+                    <div class="table-responsive">
+                        <table class="table table-sm align-middle mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Cliente</th>
+                                    <th class="text-end">Saldo</th>
+                                    <th class="text-end">Participación</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @if (_concentration.Customers.Count == 0)
+                                {
+                                    <tr><td colspan="3" class="text-center text-muted py-3">No hay concentración disponible.</td></tr>
+                                }
+                                else
+                                {
+                                    @foreach (var row in _concentration.Customers.Take(8))
+                                    {
+                                        <tr>
+                                            <td>@row.PartyName</td>
+                                            <td class="text-end">@row.OpenAmount.ToString("N2")</td>
+                                            <td class="text-end">@row.SharePercent.ToString("N2")%</td>
+                                        </tr>
+                                    }
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-3 mt-1">
+        <div class="col-lg-7">
+            <div class="card shadow-sm h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <div>
+                            <div class="h5 mb-0">Radar comercial por cliente</div>
+                            <div class="small text-muted">Ventas netas, cobros, vencido y participación.</div>
+                        </div>
+                        <span class="badge bg-secondary">@_customerRadar.Count filas</span>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-sm align-middle">
+                            <thead>
+                                <tr>
+                                    <th>Cliente</th>
+                                    <th class="text-end">Ventas netas</th>
+                                    <th class="text-end">Cobros</th>
+                                    <th class="text-end">Vencido</th>
+                                    <th class="text-end">Participación</th>
+                                    <th>Riesgo</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @if (_customerRadar.Count == 0)
+                                {
+                                    <tr><td colspan="6" class="text-center text-muted py-3">No hay radar de clientes.</td></tr>
+                                }
+                                else
+                                {
+                                    @foreach (var row in _customerRadar.OrderByDescending(x => x.NetSales).Take(10))
+                                    {
+                                        <tr>
+                                            <td>
+                                                <div class="fw-semibold">@row.CustomerName</div>
+                                                <div class="small text-muted">@row.CustomerCode</div>
+                                            </td>
+                                            <td class="text-end">@row.NetSales.ToString("N2")</td>
+                                            <td class="text-end text-success">@row.ReceiptsAmount.ToString("N2")</td>
+                                            <td class="text-end text-danger">@row.OverdueAmount.ToString("N2")</td>
+                                            <td class="text-end">@row.ParticipationPercent.ToString("N2")%</td>
+                                            <td><span class="badge @GetRiskClass(row.RiskLevel)">@row.RiskLevel</span></td>
+                                        </tr>
+                                    }
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-5">
+            <div class="card shadow-sm h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <div>
+                            <div class="h5 mb-0">Promesas de cobro</div>
+                            <div class="small text-muted">Compromisos por fecha y responsable.</div>
+                        </div>
+                        <span class="badge bg-secondary">@_commitments.Count filas</span>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-sm align-middle">
+                            <thead>
+                                <tr>
+                                    <th>Cliente</th>
+                                    <th>Folio</th>
+                                    <th>Compromiso</th>
+                                    <th class="text-end">Monto</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @if (_commitments.Count == 0)
+                                {
+                                    <tr><td colspan="5" class="text-center text-muted py-3">No hay promesas registradas.</td></tr>
+                                }
+                                else
+                                {
+                                    @foreach (var row in _commitments.OrderBy(x => x.PlannedCollectionDate ?? x.DueDate).Take(10))
+                                    {
+                                        <tr>
+                                            <td>
+                                                <div class="fw-semibold">@row.CustomerName</div>
+                                                <div class="small text-muted">@row.Responsible</div>
+                                            </td>
+                                            <td>@row.Folio</td>
+                                            <td>
+                                                <div>@FormatDate(row.PlannedCollectionDate ?? row.DueDate)</div>
+                                                <div class="small text-muted">@row.CommitmentStatus · @row.Priority</div>
+                                            </td>
+                                            <td class="text-end">@row.OpenAmount.ToString("N2")</td>
+                                            <td>@if (!string.IsNullOrWhiteSpace(row.Route)) { <a class="btn btn-sm btn-outline-primary" href="@row.Route">Abrir</a> }</td>
+                                        </tr>
+                                    }
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private int _year = DateTime.UtcNow.Year;
+    private int _month = DateTime.UtcNow.Month;
+    private DateTime _from = new(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 1);
+    private DateTime _to = new(DateTime.UtcNow.Year, DateTime.UtcNow.Month, DateTime.DaysInMonth(DateTime.UtcNow.Year, DateTime.UtcNow.Month));
+    private bool _loading = true;
+    private string? _error;
+    private List<FinanceCollectionPerformanceRowDto> _collections = new();
+    private List<FinanceCreditPolicyRowDto> _creditPolicy = new();
+    private List<FinanceCustomerRadarRowDto> _customerRadar = new();
+    private FinanceConcentrationAnalysisDto _concentration = new();
+    private List<FinanceCollectionCommitmentRowDto> _commitments = new();
+
+    protected override async Task OnInitializedAsync() => await ReloadAsync();
+
+    private async Task ReloadAsync()
+    {
+        _loading = true;
+        _error = null;
+
+        try
+        {
+            _collections = await FinanceApiService.GetCollectionsPerformanceAsync(_year, _month);
+            _creditPolicy = await FinanceApiService.GetCreditPolicyAsync();
+            _customerRadar = await FinanceApiService.GetCustomerRadarAsync(_year, _month);
+            _concentration = await FinanceApiService.GetConcentrationAnalysisAsync(_year, 10);
+            _commitments = await FinanceApiService.GetCollectionCommitmentsAsync(_from, _to);
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private Task OnFromChanged(ChangeEventArgs args)
+    {
+        if (DateTime.TryParse(args.Value?.ToString(), out var value))
+        {
+            _from = value;
+        }
+        return Task.CompletedTask;
+    }
+
+    private Task OnToChanged(ChangeEventArgs args)
+    {
+        if (DateTime.TryParse(args.Value?.ToString(), out var value))
+        {
+            _to = value;
+        }
+        return Task.CompletedTask;
+    }
+
+    private static string FormatDateInput(DateTime value) => value.ToString("yyyy-MM-dd");
+    private static string FormatDate(DateTime value) => value.ToString("yyyy-MM-dd");
+    private static bool IsRisk(string? value) => string.Equals(value, "Alta", StringComparison.OrdinalIgnoreCase) || string.Equals(value, "Crítica", StringComparison.OrdinalIgnoreCase);
+    private static string GetRiskClass(string? value) => (value ?? string.Empty).Trim().ToLowerInvariant() switch
+    {
+        "alta" or "crítica" or "critica" => "bg-danger",
+        "media" => "bg-warning text-dark",
+        _ => "bg-success"
+    };
+    private static string GetStatusClass(string? value) => (value ?? string.Empty).Trim().ToLowerInvariant() switch
+    {
+        "bloqueado" or "restringido" => "bg-danger",
+        "warning" or "alerta" => "bg-warning text-dark",
+        _ => "bg-success"
+    };
+}

@@ -1,0 +1,270 @@
+@page "/accounting/chart-of-accounts"
+@using Nanchesoft.Web.Services.Accounting
+@inject AccountingApiService Api
+
+<PageTitle>Catálogo contable | Nanchesoft</PageTitle>
+
+<h1 class="h3 mb-3">Contabilidad · Catálogo contable</h1>
+
+<div class="card shadow-sm mb-3">
+    <div class="card-header fw-semibold">Cuenta contable</div>
+    <div class="card-body">
+        <div class="row g-3 align-items-end">
+            <div class="col-md-2">
+                <label class="form-label">Código</label>
+                <input class="form-control" @bind="_editor.Code" />
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">Nombre</label>
+                <input class="form-control" @bind="_editor.Name" />
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">Tipo</label>
+                <select class="form-select" @bind="_editor.AccountType">
+                    @foreach (var item in _accountTypes)
+                    {
+                        <option value="@item">@item</option>
+                    }
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">Naturaleza</label>
+                <select class="form-select" @bind="_editor.Nature">
+                    @foreach (var item in _natures)
+                    {
+                        <option value="@item">@item</option>
+                    }
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">Cuenta padre</label>
+                <select class="form-select" @bind="_editor.ParentAccountId">
+                    <option value="">Sin padre</option>
+                    @foreach (var item in _lookups.Accounts.Where(x => x.Id != _editor.Id))
+                    {
+                        <option value="@item.Id">@item.Code - @item.Name</option>
+                    }
+                </select>
+            </div>
+            <div class="col-md-2">
+                <div class="form-check mt-4 pt-2">
+                    <input class="form-check-input" type="checkbox" @bind="_editor.AllowsPosting" />
+                    <label class="form-check-label">Permite posteo</label>
+                </div>
+            </div>
+            <div class="col-md-10"></div>
+            <div class="col-md-2 d-flex gap-2 justify-content-end">
+                <button class="btn btn-outline-secondary" @onclick="ResetEditor">Nuevo</button>
+                <button class="btn btn-primary" @onclick="SaveAsync" disabled="@_saving">Guardar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@if (!string.IsNullOrWhiteSpace(_message))
+{
+    <div class="alert alert-success">@_message</div>
+}
+@if (!string.IsNullOrWhiteSpace(_error))
+{
+    <div class="alert alert-danger">@_error</div>
+}
+
+<div class="card shadow-sm">
+    <div class="table-responsive">
+        <table class="table table-striped align-middle mb-0">
+            <thead>
+                <tr>
+                    <th>Código</th>
+                    <th>Nombre</th>
+                    <th>Tipo</th>
+                    <th>Naturaleza</th>
+                    <th>Padre</th>
+                    <th>Postea</th>
+                    <th>Activo</th>
+                    <th class="text-end">Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                @if (_rows.Count == 0)
+                {
+                    <tr><td colspan="8" class="text-center text-muted py-4">Sin cuentas contables.</td></tr>
+                }
+                else
+                {
+                    @foreach (var row in _rows)
+                    {
+                        <tr>
+                            <td>@row.Code</td>
+                            <td>@row.Name</td>
+                            <td>@row.AccountType</td>
+                            <td>@row.Nature</td>
+                            <td>@(string.IsNullOrWhiteSpace(row.ParentAccountCode) ? "-" : $"{row.ParentAccountCode} · {row.ParentAccountName}")</td>
+                            <td>@(row.AllowsPosting ? "Sí" : "No")</td>
+                            <td>@(row.IsActive ? "Sí" : "No")</td>
+                            <td class="text-end">
+                                <div class="btn-group btn-group-sm">
+                                    <button class="btn btn-outline-primary" @onclick="() => Edit(row)">Editar</button>
+                                    @if (row.IsActive)
+                                    {
+                                        <button class="btn btn-outline-danger" @onclick="() => DeactivateAsync(row.Id)">Inactivar</button>
+                                    }
+                                    else
+                                    {
+                                        <button class="btn btn-outline-success" @onclick="() => ActivateAsync(row.Id)">Activar</button>
+                                    }
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+@code {
+    private readonly List<string> _accountTypes = ["Asset", "Liability", "Equity", "Income", "Expense"];
+    private readonly List<string> _natures = ["Debit", "Credit"];
+    private AccountingLookupsDto _lookups = new();
+    private List<AccountingAccountRowDto> _rows = new();
+    private AccountEditor _editor = new();
+    private bool _saving;
+    private string? _message;
+    private string? _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await ReloadAsync();
+    }
+
+    private async Task ReloadAsync()
+    {
+        _lookups = await Api.GetLookupsAsync();
+        _rows = await Api.GetChartOfAccountsAsync();
+        if (_editor.TenantId == Guid.Empty && _lookups.TenantId != Guid.Empty)
+        {
+            ResetEditor();
+        }
+    }
+
+    private void ResetEditor()
+    {
+        _editor = new AccountEditor
+        {
+            TenantId = _lookups.TenantId,
+            CompanyId = _lookups.CompanyId,
+            AllowsPosting = true,
+            AccountType = "Asset",
+            Nature = "Debit"
+        };
+        _message = null;
+        _error = null;
+    }
+
+    private void Edit(AccountingAccountRowDto row)
+    {
+        _editor = new AccountEditor
+        {
+            Id = row.Id,
+            TenantId = _lookups.TenantId,
+            CompanyId = row.CompanyId,
+            Code = row.Code,
+            Name = row.Name,
+            AccountType = row.AccountType,
+            Nature = row.Nature,
+            ParentAccountId = row.ParentAccountId,
+            AllowsPosting = row.AllowsPosting
+        };
+        _message = null;
+        _error = null;
+    }
+
+    private async Task SaveAsync()
+    {
+        _saving = true;
+        _message = null;
+        _error = null;
+        try
+        {
+            var request = new SaveAccountingAccountRequest
+            {
+                TenantId = _editor.TenantId,
+                CompanyId = _editor.CompanyId,
+                Code = _editor.Code,
+                Name = _editor.Name,
+                AccountType = _editor.AccountType,
+                Nature = _editor.Nature,
+                ParentAccountId = _editor.ParentAccountId,
+                AllowsPosting = _editor.AllowsPosting
+            };
+
+            if (_editor.Id is null)
+            {
+                await Api.CreateAccountAsync(request);
+                _message = "Cuenta creada correctamente.";
+            }
+            else
+            {
+                await Api.UpdateAccountAsync(_editor.Id.Value, request);
+                _message = "Cuenta actualizada correctamente.";
+            }
+
+            await ReloadAsync();
+            ResetEditor();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private async Task ActivateAsync(Guid accountId)
+    {
+        _message = null;
+        _error = null;
+        try
+        {
+            await Api.ActivateAccountAsync(accountId);
+            _message = "Cuenta activada correctamente.";
+            await ReloadAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private async Task DeactivateAsync(Guid accountId)
+    {
+        _message = null;
+        _error = null;
+        try
+        {
+            await Api.DeactivateAccountAsync(accountId);
+            _message = "Cuenta inactivada correctamente.";
+            await ReloadAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private sealed class AccountEditor
+    {
+        public Guid? Id { get; set; }
+        public Guid TenantId { get; set; }
+        public Guid CompanyId { get; set; }
+        public string Code { get; set; } = string.Empty;
+        public string Name { get; set; } = string.Empty;
+        public string AccountType { get; set; } = "Asset";
+        public string Nature { get; set; } = "Debit";
+        public Guid? ParentAccountId { get; set; }
+        public bool AllowsPosting { get; set; } = true;
+    }
+}

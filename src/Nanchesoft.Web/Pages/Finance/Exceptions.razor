@@ -1,0 +1,96 @@
+@page "/finance/exceptions"
+@using Nanchesoft.Web.Services.Finance
+@inject FinanceApiService FinanceApiService
+
+<PageTitle>Excepciones financieras | Nanchesoft</PageTitle>
+
+<h1 class="h3 mb-3">Excepciones financieras</h1>
+<p class="text-muted">Pendientes operativos y contables que requieren atención para mantener flujo y cierre en orden.</p>
+
+@if (_loading)
+{
+    <div class="alert alert-info">Cargando excepciones...</div>
+}
+else if (!string.IsNullOrWhiteSpace(_error))
+{
+    <div class="alert alert-danger">@_error</div>
+}
+else
+{
+    <div class="row g-3 mb-3">
+        <div class="col-md-4"><div class="card shadow-sm"><div class="card-body"><div class="text-muted small">Alta prioridad</div><div class="display-6 fw-bold text-danger">@_rows.Count(x => x.Severity == "Alta")</div></div></div></div>
+        <div class="col-md-4"><div class="card shadow-sm"><div class="card-body"><div class="text-muted small">Media prioridad</div><div class="display-6 fw-bold text-warning">@_rows.Count(x => x.Severity == "Media")</div></div></div></div>
+        <div class="col-md-4"><div class="card shadow-sm"><div class="card-body"><div class="text-muted small">Baja prioridad</div><div class="display-6 fw-bold text-secondary">@_rows.Count(x => x.Severity == "Baja")</div></div></div></div>
+    </div>
+
+    <div class="card shadow-sm">
+        <div class="table-responsive">
+            <table class="table table-striped align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th>Prioridad</th>
+                        <th>Categoría</th>
+                        <th>Módulo</th>
+                        <th>Folio</th>
+                        <th>Fecha</th>
+                        <th class="text-end">Monto</th>
+                        <th>Detalle</th>
+                        <th>Acción sugerida</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (_rows.Count == 0)
+                    {
+                        <tr><td colspan="8" class="text-center text-muted py-4">Sin excepciones detectadas.</td></tr>
+                    }
+                    else
+                    {
+                        @foreach (var row in _rows)
+                        {
+                            <tr>
+                                <td><span class="badge @GetSeverityBadge(row.Severity)">@row.Severity</span></td>
+                                <td>@row.Category</td>
+                                <td>@row.Module</td>
+                                <td>@row.Folio</td>
+                                <td>@(row.DocumentDate?.ToString("dd/MM/yyyy") ?? "-")</td>
+                                <td class="text-end">@((row.Amount ?? 0m).ToString("N2"))</td>
+                                <td>@row.Message</td>
+                                <td>@row.SuggestedAction</td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+}
+
+@code {
+    private bool _loading = true;
+    private string? _error;
+    private List<FinanceExceptionRowDto> _rows = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _rows = await FinanceApiService.GetExceptionsAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private static string GetSeverityBadge(string severity)
+        => severity switch
+        {
+            "Alta" => "bg-danger",
+            "Media" => "bg-warning text-dark",
+            _ => "bg-secondary"
+        };
+}

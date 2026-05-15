@@ -1,0 +1,464 @@
+@using Nanchesoft.Web.Services.Catalogs
+@using Nanchesoft.Web.Services.Purchases
+@inject PurchaseApiService PurchaseApiService
+@inject NavigationManager Navigation
+
+@if (_loading)
+{
+    <div class="p-4">Cargando documento...</div>
+}
+else if (!string.IsNullOrWhiteSpace(_error))
+{
+    <div class="alert alert-danger">@_error</div>
+}
+else if (_definition is not null)
+{
+    <div class="container-fluid py-3">
+        <div class="d-flex justify-content-between align-items-start mb-3 gap-3 flex-wrap">
+            <div>
+                <div class="text-uppercase small text-secondary fw-semibold">Compras · detalle documental</div>
+                <h2 class="mb-1">@_definition.Title</h2>
+                <div class="text-secondary">@_definition.Subtitle</div>
+            </div>
+            <div class="d-flex gap-2">
+                <button class="btn btn-outline-secondary" @onclick="BackToList">Volver</button>
+                @if (_definition.Document.Id.HasValue)
+                {
+                    <a class="btn btn-outline-secondary" href="/purchases/print/{CatalogKey}/{_definition!.Document.Id}" target="_blank">Imprimir formato</a>
+                }
+                <button class="btn btn-outline-primary" @onclick="RecalculateTotals">Recalcular</button>
+                <button class="btn btn-primary" @onclick="SaveAsync">Guardar</button>
+            </div>
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(_message))
+        {
+            <div class="alert alert-success">@_message</div>
+        }
+
+        <div class="row g-3 mb-4">
+            <div class="col-md-2">
+                <label class="form-label">Folio</label>
+                <input class="form-control" @bind="_definition.Document.Folio" />
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">Fecha</label>
+                <input class="form-control" type="date" value="@DocumentDateText" @onchange="OnDocumentDateChanged" />
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">Estatus</label>
+                <select class="form-select" @bind="_definition.Document.Status">
+                    @foreach (var status in StatusOptions)
+                    {
+                        <option value="@status.Id">@status.Name</option>
+                    }
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Empresa</label>
+                <select class="form-select" @bind="CompanyIdText">
+                    <option value="">Seleccione...</option>
+                    @foreach (var item in _definition.Lookups.Companies)
+                    {
+                        <option value="@item.Id">@item.Name</option>
+                    }
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Sucursal</label>
+                <select class="form-select" @bind="BranchIdText">
+                    <option value="">Seleccione...</option>
+                    @foreach (var item in _definition.Lookups.Branches)
+                    {
+                        <option value="@item.Id">@item.Name</option>
+                    }
+                </select>
+            </div>
+
+            @if (_definition.RequiresSupplier)
+            {
+                <div class="col-md-4">
+                    <label class="form-label">Proveedor</label>
+                    <select class="form-select" @bind="SupplierIdText">
+                        <option value="">Seleccione...</option>
+                        @foreach (var item in _definition.Lookups.Suppliers)
+                        {
+                            <option value="@item.Id">@item.Name</option>
+                        }
+                    </select>
+                </div>
+            }
+
+            @if (_definition.RequiresWarehouse)
+            {
+                <div class="col-md-4">
+                    <label class="form-label">Almacén</label>
+                    <select class="form-select" @bind="WarehouseIdText">
+                        <option value="">Seleccione...</option>
+                        @foreach (var item in _definition.Lookups.Warehouses)
+                        {
+                            <option value="@item.Id">@item.Name</option>
+                        }
+                    </select>
+                </div>
+            }
+
+            @if (_definition.RequiresCurrency)
+            {
+                <div class="col-md-4">
+                    <label class="form-label">Moneda</label>
+                    <select class="form-select" @bind="CurrencyIdText">
+                        <option value="">Seleccione...</option>
+                        @foreach (var item in _definition.Lookups.Currencies)
+                        {
+                            <option value="@item.Id">@item.Name</option>
+                        }
+                    </select>
+                </div>
+            }
+
+            @if (_definition.RequiresRequisition)
+            {
+                <div class="col-md-4">
+                    <label class="form-label">Requisición origen</label>
+                    <select class="form-select" @bind="PurchaseRequisitionIdText">
+                        <option value="">Seleccione...</option>
+                        @foreach (var item in _definition.Lookups.Requisitions)
+                        {
+                            <option value="@item.Id">@item.Name</option>
+                        }
+                    </select>
+                </div>
+            }
+
+            @if (_definition.RequiresOrder)
+            {
+                <div class="col-md-4">
+                    <label class="form-label">Orden origen</label>
+                    <select class="form-select" @bind="PurchaseOrderIdText">
+                        <option value="">Seleccione...</option>
+                        @foreach (var item in _definition.Lookups.Orders)
+                        {
+                            <option value="@item.Id">@item.Name</option>
+                        }
+                    </select>
+                </div>
+            }
+
+            @if (_definition.RequiresReceipt)
+            {
+                <div class="col-md-4">
+                    <label class="form-label">Recepción origen</label>
+                    <select class="form-select" @bind="PurchaseReceiptIdText">
+                        <option value="">Seleccione...</option>
+                        @foreach (var item in _definition.Lookups.Receipts)
+                        {
+                            <option value="@item.Id">@item.Name</option>
+                        }
+                    </select>
+                </div>
+            }
+
+            @if (_definition.RequiresInvoice)
+            {
+                <div class="col-md-4">
+                    <label class="form-label">Factura origen</label>
+                    <select class="form-select" @bind="PurchaseInvoiceIdText">
+                        <option value="">Seleccione...</option>
+                        @foreach (var item in _definition.Lookups.Invoices)
+                        {
+                            <option value="@item.Id">@item.Name</option>
+                        }
+                    </select>
+                </div>
+            }
+
+            @if (_definition.UsesRequestedBy)
+            {
+                <div class="col-md-4">
+                    <label class="form-label">Solicitó</label>
+                    <input class="form-control" @bind="_definition.Document.RequestedByName" />
+                </div>
+            }
+
+            @if (_definition.UsesSupplierInvoiceFolio)
+            {
+                <div class="col-md-4">
+                    <label class="form-label">Folio proveedor</label>
+                    <input class="form-control" @bind="_definition.Document.SupplierInvoiceFolio" />
+                </div>
+            }
+
+            @if (_definition.UsesPaymentTermDays)
+            {
+                <div class="col-md-2">
+                    <label class="form-label">Plazo</label>
+                    <input class="form-control" type="number" @bind="_definition.Document.PaymentTermDays" />
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">TC</label>
+                    <input class="form-control" type="number" step="0.0001" @bind="_definition.Document.ExchangeRate" />
+                </div>
+            }
+
+            @if (_definition.UsesReason)
+            {
+                <div class="col-md-6">
+                    <label class="form-label">Motivo</label>
+                    <input class="form-control" @bind="_definition.Document.Reason" />
+                </div>
+            }
+
+            <div class="col-12">
+                <label class="form-label">Notas</label>
+                <textarea class="form-control" rows="2" @bind="_definition.Document.Notes"></textarea>
+            </div>
+        </div>
+
+        <div class="card shadow-sm mb-3">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <strong>@_definition.LinesTitle</strong>
+                <button class="btn btn-sm btn-primary" @onclick="AddLine">Agregar partida</button>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-sm table-striped align-middle mb-0">
+                        <thead>
+                            <tr>
+                                <th style="width:70px;">#</th>
+                                <th style="min-width:220px;">Artículo</th>
+                                <th style="min-width:220px;">Descripción</th>
+                                <th style="width:120px;">Unidad</th>
+                                <th style="width:110px;">Cant.</th>
+                                @if (_definition.CatalogKey == "purchase-orders")
+                                {
+                                    <th style="width:110px;">Recibida</th>
+                                    <th style="width:110px;">Pendiente</th>
+                                }
+                                @if (_definition.UsesAmounts)
+                                {
+                                    <th style="width:120px;">P.Unit.</th>
+                                    <th style="width:120px;">Desc.</th>
+                                    <th style="width:120px;">Impuesto</th>
+                                    <th style="width:140px;">Importe</th>
+                                }
+                                <th style="width:80px;"></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @for (var i = 0; i < _definition.Document.Lines.Count; i++)
+                            {
+                                var line = _definition.Document.Lines[i];
+                                <tr>
+                                    <td>@line.LineNumber</td>
+                                    <td>
+                                        <select class="form-select form-select-sm" @bind="line.ItemIdString">
+                                            <option value="">Seleccione...</option>
+                                            @foreach (var item in _definition.Lookups.Items)
+                                            {
+                                                <option value="@item.Id">@item.Name</option>
+                                            }
+                                        </select>
+                                    </td>
+                                    <td>
+                                        <input class="form-control form-control-sm" @bind="line.Description" />
+                                    </td>
+                                    <td>
+                                        <select class="form-select form-select-sm" @bind="line.UnitIdString">
+                                            <option value="">Seleccione...</option>
+                                            @foreach (var item in _definition.Lookups.Units)
+                                            {
+                                                <option value="@item.Id">@item.Name</option>
+                                            }
+                                        </select>
+                                    </td>
+                                    <td>
+                                        <input class="form-control form-control-sm" type="number" step="0.0001" @bind="line.Quantity" />
+                                    </td>
+                                    @if (_definition.CatalogKey == "purchase-orders")
+                                    {
+                                        <td><input class="form-control form-control-sm" type="number" step="0.0001" @bind="line.ReceivedQuantity" /></td>
+                                        <td><input class="form-control form-control-sm" type="number" step="0.0001" @bind="line.PendingQuantity" /></td>
+                                    }
+                                    @if (_definition.UsesAmounts)
+                                    {
+                                        <td><input class="form-control form-control-sm" type="number" step="0.0001" @bind="line.UnitPrice" /></td>
+                                        <td><input class="form-control form-control-sm" type="number" step="0.01" @bind="line.DiscountAmount" /></td>
+                                        <td><input class="form-control form-control-sm" type="number" step="0.01" @bind="line.TaxAmount" /></td>
+                                        <td><input class="form-control form-control-sm" type="number" step="0.01" @bind="line.LineTotal" /></td>
+                                    }
+                                    <td>
+                                        <button class="btn btn-sm btn-outline-danger" @onclick="(() => RemoveLine(line))">X</button>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        @if (_definition.UsesAmounts)
+        {
+            <div class="row g-3 justify-content-end">
+                <div class="col-md-2">
+                    <label class="form-label">Subtotal</label>
+                    <input class="form-control" type="number" step="0.01" @bind="_definition.Document.Subtotal" />
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Impuesto</label>
+                    <input class="form-control" type="number" step="0.01" @bind="_definition.Document.TaxAmount" />
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Total</label>
+                    <input class="form-control" type="number" step="0.01" @bind="_definition.Document.Total" />
+                </div>
+            </div>
+        }
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired] public string CatalogKey { get; set; } = string.Empty;
+    [Parameter] public Guid? DocumentId { get; set; }
+
+    private PurchaseDocumentEditorDefinition? _definition;
+    private bool _loading = true;
+    private string? _error;
+    private string? _message;
+
+    private static IReadOnlyList<CatalogLookupItem> StatusOptions { get; } =
+    [
+        new CatalogLookupItem { Id = "draft", Name = "Draft" },
+        new CatalogLookupItem { Id = "pending_approval", Name = "Pending approval" },
+        new CatalogLookupItem { Id = "approved", Name = "Approved" },
+        new CatalogLookupItem { Id = "posted", Name = "Posted" },
+        new CatalogLookupItem { Id = "closed", Name = "Closed" },
+        new CatalogLookupItem { Id = "cancelled", Name = "Cancelled" }
+    ];
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _loading = true;
+        _error = null;
+        _message = null;
+
+        try
+        {
+            _definition = await PurchaseApiService.GetEditorDefinitionAsync(CatalogKey, DocumentId);
+            RecalculateTotals();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private string DocumentDateText
+    {
+        get => _definition?.Document.DocumentDate?.ToString("yyyy-MM-dd") ?? string.Empty;
+    }
+
+    private void OnDocumentDateChanged(ChangeEventArgs e)
+    {
+        if (_definition is null) return;
+        var value = e.Value?.ToString();
+        _definition.Document.DocumentDate = DateTime.TryParse(value, out var parsed) ? parsed : null;
+    }
+
+    private string CompanyIdText { get => GetGuid(_definition?.Document.CompanyId); set => SetGuid(v => _definition!.Document.CompanyId = v, value); }
+    private string BranchIdText { get => GetGuid(_definition?.Document.BranchId); set => SetGuid(v => _definition!.Document.BranchId = v, value); }
+    private string SupplierIdText { get => GetGuid(_definition?.Document.SupplierId); set => SetGuid(v => _definition!.Document.SupplierId = v, value); }
+    private string WarehouseIdText { get => GetGuid(_definition?.Document.WarehouseId); set => SetGuid(v => _definition!.Document.WarehouseId = v, value); }
+    private string CurrencyIdText { get => GetGuid(_definition?.Document.CurrencyId); set => SetGuid(v => _definition!.Document.CurrencyId = v, value); }
+    private string PurchaseRequisitionIdText { get => GetGuid(_definition?.Document.PurchaseRequisitionId); set => SetGuid(v => _definition!.Document.PurchaseRequisitionId = v, value); }
+    private string PurchaseOrderIdText { get => GetGuid(_definition?.Document.PurchaseOrderId); set => SetGuid(v => _definition!.Document.PurchaseOrderId = v, value); }
+    private string PurchaseReceiptIdText { get => GetGuid(_definition?.Document.PurchaseReceiptId); set => SetGuid(v => _definition!.Document.PurchaseReceiptId = v, value); }
+    private string PurchaseInvoiceIdText { get => GetGuid(_definition?.Document.PurchaseInvoiceId); set => SetGuid(v => _definition!.Document.PurchaseInvoiceId = v, value); }
+
+    private static string GetGuid(Guid? value) => value?.ToString() ?? string.Empty;
+    private static void SetGuid(Action<Guid?> setter, string value) => setter(Guid.TryParse(value, out var parsed) ? parsed : null);
+
+    private void AddLine()
+    {
+        if (_definition is null) return;
+        _definition.Document.Lines.Add(new PurchaseLineModel { LineNumber = _definition.Document.Lines.Count + 1, Quantity = 1m });
+    }
+
+    private void RemoveLine(PurchaseLineModel line)
+    {
+        if (_definition is null) return;
+        _definition.Document.Lines.Remove(line);
+        for (var i = 0; i < _definition.Document.Lines.Count; i++)
+        {
+            _definition.Document.Lines[i].LineNumber = i + 1;
+        }
+        RecalculateTotals();
+    }
+
+    private void RecalculateTotals()
+    {
+        if (_definition is null) return;
+
+        foreach (var line in _definition.Document.Lines)
+        {
+            if (_definition.CatalogKey == "purchase-orders")
+            {
+                line.PendingQuantity = Math.Max(0, line.Quantity - line.ReceivedQuantity);
+            }
+
+            if (_definition.UsesAmounts)
+            {
+                line.LineTotal = (line.Quantity * line.UnitPrice) - line.DiscountAmount + line.TaxAmount;
+            }
+        }
+
+        if (_definition.UsesAmounts)
+        {
+            _definition.Document.Subtotal = _definition.Document.Lines.Sum(x => (x.Quantity * x.UnitPrice) - x.DiscountAmount);
+            _definition.Document.TaxAmount = _definition.Document.Lines.Sum(x => x.TaxAmount);
+            _definition.Document.Total = _definition.Document.Subtotal + _definition.Document.TaxAmount;
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        if (_definition is null) return;
+
+        try
+        {
+            _message = null;
+            _error = null;
+            RecalculateTotals();
+            var savedId = await PurchaseApiService.SaveDocumentAsync(CatalogKey, _definition.Document);
+            _message = "Documento guardado correctamente.";
+
+            if (!_definition.Document.Id.HasValue && savedId != Guid.Empty)
+            {
+                Navigation.NavigateTo($"{Navigation.BaseUri.TrimEnd('/')}/purchases/{CatalogKey.Replace("purchase-", string.Empty)}/detail/{savedId}", true);
+            }
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private void BackToList()
+    {
+        var segment = CatalogKey switch
+        {
+            "purchase-requisitions" => "requisitions",
+            "purchase-orders" => "orders",
+            "purchase-receipts" => "receipts",
+            "purchase-invoices" => "invoices",
+            _ => "returns"
+        };
+
+        Navigation.NavigateTo($"/purchases/{segment}");
+    }
+}

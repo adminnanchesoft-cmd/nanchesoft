@@ -1,0 +1,156 @@
+@using Nanchesoft.Web.Services.Catalogs
+@using Nanchesoft.Web.Services.Treasury
+@inject NavigationManager Navigation
+@inject TreasuryApiService TreasuryApiService
+
+@if (_loading)
+{
+    <div class="alert alert-info">Cargando tesorería...</div>
+}
+else if (!string.IsNullOrWhiteSpace(_error))
+{
+    <div class="alert alert-danger">@_error</div>
+}
+else if (_definition is not null)
+{
+    <div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-3">
+        <div>
+            <div class="text-muted small">Nanchesoft ERP · Tesorería</div>
+            <h1 class="h3 mb-1">@_definition.Title</h1>
+            <div class="text-muted">@_definition.Subtitle</div>
+        </div>
+        <div class="d-flex gap-2 flex-wrap">
+            @if (!string.IsNullOrWhiteSpace(DashboardUrl))
+            {
+                <button class="btn btn-outline-secondary" @onclick="(() => Navigation.NavigateTo(DashboardUrl!))">Dashboard</button>
+            }
+            <button class="btn btn-outline-secondary" @onclick="ReloadAsync">Recargar</button>
+            <button class="btn btn-primary" @onclick="(() => Navigation.NavigateTo(CreateUrl))">Nuevo</button>
+        </div>
+    </div>
+
+    <div class="row g-3 mb-3">
+        <div class="col-md-4"><div class="card shadow-sm"><div class="card-body"><div class="text-muted small">Total</div><div class="fs-4 fw-bold">@_definition.TotalCount</div></div></div></div>
+        <div class="col-md-4"><div class="card shadow-sm"><div class="card-body"><div class="text-muted small">Activos</div><div class="fs-4 fw-bold text-success">@_definition.ActiveCount</div></div></div></div>
+        <div class="col-md-4"><div class="card shadow-sm"><div class="card-body"><div class="text-muted small">Inactivos</div><div class="fs-4 fw-bold text-danger">@_definition.InactiveCount</div></div></div></div>
+    </div>
+
+    <div class="card shadow-sm">
+        <div class="table-responsive">
+            <table class="table table-striped align-middle mb-0">
+                <thead>
+                    <tr>
+                        @foreach (var column in VisibleColumns)
+                        {
+                            <th>@column.Caption</th>
+                        }
+                        <th style="width:140px;">Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (_definition.Rows.Count == 0)
+                    {
+                        <tr><td colspan="@(VisibleColumns.Count + 1)" class="text-center text-muted py-4">Sin registros.</td></tr>
+                    }
+                    else
+                    {
+                        @foreach (var row in _definition.Rows)
+                        {
+                            <tr>
+                                @foreach (var column in VisibleColumns)
+                                {
+                                    <td>@FormatValue(column, row)</td>
+                                }
+                                <td>
+                                    @if (TryGetKey(row, out var id))
+                                    {
+                                        <button class="btn btn-sm btn-outline-primary" @onclick="(() => OpenDetail(id))">Abrir</button>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired] public string CatalogKey { get; set; } = string.Empty;
+    [Parameter, EditorRequired] public string CreateUrl { get; set; } = string.Empty;
+    [Parameter, EditorRequired] public string DetailBaseUrl { get; set; } = string.Empty;
+    [Parameter] public string? DashboardUrl { get; set; }
+
+    private CatalogViewDefinition? _definition;
+    private bool _loading = true;
+    private string? _error;
+
+    private List<CatalogColumnDefinition> VisibleColumns => _definition?.Columns.Where(x => x.Visible).Take(8).ToList() ?? [];
+
+    protected override async Task OnParametersSetAsync() => await ReloadAsync();
+
+    private async Task ReloadAsync()
+    {
+        _loading = true;
+        _error = null;
+        try
+        {
+            _definition = await TreasuryApiService.GetCatalogAsync(CatalogKey);
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void OpenDetail(Guid id) => Navigation.NavigateTo($"{DetailBaseUrl}/{id}");
+
+    private bool TryGetKey(Dictionary<string, object?> row, out Guid id)
+    {
+        id = Guid.Empty;
+        if (_definition is null || !row.TryGetValue(_definition.KeyExpr, out var value) || value is null)
+        {
+            return false;
+        }
+
+        return Guid.TryParse(value.ToString(), out id);
+    }
+
+    private string FormatValue(CatalogColumnDefinition column, Dictionary<string, object?> row)
+    {
+        if (!row.TryGetValue(column.DataField, out var raw) || raw is null)
+        {
+            return string.Empty;
+        }
+
+        var value = raw.ToString() ?? string.Empty;
+
+        if (column.UseLookup)
+        {
+            var match = column.LookupItems.FirstOrDefault(x => x.Id == value);
+            return match?.Name ?? value;
+        }
+
+        if (column.DataType == "boolean")
+        {
+            return value.Equals("True", StringComparison.OrdinalIgnoreCase) || value.Equals("true", StringComparison.OrdinalIgnoreCase) ? "Sí" : "No";
+        }
+
+        if (column.DataType == "date" && DateTime.TryParse(value, out var date))
+        {
+            return date.ToString("dd/MM/yyyy");
+        }
+
+        if (column.DataType == "number" && decimal.TryParse(value, out var number))
+        {
+            return number.ToString("N2");
+        }
+
+        return value;
+    }
+}

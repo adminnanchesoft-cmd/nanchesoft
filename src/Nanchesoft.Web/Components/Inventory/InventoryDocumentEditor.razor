@@ -1,0 +1,458 @@
+@using Nanchesoft.Web.Services.Inventory
+@inject InventoryApiService InventoryApiService
+@inject NavigationManager Navigation
+
+@if (_loading)
+{
+    <div class="p-4">Cargando documento...</div>
+}
+else if (!string.IsNullOrWhiteSpace(_error))
+{
+    <div class="alert alert-danger">@_error</div>
+}
+else if (_definition is not null)
+{
+    <div class="container-fluid py-3">
+        <div class="d-flex justify-content-between align-items-start mb-3 gap-3 flex-wrap">
+            <div>
+                <div class="text-uppercase small text-secondary fw-semibold">Inventario · detalle documental</div>
+                <h2 class="mb-1">@_definition.Title</h2>
+                <div class="text-secondary">@_definition.Subtitle</div>
+            </div>
+            <div class="d-flex gap-2">
+                <button class="btn btn-outline-secondary" @onclick="BackToList">Volver</button>
+                @if (_definition.Document.Id.HasValue)
+                {
+                    <a class="btn btn-outline-secondary" href="/inventory/print/{CatalogKey}/{_definition!.Document.Id}" target="_blank">Imprimir formato</a>
+                }
+                <button class="btn btn-outline-primary" @onclick="RecalculateLines">Recalcular</button>
+                <button class="btn btn-primary" @onclick="SaveAsync">Guardar</button>
+            </div>
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(_message))
+        {
+            <div class="alert alert-success">@_message</div>
+        }
+
+        <div class="row g-3 mb-4">
+            <div class="col-md-2">
+                <label class="form-label">Folio</label>
+                <input class="form-control" @bind="_definition.Document.Folio" />
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">Fecha</label>
+                <input class="form-control" type="date" value="@DocumentDateText" @onchange="OnDocumentDateChanged" />
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">Estatus</label>
+                <select class="form-select" @bind="_definition.Document.Status">
+                    @foreach (var status in StatusOptions)
+                    {
+                        <option value="@status.Id">@status.Name</option>
+                    }
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Empresa</label>
+                <select class="form-select" @bind="CompanyIdText">
+                    <option value="">Seleccione...</option>
+                    @foreach (var item in _definition.Lookups.Companies)
+                    {
+                        <option value="@item.Id">@item.Name</option>
+                    }
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Sucursal</label>
+                <select class="form-select" @bind="BranchIdText">
+                    <option value="">Seleccione...</option>
+                    @foreach (var item in _definition.Lookups.Branches)
+                    {
+                        <option value="@item.Id">@item.Name</option>
+                    }
+                </select>
+            </div>
+
+            @if (_definition.RequiresSingleWarehouse)
+            {
+                <div class="col-md-4">
+                    <label class="form-label">Almacén</label>
+                    <select class="form-select" @bind="WarehouseIdText">
+                        <option value="">Seleccione...</option>
+                        @foreach (var item in _definition.Lookups.Warehouses)
+                        {
+                            <option value="@item.Id">@item.Name</option>
+                        }
+                    </select>
+                </div>
+            }
+
+            @if (_definition.RequiresSourceTargetWarehouse)
+            {
+                <div class="col-md-4">
+                    <label class="form-label">Almacén origen</label>
+                    <select class="form-select" @bind="SourceWarehouseIdText">
+                        <option value="">Seleccione...</option>
+                        @foreach (var item in _definition.Lookups.Warehouses)
+                        {
+                            <option value="@item.Id">@item.Name</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Almacén destino</label>
+                    <select class="form-select" @bind="TargetWarehouseIdText">
+                        <option value="">Seleccione...</option>
+                        @foreach (var item in _definition.Lookups.Warehouses)
+                        {
+                            <option value="@item.Id">@item.Name</option>
+                        }
+                    </select>
+                </div>
+            }
+
+            @if (_definition.RequiresAdjustmentType)
+            {
+                <div class="col-md-3">
+                    <label class="form-label">Tipo ajuste</label>
+                    <select class="form-select" @bind="_definition.Document.AdjustmentType">
+                        <option value="positive">Positivo</option>
+                        <option value="negative">Negativo</option>
+                    </select>
+                </div>
+            }
+
+            @if (_definition.RequiresReason)
+            {
+                <div class="col-md-5">
+                    <label class="form-label">Motivo</label>
+                    <input class="form-control" @bind="_definition.Document.Reason" />
+                </div>
+            }
+
+            <div class="col-12">
+                <label class="form-label">Notas</label>
+                <textarea class="form-control" rows="2" @bind="_definition.Document.Notes"></textarea>
+            </div>
+        </div>
+
+        <div class="card shadow-sm mb-3">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <strong>@_definition.LinesTitle</strong>
+                <button class="btn btn-sm btn-primary" @onclick="AddLine">Agregar partida</button>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-sm table-striped align-middle mb-0">
+                        <thead>
+                            <tr>
+                                <th style="width:70px;">#</th>
+                                <th style="min-width:220px;">Producto</th>
+                                <th style="min-width:220px;">Descripción</th>
+                                <th style="width:120px;">Unidad</th>
+                                <th style="width:130px;">Lote</th>
+                                <th style="width:140px;">Serie</th>
+                                @if (_definition.UsesCountLines)
+                                {
+                                    <th style="width:110px;">Sistema</th>
+                                    <th style="width:110px;">Contada</th>
+                                    <th style="width:110px;">Diferencia</th>
+                                }
+                                else
+                                {
+                                    <th style="width:110px;">Cant.</th>
+                                    <th style="width:120px;">Costo U.</th>
+                                    <th style="width:130px;">Importe</th>
+                                }
+                                <th style="width:80px;"></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @for (var i = 0; i < _definition.Document.Lines.Count; i++)
+                            {
+                                var line = _definition.Document.Lines[i];
+                                <tr>
+                                    <td>@line.LineNumber</td>
+                                    <td>
+                                        <select class="form-select form-select-sm" @bind="line.ItemIdString" @bind:after="() => FillItemData(line)">
+                                            <option value="">Seleccione...</option>
+                                            @foreach (var item in _definition.Lookups.Items)
+                                            {
+                                                <option value="@item.Id">@item.Name</option>
+                                            }
+                                        </select>
+                                        @if (!string.IsNullOrWhiteSpace(line.ItemCode) || !string.IsNullOrWhiteSpace(line.ItemName))
+                                        {
+                                            <div class="small text-secondary">@line.ItemCode @line.ItemName</div>
+                                        }
+                                    </td>
+                                    <td>
+                                        <input class="form-control form-control-sm" @bind="line.Description" />
+                                    </td>
+                                    <td>
+                                        <select class="form-select form-select-sm" @bind="line.UnitIdString" @bind:after="() => FillUnitData(line)">
+                                            <option value="">Seleccione...</option>
+                                            @foreach (var unit in _definition.Lookups.Units)
+                                            {
+                                                <option value="@unit.Id">@unit.Name</option>
+                                            }
+                                        </select>
+                                    </td>
+                                    <td>
+                                        <select class="form-select form-select-sm" @bind="line.LotIdString" @bind:after="() => FillLotData(line)">
+                                            <option value="">Sin lote</option>
+                                            @foreach (var lot in _definition.Lookups.Lots)
+                                            {
+                                                <option value="@lot.Id">@lot.Name</option>
+                                            }
+                                        </select>
+                                    </td>
+                                    <td>
+                                        <select class="form-select form-select-sm" @bind="line.SerialIdString" @bind:after="() => FillSerialData(line)">
+                                            <option value="">Sin serie</option>
+                                            @foreach (var serial in _definition.Lookups.Serials)
+                                            {
+                                                <option value="@serial.Id">@serial.Name</option>
+                                            }
+                                        </select>
+                                    </td>
+                                    @if (_definition.UsesCountLines)
+                                    {
+                                        <td><input class="form-control form-control-sm" type="number" step="0.0001" @bind="line.SystemQuantity" @bind:after="() => RecalculateLine(line)" /></td>
+                                        <td><input class="form-control form-control-sm" type="number" step="0.0001" @bind="line.CountedQuantity" @bind:after="() => RecalculateLine(line)" /></td>
+                                        <td><input class="form-control form-control-sm" type="number" step="0.0001" @bind="line.DifferenceQuantity" /></td>
+                                    }
+                                    else
+                                    {
+                                        <td><input class="form-control form-control-sm" type="number" step="0.0001" @bind="line.Quantity" @bind:after="() => RecalculateLine(line)" /></td>
+                                        <td><input class="form-control form-control-sm" type="number" step="0.0001" @bind="line.UnitCost" @bind:after="() => RecalculateLine(line)" /></td>
+                                        <td><input class="form-control form-control-sm" type="number" step="0.01" @bind="line.LineTotal" /></td>
+                                    }
+                                    <td>
+                                        <button class="btn btn-sm btn-outline-danger" @onclick="(() => RemoveLine(line))">X</button>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired] public string CatalogKey { get; set; } = string.Empty;
+    [Parameter] public Guid? DocumentId { get; set; }
+
+    private InventoryDocumentEditorDefinition? _definition;
+    private bool _loading = true;
+    private string? _error;
+    private string? _message;
+
+    private static IReadOnlyList<StatusOption> StatusOptions { get; } =
+    [
+        new("draft", "Draft"),
+        new("pending_approval", "Pending approval"),
+        new("approved", "Approved"),
+        new("posted", "Posted"),
+        new("closed", "Closed"),
+        new("cancelled", "Cancelled")
+    ];
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _loading = true;
+        _error = null;
+        _message = null;
+
+        try
+        {
+            _definition = await InventoryApiService.GetEditorDefinitionAsync(CatalogKey, DocumentId);
+            RecalculateLines();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private string DocumentDateText => _definition?.Document.DocumentDate?.ToString("yyyy-MM-dd") ?? string.Empty;
+    private string CompanyIdText { get => GetGuid(_definition?.Document.CompanyId); set => SetGuid(v => _definition!.Document.CompanyId = v, value); }
+    private string BranchIdText { get => GetGuid(_definition?.Document.BranchId); set => SetGuid(v => _definition!.Document.BranchId = v, value); }
+    private string WarehouseIdText { get => GetGuid(_definition?.Document.WarehouseId); set => SetGuid(v => _definition!.Document.WarehouseId = v, value); }
+    private string SourceWarehouseIdText { get => GetGuid(_definition?.Document.SourceWarehouseId); set => SetGuid(v => _definition!.Document.SourceWarehouseId = v, value); }
+    private string TargetWarehouseIdText { get => GetGuid(_definition?.Document.TargetWarehouseId); set => SetGuid(v => _definition!.Document.TargetWarehouseId = v, value); }
+
+    private static string GetGuid(Guid? value) => value?.ToString() ?? string.Empty;
+    private static void SetGuid(Action<Guid?> setter, string value) => setter(Guid.TryParse(value, out var parsed) ? parsed : null);
+
+    private void OnDocumentDateChanged(ChangeEventArgs e)
+    {
+        if (_definition is null)
+        {
+            return;
+        }
+
+        var value = e.Value?.ToString();
+        _definition.Document.DocumentDate = DateTime.TryParse(value, out var parsed) ? parsed : null;
+    }
+
+    private void AddLine()
+    {
+        if (_definition is null)
+        {
+            return;
+        }
+
+        _definition.Document.Lines.Add(new InventoryLineModel
+        {
+            LineNumber = _definition.Document.Lines.Count + 1,
+            Quantity = 1m
+        });
+    }
+
+    private void RemoveLine(InventoryLineModel line)
+    {
+        if (_definition is null)
+        {
+            return;
+        }
+
+        _definition.Document.Lines.Remove(line);
+        for (var i = 0; i < _definition.Document.Lines.Count; i++)
+        {
+            _definition.Document.Lines[i].LineNumber = i + 1;
+        }
+    }
+
+    private void FillItemData(InventoryLineModel line)
+    {
+        if (_definition is null || line.ItemId is null)
+        {
+            return;
+        }
+
+        var lookup = _definition.Lookups.Items.FirstOrDefault(x => x.Id == line.ItemId.ToString());
+        if (lookup is not null)
+        {
+            var parts = lookup.Name.Split('·', 2, StringSplitOptions.TrimEntries);
+            line.ItemCode = parts.Length > 1 ? parts[0] : string.Empty;
+            line.ItemName = parts.Length > 1 ? parts[1] : lookup.Name;
+            if (string.IsNullOrWhiteSpace(line.Description))
+            {
+                line.Description = line.ItemName;
+            }
+        }
+    }
+
+    private void FillUnitData(InventoryLineModel line)
+    {
+        if (_definition is null || line.UnitId is null)
+        {
+            return;
+        }
+
+        var lookup = _definition.Lookups.Units.FirstOrDefault(x => x.Id == line.UnitId.ToString());
+        line.UnitName = lookup?.Name ?? string.Empty;
+    }
+
+    private void FillLotData(InventoryLineModel line)
+    {
+        if (_definition is null || line.LotId is null)
+        {
+            line.LotNumber = string.Empty;
+            return;
+        }
+
+        var lookup = _definition.Lookups.Lots.FirstOrDefault(x => x.Id == line.LotId.ToString());
+        line.LotNumber = lookup?.Name ?? string.Empty;
+    }
+
+    private void FillSerialData(InventoryLineModel line)
+    {
+        if (_definition is null || line.SerialId is null)
+        {
+            line.SerialNumber = string.Empty;
+            return;
+        }
+
+        var lookup = _definition.Lookups.Serials.FirstOrDefault(x => x.Id == line.SerialId.ToString());
+        line.SerialNumber = lookup?.Name ?? string.Empty;
+    }
+
+    private void RecalculateLine(InventoryLineModel line)
+    {
+        if (_definition is null)
+        {
+            return;
+        }
+
+        if (_definition.UsesCountLines)
+        {
+            line.DifferenceQuantity = line.CountedQuantity - line.SystemQuantity;
+        }
+        else
+        {
+            line.LineTotal = line.Quantity * line.UnitCost;
+        }
+    }
+
+    private void RecalculateLines()
+    {
+        if (_definition is null)
+        {
+            return;
+        }
+
+        foreach (var line in _definition.Document.Lines)
+        {
+            RecalculateLine(line);
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        if (_definition is null)
+        {
+            return;
+        }
+
+        try
+        {
+            _message = null;
+            _error = null;
+            RecalculateLines();
+            var savedId = await InventoryApiService.SaveDocumentAsync(CatalogKey, _definition.Document);
+            _message = "Documento guardado correctamente.";
+
+            if (!_definition.Document.Id.HasValue && savedId != Guid.Empty)
+            {
+                Navigation.NavigateTo($"/inventory/{GetRouteSegment(CatalogKey)}/detail/{savedId}", true);
+            }
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private void BackToList() => Navigation.NavigateTo($"/inventory/{GetRouteSegment(CatalogKey)}");
+
+    private static string GetRouteSegment(string catalogKey)
+        => catalogKey switch
+        {
+            "inventory-entries" => "entries",
+            "inventory-exits" => "exits",
+            "inventory-transfers" => "transfers",
+            "inventory-adjustments" => "adjustments",
+            _ => "physical-counts"
+        };
+
+    private sealed record StatusOption(string Id, string Name);
+}

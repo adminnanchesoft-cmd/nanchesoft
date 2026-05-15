@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="es-MX">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nanchesoft Shell V3 — Preview</title>
+<style>
+:root { --ns-bg: #edf2fa; }
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; min-height: 100%; font-family: -apple-system, "Segoe UI", Roboto, "Inter", sans-serif; color: #16233c; background: linear-gradient(180deg, #f3f6fb 0%, #eef2f9 100%); }
+
+/* === SHELL V3 INLINED FROM app.css === */
+.ns-shell-v3 {
+    --v3-azure-1: #0a3d8f; --v3-azure-2: #0f5ea8; --v3-azure-3: #0078d4; --v3-azure-4: #2b88d8;
+    --v3-accent: #3658ff;
+    --v3-ink-900: #0f172a; --v3-ink-700: #1e293b; --v3-ink-600: #334155; --v3-ink-500: #475569; --v3-ink-400: #64748b; --v3-ink-300: #94a3b8; --v3-ink-200: #cbd5e1;
+    --v3-line: #e2e8f0; --v3-line-soft: #eef2f7;
+    --v3-surface: #ffffff; --v3-surface-soft: #f8fafc; --v3-surface-tint: #f1f6fc;
+    --v3-shadow-sm: 0 1px 2px rgba(15, 23, 42, .06), 0 1px 3px rgba(15, 23, 42, .08);
+    --v3-shadow-md: 0 4px 12px rgba(15, 23, 42, .06), 0 8px 24px rgba(15, 23, 42, .08);
+    --v3-shadow-lg: 0 10px 30px rgba(15, 23, 42, .12), 0 24px 60px rgba(15, 23, 42, .12);
+    --v3-radius-sm: 8px; --v3-radius-md: 12px; --v3-radius-lg: 16px; --v3-radius-xl: 20px;
+    min-height: 100vh;
+}
+.ns-shell2__body { display: grid; grid-template-columns: 304px minmax(0,1fr); gap: 16px; padding: 14px 18px 24px; }
+.ns-shell2__pageframe { padding: 18px 20px; border-radius: var(--v3-radius-lg); background: var(--v3-surface); border: 1px solid var(--v3-line); box-shadow: var(--v3-shadow-md); }
+
+/* TopBar */
+.ns-tb3 { position: sticky; top: 0; z-index: 60; display: grid; grid-template-columns: minmax(280px, 320px) minmax(0,1fr) auto; align-items: center; gap: 18px; min-height: 56px; padding: 0 18px; color: #fff; background: linear-gradient(135deg, #062b6e 0%, #0a3d8f 38%, #0f5ea8 75%, #1474c4 100%); border-bottom: 1px solid rgba(0,0,0,.08); box-shadow: 0 1px 0 rgba(255,255,255,.06) inset, 0 6px 18px rgba(6,18,48,.22); }
+.ns-tb3__left { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.ns-tb3__iconbtn { position: relative; width: 36px; height: 36px; border-radius: 8px; display: grid; place-items: center; color: #fff; background: transparent; border: 1px solid transparent; cursor: pointer; transition: background .14s ease, border-color .14s ease, transform .12s ease; }
+.ns-tb3__iconbtn:hover { background: rgba(255,255,255,.14); border-color: rgba(255,255,255,.22); }
+.ns-tb3__iconbtn-dot { position: absolute; top: 3px; right: 2px; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 999px; background: #ff5d4d; color: #fff; font-size: .65rem; font-weight: 800; display: grid; place-items: center; border: 1.5px solid var(--v3-azure-1); }
+.ns-tb3__waffle { margin-right: 4px; }
+.ns-tb3__brand { display: flex; align-items: center; gap: 10px; text-decoration: none; color: #fff; padding: 4px 8px; border-radius: 8px; }
+.ns-tb3__brandmark { width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center; background: rgba(255,255,255,.14); border: 1px solid rgba(255,255,255,.22); }
+.ns-tb3__brandtext { display: flex; flex-direction: column; line-height: 1.05; }
+.ns-tb3__brandtitle { font-size: 1rem; font-weight: 700; letter-spacing: -.01em; white-space: nowrap; }
+.ns-tb3__brandtag { font-size: .72rem; color: rgba(255,255,255,.78); margin-top: 2px; white-space: nowrap; }
+.ns-tb3__center { min-width: 0; display: flex; justify-content: center; }
+.ns-tb3__searchwrap { position: relative; width: 100%; max-width: 720px; }
+.ns-tb3__searchicon { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--v3-ink-400); pointer-events: none; }
+.ns-tb3__search { width: 100%; height: 40px; padding: 0 92px 0 38px; border: 0; border-radius: 8px; background: #fff; color: var(--v3-ink-900); font-size: .92rem; box-shadow: inset 0 0 0 1px rgba(15,23,42,.04); transition: box-shadow .14s ease; outline: none; }
+.ns-tb3__search::placeholder { color: var(--v3-ink-400); }
+.ns-tb3__search:focus { box-shadow: inset 0 0 0 1px rgba(0,120,212,.25), 0 0 0 3px rgba(0,120,212,.25), 0 0 0 4px rgba(255,255,255,.25); }
+.ns-tb3__shortcutpill { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); display: inline-flex; align-items: center; gap: 4px; height: 28px; padding: 0 9px; border: 1px solid var(--v3-line); border-radius: 6px; background: var(--v3-surface-soft); color: var(--v3-ink-500); font-size: .72rem; font-weight: 600; cursor: pointer; }
+.ns-tb3__shortcutpill kbd { display: inline-grid; place-items: center; min-width: 16px; padding: 0 3px; height: 16px; border-radius: 3px; background: #fff; border: 1px solid var(--v3-line); color: var(--v3-ink-700); font-family: inherit; font-size: .68rem; font-weight: 700; line-height: 1; }
+.ns-tb3__shortcutpill span { color: var(--v3-ink-400); font-size: .7rem; }
+
+.ns-tb3__results { position: absolute; top: calc(100% + 8px); left: 0; right: 0; background: #fff; border: 1px solid var(--v3-line); border-radius: var(--v3-radius-md); box-shadow: var(--v3-shadow-lg); overflow: hidden; z-index: 100; max-height: 480px; overflow-y: auto; }
+.ns-tb3__results-section + .ns-tb3__results-section { border-top: 1px solid var(--v3-line-soft); }
+.ns-tb3__results-eyebrow { padding: 10px 14px 6px; color: var(--v3-ink-400); font-size: .68rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; }
+.ns-tb3__result { width: 100%; display: grid; grid-template-columns: 32px minmax(0,1fr) auto; align-items: center; gap: 12px; padding: 9px 14px; background: transparent; border: 0; text-align: left; cursor: pointer; }
+.ns-tb3__result:hover { background: var(--v3-surface-tint); }
+.ns-tb3__result-icon { width: 28px; height: 28px; border-radius: 7px; display: grid; place-items: center; background: linear-gradient(135deg, rgba(0,120,212,.14), rgba(54,88,255,.12)); color: var(--v3-azure-2); font-size: .65rem; font-weight: 800; letter-spacing: .04em; }
+.ns-tb3__result-meta { display: flex; flex-direction: column; min-width: 0; }
+.ns-tb3__result-title { color: var(--v3-ink-900); font-size: .9rem; font-weight: 600; line-height: 1.2; }
+.ns-tb3__result-sub { margin-top: 2px; color: var(--v3-ink-400); font-size: .76rem; }
+.ns-tb3__result-kind { padding: 3px 8px; border-radius: 999px; background: var(--v3-surface-soft); border: 1px solid var(--v3-line); color: var(--v3-ink-500); font-size: .68rem; font-weight: 700; letter-spacing: .04em; }
+
+.ns-tb3__right { display: flex; align-items: center; gap: 12px; position: relative; }
+.ns-tb3__iconcluster { display: flex; align-items: center; gap: 2px; }
+.ns-tb3__divider { width: 1px; height: 28px; background: rgba(255,255,255,.22); }
+.ns-tb3__contextchips { display: flex; align-items: stretch; gap: 6px; }
+.ns-tb3__contextchip { display: flex; flex-direction: column; justify-content: center; padding: 4px 10px; border-radius: 8px; background: rgba(255,255,255,.10); border: 1px solid rgba(255,255,255,.18); line-height: 1.05; max-width: 160px; }
+.ns-tb3__contextchip-eyebrow { color: rgba(255,255,255,.72); font-size: .62rem; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; }
+.ns-tb3__contextchip-value { color: #fff; font-size: .82rem; font-weight: 700; margin-top: 2px; white-space: nowrap; }
+.ns-tb3__userpill { display: flex; align-items: center; gap: 8px; padding: 4px 10px 4px 4px; border-radius: 999px; background: rgba(255,255,255,.14); border: 1px solid rgba(255,255,255,.22); color: #fff; cursor: pointer; }
+.ns-tb3__avatar { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; background: #fff; color: var(--v3-azure-1); font-weight: 800; font-size: .82rem; box-shadow: 0 0 0 2px rgba(255,255,255,.25); }
+.ns-tb3__userpill-text { display: flex; flex-direction: column; line-height: 1.05; text-align: left; }
+.ns-tb3__userpill-name { font-size: .82rem; font-weight: 700; color: #fff; }
+.ns-tb3__userpill-role { margin-top: 2px; font-size: .68rem; color: rgba(255,255,255,.8); }
+.ns-tb3__userpill-caret { color: rgba(255,255,255,.8); margin-left: 2px; }
+
+/* SideMenu */
+.ns-sm3 { position: sticky; top: 14px; display: flex; flex-direction: column; height: calc(100vh - 86px); overflow: hidden; background: var(--v3-surface); border: 1px solid var(--v3-line); border-radius: var(--v3-radius-lg); box-shadow: var(--v3-shadow-md); }
+.ns-sm3__head { padding: 14px 14px 12px; border-bottom: 1px solid var(--v3-line-soft); background: radial-gradient(circle at top right, rgba(0,120,212,.08), transparent 35%), linear-gradient(180deg, #fff 0%, #f9fcff 100%); }
+.ns-sm3__brand { display: flex; align-items: center; gap: 10px; }
+.ns-sm3__brand-mark { width: 38px; height: 38px; border-radius: 10px; display: grid; place-items: center; background: #fff; border: 1px solid var(--v3-line); box-shadow: var(--v3-shadow-sm); }
+.ns-sm3__brand-text { min-width: 0; }
+.ns-sm3__brand-title { font-size: 1.01rem; font-weight: 800; color: var(--v3-ink-900); line-height: 1.05; letter-spacing: -.01em; }
+.ns-sm3__brand-subtitle { margin-top: 3px; color: var(--v3-ink-400); font-size: .74rem; }
+.ns-sm3__current { margin-top: 12px; padding: 10px 12px; border-radius: var(--v3-radius-md); background: linear-gradient(135deg, rgba(0,120,212,.08), rgba(54,88,255,.04)); border: 1px solid rgba(0,120,212,.14); }
+.ns-sm3__current-eyebrow { color: var(--v3-ink-400); font-size: .66rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; }
+.ns-sm3__current-row { margin-top: 6px; display: grid; grid-template-columns: auto minmax(0,1fr) auto; align-items: center; gap: 8px; }
+.ns-sm3__current-pill { width: 26px; height: 26px; border-radius: 7px; display: grid; place-items: center; background: linear-gradient(135deg, var(--v3-azure-3), var(--v3-accent)); color: #fff; font-size: .68rem; font-weight: 800; letter-spacing: .04em; box-shadow: 0 6px 14px rgba(0,120,212,.22); }
+.ns-sm3__current-name { font-size: .92rem; font-weight: 800; color: var(--v3-ink-900); white-space: nowrap; }
+.ns-sm3__current-cmd { display: inline-flex; align-items: center; gap: 4px; padding: 4px 8px; border-radius: 6px; background: #fff; border: 1px solid var(--v3-line); color: var(--v3-ink-500); font-size: .7rem; font-weight: 700; cursor: pointer; }
+.ns-sm3__current-cmd kbd { display: inline-grid; place-items: center; min-width: 14px; padding: 0 3px; height: 14px; border-radius: 3px; background: var(--v3-surface-soft); border: 1px solid var(--v3-line); color: var(--v3-ink-700); font-family: inherit; font-size: .64rem; font-weight: 700; line-height: 1; }
+.ns-sm3__current-cmd span { color: var(--v3-ink-300); font-size: .66rem; }
+
+.ns-sm3__search { margin-top: 12px; }
+.ns-sm3__search-fake { display: grid; grid-template-columns: 18px minmax(0,1fr); align-items: center; gap: 8px; border: 1px solid var(--v3-line); border-radius: 10px; background: #fff; padding: 0 12px; min-height: 38px; color: var(--v3-ink-400); font-size: .9rem; }
+
+.ns-sm3__tree { flex: 1; min-height: 0; overflow-y: auto; padding: 8px 6px 12px; }
+
+/* tree items emulando DevExpress */
+.dxv { display: flex; flex-direction: column; gap: 1px; }
+.dxv__group-wrap { }
+.dxv__group, .dxv__leaf { padding: 0 4px; }
+.ns-nav-tree-item { position: relative; display: grid; grid-template-columns: 3px minmax(0,1fr) auto; align-items: center; gap: 8px; width: 100%; min-height: 36px; padding: 7px 8px 7px 6px; border-radius: 8px; color: var(--v3-ink-600); font-size: .88rem; font-weight: 500; cursor: pointer; transition: background .14s ease, color .14s ease; }
+.ns-nav-tree-item__indicator { width: 3px; height: 18px; border-radius: 999px; background: transparent; }
+.ns-nav-tree-item__left { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.ns-nav-tree-item__right { display: flex; align-items: center; gap: 6px; }
+.ns-nav-tree-item__title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ns-nav-tree-item__icon { width: 24px; height: 24px; border-radius: 7px; display: grid; place-items: center; flex: 0 0 auto; background: linear-gradient(135deg, rgba(0,120,212,.12), rgba(54,88,255,.10)); color: var(--v3-azure-2); font-size: .62rem; font-weight: 800; letter-spacing: .04em; }
+.ns-nav-tree-item__icon--group { background: linear-gradient(135deg, rgba(15,23,42,.07), rgba(148,163,184,.14)); color: var(--v3-ink-600); }
+.ns-nav-tree-item__badge { border-radius: 999px; padding: 2px 8px; background: var(--v3-surface-soft); border: 1px solid var(--v3-line); color: var(--v3-ink-500); font-size: .66rem; font-weight: 700; }
+.ns-nav-tree-item__chevron { display: grid; place-items: center; color: var(--v3-ink-300); transition: transform .18s ease, color .14s ease; }
+.ns-nav-tree-item--group { font-size: .82rem; font-weight: 700; color: var(--v3-ink-700); text-transform: uppercase; letter-spacing: .04em; }
+.ns-nav-tree-item--leaf { margin-left: 8px; padding-left: 18px; font-size: .88rem; font-weight: 500; color: var(--v3-ink-600); }
+
+.ns-nav-tree-item:hover { background: var(--v3-surface-tint); color: var(--v3-ink-900); }
+.dxv__group-wrap.is-open > .ns-nav-tree-item--group { color: var(--v3-azure-2); background: rgba(0,120,212,.04); }
+.dxv__group-wrap.is-open > .ns-nav-tree-item--group .ns-nav-tree-item__chevron { transform: rotate(90deg); color: var(--v3-azure-3); }
+.dxv__group-wrap.is-open > .ns-nav-tree-item--group .ns-nav-tree-item__icon { background: linear-gradient(135deg, rgba(0,120,212,.18), rgba(54,88,255,.14)); color: var(--v3-azure-2); }
+.dxv__leafs { padding-left: 4px; }
+.ns-nav-tree-item.is-selected { background: linear-gradient(90deg, rgba(0,120,212,.12) 0%, rgba(0,120,212,.04) 100%); color: var(--v3-ink-900); font-weight: 700; }
+.ns-nav-tree-item.is-selected .ns-nav-tree-item__indicator { background: linear-gradient(180deg, var(--v3-azure-3), var(--v3-accent)); height: 22px; box-shadow: 0 0 0 2px rgba(0,120,212,.12); }
+.ns-nav-tree-item.is-selected .ns-nav-tree-item__icon { background: linear-gradient(135deg, var(--v3-azure-3), var(--v3-accent)); color: #fff; }
+
+/* footer */
+.ns-sm3__footer { padding: 12px 12px 14px; border-top: 1px solid var(--v3-line-soft); background: var(--v3-surface-soft); display: flex; flex-direction: column; gap: 14px; max-height: 38vh; overflow-y: auto; }
+.ns-sm3__footer-block { display: flex; flex-direction: column; gap: 6px; }
+.ns-sm3__footer-title { display: inline-flex; align-items: center; gap: 6px; color: var(--v3-ink-400); font-size: .68rem; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
+.ns-sm3__footer-icon { display: grid; place-items: center; color: var(--v3-azure-3); }
+.ns-sm3__footer-list { display: flex; flex-direction: column; gap: 3px; }
+.ns-sm3__footer-item { width: 100%; display: grid; grid-template-columns: 24px minmax(0,1fr); align-items: center; gap: 10px; padding: 7px 9px; background: #fff; border: 1px solid var(--v3-line); border-radius: 8px; color: var(--v3-ink-700); cursor: pointer; text-align: left; }
+.ns-sm3__footer-item:hover { background: var(--v3-surface-tint); border-color: #c7dff3; }
+.ns-sm3__footer-item-code { width: 24px; height: 24px; border-radius: 6px; display: grid; place-items: center; background: linear-gradient(135deg, rgba(0,120,212,.14), rgba(54,88,255,.10)); color: var(--v3-azure-2); font-size: .6rem; font-weight: 800; letter-spacing: .04em; }
+.ns-sm3__footer-item-text { display: flex; flex-direction: column; min-width: 0; line-height: 1.05; }
+.ns-sm3__footer-item-title { font-size: .82rem; font-weight: 700; color: var(--v3-ink-900); white-space: nowrap; overflow:hidden; text-overflow:ellipsis; }
+.ns-sm3__footer-item-sub { margin-top: 2px; font-size: .68rem; color: var(--v3-ink-400); white-space: nowrap; overflow:hidden; text-overflow:ellipsis; }
+
+/* ModuleHero */
+.ns-module-hero-compact { margin-bottom: 14px; border-radius: var(--v3-radius-lg); border: 1px solid var(--v3-line); background: radial-gradient(circle at top right, rgba(0,120,212,.10), transparent 38%), linear-gradient(135deg, #fff 0%, #f8fbff 100%); box-shadow: var(--v3-shadow-sm); }
+.ns-module-hero-compact__content { padding: 16px 20px; display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.ns-module-hero-compact__eyebrow { margin-bottom: 6px; color: var(--v3-ink-400); font-size: .7rem; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
+.ns-module-hero-compact__title { margin: 0 0 4px; font-size: 1.55rem; font-weight: 800; letter-spacing: -.02em; color: var(--v3-ink-900); }
+.ns-module-hero-compact__subtitle { margin: 0; color: var(--v3-ink-500); font-size: .9rem; line-height: 1.5; }
+.ns-module-hero-compact__badge { min-width: 64px; padding: 8px 14px; border-radius: 10px; text-align: center; background: linear-gradient(135deg, var(--v3-azure-3) 0%, var(--v3-accent) 100%); color: #fff; font-size: .82rem; font-weight: 800; letter-spacing: .08em; box-shadow: 0 8px 18px rgba(0,120,212,.22); }
+
+/* Breadcrumb */
+.ns-breadcrumb2 { margin-bottom: 10px; padding: 6px 4px; color: var(--v3-ink-500); font-size: .82rem; }
+.ns-breadcrumb2 a { color: var(--v3-ink-500); text-decoration: none; }
+.ns-breadcrumb2 strong { color: var(--v3-ink-900); }
+
+/* fake page content */
+.demo-grid { display: grid; grid-template-columns: 60px repeat(5, 1fr) 80px; gap: 0; border: 1px solid var(--v3-line); border-radius: 8px; overflow: hidden; font-size: .82rem; }
+.demo-grid > div { padding: 10px 12px; border-bottom: 1px solid var(--v3-line-soft); background: #fff; }
+.demo-grid > div:nth-child(7n+1) { color: var(--v3-azure-3); }
+.demo-grid > .head { background: var(--v3-surface-soft); font-weight: 700; color: var(--v3-ink-700); border-bottom: 1px solid var(--v3-line); font-size: .78rem; text-transform: uppercase; letter-spacing: .04em; }
+.demo-toolbar { display:flex; align-items:center; justify-content:space-between; gap: 10px; margin-bottom: 12px; }
+.demo-toolbar h2 { margin: 0; font-size: 1.1rem; color: var(--v3-ink-900); }
+.demo-tools { display:flex; gap: 8px; }
+.demo-tool { padding: 6px 12px; border-radius: 6px; border: 1px solid var(--v3-line); background: #fff; color: var(--v3-ink-700); font-size: .82rem; font-weight: 600; cursor: pointer; }
+.demo-tool--primary { background: var(--v3-azure-3); color: #fff; border-color: var(--v3-azure-3); }
+
+</style>
+</head>
+<body>
+<div class="ns-shell-v3">
+
+<!-- TOPBAR -->
+<header class="ns-tb3">
+  <div class="ns-tb3__left">
+    <button class="ns-tb3__iconbtn ns-tb3__waffle" title="Búsqueda global · Ctrl+K">
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><rect x="3" y="3" width="7" height="7" rx="1.4"/><rect x="14" y="3" width="7" height="7" rx="1.4"/><rect x="3" y="14" width="7" height="7" rx="1.4"/><rect x="14" y="14" width="7" height="7" rx="1.4"/></svg>
+    </button>
+    <a class="ns-tb3__brand" href="#">
+      <span class="ns-tb3__brandmark">
+        <svg viewBox="0 0 32 32" width="22" height="22"><defs><linearGradient id="g1" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#fff" stop-opacity=".95"/><stop offset="100%" stop-color="#cfe5ff" stop-opacity=".7"/></linearGradient></defs><path d="M6 24 L6 8 L12 8 L20 18 L20 8 L26 8 L26 24 L20 24 L12 14 L12 24 Z" fill="url(#g1)"/></svg>
+      </span>
+      <span class="ns-tb3__brandtext">
+        <span class="ns-tb3__brandtitle">Nanchesoft ERP</span>
+        <span class="ns-tb3__brandtag">Cloud enterprise platform</span>
+      </span>
+    </a>
+  </div>
+
+  <div class="ns-tb3__center">
+    <div class="ns-tb3__searchwrap">
+      <span class="ns-tb3__searchicon"><svg viewBox="0 0 24 24" width="16" height="16"><circle cx="10.5" cy="10.5" r="6.5" fill="none" stroke="currentColor" stroke-width="2"/><line x1="15.2" y1="15.2" x2="20" y2="20" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></span>
+      <input class="ns-tb3__search" placeholder="Buscar módulos, pantallas, clientes, acciones del ERP...">
+      <button class="ns-tb3__shortcutpill"><kbd>Ctrl</kbd><span>+</span><kbd>K</kbd></button>
+
+      <!-- Dropdown abierto para preview -->
+      <div class="ns-tb3__results">
+        <div class="ns-tb3__results-section">
+          <div class="ns-tb3__results-eyebrow">Recientes</div>
+          <button class="ns-tb3__result">
+            <span class="ns-tb3__result-icon">CA</span>
+            <span class="ns-tb3__result-meta"><span class="ns-tb3__result-title">Catálogo de materiales</span><span class="ns-tb3__result-sub">Catálogos · /products/material-items</span></span>
+            <span class="ns-tb3__result-kind">Reciente</span>
+          </button>
+          <button class="ns-tb3__result">
+            <span class="ns-tb3__result-icon">PR</span>
+            <span class="ns-tb3__result-meta"><span class="ns-tb3__result-title">Componentes del producto</span><span class="ns-tb3__result-sub">Productos · /products/components</span></span>
+            <span class="ns-tb3__result-kind">Reciente</span>
+          </button>
+          <button class="ns-tb3__result">
+            <span class="ns-tb3__result-icon">CO</span>
+            <span class="ns-tb3__result-meta"><span class="ns-tb3__result-title">Órdenes de compra</span><span class="ns-tb3__result-sub">Compras · /purchases/orders</span></span>
+            <span class="ns-tb3__result-kind">Reciente</span>
+          </button>
+        </div>
+        <div class="ns-tb3__results-footer" style="padding:8px 10px; border-top:1px solid var(--v3-line-soft); background: var(--v3-surface-soft); text-align:right;">
+          <button style="border:0; background:transparent; color: var(--v3-azure-3); font-size:.8rem; font-weight:700; cursor:pointer; padding: 4px 8px; border-radius: 6px;">Búsqueda avanzada · Ctrl + K</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="ns-tb3__right">
+    <div class="ns-tb3__iconcluster">
+      <button class="ns-tb3__iconbtn" title="Notificaciones">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 3a6 6 0 0 0-6 6v3.2L4 15v1h16v-1l-2-2.8V9a6 6 0 0 0-6-6Z" stroke-linejoin="round"/><path d="M10 18a2 2 0 0 0 4 0" stroke-linecap="round"/></svg>
+        <span class="ns-tb3__iconbtn-dot">3</span>
+      </button>
+      <button class="ns-tb3__iconbtn" title="Ayuda">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.2a2.5 2.5 0 1 1 3.6 2.3c-.9.5-1.6 1-1.6 2.1" stroke-linecap="round"/><circle cx="11.5" cy="17" r="1.1" fill="currentColor"/></svg>
+      </button>
+      <button class="ns-tb3__iconbtn" title="Configuración">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7Z" stroke-width="1.7"/><path d="M19.4 13.5a7.6 7.6 0 0 0 0-3l1.7-1.3-1.7-3-2 .8a7.5 7.5 0 0 0-2.6-1.5l-.3-2.1h-3.4l-.3 2.1c-.95.32-1.83.83-2.6 1.5l-2-.8-1.7 3 1.7 1.3a7.6 7.6 0 0 0 0 3l-1.7 1.3 1.7 3 2-.8c.77.67 1.65 1.18 2.6 1.5l.3 2.1h3.4l.3-2.1a7.5 7.5 0 0 0 2.6-1.5l2 .8 1.7-3-1.7-1.3Z" stroke-linejoin="round"/></svg>
+      </button>
+    </div>
+    <span class="ns-tb3__divider"></span>
+    <div class="ns-tb3__contextchips">
+      <span class="ns-tb3__contextchip"><span class="ns-tb3__contextchip-eyebrow">Tenant</span><span class="ns-tb3__contextchip-value">Workerterra</span></span>
+      <span class="ns-tb3__contextchip"><span class="ns-tb3__contextchip-eyebrow">Empresa</span><span class="ns-tb3__contextchip-value">Workerterra Matriz</span></span>
+    </div>
+    <span class="ns-tb3__divider"></span>
+    <button class="ns-tb3__userpill">
+      <span class="ns-tb3__avatar">W</span>
+      <span class="ns-tb3__userpill-text"><span class="ns-tb3__userpill-name">Workerterra Admin</span><span class="ns-tb3__userpill-role">Tenant Admin</span></span>
+      <svg class="ns-tb3__userpill-caret" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9 L12 15 L18 9"/></svg>
+    </button>
+  </div>
+</header>
+
+<div class="ns-shell2__body">
+  <!-- SIDEMENU -->
+  <aside>
+    <nav class="ns-sm3">
+      <div class="ns-sm3__head">
+        <div class="ns-sm3__brand">
+          <span class="ns-sm3__brand-mark"><svg viewBox="0 0 32 32" width="22" height="22"><defs><linearGradient id="g2" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#3658ff"/><stop offset="100%" stop-color="#0078d4"/></linearGradient></defs><path d="M6 24 L6 8 L12 8 L20 18 L20 8 L26 8 L26 24 L20 24 L12 14 L12 24 Z" fill="url(#g2)"/></svg></span>
+          <div class="ns-sm3__brand-text"><div class="ns-sm3__brand-title">Nanchesoft ERP</div><div class="ns-sm3__brand-subtitle">Cloud enterprise platform</div></div>
+        </div>
+        <div class="ns-sm3__current">
+          <div class="ns-sm3__current-eyebrow">Módulo actual</div>
+          <div class="ns-sm3__current-row">
+            <span class="ns-sm3__current-pill">CA</span>
+            <div class="ns-sm3__current-name">Catálogos</div>
+            <button class="ns-sm3__current-cmd"><kbd>Ctrl</kbd><span>+</span><kbd>K</kbd></button>
+          </div>
+        </div>
+        <div class="ns-sm3__search">
+          <div class="ns-sm3__search-fake"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="10.5" cy="10.5" r="6.5"/><line x1="15.2" y1="15.2" x2="20" y2="20" stroke-linecap="round"/></svg> Buscar pantalla, módulo o atajo...</div>
+        </div>
+      </div>
+
+      <div class="ns-sm3__tree">
+        <div class="dxv">
+          <!-- Inicio (cerrado) -->
+          <div class="dxv__group-wrap">
+            <div class="ns-nav-tree-item ns-nav-tree-item--group"><span class="ns-nav-tree-item__indicator"></span><div class="ns-nav-tree-item__left"><span class="ns-nav-tree-item__icon ns-nav-tree-item__icon--group">IN</span><span class="ns-nav-tree-item__title">Inicio</span></div><div class="ns-nav-tree-item__right"><span class="ns-nav-tree-item__badge">2 opciones</span><span class="ns-nav-tree-item__chevron"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6 L15 12 L9 18"/></svg></span></div></div>
+          </div>
+          <!-- Organización (cerrado) -->
+          <div class="dxv__group-wrap">
+            <div class="ns-nav-tree-item ns-nav-tree-item--group"><span class="ns-nav-tree-item__indicator"></span><div class="ns-nav-tree-item__left"><span class="ns-nav-tree-item__icon ns-nav-tree-item__icon--group">OR</span><span class="ns-nav-tree-item__title">Organización</span></div><div class="ns-nav-tree-item__right"><span class="ns-nav-tree-item__badge">3 opciones</span><span class="ns-nav-tree-item__chevron"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6 L15 12 L9 18"/></svg></span></div></div>
+          </div>
+          <!-- Seguridad (cerrado) -->
+          <div class="dxv__group-wrap">
+            <div class="ns-nav-tree-item ns-nav-tree-item--group"><span class="ns-nav-tree-item__indicator"></span><div class="ns-nav-tree-item__left"><span class="ns-nav-tree-item__icon ns-nav-tree-item__icon--group">SE</span><span class="ns-nav-tree-item__title">Seguridad</span></div><div class="ns-nav-tree-item__right"><span class="ns-nav-tree-item__badge">3 opciones</span><span class="ns-nav-tree-item__chevron"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6 L15 12 L9 18"/></svg></span></div></div>
+          </div>
+          <!-- Catálogos (abierto) -->
+          <div class="dxv__group-wrap is-open">
+            <div class="ns-nav-tree-item ns-nav-tree-item--group"><span class="ns-nav-tree-item__indicator"></span><div class="ns-nav-tree-item__left"><span class="ns-nav-tree-item__icon ns-nav-tree-item__icon--group">CA</span><span class="ns-nav-tree-item__title">Catálogos</span></div><div class="ns-nav-tree-item__right"><span class="ns-nav-tree-item__badge">8 opciones</span><span class="ns-nav-tree-item__chevron"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6 L15 12 L9 18"/></svg></span></div></div>
+            <div class="dxv__leafs">
+              <div class="ns-nav-tree-item ns-nav-tree-item--leaf is-selected"><span class="ns-nav-tree-item__indicator"></span><div class="ns-nav-tree-item__left"><span class="ns-nav-tree-item__icon">CA</span><span class="ns-nav-tree-item__title">Catálogo de materiales</span></div><div class="ns-nav-tree-item__right"></div></div>
+              <div class="ns-nav-tree-item ns-nav-tree-item--leaf"><span class="ns-nav-tree-item__indicator"></span><div class="ns-nav-tree-item__left"><span class="ns-nav-tree-item__icon">CA</span><span class="ns-nav-tree-item__title">Familias y subfamilias</span></div><div class="ns-nav-tree-item__right"></div></div>
+              <div class="ns-nav-tree-item ns-nav-tree-item--leaf"><span class="ns-nav-tree-item__indicator"></span><div class="ns-nav-tree-item__left"><span class="ns-nav-tree-item__icon">CA</span><span class="ns-nav-tree-item__title">Unidades de medida</span></div><div class="ns-nav-tree-item__right"></div></div>
+              <div class="ns-nav-tree-item ns-nav-tree-item--leaf"><span class="ns-nav-tree-item__indicator"></span><div class="ns-nav-tree-item__left"><span class="ns-nav-tree-item__icon">CA</span><span class="ns-nav-tree-item__title">Almacenes</span></div><div class="ns-nav-tree-item__right"></div></div>
+            </div>
+          </div>
+          <!-- Terceros -->
+          <div class="dxv__group-wrap">
+            <div class="ns-nav-tree-item ns-nav-tree-item--group"><span class="ns-nav-tree-item__indicator"></span><div class="ns-nav-tree-item__left"><span class="ns-nav-tree-item__icon ns-nav-tree-item__icon--group">TE</span><span class="ns-nav-tree-item__title">Terceros</span></div><div class="ns-nav-tree-item__right"><span class="ns-nav-tree-item__badge">5 opciones</span><span class="ns-nav-tree-item__chevron"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6 L15 12 L9 18"/></svg></span></div></div>
+          </div>
+          <!-- Productos -->
+          <div class="dxv__group-wrap">
+            <div class="ns-nav-tree-item ns-nav-tree-item--group"><span class="ns-nav-tree-item__indicator"></span><div class="ns-nav-tree-item__left"><span class="ns-nav-tree-item__icon ns-nav-tree-item__icon--group">PR</span><span class="ns-nav-tree-item__title">Productos</span></div><div class="ns-nav-tree-item__right"><span class="ns-nav-tree-item__badge">4 opciones</span><span class="ns-nav-tree-item__chevron"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6 L15 12 L9 18"/></svg></span></div></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="ns-sm3__footer">
+        <div class="ns-sm3__footer-block">
+          <div class="ns-sm3__footer-title"><span class="ns-sm3__footer-icon"><svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M12 3.5l2.7 5.5 6 .9-4.4 4.3 1.1 6-5.4-2.9-5.4 2.9 1.1-6L3.3 9.9l6-.9z"/></svg></span> Favoritos</div>
+          <div class="ns-sm3__footer-list">
+            <button class="ns-sm3__footer-item"><span class="ns-sm3__footer-item-code">CA</span><span class="ns-sm3__footer-item-text"><span class="ns-sm3__footer-item-title">Catálogo de materiales</span><span class="ns-sm3__footer-item-sub">Catálogos</span></span></button>
+            <button class="ns-sm3__footer-item"><span class="ns-sm3__footer-item-code">CO</span><span class="ns-sm3__footer-item-text"><span class="ns-sm3__footer-item-title">Órdenes de compra</span><span class="ns-sm3__footer-item-sub">Compras</span></span></button>
+          </div>
+        </div>
+        <div class="ns-sm3__footer-block">
+          <div class="ns-sm3__footer-title"><span class="ns-sm3__footer-icon"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2" stroke-linecap="round"/></svg></span> Recientes</div>
+          <div class="ns-sm3__footer-list">
+            <button class="ns-sm3__footer-item"><span class="ns-sm3__footer-item-code">PR</span><span class="ns-sm3__footer-item-text"><span class="ns-sm3__footer-item-title">Componentes del producto</span><span class="ns-sm3__footer-item-sub">Productos</span></span></button>
+          </div>
+        </div>
+      </div>
+    </nav>
+  </aside>
+
+  <!-- MAIN CONTENT -->
+  <main>
+    <nav class="ns-breadcrumb2"><a href="#">Inicio</a> <span style="color: var(--v3-ink-300); margin: 0 6px;">/</span> <a href="#">Catálogos</a> <span style="color: var(--v3-ink-300); margin: 0 6px;">/</span> <strong>Catálogo de materiales</strong></nav>
+    <section class="ns-module-hero-compact">
+      <div class="ns-module-hero-compact__content">
+        <div>
+          <div class="ns-module-hero-compact__eyebrow">Área de trabajo</div>
+          <h1 class="ns-module-hero-compact__title">Catálogos</h1>
+          <p class="ns-module-hero-compact__subtitle">Familias, subfamilias y catálogo de materiales para operación.</p>
+        </div>
+        <div class="ns-module-hero-compact__badge">CAT</div>
+      </div>
+    </section>
+
+    <section class="ns-shell2__pageframe">
+      <div class="demo-toolbar">
+        <h2>Catálogo de materiales</h2>
+        <div class="demo-tools">
+          <button class="demo-tool">Recargar</button>
+          <button class="demo-tool">Exportar CSV</button>
+          <button class="demo-tool">Exportar JSON</button>
+          <button class="demo-tool demo-tool--primary">+ Nuevo material</button>
+        </div>
+      </div>
+
+      <div class="demo-grid">
+        <div class="head">#</div><div class="head">ID</div><div class="head">Subfamilia</div><div class="head">Unidad compra</div><div class="head">Unidad salida</div><div class="head">Proveedor</div><div class="head">Acciones</div>
+        <div>1</div><div>2fefbe38-165e-49f9-b36b...</div><div>001 - PIEL</div><div>DCM2 - DCM2</div><div>DCM2 - DCM2</div><div>008 - PIELES</div><div>✏️ 🗑</div>
+        <div>2</div><div>0ece472d-70b4-4c43-a81e...</div><div>001 - PIEL</div><div>DCM2 - DCM2</div><div>DCM2 - DCM2</div><div>008 - PIELES</div><div>✏️ 🗑</div>
+        <div>3</div><div>5df46a83-d5b7-4535-a1e9...</div><div>001 - PIEL</div><div>DCM2 - DCM2</div><div>DCM2 - DCM2</div><div>008 - PIELES</div><div>✏️ 🗑</div>
+        <div>4</div><div>f0786c17-015b-4932-a2b4...</div><div>001 - PIEL</div><div>DCM2 - DCM2</div><div>DCM2 - DCM2</div><div>008 - PIELES</div><div>✏️ 🗑</div>
+        <div>5</div><div>1c9758a2-4a43-47ee-874a...</div><div>002 - FORROS DE PIEL</div><div>DCM2 - DCM2</div><div>DCM2 - DCM2</div><div>019 - SERGIO</div><div>✏️ 🗑</div>
+        <div>6</div><div>7d9ae370-32dd-42fd-948c...</div><div>002 - FORROS DE PIEL</div><div>DCM2 - DCM2</div><div>DCM2 - DCM2</div><div>019 - SERGIO</div><div>✏️ 🗑</div>
+        <div>7</div><div>3f12d0a8-b2aa-435d-b4b1...</div><div>003 - TEXTILES DE FORRO</div><div>LAM 1X1 - LAM 1X1</div><div>DCM2 - DCM2</div><div>002 - DEL PUERTO</div><div>✏️ 🗑</div>
+      </div>
+    </section>
+  </main>
+</div>
+
+</div>
+</body>
+</html>

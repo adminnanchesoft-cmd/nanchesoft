@@ -1,0 +1,81 @@
+@page "/accounts-payable/aging"
+@using Nanchesoft.Web.Services.AccountsPayable
+@inject AccountsPayableApiService AccountsPayableApiService
+
+<PageTitle>Antigüedad CxP | Nanchesoft</PageTitle>
+
+<h1 class="h3 mb-3">Cuentas por pagar · Antigüedad de saldos</h1>
+
+@if (_loading)
+{
+    <div class="alert alert-info">Cargando antigüedad...</div>
+}
+else if (!string.IsNullOrWhiteSpace(_error))
+{
+    <div class="alert alert-danger">@_error</div>
+}
+else
+{
+    <div class="card shadow-sm">
+        <div class="table-responsive">
+            <table class="table table-striped align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th>Proveedor</th>
+                        <th>Factura</th>
+                        <th>Fecha</th>
+                        <th class="text-end">Saldo abierto</th>
+                        <th class="text-end">0-30</th>
+                        <th class="text-end">31-60</th>
+                        <th class="text-end">61-90</th>
+                        <th class="text-end">90+</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (_rows.Count == 0)
+                    {
+                        <tr><td colspan="8" class="text-center text-muted py-4">Sin registros.</td></tr>
+                    }
+                    else
+                    {
+                        @foreach (var row in _rows)
+                        {
+                            <tr>
+                                <td>@row.SupplierName</td>
+                                <td>@row.Folio</td>
+                                <td>@row.InvoiceDate.ToString("dd/MM/yyyy")</td>
+                                <td class="text-end fw-bold">@row.OpenAmount.ToString("N2")</td>
+                                <td class="text-end">@row.BucketCurrent.ToString("N2")</td>
+                                <td class="text-end">@row.Bucket31To60.ToString("N2")</td>
+                                <td class="text-end">@row.Bucket61To90.ToString("N2")</td>
+                                <td class="text-end">@row.BucketOver90.ToString("N2")</td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+}
+
+@code {
+    private bool _loading = true;
+    private string? _error;
+    private List<ApAgingRowDto> _rows = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _rows = await AccountsPayableApiService.GetAgingAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+}

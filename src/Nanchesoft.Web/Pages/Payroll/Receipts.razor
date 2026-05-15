@@ -1,0 +1,42 @@
+@page "/payroll/receipts"
+@inject Nanchesoft.Web.Services.HumanResources.HumanResourcesApiService HumanResourcesApiService
+
+<PageTitle>Recibos de nómina | Nanchesoft</PageTitle>
+
+<div class="container-fluid py-3">
+    <h1>Recibos de nómina</h1>
+    <p class="text-secondary">Selecciona una corrida para ver los recibos individuales por colaborador.</p>
+    <div class="card shadow-sm">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-sm mb-0">
+                    <thead><tr><th>Folio</th><th>Fecha</th><th>Empleados</th><th>Neto</th><th></th></tr></thead>
+                    <tbody>
+                    @foreach (var row in _rows)
+                    {
+                        <tr>
+                            <td>@GetValue(row, "Folio")</td>
+                            <td>@GetValue(row, "RunDate")</td>
+                            <td>@GetValue(row, "EmployeeCount")</td>
+                            <td>@GetValue(row, "NetAmount")</td>
+                            <td class="text-end"><a class="btn btn-sm btn-outline-primary" href="/payroll/receipts/@GetValue(row, "PayrollRunId")">Abrir</a></td>
+                        </tr>
+                    }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private List<Dictionary<string, object?>> _rows = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        _rows = (await HumanResourcesApiService.GetCatalogAsync("payroll-runs")).Rows;
+    }
+
+    private static string GetValue(Dictionary<string, object?> row, string key)
+        => row.TryGetValue(key, out var value) ? value?.ToString() ?? string.Empty : string.Empty;
+}

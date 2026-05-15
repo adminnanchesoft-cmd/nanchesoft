@@ -1,0 +1,103 @@
+@page "/products/control-center"
+@page "/products/orange-control-center"
+@inject NavigationManager Nav
+
+<PageTitle>Productos | Nanchesoft</PageTitle>
+
+<div class="orange-cc shell-products">
+    <section class="orange-cc__hero">
+        <img src="images/hero-productos-orange.svg" alt="Productos Orange" class="orange-cc__hero-image" />
+        <div class="orange-cc__overlay"></div>
+        <div class="orange-cc__content">
+            <div class="orange-cc__left">
+                <div class="orange-cc__eyebrow">Orange → ERP</div>
+                <h1>Productos</h1>
+                <p>Centro maestro para cerrar el flujo de producto de Orange: familia, línea, estilo, modelo, producto terminado, materiales, consumos y autorización.</p>
+
+                <div class="orange-cc__kpis">
+                    @foreach (var kpi in Kpis)
+                    {
+                        <div class="orange-cc__kpi">
+                            <div class="orange-cc__kpi-value">@kpi.Value</div>
+                            <div class="orange-cc__kpi-label">@kpi.Label</div>
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <aside class="orange-cc__rail">
+                <div class="orange-cc__rail-card">
+                    <div class="orange-cc__rail-title">Quick access</div>
+                    @foreach (var quick in QuickAccess)
+                    {
+                        <button class="orange-cc__quick" @onclick="() => Go(quick.Route)">
+                            <span>@quick.Code</span>
+                            <strong>@quick.Label</strong>
+                        </button>
+                    }
+                </div>
+            </aside>
+        </div>
+    </section>
+
+    <section class="orange-cc__grid-section">
+        <div class="orange-cc__breadcrumb">Inicio <span>›</span> Productos</div>
+        <div class="orange-cc__grid">
+            @foreach (var card in Cards)
+            {
+                <button class="orange-cc__card" @onclick="() => Go(card.Route)">
+                    <div class="orange-cc__icon">@card.Icon</div>
+                    <div class="orange-cc__card-title">@card.Title</div>
+                    <div class="orange-cc__card-text">@card.Text</div>
+                </button>
+            }
+        </div>
+    </section>
+</div>
+
+@code {
+    private void Go(string route) => Nav.NavigateTo(route);
+
+    private readonly List<KpiVm> Kpis =
+    [
+        new("6", "Capas clave"),
+        new("1", "Flujo Orange"),
+        new("PT", "Producto terminado"),
+        new("GO", "A terminar")
+    ];
+
+    private readonly List<QuickVm> QuickAccess =
+    [
+        new("FP", "Familias", "/products/families"),
+        new("ES", "Estilos", "/products/styles"),
+        new("PT", "Terminados", "/products/finished-products"),
+        new("MP", "Prov. material", "/products/material-suppliers"),
+        new("CT", "Fichas", "/products/technical-sheets")
+    ];
+
+    private readonly List<CardVm> Cards =
+    [
+        new("◈", "Familias de productos", "Clasificación estadística y comercial base del producto terminado.", "/products/families"),
+        new("◎", "Líneas y hormas", "Estructura técnica base para estilo y producto.", "/products/lines"),
+        new("⬢", "Estilos", "Corazón del producto Orange y referencia para consumos.", "/products/styles"),
+        new("◍", "Marcas y modelos", "Atributos comerciales y de variación del producto.", "/products/models"),
+        new("▣", "Productos terminados", "Producto listo para captura, ingeniería y autorización.", "/products/finished-products"),
+        new("⟐", "Materiales por producto", "Asignación del material real por producto.", "/products/finished-product-materials"),
+        new("△", "Consumos por producto", "Consumos por estilo/corrida y variación por talla.", "/products/product-consumption-profiles"),
+        new("◇", "Ficha técnica y costo", "Documentación técnica, costo y autorización del producto.", "/products/technical-sheets"),
+        new("✦", "Centro técnico", "Vista ejecutiva para producción, ficha, costo y autorización.", "/products/production-center"),
+        new("◈", "Corridas", "Corridas de tallas estándar y especiales para el calzado.", "/products/size-runs"),
+        new("◎", "Pieles", "Tipos de piel o material exterior usados en el calzado.", "/products/leather-types"),
+        new("⬢", "Suelas", "Catálogo de suelas utilizadas en la fabricación del calzado.", "/products/soles"),
+        new("◍", "Color suela", "Colores de suela para combinación con el producto terminado.", "/products/sole-colors"),
+        new("◇", "Foliados", "Formas de foliado solicitadas por cliente o producción.", "/products/folio-patterns"),
+        new("◈", "Colores", "Catálogo de colores predominantes del producto terminado.", "/products/colors"),
+        new("◎", "Cascos", "Cascos y punteras usados en la fabricación del calzado.", "/products/toe-caps"),
+        new("⬢", "Manufacturas", "Tipos de manufactura: a mano, máquina, mixta.", "/products/manufacturing-types"),
+        new("◍", "Troqueles", "Troqueles usados en producción y tarjeta de proceso.", "/products/dies")
+    ];
+
+    private sealed record KpiVm(string Value, string Label);
+    private sealed record QuickVm(string Code, string Label, string Route);
+    private sealed record CardVm(string Icon, string Title, string Text, string Route);
+}

@@ -1,0 +1,39 @@
+@page "/inventory/dashboard"
+@inject Nanchesoft.Web.Services.Inventory.InventoryApiService InventoryApiService
+
+<PageTitle>Dashboard inventario</PageTitle>
+
+@if (_summary is null)
+{
+    <div style="padding:24px;">Cargando dashboard de inventario...</div>
+}
+else
+{
+    <div class="ns-catalog-page">
+        <div class="ns-catalog-header">
+            <div>
+                <div class="ns-catalog-eyebrow">Nanchesoft ERP · Implementación actual</div>
+                <h1 class="ns-catalog-title">Dashboard inventario</h1>
+                <p class="ns-catalog-subtitle">Resumen operativo de existencias, movimientos, lotes y series.</p>
+            </div>
+            <div class="ns-catalog-badge">DevExtreme 25.1.6</div>
+        </div>
+        <div class="ns-kpi-grid">
+            <div class="ns-kpi-card"><div class="ns-kpi-label">Renglones stock</div><div class="ns-kpi-value">@_summary.TotalStockRows</div></div>
+            <div class="ns-kpi-card ns-kpi-card-success"><div class="ns-kpi-label">Existencia total</div><div class="ns-kpi-value">@_summary.TotalOnHand</div></div>
+            <div class="ns-kpi-card"><div class="ns-kpi-label">Disponible</div><div class="ns-kpi-value">@_summary.TotalAvailable</div></div>
+            <div class="ns-kpi-card"><div class="ns-kpi-label">Movimientos</div><div class="ns-kpi-value">@_summary.TotalMovements</div></div>
+            <div class="ns-kpi-card"><div class="ns-kpi-label">Lotes activos</div><div class="ns-kpi-value">@_summary.ActiveLots</div></div>
+            <div class="ns-kpi-card"><div class="ns-kpi-label">Series activas</div><div class="ns-kpi-value">@_summary.ActiveSerials</div></div>
+        </div>
+    </div>
+}
+
+@code {
+    private Nanchesoft.Web.Services.Inventory.InventoryDashboardSummaryDto? _summary;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _summary = await InventoryApiService.GetDashboardSummaryAsync();
+    }
+}

@@ -1,0 +1,121 @@
+@page "/cfdi/cancellation"
+@using Nanchesoft.Web.Services.Cfdi
+@inject CfdiApiService CfdiApiService
+@inject NavigationManager Navigation
+<PageTitle>Cancelación CFDI | Nanchesoft</PageTitle>
+
+<div class="container-fluid py-3">
+    <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-3">
+        <div>
+            <div class="text-uppercase small text-secondary fw-semibold">CFDI · cancelación</div>
+            <h2 class="mb-1">Cancelación CFDI</h2>
+            <div class="text-secondary">Documentos timbrados o cancelados con operación directa.</div>
+        </div>
+        <div class="d-flex gap-2 flex-wrap">
+            <button class="btn btn-outline-secondary" @onclick='() => Navigation.NavigateTo("/cfdi/documents")'>Documentos</button>
+            <button class="btn btn-outline-secondary" @onclick="LoadAsync">Actualizar</button>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(_message))
+    {
+        <div class="alert alert-success">@_message</div>
+    }
+    @if (!string.IsNullOrWhiteSpace(_error))
+    {
+        <div class="alert alert-danger">@_error</div>
+    }
+
+    @if (_loading)
+    {
+        <div class="alert alert-info">Cargando cancelaciones CFDI...</div>
+    }
+    else
+    {
+        <div class="card shadow-sm">
+            <div class="table-responsive">
+                <table class="table table-sm table-striped align-middle mb-0">
+                    <thead>
+                        <tr>
+                            <th>Tipo</th>
+                            <th>Folio</th>
+                            <th>Cliente</th>
+                            <th>Fecha</th>
+                            <th>CFDI</th>
+                            <th>UUID</th>
+                            <th>Timbrado</th>
+                            <th>Cancelado</th>
+                            <th style="width: 220px;">Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var row in _rows)
+                        {
+                            <tr>
+                                <td>@(row.SourceType == "sales-invoice" ? "Factura" : "Nota crédito")</td>
+                                <td><a href="@row.SourceRoute">@row.Folio</a></td>
+                                <td>@row.CustomerName</td>
+                                <td>@row.DocumentDate.ToString("yyyy-MM-dd")</td>
+                                <td>@row.CfdiStatus</td>
+                                <td>@(string.IsNullOrWhiteSpace(row.Uuid) ? "-" : row.Uuid)</td>
+                                <td>@(row.StampedAt?.ToString("yyyy-MM-dd HH:mm") ?? "-")</td>
+                                <td>@(row.CancelledAt?.ToString("yyyy-MM-dd HH:mm") ?? "-")</td>
+                                <td>
+                                    <div class="d-flex gap-2 flex-wrap">
+                                        <a class="btn btn-sm btn-outline-secondary" href="@row.SourceRoute">Abrir</a>
+                                        @if (row.CfdiStatus == "stamped")
+                                        {
+                                            <button class="btn btn-sm btn-warning" @onclick='() => CancelAsync(row)'>Cancelar</button>
+                                        }
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private bool _loading = true;
+    private string? _message;
+    private string? _error;
+    private List<CfdiDocumentDto> _rows = [];
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _message = null;
+        _error = null;
+        _rows = await CfdiApiService.GetCancellationAsync();
+        _loading = false;
+    }
+
+    private async Task CancelAsync(CfdiDocumentDto row)
+    {
+        _message = null;
+        _error = null;
+        try
+        {
+            if (row.SourceType == "sales-invoice")
+            {
+                await CfdiApiService.CancelSalesInvoiceAsync(row.Id);
+            }
+            else
+            {
+                await CfdiApiService.CancelCreditNoteAsync(row.Id);
+            }
+
+            _message = $"{(row.SourceType == "sales-invoice" ? "Factura" : "Nota de crédito")} cancelada correctamente.";
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+    }
+}

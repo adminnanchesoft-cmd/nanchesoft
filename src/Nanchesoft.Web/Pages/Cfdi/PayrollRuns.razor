@@ -1,0 +1,140 @@
+@page "/cfdi/payroll-runs"
+@using Nanchesoft.Web.Services.Cfdi
+@inject CfdiApiService CfdiApiService
+@inject NavigationManager Navigation
+<PageTitle>CFDI nómina | Nanchesoft</PageTitle>
+
+<div class="container-fluid py-3">
+    <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-3">
+        <div>
+            <div class="text-uppercase small text-secondary fw-semibold">CFDI · nómina</div>
+            <h2 class="mb-1">CFDI de nómina</h2>
+            <div class="text-secondary">Centro operativo para timbrado demo de corridas y acceso al detalle de recibos CFDI por colaborador.</div>
+        </div>
+        <div class="d-flex gap-2 flex-wrap">
+            <button class="btn btn-outline-secondary" @onclick='() => Navigation.NavigateTo("/payroll/runs")'>Procesamientos nómina</button>
+            <button class="btn btn-outline-secondary" @onclick='() => Navigation.NavigateTo("/cfdi/dashboard")'>Dashboard CFDI</button>
+            <button class="btn btn-outline-secondary" @onclick="LoadAsync">Actualizar</button>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(_message))
+    {
+        <div class="alert alert-success">@_message</div>
+    }
+    @if (!string.IsNullOrWhiteSpace(_error))
+    {
+        <div class="alert alert-danger">@_error</div>
+    }
+
+    @if (_loading)
+    {
+        <div class="alert alert-info">Cargando CFDI de nómina...</div>
+    }
+    else
+    {
+        <div class="row g-3 mb-4">
+            <div class="col-md-3"><div class="card shadow-sm"><div class="card-body"><div class="text-secondary small">Corridas</div><div class="display-6 fw-bold">@_rows.Count</div></div></div></div>
+            <div class="col-md-3"><div class="card shadow-sm border-success"><div class="card-body"><div class="text-secondary small">Recibos timbrados</div><div class="display-6 fw-bold text-success">@_rows.Sum(x => x.StampedReceipts)</div></div></div></div>
+            <div class="col-md-3"><div class="card shadow-sm border-warning"><div class="card-body"><div class="text-secondary small">Recibos cancelados</div><div class="display-6 fw-bold text-warning">@_rows.Sum(x => x.CancelledReceipts)</div></div></div></div>
+            <div class="col-md-3"><div class="card shadow-sm border-secondary"><div class="card-body"><div class="text-secondary small">Pendientes</div><div class="display-6 fw-bold">@_rows.Sum(x => x.PendingReceipts)</div></div></div></div>
+        </div>
+
+        <div class="card shadow-sm">
+            <div class="table-responsive">
+                <table class="table table-sm table-striped align-middle mb-0">
+                    <thead>
+                        <tr>
+                            <th>Folio</th>
+                            <th>Periodo</th>
+                            <th>Fecha corrida</th>
+                            <th>Pago</th>
+                            <th>Empleados</th>
+                            <th>Neto</th>
+                            <th>Timbrados</th>
+                            <th>Cancelados</th>
+                            <th>Pendientes</th>
+                            <th>Estado CFDI</th>
+                            <th style="width: 340px;">Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var row in _rows)
+                        {
+                            <tr>
+                                <td>@row.Folio</td>
+                                <td>@row.PayrollPeriodName</td>
+                                <td>@row.DocumentDate.ToString("yyyy-MM-dd")</td>
+                                <td>@(row.PaymentDate?.ToString("yyyy-MM-dd") ?? "-")</td>
+                                <td>@row.EmployeeCount</td>
+                                <td>@row.Total.ToString("N2")</td>
+                                <td>@row.StampedReceipts</td>
+                                <td>@row.CancelledReceipts</td>
+                                <td>@row.PendingReceipts</td>
+                                <td><span class="badge text-bg-light">@row.CfdiStatus</span></td>
+                                <td>
+                                    <div class="d-flex gap-2 flex-wrap">
+                                        <a class="btn btn-sm btn-outline-secondary" href="@row.EditRoute">Abrir nómina</a>
+                                        <a class="btn btn-sm btn-outline-primary" href="@row.ReceiptsRoute">Recibos CFDI</a>
+                                        <button class="btn btn-sm btn-success" disabled="@(!CanGenerate(row))" @onclick='() => GenerateAsync(row.Id)'>Generar CFDI</button>
+                                        <button class="btn btn-sm btn-warning" disabled="@(!CanCancel(row))" @onclick='() => CancelAsync(row.Id)'>Cancelar CFDI</button>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private bool _loading = true;
+    private string? _message;
+    private string? _error;
+    private List<CfdiPayrollSourceDto> _rows = [];
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _message = null;
+        _error = null;
+        _rows = await CfdiApiService.GetPayrollRunsAsync();
+        _loading = false;
+    }
+
+    private async Task GenerateAsync(Guid id)
+    {
+        await ExecuteAsync(async () => await CfdiApiService.GeneratePayrollReceiptsAsync(id), "Recibos CFDI demo de nómina generados correctamente.");
+    }
+
+    private async Task CancelAsync(Guid id)
+    {
+        await ExecuteAsync(async () => await CfdiApiService.CancelPayrollReceiptsAsync(id), "Recibos CFDI demo de nómina cancelados correctamente.");
+    }
+
+    private async Task ExecuteAsync(Func<Task> action, string successMessage)
+    {
+        _message = null;
+        _error = null;
+        try
+        {
+            await action();
+            _message = successMessage;
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private static bool CanGenerate(CfdiPayrollSourceDto row) =>
+        (row.BusinessStatus is "approved" or "posted" or "generated" or "calculated") &&
+        row.PendingReceipts > 0;
+
+    private static bool CanCancel(CfdiPayrollSourceDto row) => row.StampedReceipts > 0;
+}

@@ -1,0 +1,33 @@
+@page "/treasury/receipts/detail"
+@page "/treasury/receipts/detail/{Id:guid}"
+@inject NavigationManager Navigation
+
+<PageTitle>Detalle recibo | Nanchesoft</PageTitle>
+
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+    <div>
+        <h1 class="h4 mb-1">Detalle de recibo</h1>
+        <div class="text-muted">Puedes abrir la contabilización automática del documento desde aquí.</div>
+    </div>
+    <div class="d-flex flex-wrap gap-2">
+        <a class="btn btn-outline-secondary" href="/accounting/auto-policies?sourceType=receipt">Pólizas automáticas</a>
+        @if (Id.HasValue)
+        {
+            <button class="btn btn-primary" @onclick="OpenAccounting">Contabilizar documento</button>
+        }
+    </div>
+</div>
+
+<TreasuryDocumentEditor CatalogKey="treasury-receipts" DocumentId="Id" />
+
+@code {
+    [Parameter] public Guid? Id { get; set; }
+
+    private void OpenAccounting()
+    {
+        if (Id.HasValue)
+        {
+            Navigation.NavigateTo($"/accounting/document-posting?sourceType=receipt&sourceId={Id.Value}");
+        }
+    }
+}

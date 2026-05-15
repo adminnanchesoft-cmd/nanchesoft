@@ -1,0 +1,43 @@
+@using Microsoft.AspNetCore.Components
+@using Microsoft.JSInterop
+@using Nanchesoft.Web.Services.HumanResources
+@inject PayrollOperationsApiService PayrollOperationsApiService
+@inject IJSRuntime JS
+
+@if (_loading)
+{
+    <div class="p-4">Cargando impresión de nómina...</div>
+}
+else if (!string.IsNullOrWhiteSpace(_error))
+{
+    <div class="alert alert-danger">@_error</div>
+}
+else
+{
+    <div class="ns-print-toolbar d-print-none">
+        <button class="btn btn-primary" @onclick="PrintAsync">Imprimir</button>
+    </div>
+    <div class="ns-print-sheet">@((MarkupString)_html)</div>
+}
+
+<style>
+.ns-print-toolbar{padding:16px 0}.ns-print-sheet{background:#fff;color:#0f172a}
+</style>
+
+@code {
+    [Parameter, EditorRequired] public Guid RunId { get; set; }
+    private bool _loading = true;
+    private string? _error;
+    private string _html = string.Empty;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _loading = true;
+        _error = null;
+        try { _html = await PayrollOperationsApiService.GetPayrollRunPrintHtmlAsync(RunId); }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _loading = false; }
+    }
+
+    private Task PrintAsync() => JS.InvokeVoidAsync("print").AsTask();
+}

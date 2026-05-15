@@ -1,0 +1,87 @@
+@page "/accounts-payable/dashboard"
+@using Nanchesoft.Web.Services.AccountsPayable
+@inject AccountsPayableApiService AccountsPayableApiService
+
+<PageTitle>Dashboard CxP | Nanchesoft</PageTitle>
+
+<h1 class="h3 mb-3">Cuentas por pagar · Dashboard</h1>
+
+@if (_loading)
+{
+    <div class="alert alert-info">Cargando dashboard...</div>
+}
+else if (!string.IsNullOrWhiteSpace(_error))
+{
+    <div class="alert alert-danger">@_error</div>
+}
+else
+{
+    <div class="row g-3 mb-4">
+        <div class="col-md-3"><div class="card shadow-sm"><div class="card-body"><div class="text-muted small">Proveedores con saldo</div><div class="fs-3 fw-bold">@_summary.ActiveSuppliersWithBalance</div></div></div></div>
+        <div class="col-md-3"><div class="card shadow-sm"><div class="card-body"><div class="text-muted small">Saldo abierto</div><div class="fs-3 fw-bold text-danger">@_summary.TotalOpenBalance.ToString("N2")</div></div></div></div>
+        <div class="col-md-3"><div class="card shadow-sm"><div class="card-body"><div class="text-muted small">Vencido</div><div class="fs-3 fw-bold text-warning">@_summary.OverdueBalance.ToString("N2")</div></div></div></div>
+        <div class="col-md-3"><div class="card shadow-sm"><div class="card-body"><div class="text-muted small">Aplicaciones</div><div class="fs-3 fw-bold text-success">@_summary.AppliedPaymentsCount</div></div></div></div>
+    </div>
+
+    <div class="card shadow-sm">
+        <div class="card-header fw-semibold">Movimientos recientes</div>
+        <div class="table-responsive">
+            <table class="table table-striped align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th>Fecha</th>
+                        <th>Tipo</th>
+                        <th>Folio</th>
+                        <th>Proveedor</th>
+                        <th class="text-end">Cargo</th>
+                        <th class="text-end">Crédito</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (_recent.Count == 0)
+                    {
+                        <tr><td colspan="6" class="text-center text-muted py-4">Sin movimientos.</td></tr>
+                    }
+                    else
+                    {
+                        @foreach (var row in _recent)
+                        {
+                            <tr>
+                                <td>@row.MovementDate.ToString("dd/MM/yyyy")</td>
+                                <td>@row.DocumentType</td>
+                                <td>@row.Folio</td>
+                                <td>@row.SupplierName</td>
+                                <td class="text-end">@row.ChargeAmount.ToString("N2")</td>
+                                <td class="text-end">@row.CreditAmount.ToString("N2")</td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+}
+
+@code {
+    private bool _loading = true;
+    private string? _error;
+    private ApDashboardSummaryDto _summary = new();
+    private List<ApDashboardRecentRowDto> _recent = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _summary = await AccountsPayableApiService.GetDashboardSummaryAsync();
+            _recent = await AccountsPayableApiService.GetDashboardRecentAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+}

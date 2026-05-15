@@ -1,0 +1,58 @@
+@page "/audit/document-log"
+@inject Nanchesoft.Web.Services.Audit.AuditApiService AuditApiService
+
+<PageTitle>Bitácora documental | Nanchesoft</PageTitle>
+
+<div class="ns-catalog-page">
+    <div class="ns-catalog-header">
+        <div>
+            <div class="ns-catalog-eyebrow">Auditoría</div>
+            <h1 class="ns-catalog-title">Bitácora documental</h1>
+            <p class="ns-catalog-subtitle">Vista consolidada de documentos operativos recientes.</p>
+        </div>
+    </div>
+
+    @if (_rows is null)
+    {
+        <div class="ns-catalog-loading"><div class="ns-loader"></div><span>Cargando documentos...</span></div>
+    }
+    else
+    {
+        <div class="card shadow-sm">
+            <div class="card-body p-0">
+                <table class="table table-sm table-striped mb-0 align-middle">
+                    <thead>
+                        <tr>
+                            <th>Fecha</th>
+                            <th>Módulo</th>
+                            <th>Tipo</th>
+                            <th>Folio</th>
+                            <th>Tercero / referencia</th>
+                            <th>Estatus</th>
+                            <th class="text-end">Importe</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    @foreach (var row in _rows)
+                    {
+                        <tr>
+                            <td>@row.DocumentDate.ToString("d")</td>
+                            <td>@row.SourceModule</td>
+                            <td>@row.DocumentType</td>
+                            <td>@row.Folio</td>
+                            <td>@row.PartyName</td>
+                            <td>@row.Status</td>
+                            <td class="text-end">@row.Amount.ToString("C")</td>
+                        </tr>
+                    }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private List<Nanchesoft.Web.Services.Audit.DocumentLogRowDto>? _rows;
+    protected override async Task OnInitializedAsync() => _rows = await AuditApiService.GetDocumentLogAsync();
+}

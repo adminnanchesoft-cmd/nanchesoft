@@ -1,0 +1,211 @@
+
+@page "/products/authorizations"
+@using Nanchesoft.Web.Services.Products
+@inject ProductTechnicalCostingApiService Api
+
+<PageTitle>Autorizaciones de producto</PageTitle>
+
+<h3>Autorizaciones de producto</h3>
+<p>Sincroniza reglas mínimas: foto, consumos, materiales, ficha técnica aprobada y hoja de costo aprobada.</p>
+
+@if (!string.IsNullOrWhiteSpace(_message))
+{
+    <div class="alert alert-info">@_message</div>
+}
+
+@if (_items is null || _products is null)
+{
+    <p>Cargando...</p>
+}
+else
+{
+    <div class="row">
+        <div class="col-7">
+            <table class="table table-sm table-striped">
+                <thead>
+                    <tr>
+                        <th>Código</th>
+                        <th>Estatus</th>
+                        <th>Observación</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                @foreach (var item in _items)
+                {
+                    <tr>
+                        <td>@item.AuthorizationCode</td>
+                        <td>@item.Status</td>
+                        <td>@item.RejectionReason</td>
+                        <td><button class="btn btn-sm btn-outline-primary" @onclick="() => Edit(item)">Editar</button></td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        </div>
+        <div class="col-5">
+            <EditForm Model="_editor" OnValidSubmit="SaveAsync">
+                <div class="mb-2">
+                    <label>Producto</label>
+                    <select class="form-select" @bind="_editor.FinishedProductIdString">
+                        <option value="">Seleccione</option>
+                        @foreach (var product in _products)
+                        {
+                            <option value="@product.FinishedProductId">@product.ProductCode - @product.ProductName</option>
+                        }
+                    </select>
+                </div>
+                <div class="mb-2"><label>Código</label><input class="form-control" @bind="_editor.AuthorizationCode" /></div>
+                <div class="mb-2"><label>Estatus</label><input class="form-control" @bind="_editor.Status" /></div>
+                <div class="form-check"><input class="form-check-input" type="checkbox" @bind="_editor.RequiresPhoto" /><label class="form-check-label">Requiere foto</label></div>
+                <div class="form-check"><input class="form-check-input" type="checkbox" @bind="_editor.RequiresConsumption" /><label class="form-check-label">Requiere consumos</label></div>
+                <div class="form-check"><input class="form-check-input" type="checkbox" @bind="_editor.RequiresMaterialAssignment" /><label class="form-check-label">Requiere materiales</label></div>
+                <div class="form-check mb-2"><input class="form-check-input" type="checkbox" @bind="_editor.RequiresCostSheet" /><label class="form-check-label">Requiere hoja de costo</label></div>
+                <div class="mb-2"><label>Bloqueos</label><textarea class="form-control" rows="3" @bind="_editor.RejectionReason"></textarea></div>
+                <div class="mb-2"><label>Notas</label><textarea class="form-control" rows="3" @bind="_editor.Notes"></textarea></div>
+                <div class="d-flex gap-2 flex-wrap">
+                    <button class="btn btn-primary" type="submit">Guardar</button>
+                    <button class="btn btn-outline-secondary" type="button" @onclick="New">Nuevo</button>
+                    <button class="btn btn-outline-info" type="button" @onclick="SyncAsync" disabled="@(!_editor.FinishedProductId.HasValue)">Sincronizar</button>
+                    <button class="btn btn-outline-success" type="button" @onclick="AutoAuthorizeAsync" disabled="@(!_editor.FinishedProductId.HasValue)">Auto autorizar</button>
+                    @if (_editor.Id.HasValue)
+                    {
+                        <button class="btn btn-outline-danger" type="button" @onclick="DeleteAsync">Eliminar</button>
+                    }
+                </div>
+            </EditForm>
+        </div>
+    </div>
+}
+
+@code {
+    private List<ProductAuthorizationRecordDto>? _items;
+    private List<ProductTechnicalCenterRowDto>? _products;
+    private AuthorizationEditor _editor = new();
+    private string? _message;
+
+    protected override async Task OnInitializedAsync() => await ReloadAsync();
+
+    private async Task ReloadAsync()
+    {
+        _items = await Api.GetAuthorizationsAsync();
+        _products = await Api.GetTechnicalCenterOverviewAsync();
+        _editor = new AuthorizationEditor();
+    }
+
+    private void Edit(ProductAuthorizationRecordDto item) => _editor = new AuthorizationEditor(item);
+    private void New() => _editor = new AuthorizationEditor();
+
+    private async Task SyncAsync()
+    {
+        if (!_editor.FinishedProductId.HasValue) return;
+        var response = await Api.SyncAuthorizationAsync(_editor.FinishedProductId.Value);
+        _message = response?.Message;
+        await ReloadAsync();
+    }
+
+    private async Task AutoAuthorizeAsync()
+    {
+        if (!_editor.FinishedProductId.HasValue) return;
+        var response = await Api.AutoAuthorizeAsync(_editor.FinishedProductId.Value);
+        _message = response?.Message;
+        await ReloadAsync();
+    }
+
+    private async Task SaveAsync()
+    {
+        if (!_editor.FinishedProductId.HasValue) return;
+        var selectedProduct = _products?.FirstOrDefault(x => x.FinishedProductId == _editor.FinishedProductId.Value);
+        if (selectedProduct is not null && _editor.TenantId == Guid.Empty)
+        {
+            _editor.TenantId = selectedProduct.TenantId;
+            _editor.CompanyId = selectedProduct.CompanyId;
+        }
+        var saved = await Api.SaveAuthorizationAsync(_editor.ToRequest(), _editor.Id);
+        _message = saved is null ? "No se pudo guardar." : "Autorización guardada.";
+        await ReloadAsync();
+        if (saved is not null)
+        {
+            _editor = new AuthorizationEditor(saved);
+        }
+    }
+
+    private async Task DeleteAsync()
+    {
+        if (!_editor.Id.HasValue) return;
+        await Api.DeleteAuthorizationAsync(_editor.Id.Value);
+        _message = "Autorización eliminada.";
+        await ReloadAsync();
+    }
+
+    private sealed class AuthorizationEditor
+    {
+        public Guid? Id { get; set; }
+        public Guid? FinishedProductId { get; set; }
+        public string FinishedProductIdString { get => FinishedProductId?.ToString() ?? string.Empty; set => FinishedProductId = Guid.TryParse(value, out var parsed) ? parsed : null; }
+        public Guid TenantId { get; set; }
+        public Guid CompanyId { get; set; }
+        public Guid? ProductTechnicalSheetId { get; set; }
+        public Guid? ProductCostSheetId { get; set; }
+        public string AuthorizationCode { get; set; } = string.Empty;
+        public string Status { get; set; } = "pending";
+        public bool RequiresPhoto { get; set; } = true;
+        public bool RequiresConsumption { get; set; } = true;
+        public bool RequiresMaterialAssignment { get; set; } = true;
+        public bool RequiresCostSheet { get; set; } = true;
+        public bool HasPhoto { get; set; }
+        public bool HasConsumption { get; set; }
+        public bool HasMaterialAssignment { get; set; }
+        public bool HasCostSheet { get; set; }
+        public string RejectionReason { get; set; } = string.Empty;
+        public string Notes { get; set; } = string.Empty;
+        public bool IsActive { get; set; } = true;
+
+        public AuthorizationEditor() { }
+        public AuthorizationEditor(ProductAuthorizationRecordDto dto)
+        {
+            Id = dto.Id;
+            FinishedProductId = dto.FinishedProductId;
+            TenantId = dto.TenantId;
+            CompanyId = dto.CompanyId;
+            ProductTechnicalSheetId = dto.ProductTechnicalSheetId;
+            ProductCostSheetId = dto.ProductCostSheetId;
+            AuthorizationCode = dto.AuthorizationCode;
+            Status = dto.Status;
+            RequiresPhoto = dto.RequiresPhoto;
+            RequiresConsumption = dto.RequiresConsumption;
+            RequiresMaterialAssignment = dto.RequiresMaterialAssignment;
+            RequiresCostSheet = dto.RequiresCostSheet;
+            HasPhoto = dto.HasPhoto;
+            HasConsumption = dto.HasConsumption;
+            HasMaterialAssignment = dto.HasMaterialAssignment;
+            HasCostSheet = dto.HasCostSheet;
+            RejectionReason = dto.RejectionReason;
+            Notes = dto.Notes;
+            IsActive = dto.IsActive;
+        }
+
+        public ProductAuthorizationRecordRequest ToRequest() => new(
+            TenantId,
+            CompanyId,
+            FinishedProductId ?? Guid.Empty,
+            ProductTechnicalSheetId,
+            ProductCostSheetId,
+            AuthorizationCode,
+            Status,
+            RequiresPhoto,
+            RequiresConsumption,
+            RequiresMaterialAssignment,
+            RequiresCostSheet,
+            HasPhoto,
+            HasConsumption,
+            HasMaterialAssignment,
+            HasCostSheet,
+            Status == "authorized" ? DateTime.UtcNow : null,
+            Status == "authorized" ? "web" : string.Empty,
+            RejectionReason,
+            Notes,
+            IsActive,
+            "web");
+    }
+}

@@ -1,0 +1,250 @@
+@using Microsoft.JSInterop
+@using Nanchesoft.Web.Services
+@using Nanchesoft.Web.State
+@implements IDisposable
+@inject NavigationService NavigationService
+@inject NavigationManager NavigationManager
+@inject IJSRuntime JS
+
+<nav class="ns-azure-nav ns-sm3" aria-label="Navegación principal">
+    <div class="ns-azure-nav__top ns-sm3__head">
+        <div class="ns-sm3__brand">
+            <span class="ns-sm3__brand-mark" aria-hidden="true">
+                <svg viewBox="0 0 32 32" width="22" height="22">
+                    <defs>
+                        <linearGradient id="ns-sm3-grad" x1="0" y1="0" x2="1" y2="1">
+                            <stop offset="0%" stop-color="#3658ff"></stop>
+                            <stop offset="100%" stop-color="#0078d4"></stop>
+                        </linearGradient>
+                    </defs>
+                    <path d="M6 24 L6 8 L12 8 L20 18 L20 8 L26 8 L26 24 L20 24 L12 14 L12 24 Z" fill="url(#ns-sm3-grad)"></path>
+                </svg>
+            </span>
+            <div class="ns-sm3__brand-text">
+                <div class="ns-sm3__brand-title">Nanchesoft ERP</div>
+                <div class="ns-sm3__brand-subtitle">Cloud enterprise platform</div>
+            </div>
+        </div>
+
+        <div class="ns-sm3__current">
+            <div class="ns-sm3__current-eyebrow">Módulo actual</div>
+            <div class="ns-sm3__current-row">
+                <span class="ns-sm3__current-pill">@CurrentGroupCode</span>
+                <div class="ns-sm3__current-name">@CurrentGroupTitle</div>
+                <button type="button"
+                        class="ns-sm3__current-cmd"
+                        title="Búsqueda global · Ctrl+K"
+                        @onclick="OpenPaletteAsync">
+                    <kbd>Ctrl</kbd><span>+</span><kbd>K</kbd>
+                </button>
+            </div>
+        </div>
+
+        <div id="@_searchId" class="ns-azure-nav__search ns-sm3__search"></div>
+    </div>
+
+    <div id="@_treeId" class="ns-azure-nav__tree ns-sm3__tree"></div>
+
+    <div class="ns-azure-nav__footer ns-sm3__footer">
+        @if (Favorites.Count > 0)
+        {
+            <div class="ns-sm3__footer-block">
+                <div class="ns-sm3__footer-title">
+                    <span class="ns-sm3__footer-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" width="13" height="13"><path d="M12 3.5l2.7 5.5 6 .9-4.4 4.3 1.1 6-5.4-2.9-5.4 2.9 1.1-6L3.3 9.9l6-.9z" fill="currentColor"></path></svg>
+                    </span>
+                    Favoritos
+                </div>
+                <div class="ns-sm3__footer-list">
+                    @foreach (var fav in Favorites.Take(4))
+                    {
+                        <button type="button" class="ns-sm3__footer-item" @onclick="() => OpenBookmark(fav)" title="@fav.Title">
+                            <span class="ns-sm3__footer-item-code">@ShellNavHelper.GetModuleShortCode(fav.Module ?? fav.Title)</span>
+                            <span class="ns-sm3__footer-item-text">
+                                <span class="ns-sm3__footer-item-title">@fav.Title</span>
+                                <span class="ns-sm3__footer-item-sub">@(fav.Module ?? "General")</span>
+                            </span>
+                        </button>
+                    }
+                </div>
+            </div>
+        }
+
+        @if (Recents.Count > 0)
+        {
+            <div class="ns-sm3__footer-block">
+                <div class="ns-sm3__footer-title">
+                    <span class="ns-sm3__footer-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" width="13" height="13"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.7"></circle><path d="M12 7v5l3 2" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"></path></svg>
+                    </span>
+                    Recientes
+                </div>
+                <div class="ns-sm3__footer-list">
+                    @foreach (var rec in Recents.Take(3))
+                    {
+                        <button type="button" class="ns-sm3__footer-item" @onclick="() => OpenBookmark(rec)" title="@rec.Title">
+                            <span class="ns-sm3__footer-item-code">@ShellNavHelper.GetModuleShortCode(rec.Module ?? rec.Title)</span>
+                            <span class="ns-sm3__footer-item-text">
+                                <span class="ns-sm3__footer-item-title">@rec.Title</span>
+                                <span class="ns-sm3__footer-item-sub">@(rec.Module ?? "General")</span>
+                            </span>
+                        </button>
+                    }
+                </div>
+            </div>
+        }
+
+        @if (Favorites.Count == 0 && Recents.Count == 0)
+        {
+            <div class="ns-sm3__footer-empty">
+                <span class="ns-sm3__footer-empty-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" width="18" height="18"><circle cx="11" cy="11" r="6.5" fill="none" stroke="currentColor" stroke-width="1.6"></circle><line x1="15.6" y1="15.6" x2="20" y2="20" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"></line></svg>
+                </span>
+                <span>Usa la búsqueda global o entra a una pantalla para que aquí aparezcan accesos rápidos.</span>
+            </div>
+        }
+    </div>
+</nav>
+
+@code {
+    private readonly string _searchId = $"ns-nav-search-{Guid.NewGuid():N}";
+    private readonly string _treeId = $"ns-nav-tree-{Guid.NewGuid():N}";
+    private DotNetObjectReference<SideMenu>? _objectReference;
+    private bool _initialized;
+
+    private string CurrentGroupTitle { get; set; } = "Inicio";
+    private string CurrentGroupCode { get; set; } = "IN";
+    private IReadOnlyList<ShellBookmark> Favorites { get; set; } = Array.Empty<ShellBookmark>();
+    private IReadOnlyList<ShellBookmark> Recents { get; set; } = Array.Empty<ShellBookmark>();
+
+    protected override void OnInitialized()
+    {
+        NavigationManager.LocationChanged += OnLocationChanged;
+        RefreshContext();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            _objectReference = DotNetObjectReference.Create(this);
+            _initialized = true;
+        }
+
+        await InitializeTreeAsync();
+    }
+
+    public void Dispose()
+    {
+        NavigationManager.LocationChanged -= OnLocationChanged;
+        _objectReference?.Dispose();
+    }
+
+    [JSInvokable]
+    public Task NavigateTo(string route)
+    {
+        var normalized = NavigationService.Normalize(route);
+        if (NavigationService.GetActiveItem(normalized) is { } item)
+        {
+            ShellMemoryStore.Remember(item.Title, normalized, item.Module ?? CurrentGroupTitle);
+        }
+
+        NavigationManager.NavigateTo(normalized);
+        return Task.CompletedTask;
+    }
+
+    private async void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
+    {
+        RefreshContext();
+        await InvokeAsync(async () =>
+        {
+            StateHasChanged();
+            await InitializeTreeAsync();
+        });
+    }
+
+    private void RefreshContext()
+    {
+        var route = NavigationManager.ToBaseRelativePath(NavigationManager.Uri);
+        CurrentGroupTitle = ShellNavHelper.GetActiveGroup(NavigationService, route)?.Title ?? "Inicio";
+        CurrentGroupCode = ShellNavHelper.GetModuleShortCode(CurrentGroupTitle);
+        Favorites = ShellMemoryStore.GetFavorites();
+        Recents = ShellMemoryStore.GetRecents();
+    }
+
+    private async Task InitializeTreeAsync()
+    {
+        if (!_initialized || _objectReference is null)
+        {
+            return;
+        }
+
+        await JS.InvokeVoidAsync(
+            "nsNavigation.init",
+            _searchId,
+            _treeId,
+            _objectReference,
+            BuildTreeItems(),
+            NavigationService.Normalize(NavigationManager.ToBaseRelativePath(NavigationManager.Uri)));
+    }
+
+    private async Task OpenPaletteAsync()
+        => await JS.InvokeVoidAsync("nsShell.open");
+
+    private void OpenBookmark(ShellBookmark bookmark)
+    {
+        var route = NavigationService.Normalize(bookmark.Route);
+        ShellMemoryStore.Remember(bookmark.Title, route, bookmark.Module);
+        NavigationManager.NavigateTo(route);
+    }
+
+    private List<SideTreeNode> BuildTreeItems()
+    {
+        var items = new List<SideTreeNode>();
+        var groupIndex = 0;
+
+        foreach (var group in NavigationService.GetMenu())
+        {
+            var groupNode = new SideTreeNode
+            {
+                Id = $"group-{groupIndex}",
+                Text = group.Title,
+                Icon = ShellNavHelper.GetModuleShortCode(group.Title),
+                Badge = group.Items.Count == 1 ? "1 opción" : $"{group.Items.Count} opciones",
+                Expanded = string.Equals(group.Title, CurrentGroupTitle, StringComparison.OrdinalIgnoreCase)
+            };
+
+            var itemIndex = 0;
+            foreach (var item in group.Items)
+            {
+                groupNode.Items.Add(new SideTreeNode
+                {
+                    Id = $"group-{groupIndex}-item-{itemIndex}",
+                    Text = item.Title,
+                    Route = NavigationService.Normalize(item.Route),
+                    Module = item.Module ?? group.Title,
+                    Badge = item.Badge ?? string.Empty,
+                    Icon = ShellNavHelper.GetModuleShortCode(item.Module ?? group.Title)
+                });
+                itemIndex++;
+            }
+
+            items.Add(groupNode);
+            groupIndex++;
+        }
+
+        return items;
+    }
+
+    public sealed class SideTreeNode
+    {
+        public string Id { get; set; } = string.Empty;
+        public string Text { get; set; } = string.Empty;
+        public string? Route { get; set; }
+        public string? Module { get; set; }
+        public string? Badge { get; set; }
+        public string? Icon { get; set; }
+        public bool Expanded { get; set; }
+        public List<SideTreeNode> Items { get; set; } = new();
+    }
+}

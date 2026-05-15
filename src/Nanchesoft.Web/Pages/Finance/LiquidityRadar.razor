@@ -1,0 +1,113 @@
+@page "/finance/liquidity-radar"
+@using Nanchesoft.Web.Services.Finance
+@inject FinanceApiService FinanceApiService
+
+<PageTitle>Radar liquidez | Nanchesoft</PageTitle>
+
+<h1 class="h3 mb-3">Radar de liquidez</h1>
+<p class="text-muted">Monitorea la posición de liquidez por horizonte para anticipar presión de caja.</p>
+
+<div class="row g-2 align-items-end mb-3">
+    <div class="col-md-2">
+        <label class="form-label">Año</label>
+        <input class="form-control" type="number" min="2020" max="2100" @bind="_year" />
+    </div>
+    <div class="col-md-2">
+        <label class="form-label">Mes</label>
+        <select class="form-select" @bind="_month">
+            @for (var month = 1; month <= 12; month++)
+            {
+                <option value="@month">@(new DateTime(2000, month, 1).ToString("MMMM"))</option>
+            }
+        </select>
+    </div>
+    <div class="col-md-8 d-flex gap-2">
+        <button class="btn btn-primary" @onclick="ReloadAsync">Actualizar</button>
+        <a class="btn btn-outline-secondary" href="/finance/board-pack">Paquete directivo</a>
+        <a class="btn btn-outline-secondary" href="/finance/stress-tests">Pruebas de estrés</a>
+    </div>
+</div>
+
+@if (_loading)
+{
+    <div class="alert alert-info">Cargando radar de liquidez...</div>
+}
+else if (!string.IsNullOrWhiteSpace(_error))
+{
+    <div class="alert alert-danger">@_error</div>
+}
+else
+{
+    <div class="row g-3 mb-3">
+        <div class="col-md-4"><div class="card shadow-sm h-100"><div class="card-body"><div class="text-muted small">Horizonte más comprometido</div><div class="fs-4 fw-bold @GetRiskClass(MostCritical?.RiskLevel)">@MostCritical?.HorizonLabel</div><div class="small text-muted">Riesgo @MostCritical?.RiskLevel</div></div></div></div>
+        <div class="col-md-4"><div class="card shadow-sm h-100"><div class="card-body"><div class="text-muted small">Cobertura mínima</div><div class="fs-4 fw-bold">@_rows.DefaultIfEmpty(new()).Min(x => x.CoverageRatio).ToString("N2")</div><div class="small text-muted">Liquidez + cobros / pagos</div></div></div></div>
+        <div class="col-md-4"><div class="card shadow-sm h-100"><div class="card-body"><div class="text-muted small">Posición neta mínima</div><div class="fs-4 fw-bold @GetSignedClass(_rows.DefaultIfEmpty(new()).Min(x => x.NetPosition))">@_rows.DefaultIfEmpty(new()).Min(x => x.NetPosition).ToString("N2")</div><div class="small text-muted">Escenario más presionado</div></div></div></div>
+    </div>
+
+    <div class="table-responsive">
+        <table class="table table-sm table-striped align-middle">
+            <thead>
+                <tr>
+                    <th>Horizonte</th>
+                    <th class="text-end">Liquidez inicial</th>
+                    <th class="text-end">Cobros esperados</th>
+                    <th class="text-end">Pagos esperados</th>
+                    <th class="text-end">Posición neta</th>
+                    <th class="text-end">Cobertura</th>
+                    <th>Riesgo</th>
+                    <th>Acción sugerida</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var row in _rows)
+                {
+                    <tr>
+                        <td>@row.HorizonLabel</td>
+                        <td class="text-end">@row.OpeningLiquidity.ToString("N2")</td>
+                        <td class="text-end text-success">@row.ExpectedInflows.ToString("N2")</td>
+                        <td class="text-end text-danger">@row.ExpectedOutflows.ToString("N2")</td>
+                        <td class="text-end @GetSignedClass(row.NetPosition)">@row.NetPosition.ToString("N2")</td>
+                        <td class="text-end">@row.CoverageRatio.ToString("N2")</td>
+                        <td><span class="badge @GetRiskBadge(row.RiskLevel)">@row.RiskLevel</span></td>
+                        <td>@row.SuggestedAction</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+@code {
+    private int _year = DateTime.UtcNow.Year;
+    private int _month = DateTime.UtcNow.Month;
+    private bool _loading = true;
+    private string? _error;
+    private List<FinanceLiquidityRadarRowDto> _rows = new();
+
+    private FinanceLiquidityRadarRowDto? MostCritical => _rows.OrderBy(x => Priority(x.RiskLevel)).ThenBy(x => x.NetPosition).FirstOrDefault();
+
+    protected override async Task OnInitializedAsync() => await ReloadAsync();
+
+    private async Task ReloadAsync()
+    {
+        _loading = true;
+        _error = null;
+        try
+        {
+            _rows = await FinanceApiService.GetLiquidityRadarAsync(_year, _month);
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private static int Priority(string? value) => value switch { "Rojo" => 0, "Amarillo" => 1, _ => 2 };
+    private static string GetSignedClass(decimal value) => value >= 0m ? "text-success" : "text-danger";
+    private static string GetRiskClass(string? value) => value == "Rojo" ? "text-danger" : value == "Amarillo" ? "text-warning" : "text-success";
+    private static string GetRiskBadge(string value) => value == "Rojo" ? "bg-danger" : value == "Amarillo" ? "bg-warning text-dark" : "bg-success";
+}

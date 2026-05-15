@@ -1,0 +1,33 @@
+@using Nanchesoft.Web.Services.Monitoring
+
+<div class="table-responsive">
+    <table class="table table-sm table-striped align-middle">
+        <thead>
+            <tr>
+                <th>Fecha</th>
+                <th>Origen</th>
+                <th>Mensaje</th>
+                <th>Ruta</th>
+                <th>Empresa</th>
+                <th>Usuario</th>
+            </tr>
+        </thead>
+        <tbody>
+        @foreach (var row in Rows)
+        {
+            <tr>
+                <td>@row.CreatedAt.ToLocalTime().ToString("g")</td>
+                <td>@row.Source</td>
+                <td>@row.Message</td>
+                <td>@row.RequestPath</td>
+                <td>@(row.CompanyId?.ToString() ?? "-")</td>
+                <td>@(row.UserId?.ToString() ?? "-")</td>
+            </tr>
+        }
+        </tbody>
+    </table>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<MonitoringErrorRowDto> Rows { get; set; } = Array.Empty<MonitoringErrorRowDto>();
+}

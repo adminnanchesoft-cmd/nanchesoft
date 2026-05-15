@@ -1,0 +1,419 @@
+@page "/dashboard"
+@using Nanchesoft.Web.Services
+@using Nanchesoft.Web.State
+@using Microsoft.JSInterop
+@inject DashboardService DashboardService
+@inject NavigationService NavigationService
+@inject NavigationManager NavigationManager
+@inject IJSRuntime JS
+@inject Nanchesoft.Web.State.AuthState AuthState
+
+<PageTitle>Dashboard | Nanchesoft</PageTitle>
+
+@if (summary is null)
+{
+    <div class="ns-dash3__loading">
+        <div class="ns-dash3__loading-spinner" aria-hidden="true"></div>
+        <span>Cargando workspace...</span>
+    </div>
+}
+else
+{
+    <div class="ns-dash3">
+
+        @* ===== HERO + KPIs ===== *@
+        <section class="ns-dash3__hero">
+            <div class="ns-dash3__hero-left">
+                <div class="ns-dash3__hero-eyebrow">Workspace de @summary.UserName</div>
+                <h1 class="ns-dash3__hero-title">Buen día, @FirstName.</h1>
+                <p class="ns-dash3__hero-sub">
+                    Estás operando <strong>@summary.CompanyName</strong>
+                    @if (!string.IsNullOrWhiteSpace(summary.BranchName) && !summary.BranchName.Equals("Sin sucursal", StringComparison.OrdinalIgnoreCase))
+                    {
+                        <text>· sucursal <strong>@summary.BranchName</strong></text>
+                    }
+                    en el tenant <strong>@summary.TenantName</strong>.
+                </p>
+
+                <div class="ns-dash3__hero-actions">
+                    <button type="button" class="ns-dash3__btn ns-dash3__btn--primary" @onclick="OpenSearch">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="10.5" cy="10.5" r="6.5"/><line x1="15.2" y1="15.2" x2="20" y2="20" stroke-linecap="round"/></svg>
+                        Búsqueda global
+                        <span class="ns-dash3__kbd"><kbd>Ctrl</kbd>+<kbd>K</kbd></span>
+                    </button>
+                    <button type="button" class="ns-dash3__btn" @onclick="ToggleGuide">
+                        @(GuideOpen ? "Ocultar guía" : "Mostrar guía")
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="transform: @(GuideOpen ? "rotate(180deg)" : "rotate(0)"); transition: transform .18s ease;"><path d="M6 9 L12 15 L18 9"/></svg>
+                    </button>
+                </div>
+            </div>
+
+            <div class="ns-dash3__kpis">
+                <div class="ns-dash3__kpi ns-dash3__kpi--ok">
+                    <div class="ns-dash3__kpi-icon" aria-hidden="true">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                    </div>
+                    <div class="ns-dash3__kpi-value">@ModulesCount</div>
+                    <div class="ns-dash3__kpi-label">Módulos disponibles</div>
+                </div>
+                <div class="ns-dash3__kpi ns-dash3__kpi--info">
+                    <div class="ns-dash3__kpi-icon" aria-hidden="true">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1.4"/><rect x="14" y="3" width="7" height="7" rx="1.4"/><rect x="3" y="14" width="7" height="7" rx="1.4"/><rect x="14" y="14" width="7" height="7" rx="1.4"/></svg>
+                    </div>
+                    <div class="ns-dash3__kpi-value">@ScreensCount</div>
+                    <div class="ns-dash3__kpi-label">Pantallas configuradas</div>
+                </div>
+                <div class="ns-dash3__kpi ns-dash3__kpi--warn">
+                    <div class="ns-dash3__kpi-icon" aria-hidden="true">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2" stroke-linecap="round"/></svg>
+                    </div>
+                    <div class="ns-dash3__kpi-value">@RecentCount</div>
+                    <div class="ns-dash3__kpi-label">Pantallas recientes</div>
+                </div>
+                <div class="ns-dash3__kpi ns-dash3__kpi--accent">
+                    <div class="ns-dash3__kpi-icon" aria-hidden="true">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3.5l2.7 5.5 6 .9-4.4 4.3 1.1 6-5.4-2.9-5.4 2.9 1.1-6L3.3 9.9l6-.9z"/></svg>
+                    </div>
+                    <div class="ns-dash3__kpi-value">@FavoritesCount</div>
+                    <div class="ns-dash3__kpi-label">Favoritos guardados</div>
+                </div>
+            </div>
+        </section>
+
+        @* ===== GUÍA COLAPSABLE ===== *@
+        @if (GuideOpen)
+        {
+            <section class="ns-dash3__guide">
+                <div class="ns-dash3__section-head">
+                    <div>
+                        <div class="ns-dash3__section-eyebrow">Guía de operación</div>
+                        <h2 class="ns-dash3__section-title">Flujo recomendado para empezar</h2>
+                    </div>
+                    <button type="button" class="ns-dash3__link" @onclick="ToggleGuide">Ocultar</button>
+                </div>
+
+                <div class="ns-dash3__guide-flow">
+                    @{
+                        var steps = new[]
+                        {
+                            new GuideStep("01", "Configura tu organización", "Empresas, sucursales y almacenes.", "/organization/companies", "OR"),
+                            new GuideStep("02", "Define tus catálogos", "Monedas, impuestos, unidades y bancos.", "/catalogs/currencies", "CA"),
+                            new GuideStep("03", "Da de alta tus terceros", "Clientes y proveedores con cuentas y contactos.", "/third-parties/customers", "TE"),
+                            new GuideStep("04", "Construye tu producto", "Materiales, hormas, estilos y productos terminados.", "/products/orange-control-center", "PR"),
+                            new GuideStep("05", "Empieza a operar", "Compras, inventario, ventas y servicios.", "/sales/orders", "VE"),
+                        };
+                    }
+                    @foreach (var (step, idx) in steps.Select((s, i) => (s, i)))
+                    {
+                        <button type="button" class="ns-dash3__guide-step" @onclick="() => Go(step.Route, step.Title, step.Code)">
+                            <div class="ns-dash3__guide-step-num">@step.Num</div>
+                            <div class="ns-dash3__guide-step-icon">@step.Code</div>
+                            <div class="ns-dash3__guide-step-text">
+                                <div class="ns-dash3__guide-step-title">@step.Title</div>
+                                <div class="ns-dash3__guide-step-sub">@step.Sub</div>
+                            </div>
+                        </button>
+                        @if (idx < steps.Length - 1)
+                        {
+                            <span class="ns-dash3__guide-arrow" aria-hidden="true">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+                            </span>
+                        }
+                    }
+                </div>
+            </section>
+        }
+
+        @* ===== QUICK ACCESS ===== *@
+        <section class="ns-dash3__qa">
+            <div class="ns-dash3__section-head">
+                <div>
+                    <div class="ns-dash3__section-eyebrow">Acceso rápido</div>
+                    <h2 class="ns-dash3__section-title">Módulos principales</h2>
+                </div>
+            </div>
+
+            <div class="ns-dash3__qa-grid">
+                @foreach (var tile in QuickAccessTiles)
+                {
+                    <button type="button" class="ns-dash3__qa-tile" style="--tile-c1:@tile.Color1; --tile-c2:@tile.Color2;" @onclick="() => Go(tile.Route, tile.Title, tile.Code)">
+                        <div class="ns-dash3__qa-tile-icon" aria-hidden="true">
+                            @((MarkupString)tile.IconSvg)
+                        </div>
+                        <div class="ns-dash3__qa-tile-meta">
+                            <div class="ns-dash3__qa-tile-title">@tile.Title</div>
+                            <div class="ns-dash3__qa-tile-sub">@tile.Sub</div>
+                        </div>
+                        <div class="ns-dash3__qa-tile-arrow" aria-hidden="true">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+                        </div>
+                    </button>
+                }
+            </div>
+        </section>
+
+        @* ===== ROW 2: RECENT + REAL-TIME ===== *@
+        <div class="ns-dash3__row">
+
+            @* RECENT RECORDS *@
+            <section class="ns-dash3__panel ns-dash3__panel--recent">
+                <div class="ns-dash3__section-head">
+                    <div>
+                        <div class="ns-dash3__section-eyebrow">Visto recientemente</div>
+                        <h2 class="ns-dash3__section-title">Tus últimas pantallas</h2>
+                    </div>
+                    <span class="ns-dash3__chip">@Recents.Count abiertas</span>
+                </div>
+
+                @if (Recents.Count == 0)
+                {
+                    <div class="ns-dash3__empty">
+                        <div class="ns-dash3__empty-icon">
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2" stroke-linecap="round"/></svg>
+                        </div>
+                        <div>
+                            <div class="ns-dash3__empty-title">Aún no abres pantallas</div>
+                            <div class="ns-dash3__empty-sub">Cuando uses una pantalla, aparecerá aquí para que vuelvas rápido.</div>
+                        </div>
+                    </div>
+                }
+                else
+                {
+                    <div class="ns-dash3__recent-list">
+                        @foreach (var rec in Recents.Take(8))
+                        {
+                            <button type="button" class="ns-dash3__recent-item" @onclick="() => Go(rec.Route, rec.Title, rec.Module)">
+                                <div class="ns-dash3__recent-avatar">@ShellNavHelper.GetModuleShortCode(rec.Module ?? rec.Title)</div>
+                                <div class="ns-dash3__recent-meta">
+                                    <div class="ns-dash3__recent-title">@rec.Title</div>
+                                    <div class="ns-dash3__recent-sub">@(rec.Module ?? "General") · @rec.Route</div>
+                                </div>
+                                <div class="ns-dash3__recent-go" aria-hidden="true">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
+                                </div>
+                            </button>
+                        }
+                    </div>
+                }
+            </section>
+
+            @* REAL-TIME MESSAGE *@
+            <section class="ns-dash3__panel ns-dash3__panel--rt">
+                <div class="ns-dash3__section-head">
+                    <div>
+                        <div class="ns-dash3__section-eyebrow">Tiempo real</div>
+                        <h2 class="ns-dash3__section-title">Mensajes del sistema</h2>
+                    </div>
+                    <span class="ns-dash3__rt-pulse" aria-hidden="true"><span></span></span>
+                </div>
+
+                <div class="ns-dash3__rt-tabs" role="tablist">
+                    <button type="button" class="ns-dash3__rt-tab @(ActiveRtTab == "alarm" ? "is-active" : "")" @onclick='() => ActiveRtTab = "alarm"'>
+                        <span class="ns-dash3__rt-tab-dot ns-dash3__rt-tab-dot--alarm"></span>
+                        Alarmas
+                        <span class="ns-dash3__rt-tab-count">@AlarmMessages.Count</span>
+                    </button>
+                    <button type="button" class="ns-dash3__rt-tab @(ActiveRtTab == "service" ? "is-active" : "")" @onclick='() => ActiveRtTab = "service"'>
+                        <span class="ns-dash3__rt-tab-dot ns-dash3__rt-tab-dot--service"></span>
+                        Servicio
+                        <span class="ns-dash3__rt-tab-count">@ServiceMessages.Count</span>
+                    </button>
+                </div>
+
+                <div class="ns-dash3__rt-list">
+                    @{
+                        var messages = ActiveRtTab == "alarm" ? AlarmMessages : ServiceMessages;
+                    }
+                    @if (messages.Count == 0)
+                    {
+                        <div class="ns-dash3__empty ns-dash3__empty--compact">
+                            <div class="ns-dash3__empty-icon">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                            </div>
+                            <div>
+                                <div class="ns-dash3__empty-title">Sin mensajes</div>
+                                <div class="ns-dash3__empty-sub">No hay eventos activos en este canal.</div>
+                            </div>
+                        </div>
+                    }
+                    else
+                    {
+                        @foreach (var msg in messages)
+                        {
+                            <div class="ns-dash3__rt-item ns-dash3__rt-item--@msg.Severity">
+                                <div class="ns-dash3__rt-item-time">@msg.Time</div>
+                                <div class="ns-dash3__rt-item-meta">
+                                    <div class="ns-dash3__rt-item-title">@msg.Title</div>
+                                    <div class="ns-dash3__rt-item-sub">@msg.Source</div>
+                                </div>
+                            </div>
+                        }
+                    }
+                </div>
+            </section>
+        </div>
+
+        @* ===== CONTEXTO + IMPLEMENTACIÓN ===== *@
+        <section class="ns-dash3__ctx">
+            <div class="ns-dash3__ctx-card">
+                <div class="ns-dash3__ctx-eyebrow">Tenant</div>
+                <div class="ns-dash3__ctx-value">@summary.TenantName</div>
+            </div>
+            <div class="ns-dash3__ctx-card">
+                <div class="ns-dash3__ctx-eyebrow">Empresa</div>
+                <div class="ns-dash3__ctx-value">@summary.CompanyName</div>
+            </div>
+            <div class="ns-dash3__ctx-card">
+                <div class="ns-dash3__ctx-eyebrow">Sucursal</div>
+                <div class="ns-dash3__ctx-value">@summary.BranchName</div>
+            </div>
+            <div class="ns-dash3__ctx-card">
+                <div class="ns-dash3__ctx-eyebrow">Usuario</div>
+                <div class="ns-dash3__ctx-value">@summary.UserName</div>
+            </div>
+            <div class="ns-dash3__ctx-card ns-dash3__ctx-card--note">
+                <div class="ns-dash3__ctx-eyebrow">Implementación actual</div>
+                <div class="ns-dash3__ctx-note">
+                    @(AuthState.IsPlatformOwner
+                        ? "Plataforma SaaS lista: tenants, planes y suscripciones separados de Organización."
+                        : "Tu tenant está configurado y operando con privilegios separados de la plataforma.")
+                </div>
+                @if (AuthState.IsPlatformOwner)
+                {
+                    <div class="ns-dash3__ctx-actions">
+                        <a class="ns-dash3__btn ns-dash3__btn--sm" href="/platform/tenants">Tenants</a>
+                        <a class="ns-dash3__btn ns-dash3__btn--sm" href="/platform/plans">Planes SaaS</a>
+                        <a class="ns-dash3__btn ns-dash3__btn--sm" href="/platform/subscriptions">Suscripciones</a>
+                    </div>
+                }
+            </div>
+        </section>
+
+    </div>
+}
+
+@code {
+    private DashboardSummary? summary;
+    private bool GuideOpen { get; set; } = true;
+    private string ActiveRtTab { get; set; } = "alarm";
+
+    private IReadOnlyList<ShellBookmark> Recents { get; set; } = Array.Empty<ShellBookmark>();
+    private IReadOnlyList<ShellBookmark> Favorites { get; set; } = Array.Empty<ShellBookmark>();
+    private List<RtMessage> AlarmMessages { get; set; } = new();
+    private List<RtMessage> ServiceMessages { get; set; } = new();
+
+    private int ModulesCount { get; set; }
+    private int ScreensCount { get; set; }
+    private int RecentCount => Recents.Count;
+    private int FavoritesCount => Favorites.Count;
+
+    private string FirstName => string.IsNullOrWhiteSpace(summary?.UserName)
+        ? "operador"
+        : summary!.UserName.Split(' ', 2)[0];
+
+    private List<QuickTile> QuickAccessTiles { get; set; } = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        summary = await DashboardService.GetSummaryAsync();
+
+        var menu = NavigationService.GetMenu();
+        ModulesCount = menu.Count;
+        ScreensCount = menu.Sum(g => g.Items.Count);
+
+        Recents = ShellMemoryStore.GetRecents();
+        Favorites = ShellMemoryStore.GetFavorites();
+
+        BuildQuickAccessTiles();
+        BuildSampleMessages();
+    }
+
+    private void BuildQuickAccessTiles()
+    {
+        // Tiles principales con SVG inline + paleta
+        QuickAccessTiles = new List<QuickTile>
+        {
+            new("Ventas", "Cotizaciones, pedidos, facturación",
+                "/sales/orders", "VE",
+                "#0078d4", "#3658ff",
+                "<svg width='22' height='22' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><path d='M3 3h2l.4 2M7 13h10l3-7H6.4M7 13l-1.5 4h12'/><circle cx='9' cy='20' r='1.5'/><circle cx='17' cy='20' r='1.5'/></svg>"),
+
+            new("Compras", "Requisiciones, órdenes y recepciones",
+                "/purchases/orders", "CO",
+                "#0ea5e9", "#0078d4",
+                "<svg width='22' height='22' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><rect x='3' y='6' width='18' height='13' rx='2'/><path d='M3 10h18M8 6V4h8v2'/></svg>"),
+
+            new("Inventario", "Existencias, kardex y trazabilidad",
+                "/inventory/stock-balances", "IN",
+                "#10b981", "#059669",
+                "<svg width='22' height='22' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><path d='M21 16V8a2 2 0 0 0-1-1.7l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.7l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z'/><path d='M3.3 7 12 12l8.7-5M12 22V12'/></svg>"),
+
+            new("Servicios", "Notas por horas y tarifas por cliente",
+                "/services/notes", "SE",
+                "#8b5cf6", "#6d28d9",
+                "<svg width='22' height='22' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='12' r='9'/><path d='M12 7v5l3 2'/></svg>"),
+
+            new("Productos", "Estilos, ingeniería y producto terminado",
+                "/products/orange-control-center", "PR",
+                "#f59e0b", "#d97706",
+                "<svg width='22' height='22' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><path d='M20.59 13.41 13.42 20.6a2 2 0 0 1-2.83 0l-7.18-7.19A2 2 0 0 1 3 12V5a2 2 0 0 1 2-2h7a2 2 0 0 1 1.41.59l7.18 7.19a2 2 0 0 1 0 2.83Z'/><circle cx='8' cy='8' r='1.5'/></svg>"),
+
+            new("Materiales", "Familias, subfamilias y costos",
+                "/materials/control-center", "MA",
+                "#ec4899", "#be185d",
+                "<svg width='22' height='22' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><rect x='3' y='3' width='7' height='7' rx='1'/><rect x='14' y='3' width='7' height='7' rx='1'/><rect x='3' y='14' width='7' height='7' rx='1'/><rect x='14' y='14' width='7' height='7' rx='1'/></svg>"),
+
+            new("Tesorería", "Cajas, bancos, ingresos y egresos",
+                "/treasury/dashboard", "TS",
+                "#06b6d4", "#0891b2",
+                "<svg width='22' height='22' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><rect x='2' y='6' width='20' height='12' rx='2'/><circle cx='12' cy='12' r='3'/><path d='M6 12h.01M18 12h.01'/></svg>"),
+
+            new("CFDI", "Timbrado, cancelación y configuración",
+                "/cfdi/dashboard", "CF",
+                "#ef4444", "#b91c1c",
+                "<svg width='22' height='22' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><path d='M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z'/><polyline points='14 2 14 8 20 8'/><path d='M9 13h6M9 17h4'/></svg>"),
+        };
+    }
+
+    private void BuildSampleMessages()
+    {
+        // Mensajes de ejemplo: cuando tengas un servicio real, conéctalo aquí.
+        var now = DateTime.Now;
+        AlarmMessages = new List<RtMessage>
+        {
+            new(now.AddMinutes(-3).ToString("HH:mm"), "Sin alarmas activas", "Sistema · Monitor", "ok"),
+        };
+
+        ServiceMessages = new List<RtMessage>();
+
+        if (Recents.Count > 0)
+        {
+            var first = Recents.First();
+            ServiceMessages.Add(new(now.AddMinutes(-1).ToString("HH:mm"), $"Acceso a {first.Title}", first.Module ?? "General", "info"));
+        }
+        if (Favorites.Count > 0)
+        {
+            ServiceMessages.Add(new(now.AddMinutes(-15).ToString("HH:mm"), $"{Favorites.Count} favoritos guardados", "Workspace", "ok"));
+        }
+        ServiceMessages.Add(new(now.AddHours(-1).ToString("HH:mm"), "Sesión iniciada", $"Tenant {summary?.TenantName}", "info"));
+    }
+
+    private void ToggleGuide() => GuideOpen = !GuideOpen;
+
+    private async Task OpenSearch()
+    {
+        try { await JS.InvokeVoidAsync("nsShell.open"); }
+        catch { /* nsShell aún no listo, ignorar */ }
+    }
+
+    private void Go(string route, string title, string moduleOrCode)
+    {
+        var normalized = NavigationService.Normalize(route);
+        ShellMemoryStore.Remember(title, normalized, moduleOrCode);
+        NavigationManager.NavigateTo(normalized);
+    }
+
+    private sealed record GuideStep(string Num, string Title, string Sub, string Route, string Code);
+    private sealed record QuickTile(string Title, string Sub, string Route, string Code, string Color1, string Color2, string IconSvg);
+    private sealed record RtMessage(string Time, string Title, string Source, string Severity);
+}

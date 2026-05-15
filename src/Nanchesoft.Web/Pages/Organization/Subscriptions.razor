@@ -1,0 +1,502 @@
+@page "/organization/subscriptions"
+@page "/platform/subscriptions"
+@using System.Globalization
+@using Nanchesoft.Web.Services.Platform
+@inject SubscriptionControlApiService SubscriptionControlApiService
+@inject Nanchesoft.Web.State.AuthState AuthState
+@inject NavigationManager Navigation
+
+<PageTitle>Control de suscripciones SaaS | Nanchesoft</PageTitle>
+
+@if (!_authorized)
+{
+    <div class="alert alert-warning">Redirigiendo al dashboard. Esta sección solo está disponible para el propietario de la plataforma.</div>
+}
+else
+{
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+    <div>
+        <h1 class="h3 mb-1">Control de suscripciones SaaS</h1>
+        <div class="text-muted">Cobro mensual por tenant, seguimiento de saldo, descuentos y compensaciones.</div>
+    </div>
+    <div class="d-flex flex-wrap gap-2">
+        <button class="btn btn-outline-secondary" @onclick="ReloadAsync" disabled="@_loading">Recargar</button>
+        <button class="btn btn-primary" @onclick="OpenGeneratePanel">Generar mes</button>
+    </div>
+</div>
+
+<div class="row g-2 align-items-end mb-3">
+    <div class="col-md-2">
+        <label class="form-label">Año</label>
+        <input class="form-control" type="number" min="2024" max="2100" @bind="_year" />
+    </div>
+    <div class="col-md-2">
+        <label class="form-label">Mes</label>
+        <select class="form-select" @bind="_month">
+            @for (var month = 1; month <= 12; month++)
+            {
+                <option value="@month">@(new DateTime(2000, month, 1).ToString("MMMM", CultureInfo.GetCultureInfo("es-MX")))</option>
+            }
+        </select>
+    </div>
+    <div class="col-md-4 d-flex gap-2 flex-wrap">
+        <button class="btn btn-primary" @onclick="ReloadAsync" disabled="@_loading">Actualizar tablero</button>
+    </div>
+</div>
+
+@if (!string.IsNullOrWhiteSpace(_error))
+{
+    <div class="alert alert-danger">@_error</div>
+}
+@if (!string.IsNullOrWhiteSpace(_message))
+{
+    <div class="alert alert-success">@_message</div>
+}
+
+@if (_showGeneratePanel)
+{
+    <div class="card shadow-sm border-primary mb-3">
+        <div class="card-body">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <div class="h5 mb-0">Generar cobro mensual</div>
+                <button class="btn btn-sm btn-outline-secondary" @onclick="ClosePanels">Cerrar</button>
+            </div>
+            <div class="row g-2 align-items-end">
+                <div class="col-md-2">
+                    <label class="form-label">Año</label>
+                    <input class="form-control" type="number" @bind="_generateRequest.Year" />
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Mes</label>
+                    <input class="form-control" type="number" min="1" max="12" @bind="_generateRequest.Month" />
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Fecha cargo</label>
+                    <input class="form-control" type="date" value="@_generateChargeDateText" @onchange="OnGenerateChargeDateChanged" />
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Vence</label>
+                    <input class="form-control" type="date" value="@_generateDueDateText" @onchange="OnGenerateDueDateChanged" />
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Notas</label>
+                    <input class="form-control" @bind="_generateRequest.Notes" />
+                </div>
+                <div class="col-md-12">
+                    <button class="btn btn-primary" @onclick="GenerateMonthAsync" disabled="@_loading">Generar cargos del mes</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@if (_selectedCharge is not null && _showEditPanel)
+{
+    <div class="card shadow-sm border-warning mb-3">
+        <div class="card-body">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <div>
+                    <div class="h5 mb-0">Editar cargo</div>
+                    <div class="small text-muted">@_selectedCharge.TenantName · @_selectedCharge.ChargeMonth</div>
+                </div>
+                <button class="btn btn-sm btn-outline-secondary" @onclick="ClosePanels">Cerrar</button>
+            </div>
+            <div class="row g-2 align-items-end">
+                <div class="col-md-2">
+                    <label class="form-label">Fecha cargo</label>
+                    <input class="form-control" type="date" value="@_editChargeDateText" @onchange="OnEditChargeDateChanged" />
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Vence</label>
+                    <input class="form-control" type="date" value="@_editDueDateText" @onchange="OnEditDueDateChanged" />
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Mensualidad</label>
+                    <input class="form-control" type="number" step="0.01" @bind="_editRequest.PlanPriceMonthly" />
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Descuento</label>
+                    <input class="form-control" type="number" step="0.01" @bind="_editRequest.DiscountAmount" />
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Recargo</label>
+                    <input class="form-control" type="number" step="0.01" @bind="_editRequest.SurchargeAmount" />
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Referencia</label>
+                    <input class="form-control" @bind="_editRequest.Reference" />
+                </div>
+                <div class="col-md-12">
+                    <label class="form-label">Notas</label>
+                    <input class="form-control" @bind="_editRequest.Notes" />
+                </div>
+                <div class="col-md-12">
+                    <button class="btn btn-primary" @onclick="SaveEditAsync" disabled="@_loading">Guardar cargo</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@if (_selectedCharge is not null && _showPaymentPanel)
+{
+    <div class="card shadow-sm border-success mb-3">
+        <div class="card-body">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <div>
+                    <div class="h5 mb-0">Registrar pago de suscripción</div>
+                    <div class="small text-muted">@_selectedCharge.TenantName · total @_selectedCharge.TotalAmount.ToString("N2") · saldo @_selectedCharge.BalanceAmount.ToString("N2")</div>
+                </div>
+                <button class="btn btn-sm btn-outline-secondary" @onclick="ClosePanels">Cerrar</button>
+            </div>
+            <div class="row g-2 align-items-end">
+                <div class="col-md-2">
+                    <label class="form-label">Fecha pago</label>
+                    <input class="form-control" type="date" value="@_paymentDateText" @onchange="OnPaymentDateChanged" />
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Forma de pago</label>
+                    <select class="form-select" @bind="_paymentRequest.PaymentMethod">
+                        <option value="TRANSFERENCIA">Transferencia</option>
+                        <option value="DEPOSITO">Depósito</option>
+                        <option value="EFECTIVO">Efectivo</option>
+                        <option value="COMPENSACION">Compensación</option>
+                        <option value="OTRO">Otro</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Importe recibido</label>
+                    <input class="form-control" type="number" step="0.01" @bind="_paymentRequest.ReceivedAmount" />
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Compensación</label>
+                    <input class="form-control" type="number" step="0.01" @bind="_paymentRequest.CompensationAmount" />
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Descuento</label>
+                    <input class="form-control" type="number" step="0.01" @bind="_paymentRequest.DiscountAmount" />
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Referencia</label>
+                    <input class="form-control" @bind="_paymentRequest.Reference" />
+                </div>
+                <div class="col-md-12">
+                    <label class="form-label">Notas</label>
+                    <input class="form-control" @bind="_paymentRequest.Notes" />
+                </div>
+                <div class="col-md-12">
+                    <button class="btn btn-success" @onclick="SavePaymentAsync" disabled="@_loading">Registrar pago</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@if (_loading && _summary is null)
+{
+    <div class="alert alert-info">Cargando control de suscripciones...</div>
+}
+else if (_summary is not null)
+{
+    <div class="row g-3 mb-3">
+        <div class="col-md-3"><div class="card shadow-sm h-100"><div class="card-body"><div class="text-muted small">Cargos del mes</div><div class="fs-4 fw-bold">@_summary.TotalCount</div><div class="small text-muted">Pendientes @_summary.PendingCount · Parciales @_summary.PartialCount</div></div></div></div>
+        <div class="col-md-3"><div class="card shadow-sm h-100"><div class="card-body"><div class="text-muted small">Mensualidad total</div><div class="fs-4 fw-bold text-primary">@_summary.TotalAmount.ToString("N2")</div><div class="small text-muted">Periodo @_monthName @_summary.Year</div></div></div></div>
+        <div class="col-md-3"><div class="card shadow-sm h-100"><div class="card-body"><div class="text-muted small">Cobrado</div><div class="fs-4 fw-bold text-success">@_summary.PaidAmount.ToString("N2")</div><div class="small text-muted">Compensado @_summary.CompensationAmount.ToString("N2")</div></div></div></div>
+        <div class="col-md-3"><div class="card shadow-sm h-100"><div class="card-body"><div class="text-muted small">Saldo</div><div class="fs-4 fw-bold @( _summary.BalanceAmount > 0 ? "text-danger" : "text-success")">@_summary.BalanceAmount.ToString("N2")</div><div class="small text-muted">Pagadas @_summary.PaidCount · Canceladas @_summary.CancelledCount</div></div></div></div>
+    </div>
+
+    <div class="card shadow-sm">
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-sm align-middle">
+                    <thead>
+                        <tr>
+                            <th>Tenant</th>
+                            <th>Plan</th>
+                            <th class="text-end">Mensualidad</th>
+                            <th class="text-end">Desc.</th>
+                            <th class="text-end">Rec.</th>
+                            <th class="text-end">Total</th>
+                            <th class="text-end">Pagado</th>
+                            <th class="text-end">Comp.</th>
+                            <th class="text-end">Saldo</th>
+                            <th>Vence</th>
+                            <th>Estatus</th>
+                            <th>Pago</th>
+                            <th>Referencia</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (_summary.Rows.Count == 0)
+                        {
+                            <tr><td colspan="14" class="text-center text-muted py-4">No hay cargos generados para el periodo.</td></tr>
+                        }
+                        else
+                        {
+                            @foreach (var row in _summary.Rows.OrderBy(x => x.Status).ThenBy(x => x.DueDate).ThenBy(x => x.TenantName))
+                            {
+                                <tr>
+                                    <td>
+                                        <div class="fw-semibold">@row.TenantName</div>
+                                        <div class="small text-muted">@row.TenantCode</div>
+                                    </td>
+                                    <td>
+                                        <div>@row.PlanName</div>
+                                        <div class="small text-muted">@row.PlanCode</div>
+                                    </td>
+                                    <td class="text-end">@row.PlanPriceMonthly.ToString("N2")</td>
+                                    <td class="text-end text-danger">@row.DiscountAmount.ToString("N2")</td>
+                                    <td class="text-end text-warning">@row.SurchargeAmount.ToString("N2")</td>
+                                    <td class="text-end fw-semibold">@row.TotalAmount.ToString("N2")</td>
+                                    <td class="text-end text-success">@row.PaidAmount.ToString("N2")</td>
+                                    <td class="text-end text-info">@row.CompensationAmount.ToString("N2")</td>
+                                    <td class="text-end @(row.BalanceAmount > 0 ? "text-danger fw-semibold" : "text-success fw-semibold")">@row.BalanceAmount.ToString("N2")</td>
+                                    <td>@row.DueDate.ToString("dd/MM/yyyy")</td>
+                                    <td><span class="badge @GetStatusBadge(row.Status)">@GetStatusText(row.Status)</span></td>
+                                    <td>@(row.PaidAt.HasValue ? row.PaidAt.Value.ToString("dd/MM/yyyy") : "-")</td>
+                                    <td>@row.Reference</td>
+                                    <td class="text-end">
+                                        <div class="btn-group btn-group-sm">
+                                            <button class="btn btn-outline-primary" @onclick="() => OpenEditPanel(row)">Editar</button>
+                                            <button class="btn btn-outline-success" @onclick="() => OpenPaymentPanel(row)">Cobrar</button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+}
+
+}
+
+@code {
+    private bool _authorized;
+    private SubscriptionDashboardSummaryDto? _summary;
+    private bool _loading;
+    private string? _error;
+    private string? _message;
+
+    private int _year = DateTime.UtcNow.Year;
+    private int _month = DateTime.UtcNow.Month;
+
+    private bool _showGeneratePanel;
+    private bool _showEditPanel;
+    private bool _showPaymentPanel;
+    private SubscriptionChargeRowDto? _selectedCharge;
+
+    private GenerateSubscriptionChargesRequestDto _generateRequest = new();
+    private UpdateSubscriptionChargeRequestDto _editRequest = new();
+    private RegisterSubscriptionPaymentRequestDto _paymentRequest = new();
+
+    private string _generateChargeDateText = DateTime.UtcNow.ToString("yyyy-MM-dd");
+    private string _generateDueDateText = new DateTime(DateTime.UtcNow.Year, DateTime.UtcNow.Month, Math.Min(5, DateTime.DaysInMonth(DateTime.UtcNow.Year, DateTime.UtcNow.Month))).ToString("yyyy-MM-dd");
+    private string _editChargeDateText = string.Empty;
+    private string _editDueDateText = string.Empty;
+    private string _paymentDateText = DateTime.UtcNow.ToString("yyyy-MM-dd");
+
+    private string _monthName => new DateTime(_year, Math.Clamp(_month, 1, 12), 1).ToString("MMMM", CultureInfo.GetCultureInfo("es-MX"));
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!AuthState.IsPlatformOwner)
+        {
+            Navigation.NavigateTo("/dashboard", forceLoad: false);
+            return;
+        }
+
+        _authorized = true;
+        await ReloadAsync();
+    }
+
+    private async Task ReloadAsync()
+    {
+        _loading = true;
+        _error = null;
+        _message = null;
+
+        try
+        {
+            _summary = await SubscriptionControlApiService.GetDashboardAsync(_year, _month);
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void OpenGeneratePanel()
+    {
+        ClosePanels();
+        _generateRequest = new GenerateSubscriptionChargesRequestDto
+        {
+            Year = _year,
+            Month = _month
+        };
+        _generateChargeDateText = new DateTime(_year, _month, 1).ToString("yyyy-MM-dd");
+        _generateDueDateText = new DateTime(_year, _month, Math.Min(5, DateTime.DaysInMonth(_year, _month))).ToString("yyyy-MM-dd");
+        _showGeneratePanel = true;
+    }
+
+    private void OpenEditPanel(SubscriptionChargeRowDto row)
+    {
+        ClosePanels();
+        _selectedCharge = row;
+        _editRequest = new UpdateSubscriptionChargeRequestDto
+        {
+            ChargeDate = row.ChargeDate,
+            DueDate = row.DueDate,
+            PlanPriceMonthly = row.PlanPriceMonthly,
+            DiscountAmount = row.DiscountAmount,
+            SurchargeAmount = row.SurchargeAmount,
+            Reference = row.Reference,
+            Notes = row.Notes
+        };
+        _editChargeDateText = row.ChargeDate.ToString("yyyy-MM-dd");
+        _editDueDateText = row.DueDate.ToString("yyyy-MM-dd");
+        _showEditPanel = true;
+    }
+
+    private void OpenPaymentPanel(SubscriptionChargeRowDto row)
+    {
+        ClosePanels();
+        _selectedCharge = row;
+        _paymentRequest = new RegisterSubscriptionPaymentRequestDto
+        {
+            PaidAt = DateTime.UtcNow.Date,
+            PaymentMethod = "TRANSFERENCIA",
+            ReceivedAmount = row.BalanceAmount,
+            CompensationAmount = 0m,
+            DiscountAmount = row.DiscountAmount,
+            Reference = row.Reference,
+            Notes = row.Notes
+        };
+        _paymentDateText = DateTime.UtcNow.ToString("yyyy-MM-dd");
+        _showPaymentPanel = true;
+    }
+
+    private void ClosePanels()
+    {
+        _showGeneratePanel = false;
+        _showEditPanel = false;
+        _showPaymentPanel = false;
+        _selectedCharge = null;
+    }
+
+    private async Task GenerateMonthAsync()
+    {
+        _loading = true;
+        _error = null;
+        _message = null;
+
+        try
+        {
+            _generateRequest.ChargeDate = ParseDate(_generateChargeDateText);
+            _generateRequest.DueDate = ParseDate(_generateDueDateText);
+            await SubscriptionControlApiService.GenerateMonthAsync(_generateRequest);
+            ClosePanels();
+            _message = "Se generaron los cargos del mes.";
+            await ReloadAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task SaveEditAsync()
+    {
+        if (_selectedCharge is null)
+            return;
+
+        _loading = true;
+        _error = null;
+        _message = null;
+
+        try
+        {
+            _editRequest.ChargeDate = ParseDate(_editChargeDateText);
+            _editRequest.DueDate = ParseDate(_editDueDateText);
+            await SubscriptionControlApiService.UpdateChargeAsync(_selectedCharge.SubscriptionChargeId, _editRequest);
+            ClosePanels();
+            _message = "Se actualizó el cargo de suscripción.";
+            await ReloadAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task SavePaymentAsync()
+    {
+        if (_selectedCharge is null)
+            return;
+
+        _loading = true;
+        _error = null;
+        _message = null;
+
+        try
+        {
+            _paymentRequest.PaidAt = ParseDate(_paymentDateText);
+            await SubscriptionControlApiService.RegisterPaymentAsync(_selectedCharge.SubscriptionChargeId, _paymentRequest);
+            ClosePanels();
+            _message = "Se registró el cobro de la suscripción.";
+            await ReloadAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void OnGenerateChargeDateChanged(ChangeEventArgs e) => _generateChargeDateText = e.Value?.ToString() ?? string.Empty;
+    private void OnGenerateDueDateChanged(ChangeEventArgs e) => _generateDueDateText = e.Value?.ToString() ?? string.Empty;
+    private void OnEditChargeDateChanged(ChangeEventArgs e) => _editChargeDateText = e.Value?.ToString() ?? string.Empty;
+    private void OnEditDueDateChanged(ChangeEventArgs e) => _editDueDateText = e.Value?.ToString() ?? string.Empty;
+    private void OnPaymentDateChanged(ChangeEventArgs e) => _paymentDateText = e.Value?.ToString() ?? string.Empty;
+
+    private static DateTime? ParseDate(string? value)
+        => DateTime.TryParse(value, out var parsed)
+            ? DateTime.SpecifyKind(parsed.Date, DateTimeKind.Utc)
+            : null;
+
+    private static string GetStatusBadge(string? status)
+        => (status ?? string.Empty).Trim().ToLowerInvariant() switch
+        {
+            "paid" => "bg-success",
+            "partial" => "bg-warning text-dark",
+            "cancelled" => "bg-secondary",
+            _ => "bg-danger"
+        };
+
+    private static string GetStatusText(string? status)
+        => (status ?? string.Empty).Trim().ToLowerInvariant() switch
+        {
+            "paid" => "Pagada",
+            "partial" => "Parcial",
+            "cancelled" => "Cancelada",
+            _ => "Pendiente"
+        };
+}

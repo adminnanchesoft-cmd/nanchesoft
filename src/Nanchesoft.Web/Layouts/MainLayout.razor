@@ -1,0 +1,25 @@
+@inherits LayoutComponentBase
+@using Nanchesoft.Web.Shared
+@inject NavigationManager NavigationManager
+@inject Nanchesoft.Web.Services.NavigationService NavigationService
+
+<div class="ns-shell2 ns-shell2--azure-topbar ns-shell-v3">
+    <TopBar />
+
+    <div class="ns-shell2__body ns-shell2__body--nav">
+        <aside class="ns-shell2__left">
+            <SideMenu />
+        </aside>
+
+        <main class="ns-shell2__main">
+            <Breadcrumb />
+            <ModuleHero />
+
+            <section class="ns-shell2__pageframe ns-shell2__pageframe--wide">
+                @Body
+            </section>
+        </main>
+    </div>
+</div>
+
+<ShellCommandPalette />

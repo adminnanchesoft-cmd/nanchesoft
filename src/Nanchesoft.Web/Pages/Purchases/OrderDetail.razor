@@ -1,0 +1,5 @@
+@page "/purchases/orders/detail"
+@page "/purchases/orders/detail/{Id:guid}"
+<PageTitle>Detalle orden de compra | Nanchesoft</PageTitle>
+<PurchaseDocumentEditor CatalogKey="purchase-orders" DocumentId="Id" />
+@code { [Parameter] public Guid? Id { get; set; } }

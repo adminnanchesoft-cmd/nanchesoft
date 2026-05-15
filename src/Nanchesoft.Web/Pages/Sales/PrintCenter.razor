@@ -1,0 +1,63 @@
+@page "/sales/print-center"
+@inject SalesApiService SalesApiService
+
+<PageTitle>Formatos ventas | Nanchesoft</PageTitle>
+
+@if (_sections.Count == 0)
+{
+    <div class="p-4">Cargando formatos...</div>
+}
+else
+{
+    <div class="container-fluid py-3">
+        <h1>Formatos de ventas</h1>
+        <p class="text-secondary">Imprime cualquier cotización, pedido, remisión, factura, devolución o nota de crédito.</p>
+        @foreach (var grp in _sections)
+        {
+            <div class="card shadow-sm mb-4">
+                <div class="card-header"><strong>@grp.Title</strong></div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-sm mb-0">
+                            <thead>
+                                <tr><th>Folio</th><th>Fecha</th><th>Estatus</th><th></th></tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var row in grp.Rows)
+                                {
+                                    <tr>
+                                        <td>@GetValue(row, "Folio")</td>
+                                        <td>@GetValue(row, grp.DateField)</td>
+                                        <td>@GetValue(row, "Status")</td>
+                                        <td>
+                                            <a class="btn btn-sm btn-outline-primary" target="_blank" href="/sales/print/@grp.CatalogKey/@GetValue(row, grp.KeyField)">Imprimir</a>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+}
+
+@code {
+    private readonly List<PrintSection> _sections = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        _sections.Add(new PrintSection("sales-quotes", "Cotizaciones", "SalesQuoteId", "QuoteDate", (await SalesApiService.GetCatalogAsync("sales-quotes")).Rows));
+        _sections.Add(new PrintSection("sales-orders", "Pedidos", "SalesOrderId", "OrderDate", (await SalesApiService.GetCatalogAsync("sales-orders")).Rows));
+        _sections.Add(new PrintSection("sales-shipments", "Remisiones", "SalesShipmentId", "ShipmentDate", (await SalesApiService.GetCatalogAsync("sales-shipments")).Rows));
+        _sections.Add(new PrintSection("sales-invoices", "Facturas", "SalesInvoiceId", "InvoiceDate", (await SalesApiService.GetCatalogAsync("sales-invoices")).Rows));
+        _sections.Add(new PrintSection("sales-returns", "Devoluciones", "SalesReturnId", "ReturnDate", (await SalesApiService.GetCatalogAsync("sales-returns")).Rows));
+        _sections.Add(new PrintSection("credit-notes", "Notas de crédito", "CreditNoteId", "CreditNoteDate", (await SalesApiService.GetCatalogAsync("credit-notes")).Rows));
+    }
+
+    private static string GetValue(Dictionary<string, object?> row, string key)
+        => row.TryGetValue(key, out var value) ? value?.ToString() ?? string.Empty : string.Empty;
+
+    private sealed record PrintSection(string CatalogKey, string Title, string KeyField, string DateField, List<Dictionary<string, object?>> Rows);
+}

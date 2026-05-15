@@ -1,0 +1,34 @@
+@page "/finance/commitment-follow-up"
+@using Nanchesoft.Web.Services.Finance
+@inject FinanceApiService FinanceApiService
+
+<PageTitle>Seguimiento financiero | Nanchesoft</PageTitle>
+
+<h1 class="h3 mb-3">Seguimiento financiero</h1>
+<p class="text-muted">Lista operativa para perseguir promesas de cobro, pagos por autorizar y compromisos sin responsable.</p>
+
+@if (_loading)
+{
+    <div class="alert alert-info">Cargando seguimiento...</div>
+}
+else
+{
+    <div class="row g-3 mb-3">
+        <div class="col-md-3"><div class="card shadow-sm"><div class="card-body"><div class="text-muted small">Pendientes</div><div class="display-6 fw-bold">@_rows.Count</div></div></div></div>
+        <div class="col-md-3"><div class="card shadow-sm"><div class="card-body"><div class="text-muted small">Alta prioridad</div><div class="display-6 fw-bold text-danger">@_rows.Count(x => x.Priority == "Alta")</div></div></div></div>
+        <div class="col-md-3"><div class="card shadow-sm"><div class="card-body"><div class="text-muted small">Sin responsable</div><div class="display-6 fw-bold text-warning">@_rows.Count(x => string.IsNullOrWhiteSpace(x.Responsible))</div></div></div></div>
+        <div class="col-md-3"><div class="card shadow-sm"><div class="card-body"><div class="text-muted small">Importe abierto</div><div class="fs-4 fw-bold">@_rows.Sum(x => x.OpenAmount).ToString("N2")</div></div></div></div>
+    </div>
+    <div class="card shadow-sm"><div class="card-body"><div class="table-responsive"><table class="table table-sm align-middle"><thead><tr><th>Flujo</th><th>Socio</th><th>Folio</th><th>Vence</th><th>Plan</th><th>Abierto</th><th>Prioridad</th><th>Responsable</th><th>Acción requerida</th></tr></thead><tbody>@foreach (var row in _rows){<tr class="@(row.Priority == "Alta" ? "table-danger" : row.Priority == "Media" ? "table-warning" : string.Empty)"><td>@row.FlowType</td><td>@row.PartnerName</td><td><a href="@row.Route">@row.Folio</a></td><td>@row.DueDate.ToString("dd/MM/yyyy")</td><td>@((row.PlannedDate?.ToString("dd/MM/yyyy")) ?? "-")</td><td class="text-end">@row.OpenAmount.ToString("N2")</td><td>@row.Priority</td><td>@(string.IsNullOrWhiteSpace(row.Responsible) ? "Sin asignar" : row.Responsible)</td><td><div class="fw-semibold">@row.ActionRequired</div><div class="small text-muted">@row.Notes</div></td></tr>}</tbody></table></div></div></div>
+}
+
+@code {
+    private bool _loading = true;
+    private List<FinanceCommitmentFollowUpRowDto> _rows = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        try { _rows = await FinanceApiService.GetCommitmentFollowUpAsync(); }
+        finally { _loading = false; }
+    }
+}

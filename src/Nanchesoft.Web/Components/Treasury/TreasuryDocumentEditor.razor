@@ -1,0 +1,758 @@
+@using Nanchesoft.Web.Services.Treasury
+@inject TreasuryApiService TreasuryApiService
+@inject NavigationManager Navigation
+
+@if (_loading)
+{
+    <div class="alert alert-info">Cargando detalle...</div>
+}
+else if (!string.IsNullOrWhiteSpace(_error))
+{
+    <div class="alert alert-danger">@_error</div>
+}
+else if (_accountDefinition is not null)
+{
+    <div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-3">
+        <div>
+            <h1 class="h3 mb-1">@_accountDefinition.Title</h1>
+            <div class="text-muted">@_accountDefinition.Subtitle</div>
+        </div>
+        <div class="d-flex gap-2 flex-wrap">
+            <button class="btn btn-outline-secondary" @onclick="GoBack">Volver</button>
+            @if (_accountDefinition.Account.Id.HasValue)
+            {
+                <button class="btn btn-outline-warning" @onclick="ToggleAccountActiveAsync">@(_accountDefinition.Account.IsActive ? "Desactivar" : "Activar")</button>
+            }
+            <button class="btn btn-primary" @onclick="SaveAccountAsync">Guardar</button>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(_message))
+    {
+        <div class="alert alert-success">@_message</div>
+    }
+
+    <div class="card shadow-sm">
+        <div class="card-body">
+            <div class="row g-3">
+                <div class="col-md-3">
+                    <label class="form-label">Código</label>
+                    <input class="form-control" @bind="_accountDefinition.Account.Code" />
+                </div>
+                <div class="col-md-5">
+                    <label class="form-label">Nombre</label>
+                    <input class="form-control" @bind="_accountDefinition.Account.Name" />
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Estatus</label>
+                    <select class="form-select" @bind="_accountDefinition.Account.Status">
+                        @foreach (var status in AccountStatusOptions)
+                        {
+                            <option value="@status.Id">@status.Name</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Saldo inicial</label>
+                    <input class="form-control" type="number" step="0.01" @bind="_accountDefinition.Account.CurrentBalance" />
+                </div>
+
+                <div class="col-md-4">
+                    <label class="form-label">Empresa</label>
+                    <select class="form-select" @bind="AccountCompanyIdText">
+                        <option value="">Seleccione...</option>
+                        @foreach (var item in _accountDefinition.Lookups.Companies)
+                        {
+                            <option value="@item.Id">@item.Name</option>
+                        }
+                    </select>
+                </div>
+
+                @if (_accountDefinition.IsCashAccount)
+                {
+                    <div class="col-md-4">
+                        <label class="form-label">Sucursal</label>
+                        <select class="form-select" @bind="AccountBranchIdText">
+                            <option value="">Seleccione...</option>
+                            @foreach (var item in _accountDefinition.Lookups.Branches)
+                            {
+                                <option value="@item.Id">@item.Name</option>
+                            }
+                        </select>
+                    </div>
+                }
+                else
+                {
+                    <div class="col-md-4">
+                        <label class="form-label">Banco</label>
+                        <select class="form-select" @bind="AccountBankIdText">
+                            <option value="">Seleccione...</option>
+                            @foreach (var item in _accountDefinition.Lookups.Banks)
+                            {
+                                <option value="@item.Id">@item.Name</option>
+                            }
+                        </select>
+                    </div>
+                }
+
+                <div class="col-md-4">
+                    <label class="form-label">Moneda</label>
+                    <select class="form-select" @bind="AccountCurrencyIdText">
+                        <option value="">Seleccione...</option>
+                        @foreach (var item in _accountDefinition.Lookups.Currencies)
+                        {
+                            <option value="@item.Id">@item.Name</option>
+                        }
+                    </select>
+                </div>
+
+                @if (!_accountDefinition.IsCashAccount)
+                {
+                    <div class="col-md-4">
+                        <label class="form-label">Titular</label>
+                        <input class="form-control" @bind="_accountDefinition.Account.AccountHolder" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Número de cuenta</label>
+                        <input class="form-control" @bind="_accountDefinition.Account.AccountNumber" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">CLABE</label>
+                        <input class="form-control" @bind="_accountDefinition.Account.Clabe" />
+                    </div>
+                }
+
+                <div class="col-md-3 form-check mt-4 ms-3">
+                    <input class="form-check-input" type="checkbox" @bind="_accountDefinition.Account.IsActive" />
+                    <label class="form-check-label">Activo</label>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+else if (_documentDefinition is not null)
+{
+    <div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-3">
+        <div>
+            <h1 class="h3 mb-1">@_documentDefinition.Title</h1>
+            <div class="text-muted">@_documentDefinition.Subtitle</div>
+        </div>
+        <div class="d-flex gap-2 flex-wrap">
+            <button class="btn btn-outline-secondary" @onclick="GoBack">Volver</button>
+            @if (_documentDefinition.Document.Id.HasValue)
+            {
+                <button class="btn btn-outline-success" @onclick='() => ExecuteDocumentActionAsync("approve")'>Aprobar</button>
+                <button class="btn btn-outline-primary" @onclick='() => ExecuteDocumentActionAsync("post")'>Postear</button>
+                <button class="btn btn-outline-danger" @onclick='() => ExecuteDocumentActionAsync("cancel")'>Cancelar</button>
+            }
+            <button class="btn btn-primary" @onclick="SaveDocumentAsync">Guardar</button>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(_message))
+    {
+        <div class="alert alert-success">@_message</div>
+    }
+
+    <div class="card shadow-sm mb-3">
+        <div class="card-body">
+            <div class="row g-3">
+                <div class="col-md-3">
+                    <label class="form-label">Folio</label>
+                    <input class="form-control" @bind="_documentDefinition.Document.Folio" />
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Fecha</label>
+                    <input class="form-control" type="date" value="@DocumentDateText" @onchange="OnDocumentDateChanged" />
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Estatus</label>
+                    <select class="form-select" @bind="_documentDefinition.Document.Status">
+                        @foreach (var status in DocumentStatusOptions)
+                        {
+                            <option value="@status.Id">@status.Name</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Empresa</label>
+                    <select class="form-select" @bind="DocumentCompanyIdText">
+                        <option value="">Seleccione...</option>
+                        @foreach (var item in _documentDefinition.Lookups.Companies)
+                        {
+                            <option value="@item.Id">@item.Name</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Sucursal</label>
+                    <select class="form-select" @bind="DocumentBranchIdText">
+                        <option value="">Seleccione...</option>
+                        @foreach (var item in _documentDefinition.Lookups.Branches)
+                        {
+                            <option value="@item.Id">@item.Name</option>
+                        }
+                    </select>
+                </div>
+
+                @if (_documentDefinition.RequiresCustomer)
+                {
+                    <div class="col-md-4">
+                        <label class="form-label">Cliente</label>
+                        <select class="form-select" @bind="DocumentCustomerIdText">
+                            <option value="">Seleccione...</option>
+                            @foreach (var item in _documentDefinition.Lookups.Customers)
+                            {
+                                <option value="@item.Id">@item.Name</option>
+                            }
+                        </select>
+                    </div>
+                }
+
+                @if (_documentDefinition.RequiresSupplier)
+                {
+                    <div class="col-md-4">
+                        <label class="form-label">Proveedor</label>
+                        <select class="form-select" @bind="DocumentSupplierIdText">
+                            <option value="">Seleccione...</option>
+                            @foreach (var item in _documentDefinition.Lookups.Suppliers)
+                            {
+                                <option value="@item.Id">@item.Name</option>
+                            }
+                        </select>
+                    </div>
+                }
+
+                <div class="col-md-3">
+                    <label class="form-label">Moneda</label>
+                    <select class="form-select" @bind="DocumentCurrencyIdText">
+                        <option value="">Seleccione...</option>
+                        @foreach (var item in _documentDefinition.Lookups.Currencies)
+                        {
+                            <option value="@item.Id">@item.Name</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Tipo</label>
+                    @if (_documentDefinition.UsesTargetType)
+                    {
+                        <select class="form-select" @bind="_documentDefinition.Document.TargetType">
+                            <option value="cash">Caja</option>
+                            <option value="bank">Banco</option>
+                        </select>
+                    }
+                    else if (_documentDefinition.UsesSourceType)
+                    {
+                        <select class="form-select" @bind="_documentDefinition.Document.SourceType">
+                            <option value="cash">Caja</option>
+                            <option value="bank">Banco</option>
+                        </select>
+                    }
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Cuenta origen/destino</label>
+                    @if (UsesCashForDocument)
+                    {
+                        <select class="form-select" @bind="DocumentCashAccountIdText">
+                            <option value="">Seleccione caja...</option>
+                            @foreach (var item in _documentDefinition.Lookups.CashAccounts)
+                            {
+                                <option value="@item.Id">@item.Name</option>
+                            }
+                        </select>
+                    }
+                    else
+                    {
+                        <select class="form-select" @bind="DocumentBankAccountIdText">
+                            <option value="">Seleccione banco...</option>
+                            @foreach (var item in _documentDefinition.Lookups.BankAccounts)
+                            {
+                                <option value="@item.Id">@item.Name</option>
+                            }
+                        </select>
+                    }
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Tipo cambio</label>
+                    <input class="form-control" type="number" step="0.0001" @bind="_documentDefinition.Document.ExchangeRate" />
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Referencia</label>
+                    <input class="form-control" @bind="_documentDefinition.Document.Reference" />
+                </div>
+                <div class="col-md-8">
+                    <label class="form-label">Notas</label>
+                    <input class="form-control" @bind="_documentDefinition.Document.Notes" />
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card shadow-sm mb-3">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <strong>@_documentDefinition.LinesTitle</strong>
+            <button class="btn btn-sm btn-primary" @onclick="AddLine">Agregar partida</button>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-sm table-striped align-middle mb-0">
+                    <thead>
+                        <tr>
+                            <th style="width:60px;">#</th>
+                            <th>Descripción</th>
+                            @if (_documentDefinition.RequiresCustomer)
+                            {
+                                <th style="width:220px;">Cliente línea</th>
+                                <th style="width:220px;">Factura venta</th>
+                            }
+                            @if (_documentDefinition.RequiresSupplier)
+                            {
+                                <th style="width:220px;">Proveedor línea</th>
+                                <th style="width:220px;">Factura compra</th>
+                            }
+                            <th style="width:140px;">Importe</th>
+                            <th style="width:80px;"></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var line in _documentDefinition.Document.Lines)
+                        {
+                            <tr>
+                                <td>@line.LineNumber</td>
+                                <td><input class="form-control form-control-sm" @bind="line.Description" /></td>
+                                @if (_documentDefinition.RequiresCustomer)
+                                {
+                                    <td>
+                                        <select class="form-select form-select-sm" @bind="line.CustomerIdString">
+                                            <option value="">Seleccione...</option>
+                                            @foreach (var item in _documentDefinition.Lookups.Customers)
+                                            {
+                                                <option value="@item.Id">@item.Name</option>
+                                            }
+                                        </select>
+                                    </td>
+                                    <td>
+                                        <select class="form-select form-select-sm" @bind="line.SalesInvoiceIdString">
+                                            <option value="">Seleccione...</option>
+                                            @foreach (var item in _documentDefinition.Lookups.SalesInvoices)
+                                            {
+                                                <option value="@item.Id">@item.Name</option>
+                                            }
+                                        </select>
+                                    </td>
+                                }
+                                @if (_documentDefinition.RequiresSupplier)
+                                {
+                                    <td>
+                                        <select class="form-select form-select-sm" @bind="line.SupplierIdString">
+                                            <option value="">Seleccione...</option>
+                                            @foreach (var item in _documentDefinition.Lookups.Suppliers)
+                                            {
+                                                <option value="@item.Id">@item.Name</option>
+                                            }
+                                        </select>
+                                    </td>
+                                    <td>
+                                        <select class="form-select form-select-sm" @bind="line.PurchaseInvoiceIdString">
+                                            <option value="">Seleccione...</option>
+                                            @foreach (var item in _documentDefinition.Lookups.PurchaseInvoices)
+                                            {
+                                                <option value="@item.Id">@item.Name</option>
+                                            }
+                                        </select>
+                                    </td>
+                                }
+                                <td><input class="form-control form-control-sm" type="number" step="0.01" @bind="line.Amount" /></td>
+                                <td><button class="btn btn-sm btn-outline-danger" @onclick="(() => RemoveLine(line))">X</button></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="row justify-content-end">
+        <div class="col-md-3">
+            <label class="form-label">Total</label>
+            <input class="form-control" type="number" step="0.01" @bind="_documentDefinition.Document.Total" />
+        </div>
+    </div>
+}
+else if (_reconciliationDefinition is not null)
+{
+    <div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-3">
+        <div>
+            <h1 class="h3 mb-1">@_reconciliationDefinition.Title</h1>
+            <div class="text-muted">@_reconciliationDefinition.Subtitle</div>
+        </div>
+        <div class="d-flex gap-2 flex-wrap">
+            <button class="btn btn-outline-secondary" @onclick="GoBack">Volver</button>
+            @if (_reconciliationDefinition.Reconciliation.Id.HasValue)
+            {
+                <button class="btn btn-outline-success" @onclick="CloseReconciliationAsync">Cerrar conciliación</button>
+            }
+            @if (!_reconciliationDefinition.Reconciliation.Id.HasValue)
+            {
+                <button class="btn btn-primary" @onclick="SaveReconciliationAsync">Guardar</button>
+            }
+        </div>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(_message))
+    {
+        <div class="alert alert-success">@_message</div>
+    }
+
+    <div class="card shadow-sm mb-3">
+        <div class="card-body">
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <label class="form-label">Empresa</label>
+                    <select class="form-select" @bind="ReconciliationCompanyIdText">
+                        <option value="">Seleccione...</option>
+                        @foreach (var item in _reconciliationDefinition.Lookups.Companies)
+                        {
+                            <option value="@item.Id">@item.Name</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Cuenta bancaria</label>
+                    <select class="form-select" @bind="ReconciliationBankAccountIdText">
+                        <option value="">Seleccione...</option>
+                        @foreach (var item in _reconciliationDefinition.Lookups.BankAccounts)
+                        {
+                            <option value="@item.Id">@item.Name</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Fecha</label>
+                    <input class="form-control" type="date" value="@ReconciliationDateText" @onchange="OnReconciliationDateChanged" />
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Estatus</label>
+                    <select class="form-select" @bind="_reconciliationDefinition.Reconciliation.Status">
+                        @foreach (var status in ReconciliationStatusOptions)
+                        {
+                            <option value="@status.Id">@status.Name</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Saldo estado cuenta</label>
+                    <input class="form-control" type="number" step="0.01" @bind="_reconciliationDefinition.Reconciliation.StatementBalance" />
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Saldo libros</label>
+                    <input class="form-control" type="number" step="0.01" value="@_reconciliationDefinition.Reconciliation.BookBalance" readonly />
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Diferencia</label>
+                    <input class="form-control" type="number" step="0.01" value="@_reconciliationDefinition.Reconciliation.DifferenceAmount" readonly />
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card shadow-sm">
+        <div class="card-header"><strong>Movimientos conciliables</strong></div>
+        <div class="table-responsive">
+            <table class="table table-sm table-striped align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th style="width:90px;">Marcar</th>
+                        <th style="width:180px;">Movimiento</th>
+                        <th style="width:160px;">Importe</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (_reconciliationDefinition.Reconciliation.Lines.Count == 0)
+                    {
+                        <tr><td colspan="3" class="text-center text-muted py-4">Guarda la conciliación para cargar movimientos pendientes del banco seleccionado.</td></tr>
+                    }
+                    else
+                    {
+                        @foreach (var line in _reconciliationDefinition.Reconciliation.Lines)
+                        {
+                            <tr>
+                                <td><input type="checkbox" class="form-check-input" @bind="line.IsChecked" @bind:after="RecalculateReconciliation" /></td>
+                                <td>@(line.BankMovementId?.ToString() ?? string.Empty)</td>
+                                <td>@line.MovementAmount.ToString("N2")</td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired] public string CatalogKey { get; set; } = string.Empty;
+    [Parameter] public Guid? DocumentId { get; set; }
+
+    private TreasuryAccountEditorDefinition? _accountDefinition;
+    private TreasuryDocumentEditorDefinition? _documentDefinition;
+    private TreasuryReconciliationEditorDefinition? _reconciliationDefinition;
+    private bool _loading = true;
+    private string? _error;
+    private string? _message;
+
+    private static IReadOnlyList<CatalogLookupItem> AccountStatusOptions { get; } =
+    [
+        new CatalogLookupItem { Id = "active", Name = "Active" },
+        new CatalogLookupItem { Id = "inactive", Name = "Inactive" }
+    ];
+
+    private static IReadOnlyList<CatalogLookupItem> DocumentStatusOptions { get; } =
+    [
+        new CatalogLookupItem { Id = "draft", Name = "Draft" },
+        new CatalogLookupItem { Id = "pending_approval", Name = "Pending approval" },
+        new CatalogLookupItem { Id = "approved", Name = "Approved" },
+        new CatalogLookupItem { Id = "posted", Name = "Posted" },
+        new CatalogLookupItem { Id = "cancelled", Name = "Cancelled" }
+    ];
+
+    private static IReadOnlyList<CatalogLookupItem> ReconciliationStatusOptions { get; } =
+    [
+        new CatalogLookupItem { Id = "draft", Name = "Draft" },
+        new CatalogLookupItem { Id = "in_progress", Name = "In progress" },
+        new CatalogLookupItem { Id = "closed", Name = "Closed" },
+        new CatalogLookupItem { Id = "cancelled", Name = "Cancelled" }
+    ];
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _loading = true;
+        _error = null;
+        _message = null;
+        _accountDefinition = null;
+        _documentDefinition = null;
+        _reconciliationDefinition = null;
+
+        try
+        {
+            if (CatalogKey is "cash-accounts" or "bank-accounts-own")
+            {
+                _accountDefinition = await TreasuryApiService.GetAccountEditorDefinitionAsync(CatalogKey, DocumentId);
+            }
+            else if (CatalogKey == "treasury-reconciliations")
+            {
+                _reconciliationDefinition = await TreasuryApiService.GetReconciliationEditorDefinitionAsync(DocumentId);
+                RecalculateReconciliation();
+            }
+            else
+            {
+                _documentDefinition = await TreasuryApiService.GetDocumentEditorDefinitionAsync(CatalogKey, DocumentId);
+                RecalculateDocumentTotal();
+            }
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private bool UsesCashForDocument => _documentDefinition is not null && (_documentDefinition.UsesTargetType ? _documentDefinition.Document.TargetType == "cash" : _documentDefinition.Document.SourceType == "cash");
+
+    private string DocumentDateText => _documentDefinition?.Document.DocumentDate?.ToString("yyyy-MM-dd") ?? string.Empty;
+    private string ReconciliationDateText => _reconciliationDefinition?.Reconciliation.ReconciliationDate?.ToString("yyyy-MM-dd") ?? string.Empty;
+
+    private string AccountCompanyIdText { get => GetGuid(_accountDefinition?.Account.CompanyId); set => SetGuid(v => _accountDefinition!.Account.CompanyId = v, value); }
+    private string AccountBranchIdText { get => GetGuid(_accountDefinition?.Account.BranchId); set => SetGuid(v => _accountDefinition!.Account.BranchId = v, value); }
+    private string AccountBankIdText { get => GetGuid(_accountDefinition?.Account.BankId); set => SetGuid(v => _accountDefinition!.Account.BankId = v, value); }
+    private string AccountCurrencyIdText { get => GetGuid(_accountDefinition?.Account.CurrencyId); set => SetGuid(v => _accountDefinition!.Account.CurrencyId = v, value); }
+
+    private string DocumentCompanyIdText { get => GetGuid(_documentDefinition?.Document.CompanyId); set => SetGuid(v => _documentDefinition!.Document.CompanyId = v, value); }
+    private string DocumentBranchIdText { get => GetGuid(_documentDefinition?.Document.BranchId); set => SetGuid(v => _documentDefinition!.Document.BranchId = v, value); }
+    private string DocumentCustomerIdText { get => GetGuid(_documentDefinition?.Document.CustomerId); set => SetGuid(v => _documentDefinition!.Document.CustomerId = v, value); }
+    private string DocumentSupplierIdText { get => GetGuid(_documentDefinition?.Document.SupplierId); set => SetGuid(v => _documentDefinition!.Document.SupplierId = v, value); }
+    private string DocumentCurrencyIdText { get => GetGuid(_documentDefinition?.Document.CurrencyId); set => SetGuid(v => _documentDefinition!.Document.CurrencyId = v, value); }
+    private string DocumentCashAccountIdText { get => GetGuid(_documentDefinition?.Document.CashAccountId); set => SetGuid(v => _documentDefinition!.Document.CashAccountId = v, value); }
+    private string DocumentBankAccountIdText { get => GetGuid(_documentDefinition?.Document.BankAccountId); set => SetGuid(v => _documentDefinition!.Document.BankAccountId = v, value); }
+
+    private string ReconciliationCompanyIdText { get => GetGuid(_reconciliationDefinition?.Reconciliation.CompanyId); set => SetGuid(v => _reconciliationDefinition!.Reconciliation.CompanyId = v, value); }
+    private string ReconciliationBankAccountIdText { get => GetGuid(_reconciliationDefinition?.Reconciliation.BankAccountId); set => SetGuid(v => _reconciliationDefinition!.Reconciliation.BankAccountId = v, value); }
+
+    private static string GetGuid(Guid? value) => value?.ToString() ?? string.Empty;
+    private static void SetGuid(Action<Guid?> setter, string value) => setter(Guid.TryParse(value, out var parsed) ? parsed : null);
+
+    private void OnDocumentDateChanged(ChangeEventArgs e)
+    {
+        if (_documentDefinition is null) return;
+        _documentDefinition.Document.DocumentDate = DateTime.TryParse(e.Value?.ToString(), out var parsed) ? parsed : null;
+    }
+
+    private void OnReconciliationDateChanged(ChangeEventArgs e)
+    {
+        if (_reconciliationDefinition is null) return;
+        _reconciliationDefinition.Reconciliation.ReconciliationDate = DateTime.TryParse(e.Value?.ToString(), out var parsed) ? parsed : null;
+    }
+
+    private void AddLine()
+    {
+        if (_documentDefinition is null) return;
+        _documentDefinition.Document.Lines.Add(new TreasuryLineModel { LineNumber = _documentDefinition.Document.Lines.Count + 1 });
+        RecalculateDocumentTotal();
+    }
+
+    private void RemoveLine(TreasuryLineModel line)
+    {
+        if (_documentDefinition is null) return;
+        _documentDefinition.Document.Lines.Remove(line);
+        for (var i = 0; i < _documentDefinition.Document.Lines.Count; i++)
+        {
+            _documentDefinition.Document.Lines[i].LineNumber = i + 1;
+        }
+        RecalculateDocumentTotal();
+    }
+
+    private void RecalculateDocumentTotal()
+    {
+        if (_documentDefinition is null) return;
+        _documentDefinition.Document.Total = _documentDefinition.Document.Lines.Sum(x => x.Amount);
+    }
+
+    private void RecalculateReconciliation()
+    {
+        if (_reconciliationDefinition is null) return;
+        _reconciliationDefinition.Reconciliation.BookBalance = _reconciliationDefinition.Reconciliation.Lines.Where(x => x.IsChecked).Sum(x => x.MovementAmount);
+        _reconciliationDefinition.Reconciliation.DifferenceAmount = _reconciliationDefinition.Reconciliation.StatementBalance - _reconciliationDefinition.Reconciliation.BookBalance;
+        StateHasChanged();
+    }
+
+    private async Task SaveAccountAsync()
+    {
+        if (_accountDefinition is null) return;
+        try
+        {
+            var id = await TreasuryApiService.SaveAccountAsync(CatalogKey, _accountDefinition.Account);
+            _message = "Registro guardado correctamente.";
+            if (!_accountDefinition.Account.Id.HasValue && id != Guid.Empty)
+            {
+                Navigation.NavigateTo($"{GetDetailBasePath()}/{id}");
+            }
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private async Task ToggleAccountActiveAsync()
+    {
+        if (_accountDefinition?.Account.Id is not Guid id) return;
+        try
+        {
+            await TreasuryApiService.SetAccountActiveAsync(CatalogKey, id, !_accountDefinition.Account.IsActive);
+            _accountDefinition = await TreasuryApiService.GetAccountEditorDefinitionAsync(CatalogKey, id);
+            _message = "Estatus actualizado correctamente.";
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private async Task SaveDocumentAsync()
+    {
+        if (_documentDefinition is null) return;
+        try
+        {
+            RecalculateDocumentTotal();
+            var id = await TreasuryApiService.SaveDocumentAsync(CatalogKey, _documentDefinition.Document);
+            _message = "Documento guardado correctamente.";
+            if (!_documentDefinition.Document.Id.HasValue && id != Guid.Empty)
+            {
+                Navigation.NavigateTo($"{GetDetailBasePath()}/{id}");
+            }
+            else if (id != Guid.Empty)
+            {
+                _documentDefinition = await TreasuryApiService.GetDocumentEditorDefinitionAsync(CatalogKey, id);
+            }
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private async Task ExecuteDocumentActionAsync(string action)
+    {
+        if (_documentDefinition?.Document.Id is not Guid id) return;
+        try
+        {
+            await TreasuryApiService.ExecuteDocumentActionAsync(CatalogKey, id, action);
+            _documentDefinition = await TreasuryApiService.GetDocumentEditorDefinitionAsync(CatalogKey, id);
+            _message = $"Acción '{action}' aplicada correctamente.";
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private async Task SaveReconciliationAsync()
+    {
+        if (_reconciliationDefinition is null) return;
+        try
+        {
+            RecalculateReconciliation();
+            var id = await TreasuryApiService.SaveReconciliationAsync(_reconciliationDefinition.Reconciliation);
+            _message = "Conciliación guardada correctamente.";
+            Navigation.NavigateTo($"{GetDetailBasePath()}/{id}");
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private async Task CloseReconciliationAsync()
+    {
+        if (_reconciliationDefinition?.Reconciliation.Id is not Guid id) return;
+        try
+        {
+            await TreasuryApiService.CloseReconciliationAsync(id);
+            _reconciliationDefinition = await TreasuryApiService.GetReconciliationEditorDefinitionAsync(id);
+            _message = "Conciliación cerrada correctamente.";
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private string GetDetailBasePath() => CatalogKey switch
+    {
+        "cash-accounts" => "/treasury/cash-accounts/detail",
+        "bank-accounts-own" => "/treasury/bank-accounts/detail",
+        "treasury-incomes" => "/treasury/incomes/detail",
+        "treasury-expenses" => "/treasury/expenses/detail",
+        "treasury-receipts" => "/treasury/receipts/detail",
+        "treasury-payments" => "/treasury/payments/detail",
+        _ => "/treasury/reconciliations/detail"
+    };
+
+    private void GoBack()
+    {
+        var route = CatalogKey switch
+        {
+            "cash-accounts" => "/treasury/cash-accounts",
+            "bank-accounts-own" => "/treasury/bank-accounts",
+            "treasury-incomes" => "/treasury/incomes",
+            "treasury-expenses" => "/treasury/expenses",
+            "treasury-receipts" => "/treasury/receipts",
+            "treasury-payments" => "/treasury/payments",
+            _ => "/treasury/reconciliations"
+        };
+        Navigation.NavigateTo(route);
+    }
+}

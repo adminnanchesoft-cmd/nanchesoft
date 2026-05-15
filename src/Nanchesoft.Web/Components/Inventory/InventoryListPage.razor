@@ -1,0 +1,21 @@
+@using Nanchesoft.Web.Components.Shared
+@inject NavigationManager Navigation
+
+<div class="d-flex justify-content-end gap-2 mb-3 flex-wrap">
+    <button class="btn btn-outline-secondary" @onclick="GoToDashboard">Dashboard inventario</button>
+    <button class="btn btn-outline-primary" @onclick="GoToStockByItem">Existencia por producto</button>
+    <button class="btn btn-outline-primary" @onclick="GoToKardexByItem">Kardex por producto</button>
+    <button class="btn btn-primary" @onclick="CreateNew">Nuevo documento con partidas</button>
+</div>
+
+<CatalogCrudPage CatalogKey="@CatalogKey" />
+
+@code {
+    [Parameter, EditorRequired] public string CatalogKey { get; set; } = string.Empty;
+    [Parameter, EditorRequired] public string CreateUrl { get; set; } = string.Empty;
+
+    private void CreateNew() => Navigation.NavigateTo(CreateUrl);
+    private void GoToDashboard() => Navigation.NavigateTo("/inventory/dashboard");
+    private void GoToStockByItem() => Navigation.NavigateTo("/inventory/stock-by-item");
+    private void GoToKardexByItem() => Navigation.NavigateTo("/inventory/kardex-by-item");
+}

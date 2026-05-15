@@ -1,0 +1,58 @@
+@page "/audit/change-log"
+@inject Nanchesoft.Web.Services.Audit.AuditApiService AuditApiService
+
+<PageTitle>Bitácora de cambios | Nanchesoft</PageTitle>
+
+<div class="ns-catalog-page">
+    <div class="ns-catalog-header">
+        <div>
+            <div class="ns-catalog-eyebrow">Auditoría</div>
+            <h1 class="ns-catalog-title">Bitácora de cambios</h1>
+            <p class="ns-catalog-subtitle">Registros de acciones guardadas en AuditLog.</p>
+        </div>
+    </div>
+
+    @if (_rows is null)
+    {
+        <div class="ns-catalog-loading"><div class="ns-loader"></div><span>Cargando bitácora...</span></div>
+    }
+    else
+    {
+        <div class="card shadow-sm">
+            <div class="card-body p-0">
+                <table class="table table-sm table-striped mb-0 align-middle">
+                    <thead>
+                        <tr>
+                            <th>Fecha</th>
+                            <th>Módulo</th>
+                            <th>Entidad</th>
+                            <th>Acción</th>
+                            <th>Registro</th>
+                            <th>Usuario</th>
+                            <th>IP</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    @foreach (var row in _rows)
+                    {
+                        <tr>
+                            <td>@row.CreatedAt.ToLocalTime().ToString("g")</td>
+                            <td>@row.Module</td>
+                            <td>@row.EntityName</td>
+                            <td>@row.Action</td>
+                            <td>@row.EntityId</td>
+                            <td>@(row.UserId?.ToString() ?? "-")</td>
+                            <td>@row.IpAddress</td>
+                        </tr>
+                    }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private List<Nanchesoft.Web.Services.Audit.AuditChangeLogRowDto>? _rows;
+    protected override async Task OnInitializedAsync() => _rows = await AuditApiService.GetChangeLogAsync();
+}

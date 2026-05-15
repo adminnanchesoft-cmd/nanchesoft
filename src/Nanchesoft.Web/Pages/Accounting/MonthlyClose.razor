@@ -1,0 +1,239 @@
+@page "/accounting/monthly-close"
+@using Nanchesoft.Web.Services.Accounting
+@inject AccountingApiService Api
+
+<PageTitle>Cierre mensual | Nanchesoft</PageTitle>
+
+<h1 class="h3 mb-3">Contabilidad · Cierre mensual</h1>
+
+<div class="card shadow-sm mb-4">
+    <div class="card-body">
+        <div class="row g-3 align-items-end">
+            <div class="col-md-3">
+                <label class="form-label">Año</label>
+                <input type="number" class="form-control" @bind="_year" min="2020" max="2100" />
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Mes</label>
+                <select class="form-select" @bind="_month">
+                    @foreach (var month in _months)
+                    {
+                        <option value="@month.Number">@month.Name</option>
+                    }
+                </select>
+            </div>
+            <div class="col-md-6 d-flex gap-2 justify-content-md-end">
+                <button class="btn btn-outline-secondary" @onclick="ReloadAsync" disabled="@_loading">Actualizar</button>
+                <button class="btn btn-primary" @onclick="GenerateAsync" disabled="@(!_preview.IsReady || _generating)">Generar póliza de cierre</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@if (_loading)
+{
+    <div class="alert alert-info">Cargando vista previa del cierre mensual...</div>
+}
+else if (!string.IsNullOrWhiteSpace(_error))
+{
+    <div class="alert alert-danger">@_error</div>
+}
+else
+{
+    if (!string.IsNullOrWhiteSpace(_resultMessage))
+    {
+        <div class="alert @(_resultOk ? "alert-success" : "alert-warning")">@_resultMessage</div>
+    }
+
+    @if (_preview.Messages.Count > 0)
+    {
+        <div class="alert @(_preview.IsReady ? "alert-info" : "alert-warning")">
+            <ul class="mb-0">
+                @foreach (var message in _preview.Messages)
+                {
+                    <li>@message</li>
+                }
+            </ul>
+        </div>
+    }
+
+    <div class="row g-3 mb-4">
+        <div class="col-md-3"><div class="card shadow-sm"><div class="card-body"><div class="text-muted small">Periodo</div><div class="fs-5 fw-bold">@_year-@_month.ToString("00")</div></div></div></div>
+        <div class="col-md-3"><div class="card shadow-sm"><div class="card-body"><div class="text-muted small">Ingresos</div><div class="fs-5 fw-bold text-success">@_preview.TotalIncome.ToString("N2")</div></div></div></div>
+        <div class="col-md-3"><div class="card shadow-sm"><div class="card-body"><div class="text-muted small">Gastos</div><div class="fs-5 fw-bold text-danger">@_preview.TotalExpense.ToString("N2")</div></div></div></div>
+        <div class="col-md-3"><div class="card shadow-sm"><div class="card-body"><div class="text-muted small">Resultado neto</div><div class="fs-5 fw-bold @(_preview.NetResult >= 0 ? "text-primary" : "text-danger")">@_preview.NetResult.ToString("N2")</div></div></div></div>
+    </div>
+
+    <div class="row g-3 mb-4">
+        <div class="col-lg-6">
+            <div class="card shadow-sm h-100">
+                <div class="card-header fw-semibold">Resumen del cierre</div>
+                <div class="card-body">
+                    <div class="mb-2"><span class="text-muted">Estatus del periodo:</span> <strong>@_preview.PeriodStatus</strong></div>
+                    <div class="mb-2"><span class="text-muted">Fecha de cierre:</span> <strong>@FormatDate(_preview.ClosingDate)</strong></div>
+                    <div class="mb-2"><span class="text-muted">Cuenta de resultado:</span> <strong>@((_preview.ClosingAccountCode is null ? "No configurada" : _preview.ClosingAccountCode + " · " + _preview.ClosingAccountName))</strong></div>
+                    <div class="mb-2"><span class="text-muted">Póliza existente:</span> <strong>@((_preview.ExistingJournalFolio ?? "No existe"))</strong></div>
+                    @if (_preview.ExistingJournalEntryId.HasValue)
+                    {
+                        <a class="btn btn-sm btn-outline-primary" href="/accounting/journal-entries">Ir a pólizas</a>
+                    }
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-6">
+            <div class="card shadow-sm h-100">
+                <div class="card-header fw-semibold">Resultado esperado</div>
+                <div class="card-body">
+                    <div class="text-muted mb-2">El cierre genera una póliza en borrador que cancela ingresos y gastos del mes y manda el resultado a capital.</div>
+                    <div class="small text-muted">La póliza se crea una sola vez por periodo. Si ya existe, la vista previa te lo indicará.</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card shadow-sm mb-4">
+        <div class="card-header fw-semibold">Cuentas con movimiento del periodo</div>
+        <div class="table-responsive">
+            <table class="table table-sm table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Código</th>
+                        <th>Cuenta</th>
+                        <th>Tipo</th>
+                        <th class="text-end">Saldo</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (_preview.SourceLines.Count == 0)
+                    {
+                        <tr><td colspan="4" class="text-center text-muted py-3">No hay movimientos de ingresos o gastos en el periodo.</td></tr>
+                    }
+                    else
+                    {
+                        @foreach (var line in _preview.SourceLines)
+                        {
+                            <tr>
+                                <td>@line.AccountCode</td>
+                                <td>@line.AccountName</td>
+                                <td>@line.AccountType</td>
+                                <td class="text-end">@line.Balance.ToString("N2")</td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="card shadow-sm">
+        <div class="card-header fw-semibold">Vista previa de la póliza</div>
+        <div class="table-responsive">
+            <table class="table table-sm table-striped mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Código</th>
+                        <th>Cuenta</th>
+                        <th>Descripción</th>
+                        <th class="text-end">Debe</th>
+                        <th class="text-end">Haber</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (_preview.CloseLines.Count == 0)
+                    {
+                        <tr><td colspan="5" class="text-center text-muted py-3">No hay líneas para generar.</td></tr>
+                    }
+                    else
+                    {
+                        @foreach (var line in _preview.CloseLines)
+                        {
+                            <tr>
+                                <td>@line.AccountCode</td>
+                                <td>@line.AccountName</td>
+                                <td>@line.Description</td>
+                                <td class="text-end">@line.Debit.ToString("N2")</td>
+                                <td class="text-end">@line.Credit.ToString("N2")</td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+                @if (_preview.CloseLines.Count > 0)
+                {
+                    <tfoot class="table-light">
+                        <tr>
+                            <th colspan="3" class="text-end">Totales</th>
+                            <th class="text-end">@_preview.CloseLines.Sum(x => x.Debit).ToString("N2")</th>
+                            <th class="text-end">@_preview.CloseLines.Sum(x => x.Credit).ToString("N2")</th>
+                        </tr>
+                    </tfoot>
+                }
+            </table>
+        </div>
+    </div>
+}
+
+@code {
+    private readonly (int Number, string Name)[] _months =
+    [
+        (1, "Enero"), (2, "Febrero"), (3, "Marzo"), (4, "Abril"), (5, "Mayo"), (6, "Junio"),
+        (7, "Julio"), (8, "Agosto"), (9, "Septiembre"), (10, "Octubre"), (11, "Noviembre"), (12, "Diciembre")
+    ];
+
+    private int _year = DateTime.UtcNow.Year;
+    private int _month = DateTime.UtcNow.Month;
+    private bool _loading = true;
+    private bool _generating;
+    private bool _resultOk;
+    private string? _error;
+    private string? _resultMessage;
+    private AccountingMonthlyClosePreviewDto _preview = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await ReloadAsync();
+    }
+
+    private async Task ReloadAsync()
+    {
+        _loading = true;
+        _error = null;
+        _resultMessage = null;
+        try
+        {
+            _preview = await Api.GetMonthlyClosePreviewAsync(_year, _month);
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task GenerateAsync()
+    {
+        _generating = true;
+        _resultMessage = null;
+        try
+        {
+            var result = await Api.GenerateMonthlyCloseAsync(new AccountingMonthlyCloseGenerateRequest(_year, _month));
+            _resultOk = result.Success;
+            _resultMessage = result.Message;
+            await ReloadAsync();
+        }
+        catch (Exception ex)
+        {
+            _resultOk = false;
+            _resultMessage = ex.Message;
+        }
+        finally
+        {
+            _generating = false;
+        }
+    }
+
+    private static string FormatDate(DateTime value)
+        => value == default ? "—" : value.ToLocalTime().ToString("dd/MM/yyyy HH:mm");
+}

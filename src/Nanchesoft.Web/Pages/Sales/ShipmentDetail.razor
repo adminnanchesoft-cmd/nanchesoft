@@ -1,0 +1,8 @@
+@page "/sales/shipments/detail"
+@page "/sales/shipments/detail/{Id:guid}"
+<PageTitle>Detalle remisión | Nanchesoft</PageTitle>
+<SalesDocumentEditor CatalogKey="sales-shipments" DocumentId="Id" />
+
+@code {
+    [Parameter] public Guid? Id { get; set; }
+}

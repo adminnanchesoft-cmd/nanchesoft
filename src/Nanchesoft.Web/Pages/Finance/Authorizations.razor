@@ -1,0 +1,150 @@
+@page "/finance/authorizations"
+@using Nanchesoft.Web.Services.Finance
+@inject FinanceApiService FinanceApiService
+
+<PageTitle>Autorizaciones financieras | Nanchesoft</PageTitle>
+
+<h1 class="h3 mb-3">Autorizaciones financieras</h1>
+<p class="text-muted">Centro de revisión para documentos posteados, vencidos o pendientes de póliza.</p>
+
+<div class="d-flex gap-2 mb-3">
+    <button class="btn btn-outline-secondary" @onclick="ReloadAsync">Actualizar</button>
+    <select class="form-select w-auto" @bind="_statusFilter">
+        <option value="pending">Pendientes</option>
+        <option value="authorized">Autorizados</option>
+        <option value="rejected">Rechazados</option>
+        <option value="all">Todos</option>
+    </select>
+</div>
+
+@if (_loading)
+{
+    <div class="alert alert-info">Cargando autorizaciones...</div>
+}
+else if (!string.IsNullOrWhiteSpace(_error))
+{
+    <div class="alert alert-danger">@_error</div>
+}
+else
+{
+    <div class="row g-3 mb-3">
+        <div class="col-md-2"><div class="card shadow-sm"><div class="card-body"><div class="text-muted small">Pendientes</div><div class="display-6 fw-bold text-warning">@_summary.PendingCount</div></div></div></div>
+        <div class="col-md-2"><div class="card shadow-sm"><div class="card-body"><div class="text-muted small">Autorizados</div><div class="display-6 fw-bold text-success">@_summary.AuthorizedCount</div></div></div></div>
+        <div class="col-md-2"><div class="card shadow-sm"><div class="card-body"><div class="text-muted small">Rechazados</div><div class="display-6 fw-bold text-danger">@_summary.RejectedCount</div></div></div></div>
+        <div class="col-md-3"><div class="card shadow-sm"><div class="card-body"><div class="text-muted small">Alta prioridad</div><div class="display-6 fw-bold">@_summary.HighPriorityCount</div></div></div></div>
+        <div class="col-md-3"><div class="card shadow-sm"><div class="card-body"><div class="text-muted small">Con vencimiento</div><div class="display-6 fw-bold">@_summary.OverdueCount</div></div></div></div>
+    </div>
+
+    <div class="table-responsive">
+        <table class="table table-sm table-striped align-middle">
+            <thead>
+                <tr>
+                    <th>Módulo</th>
+                    <th>Folio</th>
+                    <th>Tercero</th>
+                    <th>Fecha</th>
+                    <th>Importe</th>
+                    <th>Saldo</th>
+                    <th>Prioridad</th>
+                    <th>Estatus</th>
+                    <th>Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                @if (_rows.Count == 0)
+                {
+                    <tr><td colspan="9" class="text-center text-muted py-4">No hay registros para el filtro actual.</td></tr>
+                }
+                else
+                {
+                    @foreach (var row in _rows)
+                    {
+                        <tr>
+                            <td>@row.Module</td>
+                            <td>@row.Folio</td>
+                            <td>@row.PartnerName</td>
+                            <td>@row.DocumentDate.ToString("dd/MM/yyyy")</td>
+                            <td>@row.Amount.ToString("N2")</td>
+                            <td>@row.OpenAmount.ToString("N2")</td>
+                            <td><span class="badge @GetPriorityClass(row.Priority)">@row.Priority</span></td>
+                            <td><span class="badge @GetStatusClass(row.Status)">@row.Status</span></td>
+                            <td>
+                                <div class="btn-group btn-group-sm">
+                                    <button class="btn btn-outline-success" @onclick="() => ApproveAsync(row)">Autorizar</button>
+                                    <button class="btn btn-outline-danger" @onclick="() => RejectAsync(row)">Rechazar</button>
+                                    <a class="btn btn-outline-primary" href="/accounting/document-posting?sourceType=@row.DocumentType&sourceId=@row.DocumentId">Contabilizar</a>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+@code {
+    private bool _loading = true;
+    private string? _error;
+    private string _statusFilter = "pending";
+    private FinanceApprovalSummaryDto _summary = new();
+    private List<FinanceApprovalRowDto> _rows = new();
+
+    protected override async Task OnInitializedAsync() => await ReloadAsync();
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (!_loading)
+        {
+            await LoadRowsOnlyAsync();
+        }
+    }
+
+    private async Task ReloadAsync()
+    {
+        _loading = true;
+        _error = null;
+        try
+        {
+            _summary = await FinanceApiService.GetApprovalSummaryAsync();
+            await LoadRowsOnlyAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task LoadRowsOnlyAsync()
+        => _rows = await FinanceApiService.GetApprovalsAsync(_statusFilter);
+
+    private async Task ApproveAsync(FinanceApprovalRowDto row)
+    {
+        await FinanceApiService.ApproveAsync(row.ModuleKey, row.DocumentId);
+        await ReloadAsync();
+    }
+
+    private async Task RejectAsync(FinanceApprovalRowDto row)
+    {
+        await FinanceApiService.RejectAsync(row.ModuleKey, row.DocumentId, "Revisión manual requerida.");
+        await ReloadAsync();
+    }
+
+    private static string GetPriorityClass(string priority) => priority switch
+    {
+        "Alta" => "bg-danger",
+        "Media" => "bg-warning text-dark",
+        _ => "bg-secondary"
+    };
+
+    private static string GetStatusClass(string status) => status switch
+    {
+        "authorized" => "bg-success",
+        "rejected" => "bg-danger",
+        _ => "bg-warning text-dark"
+    };
+}

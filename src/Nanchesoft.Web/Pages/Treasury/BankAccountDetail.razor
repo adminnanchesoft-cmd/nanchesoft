@@ -1,0 +1,5 @@
+@page "/treasury/bank-accounts/detail"
+@page "/treasury/bank-accounts/detail/{Id:guid}"
+<PageTitle>Detalle banco propio | Nanchesoft</PageTitle>
+<TreasuryDocumentEditor CatalogKey="bank-accounts-own" DocumentId="Id" />
+@code { [Parameter] public Guid? Id { get; set; } }

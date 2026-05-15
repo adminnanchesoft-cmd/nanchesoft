@@ -1,0 +1,124 @@
+@page "/products/technical-center"
+@page "/products/production-center"
+@using Nanchesoft.Web.Services.Products
+@inject ProductTechnicalCenterApiService TechnicalCenterApiService
+
+<PageTitle>Centro técnico</PageTitle>
+
+<h3>Centro técnico de producto</h3>
+<p>Control ejecutivo para ficha técnica, hoja de costo y autorización de producto terminado.</p>
+
+<div style="margin-bottom:16px;display:flex;gap:8px;align-items:center;">
+    <input class="form-control" style="max-width:320px;" @bind="_search" @bind:event="oninput" placeholder="Buscar por código, nombre o estilo" />
+    <button class="btn btn-primary" @onclick="LoadAsync">Actualizar</button>
+</div>
+
+@if (_items is null)
+{
+    <p>Cargando...</p>
+}
+else
+{
+    <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:16px;">
+        <div class="card"><div class="card-body"><div>Productos</div><h4>@_items.Count</h4></div></div>
+        <div class="card"><div class="card-body"><div>Autorizados</div><h4>@_items.Count(x => x.IsAuthorizedForExplosion)</h4></div></div>
+        <div class="card"><div class="card-body"><div>Con ficha aprobada</div><h4>@_items.Count(x => x.TechnicalSheetApproved)</h4></div></div>
+        <div class="card"><div class="card-body"><div>Con costo aprobado</div><h4>@_items.Count(x => x.CostSheetApproved)</h4></div></div>
+    </div>
+
+    <table class="table table-striped table-bordered align-middle">
+        <thead>
+            <tr>
+                <th>Producto</th>
+                <th>Estilo / corrida</th>
+                <th>Material principal</th>
+                <th>Ficha técnica</th>
+                <th>Hoja de costo</th>
+                <th>Autorización</th>
+                <th>% avance</th>
+                <th>Faltantes</th>
+                <th>Acciones</th>
+            </tr>
+        </thead>
+        <tbody>
+        @foreach (var item in FilteredItems)
+        {
+            <tr>
+                <td>
+                    <strong>@item.ProductCode</strong><br />
+                    <span>@item.ProductName</span>
+                </td>
+                <td>@item.StyleName<br /><small>@item.SizeRunName</small></td>
+                <td>@item.MainMaterialName</td>
+                <td>
+                    <div>@item.TechnicalSheetCode</div>
+                    <small>@item.TechnicalSheetStatus · Materiales: @item.TechnicalSheetMaterialCount · Procesos: @item.TechnicalSheetProcessCount</small>
+                </td>
+                <td>
+                    <div>@item.CostSheetCode</div>
+                    <small>@item.CostSheetStatus · Costo: @item.TotalCost.ToString("C") · Precio: @item.SuggestedPrice.ToString("C")</small>
+                </td>
+                <td>
+                    <div>@item.AuthorizationCode</div>
+                    <small>@item.AuthorizationStatus · Explosión: @(item.IsAuthorizedForExplosion ? "Sí" : "No")</small>
+                </td>
+                <td>@item.ReadinessPercent%</td>
+                <td>@item.MissingRequirements</td>
+                <td>
+                    <div style="display:flex;flex-direction:column;gap:6px;min-width:180px;">
+                        <button class="btn btn-outline-primary btn-sm" @onclick="() => GenerateSheetAsync(item.FinishedProductId)">Generar ficha</button>
+                        <button class="btn btn-outline-secondary btn-sm" @onclick="() => GenerateCostAsync(item.FinishedProductId)">Generar costo</button>
+                        <button class="btn btn-outline-success btn-sm" @onclick="() => SyncAuthorizationAsync(item.FinishedProductId)">Sincronizar autorización</button>
+                    </div>
+                </td>
+            </tr>
+        }
+        </tbody>
+    </table>
+}
+
+@if (!string.IsNullOrWhiteSpace(_message))
+{
+    <div class="alert alert-info">@_message</div>
+}
+
+@code {
+    private List<ProductTechnicalCenterOverviewItemDto>? _items;
+    private string _search = string.Empty;
+    private string? _message;
+
+    private IEnumerable<ProductTechnicalCenterOverviewItemDto> FilteredItems => (_items ?? Enumerable.Empty<ProductTechnicalCenterOverviewItemDto>())
+        .Where(x => string.IsNullOrWhiteSpace(_search)
+            || x.ProductCode.Contains(_search, StringComparison.OrdinalIgnoreCase)
+            || x.ProductName.Contains(_search, StringComparison.OrdinalIgnoreCase)
+            || x.StyleName.Contains(_search, StringComparison.OrdinalIgnoreCase));
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _message = null;
+        _items = await TechnicalCenterApiService.GetOverviewAsync();
+    }
+
+    private async Task GenerateSheetAsync(Guid finishedProductId)
+    {
+        var result = await TechnicalCenterApiService.GenerateTechnicalSheetAsync(finishedProductId);
+        _message = result is null ? "No se pudo generar la ficha técnica." : $"Ficha técnica sincronizada para {result.ProductCode}.";
+        await LoadAsync();
+    }
+
+    private async Task GenerateCostAsync(Guid finishedProductId)
+    {
+        var result = await TechnicalCenterApiService.GenerateCostSheetAsync(finishedProductId);
+        _message = result is null ? "No se pudo generar la hoja de costo." : $"Hoja de costo sincronizada para {result.ProductCode}.";
+        await LoadAsync();
+    }
+
+    private async Task SyncAuthorizationAsync(Guid finishedProductId)
+    {
+        var result = await TechnicalCenterApiService.SyncAuthorizationAsync(finishedProductId);
+        _message = result is null ? "No se pudo sincronizar la autorización." : $"Autorización sincronizada para {result.ProductCode}.";
+        await LoadAsync();
+    }
+}

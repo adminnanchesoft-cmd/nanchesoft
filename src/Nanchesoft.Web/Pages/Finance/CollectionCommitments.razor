@@ -1,0 +1,130 @@
+@page "/finance/collection-commitments"
+@using Nanchesoft.Web.Services.Finance
+@inject FinanceApiService FinanceApiService
+
+<PageTitle>Compromisos de cobro | Nanchesoft</PageTitle>
+
+<h1 class="h3 mb-3">Compromisos de cobro</h1>
+<p class="text-muted">Convierte la cartera abierta en promesas operables con responsable, prioridad y fecha comprometida.</p>
+
+<div class="card shadow-sm mb-3">
+    <div class="card-body">
+        <div class="row g-3 align-items-end">
+            <div class="col-md-3">
+                <label class="form-label">Desde</label>
+                <input type="date" class="form-control" value="@FromDateText" @onchange="OnFromChanged" />
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Hasta</label>
+                <input type="date" class="form-control" value="@ToDateText" @onchange="OnToChanged" />
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Filtro</label>
+                <input class="form-control" @bind="_filter" placeholder="Cliente o folio" />
+            </div>
+            <div class="col-md-3 d-flex gap-2">
+                <button class="btn btn-primary" @onclick="LoadAsync">Consultar</button>
+                <button class="btn btn-success" @onclick="SaveAsync" disabled="@_saving">Guardar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@if (_loading)
+{
+    <div class="alert alert-info">Cargando compromisos...</div>
+}
+else if (!string.IsNullOrWhiteSpace(_message))
+{
+    <div class="alert alert-success">@_message</div>
+}
+
+<div class="card shadow-sm">
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-sm align-middle">
+                <thead>
+                    <tr>
+                        <th>Cliente</th>
+                        <th>Folio</th>
+                        <th>Vence</th>
+                        <th>Abierto</th>
+                        <th>Fecha compromiso</th>
+                        <th>Estatus</th>
+                        <th>Responsable</th>
+                        <th>Prioridad</th>
+                        <th>Notas</th>
+                    </tr>
+                </thead>
+                <tbody>
+                @foreach (var row in FilteredRows)
+                {
+                    <tr class="@(row.IsOverdue ? "table-danger" : string.Empty)">
+                        <td>
+                            <div class="fw-semibold">@row.CustomerName</div>
+                            <div class="small text-muted">@row.DaysToDue días</div>
+                        </td>
+                        <td><a href="@row.Route">@row.Folio</a></td>
+                        <td>@row.DueDate.ToString("dd/MM/yyyy")</td>
+                        <td class="text-end">@row.OpenAmount.ToString("N2")</td>
+                        <td><input type="date" class="form-control form-control-sm" value="@ToInputDate(row.PlannedCollectionDate ?? row.DueDate)" @onchange="@(e => OnPlannedDateChanged(row, e))" /></td>
+                        <td>
+                            <select class="form-select form-select-sm" value="@row.CommitmentStatus" @onchange="@(e => row.CommitmentStatus = e.Value?.ToString() ?? "Sin gestionar")">
+                                <option>Sin gestionar</option>
+                                <option>Promesa</option>
+                                <option>Confirmado</option>
+                                <option>Reagendado</option>
+                                <option>Cobrado</option>
+                            </select>
+                        </td>
+                        <td><input class="form-control form-control-sm" @bind="row.Responsible" /></td>
+                        <td>
+                            <select class="form-select form-select-sm" value="@row.Priority" @onchange="@(e => row.Priority = e.Value?.ToString() ?? "Media")">
+                                <option>Alta</option>
+                                <option>Media</option>
+                                <option>Baja</option>
+                            </select>
+                        </td>
+                        <td><input class="form-control form-control-sm" @bind="row.Notes" /></td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+@code {
+    private bool _loading = true;
+    private bool _saving;
+    private string? _message;
+    private string _filter = string.Empty;
+    private DateTime _from = DateTime.Today.AddDays(-7);
+    private DateTime _to = DateTime.Today.AddDays(45);
+    private List<FinanceCollectionCommitmentRowDto> _rows = new();
+
+    private IEnumerable<FinanceCollectionCommitmentRowDto> FilteredRows => _rows.Where(x => string.IsNullOrWhiteSpace(_filter) || x.CustomerName.Contains(_filter, StringComparison.OrdinalIgnoreCase) || x.Folio.Contains(_filter, StringComparison.OrdinalIgnoreCase));
+    private string FromDateText => _from.ToString("yyyy-MM-dd");
+    private string ToDateText => _to.ToString("yyyy-MM-dd");
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loading = true; _message = null;
+        try { _rows = await FinanceApiService.GetCollectionCommitmentsAsync(_from, _to); }
+        finally { _loading = false; }
+    }
+
+    private async Task SaveAsync()
+    {
+        _saving = true; _message = null;
+        try { await FinanceApiService.SaveCollectionCommitmentsAsync(_rows); _message = "Compromisos guardados."; }
+        finally { _saving = false; }
+    }
+
+    private void OnFromChanged(ChangeEventArgs e) { if (DateTime.TryParse(e.Value?.ToString(), out var value)) _from = value.Date; }
+    private void OnToChanged(ChangeEventArgs e) { if (DateTime.TryParse(e.Value?.ToString(), out var value)) _to = value.Date; }
+    private void OnPlannedDateChanged(FinanceCollectionCommitmentRowDto row, ChangeEventArgs e) { if (DateTime.TryParse(e.Value?.ToString(), out var value)) row.PlannedCollectionDate = value.Date; }
+    private static string ToInputDate(DateTime value) => value.ToString("yyyy-MM-dd");
+}

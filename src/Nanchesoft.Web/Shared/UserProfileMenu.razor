@@ -1,0 +1,23 @@
+@inject AuthState AuthState
+@inject AuthService AuthService
+@inject NavigationManager Navigation
+
+<div class="ns-user-menu">
+    <div class="ns-user-avatar">@Initial</div>
+    <div class="ns-user-meta">
+        <strong>@AuthState.DisplayName</strong>
+        <button class="ns-link-button" @onclick="LogoutAsync">Salir</button>
+    </div>
+</div>
+
+@code {
+    private string Initial => string.IsNullOrWhiteSpace(AuthState.DisplayName)
+        ? "?"
+        : AuthState.DisplayName.Trim()[0].ToString().ToUpperInvariant();
+
+    private async Task LogoutAsync()
+    {
+        await AuthService.LogoutAsync();
+        Navigation.NavigateTo("/login", forceLoad: true);
+    }
+}

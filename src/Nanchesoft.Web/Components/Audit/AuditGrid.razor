@@ -1,0 +1,19 @@
+@typeparam TItem
+
+<div class="table-responsive">
+    <table class="table table-sm table-striped align-middle">
+        <thead>
+            <tr>
+                @Header
+            </tr>
+        </thead>
+        <tbody>
+            @RowTemplate
+        </tbody>
+    </table>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public RenderFragment Header { get; set; } = default!;
+    [Parameter, EditorRequired] public RenderFragment RowTemplate { get; set; } = default!;
+}

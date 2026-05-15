@@ -1,0 +1,9 @@
+@page "/services/print/{Id:guid}"
+@layout PrintLayout
+@using Nanchesoft.Web.Components.Printing
+
+<ServiceNotePrintDocument Id="Id" />
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+}

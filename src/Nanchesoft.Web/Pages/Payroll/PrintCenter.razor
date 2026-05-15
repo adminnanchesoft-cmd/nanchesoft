@@ -1,0 +1,58 @@
+@page "/payroll/print-center"
+@inject Nanchesoft.Web.Services.HumanResources.HumanResourcesApiService HumanResourcesApiService
+
+<PageTitle>Impresión nómina | Nanchesoft</PageTitle>
+
+@if (_rows.Count == 0)
+{
+    <div class="container-fluid py-3">
+        <h1>Impresión de nómina</h1>
+        <p class="text-secondary">No hay corridas disponibles para imprimir.</p>
+    </div>
+}
+else
+{
+    <div class="container-fluid py-3">
+        <h1>Impresión de nómina</h1>
+        <p class="text-secondary">Imprime la nómina global del periodo o entra a recibos individuales por colaborador.</p>
+        <div class="card shadow-sm">
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-sm mb-0">
+                        <thead>
+                            <tr><th>Folio</th><th>Periodo</th><th>Fecha</th><th>Empleados</th><th>Neto</th><th></th></tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var row in _rows)
+                            {
+                                <tr>
+                                    <td>@GetValue(row, "Folio")</td>
+                                    <td>@GetValue(row, "PayrollPeriodId")</td>
+                                    <td>@GetValue(row, "RunDate")</td>
+                                    <td>@GetValue(row, "EmployeeCount")</td>
+                                    <td>@GetValue(row, "NetAmount")</td>
+                                    <td class="text-end">
+                                        <a class="btn btn-sm btn-outline-primary me-2" target="_blank" href="/payroll/print/run/@GetValue(row, "PayrollRunId")">Nómina</a>
+                                        <a class="btn btn-sm btn-outline-secondary" href="/payroll/receipts/@GetValue(row, "PayrollRunId")">Recibos</a>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<Dictionary<string, object?>> _rows = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        _rows = (await HumanResourcesApiService.GetCatalogAsync("payroll-runs")).Rows;
+    }
+
+    private static string GetValue(Dictionary<string, object?> row, string key)
+        => row.TryGetValue(key, out var value) ? value?.ToString() ?? string.Empty : string.Empty;
+}

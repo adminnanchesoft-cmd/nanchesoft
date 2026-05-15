@@ -1,0 +1,6 @@
+*.deb
+**/bin/
+**/obj/
+**/.vs/
+*.user
+.DS_Store

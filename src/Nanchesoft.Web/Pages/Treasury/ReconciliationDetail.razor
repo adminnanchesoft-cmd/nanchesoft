@@ -1,0 +1,5 @@
+@page "/treasury/reconciliations/detail"
+@page "/treasury/reconciliations/detail/{Id:guid}"
+<PageTitle>Detalle conciliación | Nanchesoft</PageTitle>
+<TreasuryDocumentEditor CatalogKey="treasury-reconciliations" DocumentId="Id" />
+@code { [Parameter] public Guid? Id { get; set; } }

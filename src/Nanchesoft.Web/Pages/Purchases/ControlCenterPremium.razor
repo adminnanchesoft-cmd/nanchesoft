@@ -1,0 +1,166 @@
+@page "/purchases/control-center"
+@inject NavigationManager Nav
+@using Microsoft.AspNetCore.Components
+
+<PageTitle>Compras Premium | Nanchesoft</PageTitle>
+
+<div class="ccp-shell">
+    <header class="ccp-topbar">
+        <div class="ccp-brand">
+            <div class="ccp-brand-badge">NS</div>
+            <div>
+                <div class="ccp-brand-title">Nanchesoft ERP</div>
+                <div class="ccp-brand-subtitle">Compras</div>
+            </div>
+        </div>
+
+        <div class="ccp-search-wrap">
+            <span class="ccp-search-icon">⌕</span>
+            <input class="ccp-search" placeholder="Buscar módulo, pantalla o proceso..." />
+        </div>
+
+        <div class="ccp-top-actions">
+            <button class="ccp-icon-btn" type="button">◌</button>
+            <div class="ccp-profile">
+                <div class="ccp-avatar">D</div>
+                <div>
+                    <div class="ccp-profile-name">David</div>
+                    <div class="ccp-profile-role">ERP Owner</div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <nav class="ccp-module-tabs" aria-label="Módulos principales">
+        @foreach (var tab in ModuleTabs)
+        {
+            <button type="button"
+                    class="ccp-tab @(tab.IsActive ? "is-active" : null)"
+                    @onclick="() => Go(tab.Route)">
+                @tab.Label
+            </button>
+        }
+    </nav>
+
+    <section class="ccp-hero">
+        <div class="ccp-hero-overlay"></div>
+        <img class="ccp-hero-image" src="images/hero-compras-premium-17.png" alt="Compras premium" />
+
+        <div class="ccp-hero-content">
+            <div class="ccp-hero-main">
+                <div class="ccp-hero-title-wrap">
+                    <div class="ccp-hero-title">Compras</div>
+                    <div class="ccp-hero-subtitle">Gestión de abastecimiento</div>
+                </div>
+
+                <div class="ccp-kpi-strip">
+                    @foreach (var kpi in Kpis)
+                    {
+                        <div class="ccp-kpi-card">
+                            <div class="ccp-kpi-icon">@kpi.Icon</div>
+                            <div class="ccp-kpi-value">@kpi.Value</div>
+                            <div class="ccp-kpi-label">@kpi.Label</div>
+                        </div>
+                    }
+                </div>
+
+                <div class="ccp-breadcrumb">Inicio <span>›</span> Compras</div>
+
+                <div class="ccp-process-grid">
+                    @foreach (var card in ProcessCards)
+                    {
+                        <button type="button" class="ccp-process-card" @onclick="() => Go(card.Route)">
+                            <div class="ccp-process-visual">
+                                <div class="ccp-process-icon">@card.Icon</div>
+                            </div>
+                            <div class="ccp-process-body">
+                                <div class="ccp-process-title">@card.Title</div>
+                                <div class="ccp-process-text">@card.Description</div>
+                            </div>
+                            <div class="ccp-process-arrow">›</div>
+                        </button>
+                    }
+                </div>
+            </div>
+
+            <aside class="ccp-right-rail">
+                <div class="ccp-right-card">
+                    <div class="ccp-right-title">Quick Access &amp; Recientes</div>
+                    <div class="ccp-quick-grid">
+                        @foreach (var quick in QuickAccess)
+                        {
+                            <button type="button" class="ccp-quick-item" @onclick="() => Go(quick.Route)">
+                                <div class="ccp-quick-code">@quick.Code</div>
+                                <div class="ccp-quick-label">@quick.Label</div>
+                            </button>
+                        }
+                    </div>
+                </div>
+
+                <div class="ccp-right-card is-collapsed">
+                    <div class="ccp-right-title">Favoritos</div>
+                    <div class="ccp-muted">Tus accesos fijados aparecerán aquí.</div>
+                </div>
+
+                <div class="ccp-right-card">
+                    <div class="ccp-right-title">Focus today</div>
+                    <div class="ccp-focus-item">
+                        <div class="ccp-focus-badge">📅</div>
+                        <div>
+                            <div class="ccp-focus-title">Licitación gobierno</div>
+                            <div class="ccp-focus-text">14 órdenes formato pendientes</div>
+                        </div>
+                        <div class="ccp-focus-day">Hoy</div>
+                    </div>
+                </div>
+            </aside>
+        </div>
+    </section>
+</div>
+
+@code {
+    private void Go(string route) => Nav.NavigateTo(route);
+
+    private readonly List<ModuleTabVm> ModuleTabs =
+    [
+        new("Inicio", "/dashboard", false),
+        new("Compras", "/purchases/control-center", true),
+        new("Inventario", "/inventory/stock-balances", false),
+        new("Ventas", "/sales/invoices", false),
+        new("Nómina", "/payroll/periods", false),
+        new("Finanzas", "/finance/treasury-dashboard", false),
+        new("Recursos Humanos", "/human-resources/departments", false),
+        new("Más", "/administration/document-series", false)
+    ];
+
+    private readonly List<KpiVm> Kpis =
+    [
+        new("📄", "18", "Pendientes"),
+        new("🛒", "5", "Abiertas"),
+        new("📦", "3", "Atendidas"),
+        new("🧾", "74", "Facturas"),
+        new("↩", "2", "Devueltas")
+    ];
+
+    private readonly List<ProcessCardVm> ProcessCards =
+    [
+        new("🧩", "Requisiciones", "Gestiona requisiciones pendientes", "/purchases/requisitions"),
+        new("💻", "Órdenes de Compra", "Administra órdenes del proveedor", "/purchases/orders"),
+        new("📦", "Recepciones de Mercancía", "Controla recepciones en tránsito", "/purchases/receipts"),
+        new("🧾", "Facturas Proveedor", "Procesa facturas de proveedor", "/purchases/invoices"),
+        new("↩", "Devoluciones compra", "Control de devoluciones y notas", "/purchases/returns")
+    ];
+
+    private readonly List<QuickAccessVm> QuickAccess =
+    [
+        new("DA", "Dashboard", "/purchases/dashboard"),
+        new("CC", "Centro de compras", "/purchases/control-center"),
+        new("RC", "Recepciones", "/purchases/receipts"),
+        new("FP", "Facturas prov.", "/purchases/invoices")
+    ];
+
+    private sealed record ModuleTabVm(string Label, string Route, bool IsActive);
+    private sealed record KpiVm(string Icon, string Value, string Label);
+    private sealed record ProcessCardVm(string Icon, string Title, string Description, string Route);
+    private sealed record QuickAccessVm(string Code, string Label, string Route);
+}

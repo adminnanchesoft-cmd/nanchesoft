@@ -1,0 +1,6 @@
+@page "/inventory/adjustments/detail"
+@page "/inventory/adjustments/detail/{Id:guid}"
+@using Nanchesoft.Web.Components.Inventory
+<PageTitle>Detalle ajuste inventario | Nanchesoft</PageTitle>
+<InventoryDocumentEditor CatalogKey="inventory-adjustments" DocumentId="Id" />
+@code { [Parameter] public Guid? Id { get; set; } }

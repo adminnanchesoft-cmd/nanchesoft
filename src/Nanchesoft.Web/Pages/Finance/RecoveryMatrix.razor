@@ -1,0 +1,87 @@
+
+@page "/finance/recovery-matrix"
+@using Nanchesoft.Web.Services.Finance
+@inject FinanceApiService FinanceApiService
+
+<PageTitle>Matriz recuperación | Nanchesoft</PageTitle>
+
+<h1 class="h3 mb-3">Matriz recuperación</h1>
+<p class="text-muted">Buckets de riesgo para CxC y CxP, con participación, documentos y concentración por antigüedad.</p>
+
+@if (_loading)
+{
+    <div class="alert alert-info">Cargando matriz...</div>
+}
+else if (!string.IsNullOrWhiteSpace(_error))
+{
+    <div class="alert alert-danger">@_error</div>
+}
+else
+{
+    <div class="row g-3 mb-3">
+        <div class="col-md-3"><div class="card shadow-sm"><div class="card-body"><div class="text-muted small">CxC total</div><div class="fs-4 fw-bold text-primary">@_rows.Where(x => x.PortfolioType == "CxC").Sum(x => x.Amount).ToString("N2")</div></div></div></div>
+        <div class="col-md-3"><div class="card shadow-sm"><div class="card-body"><div class="text-muted small">CxP total</div><div class="fs-4 fw-bold text-danger">@_rows.Where(x => x.PortfolioType == "CxP").Sum(x => x.Amount).ToString("N2")</div></div></div></div>
+        <div class="col-md-3"><div class="card shadow-sm"><div class="card-body"><div class="text-muted small">Buckets alto riesgo</div><div class="fs-4 fw-bold text-danger">@_rows.Count(x => x.RiskLevel == "Alta")</div></div></div></div>
+        <div class="col-md-3"><div class="card shadow-sm"><div class="card-body"><div class="text-muted small">Partes impactadas</div><div class="fs-4 fw-bold">@_rows.Sum(x => x.Parties)</div></div></div></div>
+    </div>
+
+    <div class="card shadow-sm">
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-sm table-striped align-middle mb-0">
+                    <thead>
+                        <tr>
+                            <th>Portafolio</th>
+                            <th>Bucket</th>
+                            <th class="text-end">Documentos</th>
+                            <th class="text-end">Partes</th>
+                            <th class="text-end">Monto</th>
+                            <th class="text-end">Participación %</th>
+                            <th>Riesgo</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var row in _rows)
+                        {
+                            <tr>
+                                <td>@row.PortfolioType</td>
+                                <td>@row.Band</td>
+                                <td class="text-end">@row.Documents</td>
+                                <td class="text-end">@row.Parties</td>
+                                <td class="text-end">@row.Amount.ToString("N2")</td>
+                                <td class="text-end">@row.SharePercent.ToString("N2")%</td>
+                                <td><span class="badge @GetRiskBadge(row.RiskLevel)">@row.RiskLevel</span></td>
+                                <td><a class="btn btn-sm btn-outline-primary" href="@row.Route">Abrir</a></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private bool _loading = true;
+    private string? _error;
+    private List<FinanceRecoveryMatrixRowDto> _rows = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _rows = await FinanceApiService.GetRecoveryMatrixAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private static string GetRiskBadge(string value) => value switch { "Alta" => "text-bg-danger", "Media" => "text-bg-warning", _ => "text-bg-success" };
+}

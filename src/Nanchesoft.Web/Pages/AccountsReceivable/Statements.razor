@@ -1,0 +1,132 @@
+@page "/accounts-receivable/statements"
+@using Nanchesoft.Web.Services.AccountsReceivable
+@inject AccountsReceivableApiService Api
+
+<PageTitle>Estado de cuenta CxC | Nanchesoft</PageTitle>
+
+<div class="mb-3">
+    <div class="text-uppercase text-muted small fw-semibold">CxC · Estado de cuenta</div>
+    <h1 class="h3 mb-1">Estado de cuenta por cliente</h1>
+    <div class="text-muted">Consulta cargos, créditos y saldo acumulado por cliente.</div>
+</div>
+
+<div class="card shadow-sm mb-3">
+    <div class="card-body row g-3 align-items-end">
+        <div class="col-md-4">
+            <label class="form-label">Cliente</label>
+            <select class="form-select" @bind="_selectedCustomerIdString">
+                <option value="">Todos</option>
+                @foreach (var customer in _lookups.Customers)
+                {
+                    <option value="@customer.Id">@customer.Name</option>
+                }
+            </select>
+        </div>
+        <div class="col-md-3">
+            <label class="form-label">Desde</label>
+            <input class="form-control" type="date" @bind="_fromDate" />
+        </div>
+        <div class="col-md-3">
+            <label class="form-label">Hasta</label>
+            <input class="form-control" type="date" @bind="_toDate" />
+        </div>
+        <div class="col-md-2 d-grid">
+            <button class="btn btn-primary" @onclick="ReloadAsync">Consultar</button>
+        </div>
+    </div>
+</div>
+
+@if (_loading)
+{
+    <div class="alert alert-info">Cargando estado de cuenta...</div>
+}
+else if (!string.IsNullOrWhiteSpace(_error))
+{
+    <div class="alert alert-danger">@_error</div>
+}
+else
+{
+    <div class="card shadow-sm">
+        <div class="table-responsive">
+            <table class="table table-striped align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th>Fecha</th>
+                        <th>Cliente</th>
+                        <th>Tipo</th>
+                        <th>Folio</th>
+                        <th>Referencia</th>
+                        <th class="text-end">Cargo</th>
+                        <th class="text-end">Crédito</th>
+                        <th class="text-end">Saldo</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (_rows.Count == 0)
+                    {
+                        <tr><td colspan="8" class="text-center text-muted py-4">Sin registros.</td></tr>
+                    }
+                    else
+                    {
+                        @foreach (var row in _rows)
+                        {
+                            <tr>
+                                <td>@row.MovementDate.ToString("dd/MM/yyyy")</td>
+                                <td>@row.CustomerName</td>
+                                <td>@TranslateType(row.DocumentType)</td>
+                                <td>@row.Folio</td>
+                                <td>@row.Reference</td>
+                                <td class="text-end">@row.ChargeAmount.ToString("N2")</td>
+                                <td class="text-end">@row.CreditAmount.ToString("N2")</td>
+                                <td class="text-end fw-bold">@row.BalanceAfter.ToString("N2")</td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+}
+
+@code {
+    private bool _loading = true;
+    private string? _error;
+    private string? _selectedCustomerIdString;
+    private DateTime _fromDate = DateTime.Today.AddMonths(-1);
+    private DateTime _toDate = DateTime.Today;
+    private ArLookupsDto _lookups = new();
+    private List<ArStatementRowDto> _rows = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        _lookups = await Api.GetLookupsAsync();
+        await ReloadAsync();
+    }
+
+    private async Task ReloadAsync()
+    {
+        _loading = true;
+        _error = null;
+        try
+        {
+            Guid? customerId = Guid.TryParse(_selectedCustomerIdString, out var parsed) ? parsed : null;
+            _rows = await Api.GetStatementsAsync(customerId, _fromDate, _toDate);
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private static string TranslateType(string value) => value switch
+    {
+        "sales_invoice" => "Factura",
+        "credit_note" => "Nota de crédito",
+        "receipt_application" => "Aplicación",
+        _ => value
+    };
+}

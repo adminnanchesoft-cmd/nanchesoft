@@ -1,0 +1,155 @@
+@page "/inventory/control-center"
+
+<PageTitle>Inventario Premium | Nanchesoft</PageTitle>
+
+<div class="ns-inv-premium-page">
+    <section class="ns-inv-hero">
+        <div class="ns-inv-hero__overlay"></div>
+        <div class="ns-inv-hero__content">
+            <div class="ns-inv-topbar">
+                <div class="ns-inv-brand">
+                    <div class="ns-inv-brand__logo">NS</div>
+                    <div>
+                        <div class="ns-inv-brand__title">Nanchesoft ERP</div>
+                        <div class="ns-inv-brand__subtitle">Inventario</div>
+                    </div>
+                </div>
+
+                <div class="ns-inv-search">
+                    <span class="ns-inv-search__icon">⌕</span>
+                    <input type="text" placeholder="Buscar módulo, pantalla o proceso..." />
+                </div>
+
+                <div class="ns-inv-user">
+                    <div class="ns-inv-user__avatar">D</div>
+                    <div>
+                        <div class="ns-inv-user__name">David</div>
+                        <div class="ns-inv-user__role">ERP Owner</div>
+                    </div>
+                </div>
+            </div>
+
+            <nav class="ns-inv-tabs">
+                <a href="/dashboard">Inicio</a>
+                <a href="/purchases/control-center">Compras</a>
+                <a class="is-active" href="/inventory/control-center">Inventario</a>
+                <a href="/sales/invoices">Ventas</a>
+                <a href="/payroll/periods">Nómina</a>
+                <a href="/finance/treasury-dashboard">Finanzas</a>
+                <a href="/human-resources/departments">Recursos Humanos</a>
+                <a href="/administration/document-series">Más</a>
+            </nav>
+
+            <div class="ns-inv-main-grid">
+                <div class="ns-inv-main-left">
+                    <div class="ns-inv-headline">
+                        <h1>Inventario</h1>
+                        <p>Control operativo de existencias, movimientos y trazabilidad.</p>
+                    </div>
+
+                    <div class="ns-inv-kpis">
+                        <div class="ns-inv-kpi-card">
+                            <div class="ns-inv-kpi-card__value">128</div>
+                            <div class="ns-inv-kpi-card__label">Stock bajo</div>
+                        </div>
+                        <div class="ns-inv-kpi-card">
+                            <div class="ns-inv-kpi-card__value">42</div>
+                            <div class="ns-inv-kpi-card__label">Entradas</div>
+                        </div>
+                        <div class="ns-inv-kpi-card">
+                            <div class="ns-inv-kpi-card__value">36</div>
+                            <div class="ns-inv-kpi-card__label">Salidas</div>
+                        </div>
+                        <div class="ns-inv-kpi-card">
+                            <div class="ns-inv-kpi-card__value">14</div>
+                            <div class="ns-inv-kpi-card__label">Traspasos</div>
+                        </div>
+                        <div class="ns-inv-kpi-card">
+                            <div class="ns-inv-kpi-card__value">9</div>
+                            <div class="ns-inv-kpi-card__label">Ajustes</div>
+                        </div>
+                    </div>
+
+                    <div class="ns-inv-breadcrumb">Inicio <span>›</span> Inventario</div>
+
+                    <div class="ns-inv-card-grid">
+                        <a class="ns-inv-process-card" href="/inventory/stock-balances">
+                            <div class="ns-inv-process-card__image image-stock"></div>
+                            <div class="ns-inv-process-card__title">Existencias</div>
+                            <div class="ns-inv-process-card__text">Consulta stock por almacén, lote, serie y ubicación.</div>
+                            <div class="ns-inv-process-card__go">→</div>
+                        </a>
+
+                        <a class="ns-inv-process-card" href="/inventory/kardex">
+                            <div class="ns-inv-process-card__image image-kardex"></div>
+                            <div class="ns-inv-process-card__title">Kardex</div>
+                            <div class="ns-inv-process-card__text">Sigue entradas, salidas y costo por movimiento.</div>
+                            <div class="ns-inv-process-card__go">→</div>
+                        </a>
+
+                        <a class="ns-inv-process-card" href="/inventory/entries">
+                            <div class="ns-inv-process-card__image image-entries"></div>
+                            <div class="ns-inv-process-card__title">Entradas</div>
+                            <div class="ns-inv-process-card__text">Administra recepciones, altas y entradas al almacén.</div>
+                            <div class="ns-inv-process-card__go">→</div>
+                        </a>
+
+                        <a class="ns-inv-process-card" href="/inventory/exits">
+                            <div class="ns-inv-process-card__image image-exits"></div>
+                            <div class="ns-inv-process-card__title">Salidas</div>
+                            <div class="ns-inv-process-card__text">Registra surtidos, consumos, devoluciones y bajas.</div>
+                            <div class="ns-inv-process-card__go">→</div>
+                        </a>
+
+                        <a class="ns-inv-process-card" href="/inventory/transfers">
+                            <div class="ns-inv-process-card__image image-transfers"></div>
+                            <div class="ns-inv-process-card__title">Traspasos</div>
+                            <div class="ns-inv-process-card__text">Controla movimientos entre almacenes y sucursales.</div>
+                            <div class="ns-inv-process-card__go">→</div>
+                        </a>
+
+                        <a class="ns-inv-process-card" href="/inventory/adjustments">
+                            <div class="ns-inv-process-card__image image-adjustments"></div>
+                            <div class="ns-inv-process-card__title">Ajustes</div>
+                            <div class="ns-inv-process-card__text">Ajusta diferencias, conteos y regularizaciones.</div>
+                            <div class="ns-inv-process-card__go">→</div>
+                        </a>
+                    </div>
+                </div>
+
+                <aside class="ns-inv-rail">
+                    <div class="ns-inv-panel">
+                        <div class="ns-inv-panel__title">Quick Access &amp; Recientes</div>
+                        <div class="ns-inv-pill-grid">
+                            <a href="/inventory/stock-balances">EX<div>Existencias</div></a>
+                            <a href="/inventory/kardex">KA<div>Kardex</div></a>
+                            <a href="/inventory/entries">EN<div>Entradas</div></a>
+                            <a href="/inventory/transfers">TR<div>Traspasos</div></a>
+                        </div>
+                    </div>
+
+                    <div class="ns-inv-panel">
+                        <div class="ns-inv-panel__title">Favoritos</div>
+                        <div class="ns-inv-simple-list">
+                            <div>Existencias premium</div>
+                            <div>Kardex ejecutivo</div>
+                            <div>Entradas del día</div>
+                        </div>
+                    </div>
+
+                    <div class="ns-inv-panel focus">
+                        <div class="ns-inv-panel__title">Focus today</div>
+                        <div class="ns-inv-focus-item">
+                            <div class="ns-inv-focus-item__name">Reabasto almacén central</div>
+                            <div class="ns-inv-focus-item__meta">18 productos en mínimo</div>
+                        </div>
+                        <div class="ns-inv-focus-item">
+                            <div class="ns-inv-focus-item__name">Conteo cíclico zona A</div>
+                            <div class="ns-inv-focus-item__meta">Programado para hoy</div>
+                        </div>
+                    </div>
+                </aside>
+            </div>
+        </div>
+    </section>
+</div>

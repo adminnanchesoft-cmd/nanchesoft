@@ -1,0 +1,107 @@
+@page "/accounting/dashboard"
+@using Nanchesoft.Web.Services.Accounting
+@inject AccountingApiService Api
+
+<PageTitle>Dashboard contable | Nanchesoft</PageTitle>
+
+<h1 class="h3 mb-3">Contabilidad · Dashboard</h1>
+
+@if (_loading)
+{
+    <div class="alert alert-info">Cargando dashboard contable...</div>
+}
+else if (!string.IsNullOrWhiteSpace(_error))
+{
+    <div class="alert alert-danger">@_error</div>
+}
+else
+{
+    <div class="row g-3 mb-4">
+        <div class="col-md-3"><div class="card shadow-sm"><div class="card-body"><div class="text-muted small">Cuentas activas</div><div class="fs-3 fw-bold">@_dashboard.ActiveAccounts</div></div></div></div>
+        <div class="col-md-3"><div class="card shadow-sm"><div class="card-body"><div class="text-muted small">Pólizas</div><div class="fs-3 fw-bold">@_dashboard.JournalEntries</div></div></div></div>
+        <div class="col-md-3"><div class="card shadow-sm"><div class="card-body"><div class="text-muted small">Periodos abiertos</div><div class="fs-3 fw-bold text-success">@_dashboard.OpenPeriods</div></div></div></div>
+        <div class="col-md-3"><div class="card shadow-sm"><div class="card-body"><div class="text-muted small">Resultado del periodo</div><div class="fs-3 fw-bold @(_dashboard.ResultOfPeriod >= 0 ? "text-success" : "text-danger")">@_dashboard.ResultOfPeriod.ToString("N2")</div></div></div></div>
+    </div>
+
+    <div class="row g-3 mb-4">
+        <div class="col-md-3"><div class="card shadow-sm"><div class="card-body"><div class="text-muted small">Borrador</div><div class="fs-4 fw-bold text-secondary">@_dashboard.DraftEntries</div></div></div></div>
+        <div class="col-md-3"><div class="card shadow-sm"><div class="card-body"><div class="text-muted small">Aprobadas</div><div class="fs-4 fw-bold text-warning">@_dashboard.ApprovedEntries</div></div></div></div>
+        <div class="col-md-3"><div class="card shadow-sm"><div class="card-body"><div class="text-muted small">Posteadas</div><div class="fs-4 fw-bold text-primary">@_dashboard.PostedEntries</div></div></div></div>
+        <div class="col-md-3"><div class="card shadow-sm"><div class="card-body"><div class="text-muted small">Pendientes automáticas</div><div class="fs-4 fw-bold text-danger">@_autoSummary.PendingTotal</div></div></div></div>
+    </div>
+
+    <div class="row g-3 mb-4">
+        <div class="col-lg-6">
+            <div class="card shadow-sm h-100">
+                <div class="card-header fw-semibold">Posición financiera base</div>
+                <div class="card-body">
+                    <div class="d-flex justify-content-between mb-2"><span>Activos</span><strong>@_dashboard.AssetsTotal.ToString("N2")</strong></div>
+                    <div class="d-flex justify-content-between"><span>Pasivo + Capital</span><strong>@_dashboard.LiabilitiesAndEquityTotal.ToString("N2")</strong></div>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-6">
+            <div class="card shadow-sm h-100">
+                <div class="card-header fw-semibold">Acciones contables rápidas</div>
+                <div class="card-body">
+                    <div class="row g-2 small mb-3">
+                        <div class="col-6 d-flex justify-content-between"><span>Facturas venta</span><strong>@_autoSummary.PendingSalesInvoices</strong></div>
+                        <div class="col-6 d-flex justify-content-between"><span>Notas crédito</span><strong>@_autoSummary.PendingCreditNotes</strong></div>
+                        <div class="col-6 d-flex justify-content-between"><span>Facturas proveedor</span><strong>@_autoSummary.PendingPurchaseInvoices</strong></div>
+                        <div class="col-6 d-flex justify-content-between"><span>Recibos</span><strong>@_autoSummary.PendingReceipts</strong></div>
+                        <div class="col-6 d-flex justify-content-between"><span>Pagos</span><strong>@_autoSummary.PendingPayments</strong></div>
+                        <div class="col-6 d-flex justify-content-between"><span>Borrador automático</span><strong>@_autoSummary.DraftAutomaticEntries</strong></div>
+                    </div>
+                    <div class="d-flex gap-2 flex-wrap">
+                        <a class="btn btn-primary btn-sm" href="/accounting/auto-policies">Abrir pólizas automáticas</a>
+                        <a class="btn btn-outline-primary btn-sm" href="/accounting/document-posting">Contabilizar documento</a>
+                        <a class="btn btn-outline-secondary btn-sm" href="/accounting/monthly-close">Cierre mensual</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-3">
+        <div class="col-lg-6">
+            <div class="card shadow-sm h-100">
+                <div class="card-header fw-semibold">Estado de automatización</div>
+                <div class="card-body text-muted">
+                    Ya puedes generar pólizas automáticas base y además abrir la contabilización directa desde una factura, nota de crédito, recibo o pago para revisar un documento puntual.
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-6">
+            <div class="card shadow-sm h-100">
+                <div class="card-header fw-semibold">Siguiente paso sugerido</div>
+                <div class="card-body text-muted">
+                    Revisa catálogo contable y periodos, contabiliza documentos pendientes o masivos, y finalmente prepara el cierre mensual para dejar la contabilidad lista.
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private bool _loading = true;
+    private string? _error;
+    private AccountingDashboardDto _dashboard = new();
+    private AccountingAutoPolicySummaryDto _autoSummary = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _dashboard = await Api.GetDashboardAsync();
+            _autoSummary = await Api.GetAutoPolicySummaryAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+}

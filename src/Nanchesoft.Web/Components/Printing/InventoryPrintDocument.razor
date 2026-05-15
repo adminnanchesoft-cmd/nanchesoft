@@ -1,0 +1,122 @@
+@using Nanchesoft.Web.Services.Inventory
+@inject InventoryApiService InventoryApiService
+@inject IJSRuntime JS
+
+@if (_loading)
+{
+    <div class="p-4">Cargando formato...</div>
+}
+else if (!string.IsNullOrWhiteSpace(_error))
+{
+    <div class="alert alert-danger">@_error</div>
+}
+else if (_definition is not null)
+{
+    <div class="ns-print-toolbar d-print-none">
+        <button class="btn btn-primary" @onclick="PrintAsync">Imprimir</button>
+    </div>
+    <div class="ns-print-sheet">
+        <div class="ns-print-header">
+            <div>
+                <div class="ns-print-brand">Nanchesoft ERP Cloud</div>
+                <h1>@_definition.Title</h1>
+                <div class="ns-print-subtitle">@_definition.Subtitle</div>
+            </div>
+            <div class="ns-print-meta">
+                <div><strong>Folio:</strong> @_definition.Document.Folio</div>
+                <div><strong>Fecha:</strong> @_definition.Document.DocumentDate?.ToString("dd/MM/yyyy")</div>
+                <div><strong>Estatus:</strong> @_definition.Document.Status</div>
+            </div>
+        </div>
+
+        <div class="ns-print-grid">
+            <div><strong>Empresa:</strong> @Lookup(_definition.Lookups.Companies, _definition.Document.CompanyId)</div>
+            <div><strong>Sucursal:</strong> @Lookup(_definition.Lookups.Branches, _definition.Document.BranchId)</div>
+            @if (_definition.RequiresSingleWarehouse)
+            {
+                <div><strong>Almacén:</strong> @Lookup(_definition.Lookups.Warehouses, _definition.Document.WarehouseId)</div>
+            }
+            @if (_definition.RequiresSourceTargetWarehouse)
+            {
+                <div><strong>Origen:</strong> @Lookup(_definition.Lookups.Warehouses, _definition.Document.SourceWarehouseId)</div>
+                <div><strong>Destino:</strong> @Lookup(_definition.Lookups.Warehouses, _definition.Document.TargetWarehouseId)</div>
+            }
+            @if (_definition.RequiresReason)
+            {
+                <div><strong>Motivo:</strong> @_definition.Document.Reason</div>
+            }
+            @if (_definition.RequiresAdjustmentType)
+            {
+                <div><strong>Tipo ajuste:</strong> @_definition.Document.AdjustmentType</div>
+            }
+        </div>
+
+        <table class="ns-print-table">
+            <thead>
+                <tr>
+                    <th>#</th><th>Artículo</th><th>Descripción</th><th>Unidad</th>
+                    @if (_definition.UsesCountLines)
+                    {
+                        <th>Sistema</th><th>Contado</th><th>Diferencia</th>
+                    }
+                    else
+                    {
+                        <th>Cantidad</th><th>Costo</th><th>Importe</th>
+                    }
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var line in _definition.Document.Lines)
+                {
+                    <tr>
+                        <td>@line.LineNumber</td>
+                        <td>@Lookup(_definition.Lookups.Items, line.ItemId)</td>
+                        <td>@line.Description</td>
+                        <td>@Lookup(_definition.Lookups.Units, line.UnitId)</td>
+                        @if (_definition.UsesCountLines)
+                        {
+                            <td>@line.SystemQuantity</td><td>@line.CountedQuantity</td><td>@line.DifferenceQuantity</td>
+                        }
+                        else
+                        {
+                            <td>@line.Quantity</td><td>@line.UnitCost.ToString("C")</td><td>@line.LineTotal.ToString("C")</td>
+                        }
+                    </tr>
+                }
+            </tbody>
+        </table>
+
+        @if (!_definition.UsesCountLines)
+        {
+            <div class="ns-print-totals">
+                <div><strong>Total:</strong> @_definition.Document.Lines.Sum(x => x.LineTotal).ToString("C")</div>
+            </div>
+        }
+
+        <div class="ns-print-notes"><strong>Notas:</strong> @_definition.Document.Notes</div>
+    </div>
+}
+
+<style>
+.ns-print-toolbar{padding:16px 0}.ns-print-sheet{max-width:1000px;margin:0 auto;background:white;padding:24px;color:#0f172a}.ns-print-header{display:flex;justify-content:space-between;gap:20px;border-bottom:2px solid #e2e8f0;padding-bottom:16px;margin-bottom:16px}.ns-print-brand{font-size:12px;text-transform:uppercase;letter-spacing:.12em;color:#475569}.ns-print-subtitle{color:#64748b}.ns-print-meta{text-align:right}.ns-print-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 20px;margin-bottom:16px}.ns-print-table{width:100%;border-collapse:collapse}.ns-print-table th,.ns-print-table td{border:1px solid #cbd5e1;padding:8px;font-size:13px}.ns-print-table th{background:#f8fafc}.ns-print-totals{display:flex;justify-content:flex-end;gap:24px;margin-top:16px}.ns-print-notes{margin-top:16px;padding-top:12px;border-top:1px solid #e2e8f0}@@media print{.ns-print-sheet{max-width:none;padding:0}.ns-print-table th{background:#f1f5f9 !important;-webkit-print-color-adjust:exact;print-color-adjust:exact}}
+</style>
+
+@code {
+    [Parameter, EditorRequired] public string CatalogKey { get; set; } = string.Empty;
+    [Parameter, EditorRequired] public Guid Id { get; set; }
+    private InventoryDocumentEditorDefinition? _definition;
+    private bool _loading = true;
+    private string? _error;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _loading = true;
+        _error = null;
+        try { _definition = await InventoryApiService.GetEditorDefinitionAsync(CatalogKey, Id); }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _loading = false; }
+    }
+
+    private static string Lookup(List<CatalogLookupItem> items, Guid? id) => items.FirstOrDefault(x => Guid.TryParse(x.Id, out var parsed) && parsed == id)?.Name ?? string.Empty;
+    private Task PrintAsync() => JS.InvokeVoidAsync("print").AsTask();
+}

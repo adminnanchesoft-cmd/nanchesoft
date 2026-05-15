@@ -1,0 +1,145 @@
+@using Nanchesoft.Web.Services.Sales
+@inject SalesApiService SalesApiService
+@inject IJSRuntime JS
+
+@if (_loading)
+{
+    <div class="p-4">Cargando formato...</div>
+}
+else if (!string.IsNullOrWhiteSpace(_error))
+{
+    <div class="alert alert-danger">@_error</div>
+}
+else if (_definition is not null)
+{
+    <div class="ns-print-toolbar d-print-none">
+        <button class="btn btn-primary" @onclick="PrintAsync">Imprimir</button>
+    </div>
+    <div class="ns-print-sheet">
+        <div class="ns-print-header">
+            <div>
+                <div class="ns-print-brand">Nanchesoft ERP Cloud</div>
+                <h1>@_definition.Title</h1>
+                <div class="ns-print-subtitle">@_definition.Subtitle</div>
+            </div>
+            <div class="ns-print-meta">
+                <div><strong>Folio:</strong> @_definition.Document.Folio</div>
+                <div><strong>Fecha:</strong> @_definition.Document.DocumentDate?.ToString("dd/MM/yyyy")</div>
+                <div><strong>Estatus:</strong> @_definition.Document.Status</div>
+            </div>
+        </div>
+
+        <div class="ns-print-grid">
+            <div><strong>Empresa:</strong> @Lookup(_definition.Lookups.Companies, _definition.Document.CompanyId)</div>
+            <div><strong>Sucursal:</strong> @Lookup(_definition.Lookups.Branches, _definition.Document.BranchId)</div>
+            @if (_definition.RequiresCustomer)
+            {
+                <div><strong>Cliente:</strong> @Lookup(_definition.Lookups.Customers, _definition.Document.CustomerId)</div>
+            }
+            @if (_definition.RequiresWarehouse)
+            {
+                <div><strong>Almacén:</strong> @Lookup(_definition.Lookups.Warehouses, _definition.Document.WarehouseId)</div>
+            }
+            @if (_definition.RequiresCurrency)
+            {
+                <div><strong>Moneda:</strong> @Lookup(_definition.Lookups.Currencies, _definition.Document.CurrencyId)</div>
+            }
+            @if (_definition.RequiresQuote)
+            {
+                <div><strong>Cotización:</strong> @Lookup(_definition.Lookups.Quotes, _definition.Document.SalesQuoteId)</div>
+            }
+            @if (_definition.RequiresOrder)
+            {
+                <div><strong>Pedido:</strong> @Lookup(_definition.Lookups.Orders, _definition.Document.SalesOrderId)</div>
+            }
+            @if (_definition.RequiresShipment)
+            {
+                <div><strong>Remisión:</strong> @Lookup(_definition.Lookups.Shipments, _definition.Document.SalesShipmentId)</div>
+            }
+            @if (_definition.RequiresInvoice)
+            {
+                <div><strong>Factura:</strong> @Lookup(_definition.Lookups.Invoices, _definition.Document.SalesInvoiceId)</div>
+            }
+            @if (_definition.UsesValidUntil)
+            {
+                <div><strong>Vigencia:</strong> @_definition.Document.ValidUntil?.ToString("dd/MM/yyyy")</div>
+            }
+            @if (_definition.UsesReason)
+            {
+                <div><strong>Motivo:</strong> @_definition.Document.Reason</div>
+            }
+        </div>
+
+        <table class="ns-print-table">
+            <thead>
+                <tr>
+                    <th>#</th><th>Artículo</th><th>Descripción</th><th>Unidad</th><th>Cantidad</th>
+                    @if (_definition.UsesShipmentQuantities)
+                    {
+                        <th>Remitida</th><th>Facturada</th><th>Pendiente</th>
+                    }
+                    @if (_definition.UsesAmounts)
+                    {
+                        <th>P.Unit.</th><th>Desc.</th><th>Imp.</th><th>Importe</th>
+                    }
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var line in _definition.Document.Lines)
+                {
+                    <tr>
+                        <td>@line.LineNumber</td>
+                        <td>@Lookup(_definition.Lookups.Items, line.ItemId)</td>
+                        <td>@line.Description</td>
+                        <td>@Lookup(_definition.Lookups.Units, line.UnitId)</td>
+                        <td>@line.Quantity</td>
+                        @if (_definition.UsesShipmentQuantities)
+                        {
+                            <td>@line.ShippedQuantity</td><td>@line.InvoicedQuantity</td><td>@line.PendingQuantity</td>
+                        }
+                        @if (_definition.UsesAmounts)
+                        {
+                            <td>@line.UnitPrice.ToString("C")</td><td>@line.DiscountAmount.ToString("C")</td><td>@line.TaxAmount.ToString("C")</td><td>@line.LineTotal.ToString("C")</td>
+                        }
+                    </tr>
+                }
+            </tbody>
+        </table>
+
+        @if (_definition.UsesAmounts)
+        {
+            <div class="ns-print-totals">
+                <div><strong>Subtotal:</strong> @_definition.Document.Subtotal.ToString("C")</div>
+                <div><strong>Descuento:</strong> @_definition.Document.DiscountAmount.ToString("C")</div>
+                <div><strong>Impuesto:</strong> @_definition.Document.TaxAmount.ToString("C")</div>
+                <div><strong>Total:</strong> @_definition.Document.Total.ToString("C")</div>
+            </div>
+        }
+
+        <div class="ns-print-notes"><strong>Notas:</strong> @_definition.Document.Notes</div>
+    </div>
+}
+
+<style>
+.ns-print-toolbar{padding:16px 0}.ns-print-sheet{max-width:1000px;margin:0 auto;background:white;padding:24px;color:#0f172a}.ns-print-header{display:flex;justify-content:space-between;gap:20px;border-bottom:2px solid #e2e8f0;padding-bottom:16px;margin-bottom:16px}.ns-print-brand{font-size:12px;text-transform:uppercase;letter-spacing:.12em;color:#475569}.ns-print-subtitle{color:#64748b}.ns-print-meta{text-align:right}.ns-print-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 20px;margin-bottom:16px}.ns-print-table{width:100%;border-collapse:collapse}.ns-print-table th,.ns-print-table td{border:1px solid #cbd5e1;padding:8px;font-size:13px}.ns-print-table th{background:#f8fafc}.ns-print-totals{display:flex;justify-content:flex-end;gap:24px;margin-top:16px}.ns-print-notes{margin-top:16px;padding-top:12px;border-top:1px solid #e2e8f0}@@media print{.ns-print-sheet{max-width:none;padding:0}.ns-print-table th{background:#f1f5f9 !important;-webkit-print-color-adjust:exact;print-color-adjust:exact}}
+</style>
+
+@code {
+    [Parameter, EditorRequired] public string CatalogKey { get; set; } = string.Empty;
+    [Parameter, EditorRequired] public Guid Id { get; set; }
+    private SalesDocumentEditorDefinition? _definition;
+    private bool _loading = true;
+    private string? _error;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _loading = true;
+        _error = null;
+        try { _definition = await SalesApiService.GetEditorDefinitionAsync(CatalogKey, Id); }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _loading = false; }
+    }
+
+    private static string Lookup(List<CatalogLookupItem> items, Guid? id) => items.FirstOrDefault(x => Guid.TryParse(x.Id, out var parsed) && parsed == id)?.Name ?? string.Empty;
+    private Task PrintAsync() => JS.InvokeVoidAsync("print").AsTask();
+}

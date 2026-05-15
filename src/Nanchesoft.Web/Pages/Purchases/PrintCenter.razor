@@ -1,0 +1,62 @@
+@page "/purchases/print-center"
+@inject PurchaseApiService PurchaseApiService
+
+<PageTitle>Formatos compras | Nanchesoft</PageTitle>
+
+@if (_sections.Count == 0)
+{
+    <div class="p-4">Cargando formatos...</div>
+}
+else
+{
+    <div class="container-fluid py-3">
+        <h1>Formatos de compras</h1>
+        <p class="text-secondary">Imprime requisiciones, órdenes de compra, recepciones, facturas de proveedor y devoluciones.</p>
+        @foreach (var grp in _sections)
+        {
+            <div class="card shadow-sm mb-4">
+                <div class="card-header"><strong>@grp.Title</strong></div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-sm mb-0">
+                            <thead>
+                                <tr><th>Folio</th><th>Fecha</th><th>Estatus</th><th></th></tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var row in grp.Rows)
+                                {
+                                    <tr>
+                                        <td>@GetValue(row, "Folio")</td>
+                                        <td>@GetValue(row, grp.DateField)</td>
+                                        <td>@GetValue(row, "Status")</td>
+                                        <td>
+                                            <a class="btn btn-sm btn-outline-primary" target="_blank" href="/purchases/print/@grp.CatalogKey/@GetValue(row, grp.KeyField)">Imprimir</a>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+}
+
+@code {
+    private readonly List<PrintSection> _sections = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        _sections.Add(new PrintSection("purchase-requisitions", "Requisiciones", "PurchaseRequisitionId", "RequisitionDate", (await PurchaseApiService.GetCatalogAsync("purchase-requisitions")).Rows));
+        _sections.Add(new PrintSection("purchase-orders", "Órdenes", "PurchaseOrderId", "OrderDate", (await PurchaseApiService.GetCatalogAsync("purchase-orders")).Rows));
+        _sections.Add(new PrintSection("purchase-receipts", "Recepciones", "PurchaseReceiptId", "ReceiptDate", (await PurchaseApiService.GetCatalogAsync("purchase-receipts")).Rows));
+        _sections.Add(new PrintSection("purchase-invoices", "Facturas", "PurchaseInvoiceId", "InvoiceDate", (await PurchaseApiService.GetCatalogAsync("purchase-invoices")).Rows));
+        _sections.Add(new PrintSection("purchase-returns", "Devoluciones", "PurchaseReturnId", "ReturnDate", (await PurchaseApiService.GetCatalogAsync("purchase-returns")).Rows));
+    }
+
+    private static string GetValue(Dictionary<string, object?> row, string key)
+        => row.TryGetValue(key, out var value) ? value?.ToString() ?? string.Empty : string.Empty;
+
+    private sealed record PrintSection(string CatalogKey, string Title, string KeyField, string DateField, List<Dictionary<string, object?>> Rows);
+}

@@ -1,0 +1,109 @@
+@page "/finance/executive-agreements"
+@using Nanchesoft.Web.Services.Finance
+@inject FinanceApiService FinanceApiService
+
+<PageTitle>Acuerdos ejecutivos | Nanchesoft</PageTitle>
+
+<h1 class="h3 mb-3">Acuerdos ejecutivos</h1>
+<p class="text-muted">Bitácora de acuerdos del comité financiero: responsable, fecha compromiso, prioridad y estatus.</p>
+
+<div class="row g-2 align-items-end mb-3">
+    <div class="col-md-2"><label class="form-label">Año</label><input class="form-control" type="number" min="2020" max="2100" @bind="_year" /></div>
+    <div class="col-md-2"><label class="form-label">Mes</label><select class="form-select" @bind="_month">@for (var month = 1; month <= 12; month++) { <option value="@month">@(new DateTime(2000, month, 1).ToString("MMMM"))</option> }</select></div>
+    <div class="col-md-8 d-flex gap-2"><button class="btn btn-primary" @onclick="ReloadAsync">Cargar</button><button class="btn btn-success" @onclick="AddRow">Nuevo acuerdo</button><button class="btn btn-outline-primary" @onclick="SaveAsync">Guardar</button></div>
+</div>
+
+@if (_loading)
+{
+    <div class="alert alert-info">Cargando acuerdos...</div>
+}
+else if (!string.IsNullOrWhiteSpace(_error))
+{
+    <div class="alert alert-danger">@_error</div>
+}
+else
+{
+    <div class="card shadow-sm">
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-sm align-middle">
+                    <thead><tr><th>Tema</th><th>Acuerdo</th><th>Responsable</th><th>Vence</th><th>Prioridad</th><th>Estatus</th><th>Notas</th><th></th></tr></thead>
+                    <tbody>
+                        @foreach (var row in _rows)
+                        {
+                            <tr>
+                                <td><input class="form-control form-control-sm" @bind="row.Topic" /></td>
+                                <td><input class="form-control form-control-sm" @bind="row.Agreement" /></td>
+                                <td><input class="form-control form-control-sm" @bind="row.Owner" /></td>
+                                <td><input class="form-control form-control-sm" type="date" value="@FormatInputDate(row.DueDate)" @onchange="e => OnDateChanged(row, e.Value?.ToString())" /></td>
+                                <td><select class="form-select form-select-sm" @bind="row.Priority"><option>Baja</option><option>Media</option><option>Alta</option></select></td>
+                                <td><select class="form-select form-select-sm" @bind="row.Status"><option>pending</option><option>in_progress</option><option>done</option><option>blocked</option></select></td>
+                                <td><input class="form-control form-control-sm" @bind="row.Notes" /></td>
+                                <td><button class="btn btn-sm btn-outline-danger" @onclick="() => RemoveRow(row.Id)">Quitar</button></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private int _year = DateTime.UtcNow.Year;
+    private int _month = DateTime.UtcNow.Month;
+    private bool _loading = true;
+    private string? _error;
+    private List<FinanceExecutiveAgreementRowDto> _rows = new();
+
+    protected override async Task OnInitializedAsync() => await ReloadAsync();
+
+    private async Task ReloadAsync()
+    {
+        _loading = true;
+        _error = null;
+        try { _rows = await FinanceApiService.GetExecutiveAgreementsAsync(_year, _month); }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _loading = false; }
+    }
+
+    private void AddRow()
+    {
+        _rows.Insert(0, new FinanceExecutiveAgreementRowDto { Id = Guid.NewGuid(), Year = _year, Month = _month, Priority = "Media", Status = "pending" });
+    }
+
+    private void RemoveRow(Guid id)
+    {
+        _rows = _rows.Where(x => x.Id != id).ToList();
+    }
+
+    private async Task SaveAsync()
+    {
+        try
+        {
+            foreach (var row in _rows)
+            {
+                row.Year = _year;
+                row.Month = _month;
+            }
+            await FinanceApiService.SaveExecutiveAgreementsAsync(_rows);
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private static string FormatInputDate(DateTime? value) => value?.ToString("yyyy-MM-dd") ?? string.Empty;
+    private static void OnDateChanged(FinanceExecutiveAgreementRowDto row, string? value)
+    {
+        if (DateTime.TryParse(value, out var parsed))
+        {
+            row.DueDate = DateTime.SpecifyKind(parsed.Date, DateTimeKind.Utc);
+        }
+        else
+        {
+            row.DueDate = null;
+        }
+    }
+}

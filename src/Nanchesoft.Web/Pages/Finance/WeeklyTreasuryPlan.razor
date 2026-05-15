@@ -1,0 +1,40 @@
+@page "/finance/weekly-treasury-plan"
+@using Nanchesoft.Web.Services.Finance
+@inject FinanceApiService FinanceApiService
+
+<PageTitle>Plan semanal tesorería | Nanchesoft</PageTitle>
+
+<h1 class="h3 mb-3">Plan semanal de tesorería</h1>
+<p class="text-muted">Consolida compromisos de cobro y programación de pagos en un saldo semanal proyectado.</p>
+
+<div class="card shadow-sm mb-3"><div class="card-body"><div class="row g-3 align-items-end"><div class="col-md-3"><label class="form-label">Semanas</label><input type="number" min="1" max="26" class="form-control" @bind="_weeks" /></div><div class="col-md-3 d-flex gap-2"><button class="btn btn-primary" @onclick="LoadAsync">Actualizar</button></div></div></div></div>
+
+@if (_loading)
+{
+    <div class="alert alert-info">Cargando plan semanal...</div>
+}
+else
+{
+    <div class="row g-3 mb-3">
+        <div class="col-md-3"><div class="card shadow-sm"><div class="card-body"><div class="text-muted small">Cobros plan</div><div class="fs-4 fw-bold text-success">@_rows.Sum(x => x.PlannedCollections).ToString("N2")</div></div></div></div>
+        <div class="col-md-3"><div class="card shadow-sm"><div class="card-body"><div class="text-muted small">Pagos plan</div><div class="fs-4 fw-bold text-danger">@_rows.Sum(x => x.PlannedPayments).ToString("N2")</div></div></div></div>
+        <div class="col-md-3"><div class="card shadow-sm"><div class="card-body"><div class="text-muted small">Flujo neto</div><div class="fs-4 fw-bold">@_rows.Sum(x => x.NetFlow).ToString("N2")</div></div></div></div>
+        <div class="col-md-3"><div class="card shadow-sm"><div class="card-body"><div class="text-muted small">Cierre final</div><div class="fs-4 fw-bold @((_rows.LastOrDefault()?.ProjectedClosing ?? 0m) >= 0m ? "text-success" : "text-danger")">@((_rows.LastOrDefault()?.ProjectedClosing ?? 0m).ToString("N2"))</div></div></div></div>
+    </div>
+    <div class="card shadow-sm"><div class="card-body"><div class="table-responsive"><table class="table table-sm align-middle"><thead><tr><th>Semana</th><th>Apertura</th><th>Cobros</th><th>Pagos</th><th>Neto</th><th>Cierre</th><th>Carryover</th><th>Docs</th></tr></thead><tbody>@foreach (var row in _rows){<tr><td>@row.WeekStart.ToString("dd/MM") - @row.WeekEnd.ToString("dd/MM")</td><td class="text-end">@row.OpeningBalance.ToString("N2")</td><td class="text-end text-success">@row.PlannedCollections.ToString("N2")</td><td class="text-end text-danger">@row.PlannedPayments.ToString("N2")</td><td class="text-end">@row.NetFlow.ToString("N2")</td><td class="text-end @((row.ProjectedClosing >= 0m ? "text-success" : "text-danger"))">@row.ProjectedClosing.ToString("N2")</td><td class="text-end small">CxC @row.OverdueCollectionsCarryover.ToString("N2")<br />CxP @row.OverduePaymentsCarryover.ToString("N2")</td><td class="small">Cobros @row.CollectionCount<br />Pagos @row.PaymentCount</td></tr>}</tbody></table></div></div></div>
+}
+
+@code {
+    private bool _loading = true;
+    private int _weeks = 8;
+    private List<FinanceTreasuryWeeklyPlanRowDto> _rows = new();
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        try { _rows = await FinanceApiService.GetWeeklyTreasuryPlanAsync(_weeks); }
+        finally { _loading = false; }
+    }
+}

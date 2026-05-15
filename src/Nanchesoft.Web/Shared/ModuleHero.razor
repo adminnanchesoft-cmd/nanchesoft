@@ -1,0 +1,77 @@
+@using System
+@using Microsoft.AspNetCore.Components
+@inject NavigationManager Navigation
+
+@code {
+    private string Route => Navigation.ToBaseRelativePath(Navigation.Uri).Trim('/');
+
+    private string HeroTitle => GetHeroTitle(Route);
+    private string HeroSubtitle => GetHeroSubtitle(Route);
+    private string HeroTag => GetHeroTag(Route);
+
+    private static string GetHeroTitle(string? route)
+    {
+        var normalized = Normalize(route);
+
+        if (normalized.StartsWith("purchases/")) return "Compras";
+        if (normalized.StartsWith("inventory/")) return "Inventario";
+        if (normalized.StartsWith("sales/")) return "Ventas";
+        if (normalized.StartsWith("services/")) return "Servicios";
+        if (normalized.StartsWith("payroll/")) return "Nómina";
+        if (normalized.StartsWith("hr/") || normalized.StartsWith("human-resources/")) return "Recursos Humanos";
+        if (normalized.StartsWith("finance/")) return "Finanzas";
+        if (normalized.StartsWith("products/")) return "Productos";
+        if (normalized.StartsWith("materials/")) return "Materiales";
+        if (normalized.StartsWith("administration/") || normalized.StartsWith("admin/")) return "Administración";
+        return normalized is "" or "dashboard" or "home" ? "Nanchesoft ERP" : "Centro de operación";
+    }
+
+    private static string GetHeroSubtitle(string? route)
+    {
+        var normalized = Normalize(route);
+
+        if (normalized.StartsWith("purchases/")) return "Abastecimiento, órdenes, recepciones y control de proveedores.";
+        if (normalized.StartsWith("inventory/")) return "Existencias, kardex, movimientos y trazabilidad operativa.";
+        if (normalized.StartsWith("sales/")) return "Cotizaciones, pedidos, facturación y seguimiento comercial.";
+        if (normalized.StartsWith("services/")) return "Notas por horas, clientes y cobranza para servicios profesionales.";
+        if (normalized.StartsWith("payroll/")) return "Períodos, incidencias, prenómina, recibos y dispersión.";
+        if (normalized.StartsWith("hr/") || normalized.StartsWith("human-resources/")) return "Empleados, estructura organizacional y procesos de talento.";
+        if (normalized.StartsWith("finance/")) return "Tesorería, bancos, ingresos, egresos y conciliación.";
+        if (normalized.StartsWith("products/")) return "Ingeniería, estilos, productos terminados y control técnico.";
+        if (normalized.StartsWith("materials/")) return "Familias, subfamilias y catálogo de materiales para operación.";
+        if (normalized.StartsWith("administration/") || normalized.StartsWith("admin/")) return "Configuración general, series, folios y gobierno del sistema.";
+        return "Espacio de trabajo corporativo para operar todas las áreas del negocio.";
+    }
+
+    private static string GetHeroTag(string? route)
+    {
+        var normalized = Normalize(route);
+
+        if (normalized.StartsWith("purchases/")) return "PROC";
+        if (normalized.StartsWith("inventory/")) return "STOCK";
+        if (normalized.StartsWith("sales/")) return "COM";
+        if (normalized.StartsWith("services/")) return "HRS";
+        if (normalized.StartsWith("payroll/")) return "PAY";
+        if (normalized.StartsWith("hr/") || normalized.StartsWith("human-resources/")) return "HR";
+        if (normalized.StartsWith("finance/")) return "FIN";
+        if (normalized.StartsWith("products/") || normalized.StartsWith("materials/")) return "CAT";
+        return "ERP";
+    }
+
+    private static string Normalize(string? route)
+        => (route ?? string.Empty).Trim().Trim('/').ToLowerInvariant();
+}
+
+<section class="ns-module-hero-compact">
+    <div class="ns-module-hero-compact__content">
+        <div class="ns-module-hero-compact__eyebrow">Área de trabajo</div>
+        <div class="ns-module-hero-compact__row">
+            <div>
+                <h1 class="ns-module-hero-compact__title">@HeroTitle</h1>
+                <p class="ns-module-hero-compact__subtitle">@HeroSubtitle</p>
+            </div>
+
+            <div class="ns-module-hero-compact__badge">@HeroTag</div>
+        </div>
+    </div>
+</section>

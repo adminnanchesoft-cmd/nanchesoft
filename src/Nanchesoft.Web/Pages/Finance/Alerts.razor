@@ -1,0 +1,122 @@
+@page "/finance/alerts"
+@using Nanchesoft.Web.Services.Finance
+@inject FinanceApiService FinanceApiService
+
+<PageTitle>Alertas financieras | Nanchesoft</PageTitle>
+
+<h1 class="h3 mb-3">Alertas financieras</h1>
+<p class="text-muted">Vencimientos, riesgos de tesorería, documentos sin póliza y pendientes de seguimiento.</p>
+
+@if (_loading)
+{
+    <div class="alert alert-info">Cargando alertas...</div>
+}
+else if (!string.IsNullOrWhiteSpace(_error))
+{
+    <div class="alert alert-danger">@_error</div>
+}
+else
+{
+    <div class="d-flex gap-2 mb-3">
+        <button class="btn btn-outline-secondary" @onclick="ReloadAsync">Actualizar</button>
+        <a class="btn btn-outline-primary" href="/finance/exceptions">Ver excepciones</a>
+    </div>
+
+    <div class="table-responsive">
+        <table class="table table-sm table-striped align-middle">
+            <thead>
+                <tr>
+                    <th>Severidad</th>
+                    <th>Categoría</th>
+                    <th>Módulo</th>
+                    <th>Título</th>
+                    <th>Folio</th>
+                    <th>Importe</th>
+                    <th>Vence</th>
+                    <th>Acción</th>
+                </tr>
+            </thead>
+            <tbody>
+                @if (_rows.Count == 0)
+                {
+                    <tr><td colspan="8" class="text-center text-muted py-4">No hay alertas activas.</td></tr>
+                }
+                else
+                {
+                    @foreach (var row in _rows)
+                    {
+                        <tr>
+                            <td><span class="badge @GetSeverityClass(row.Severity)">@row.Severity</span></td>
+                            <td>@row.Category</td>
+                            <td>@row.Module</td>
+                            <td>
+                                <div class="fw-semibold">@row.Title</div>
+                                <div class="small text-muted">@row.Message</div>
+                            </td>
+                            <td>@row.Folio</td>
+                            <td>@(row.Amount?.ToString("N2") ?? "-")</td>
+                            <td>
+                                @if (row.DueDate.HasValue)
+                                {
+                                    <span>@row.DueDate.Value.ToString("dd/MM/yyyy")</span>
+                                    <div class="small text-muted">@FormatDays(row.DaysToDue)</div>
+                                }
+                                else
+                                {
+                                    <span>-</span>
+                                }
+                            </td>
+                            <td>
+                                @if (!string.IsNullOrWhiteSpace(row.Route))
+                                {
+                                    <a class="btn btn-sm btn-outline-primary" href="@row.Route">Ir</a>
+                                }
+                            </td>
+                        </tr>
+                    }
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+@code {
+    private bool _loading = true;
+    private string? _error;
+    private List<FinanceAlertRowDto> _rows = new();
+
+    protected override async Task OnInitializedAsync() => await ReloadAsync();
+
+    private async Task ReloadAsync()
+    {
+        _loading = true;
+        _error = null;
+        try
+        {
+            _rows = await FinanceApiService.GetAlertsAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private static string GetSeverityClass(string severity) => severity switch
+    {
+        "Alta" => "bg-danger",
+        "Media" => "bg-warning text-dark",
+        _ => "bg-secondary"
+    };
+
+    private static string FormatDays(int? days)
+    {
+        if (!days.HasValue) return string.Empty;
+        if (days.Value < 0) return $"Vencido {Math.Abs(days.Value)} d";
+        if (days.Value == 0) return "Vence hoy";
+        return $"Vence en {days.Value} d";
+    }
+}

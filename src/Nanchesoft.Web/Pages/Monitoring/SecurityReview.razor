@@ -1,0 +1,37 @@
+@page "/monitoring/security-review"
+@inject Nanchesoft.Web.Services.Monitoring.MonitoringApiService MonitoringApiService
+
+<PageTitle>Revisión de seguridad | Nanchesoft</PageTitle>
+
+<div class="ns-catalog-page">
+    <div class="ns-catalog-header">
+        <div>
+            <div class="ns-catalog-eyebrow">Monitoreo</div>
+            <h1 class="ns-catalog-title">Revisión de seguridad</h1>
+            <p class="ns-catalog-subtitle">Indicadores básicos de usuarios, sesiones, roles y permisos.</p>
+        </div>
+    </div>
+
+    @if (_model is null)
+    {
+        <div class="ns-catalog-loading"><div class="ns-loader"></div><span>Cargando revisión...</span></div>
+    }
+    else
+    {
+        <div class="ns-kpi-grid">
+            <div class="ns-kpi-card"><div class="ns-kpi-label">Usuarios totales</div><div class="ns-kpi-value">@_model.TotalUsers</div></div>
+            <div class="ns-kpi-card"><div class="ns-kpi-label">Usuarios activos</div><div class="ns-kpi-value">@_model.ActiveUsers</div></div>
+            <div class="ns-kpi-card ns-kpi-card-muted"><div class="ns-kpi-label">Usuarios inactivos</div><div class="ns-kpi-value">@_model.InactiveUsers</div></div>
+            <div class="ns-kpi-card"><div class="ns-kpi-label">Usuarios bloqueados</div><div class="ns-kpi-value">@_model.LockedUsers</div></div>
+            <div class="ns-kpi-card"><div class="ns-kpi-label">Sesiones activas</div><div class="ns-kpi-value">@_model.ActiveSessions</div></div>
+            <div class="ns-kpi-card"><div class="ns-kpi-label">Roles</div><div class="ns-kpi-value">@_model.TotalRoles</div></div>
+            <div class="ns-kpi-card"><div class="ns-kpi-label">Permisos</div><div class="ns-kpi-value">@_model.TotalPermissions</div></div>
+            <div class="ns-kpi-card ns-kpi-card-warning"><div class="ns-kpi-label">Fallos acceso 7 días</div><div class="ns-kpi-value">@_model.RecentAccessFailures</div></div>
+        </div>
+    }
+</div>
+
+@code {
+    private Nanchesoft.Web.Services.Monitoring.MonitoringSecurityReviewDto? _model;
+    protected override async Task OnInitializedAsync() => _model = await MonitoringApiService.GetSecurityReviewAsync();
+}

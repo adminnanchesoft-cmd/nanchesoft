@@ -1,0 +1,19 @@
+@using Nanchesoft.Web.Components.Shared
+@inject NavigationManager Navigation
+
+<div class="d-flex justify-content-end gap-2 mb-3 flex-wrap">
+    <button class="btn btn-outline-secondary" @onclick="GoToDashboard">Dashboard comercial</button>
+    <button class="btn btn-outline-secondary" @onclick="GoToFormats">Formatos de impresión</button>
+    <button class="btn btn-primary" @onclick="CreateNew">Nuevo documento con partidas</button>
+</div>
+
+<CatalogCrudPage CatalogKey="@CatalogKey" />
+
+@code {
+    [Parameter, EditorRequired] public string CatalogKey { get; set; } = string.Empty;
+    [Parameter, EditorRequired] public string CreateUrl { get; set; } = string.Empty;
+
+    private void CreateNew() => Navigation.NavigateTo(CreateUrl);
+    private void GoToDashboard() => Navigation.NavigateTo("/sales/dashboard");
+    private void GoToFormats() => Navigation.NavigateTo("/sales/print-center");
+}

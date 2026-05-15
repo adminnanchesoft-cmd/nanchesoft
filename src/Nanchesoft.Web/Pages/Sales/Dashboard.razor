@@ -1,0 +1,38 @@
+@page "/sales/dashboard"
+@using Nanchesoft.Web.Services.Sales
+@inject SalesApiService SalesApiService
+
+<PageTitle>Dashboard comercial | Nanchesoft</PageTitle>
+
+<div class="ns-catalog-page">
+    <div class="ns-catalog-header">
+        <div>
+            <div class="ns-catalog-eyebrow">Nanchesoft ERP · Ventas</div>
+            <h1 class="ns-catalog-title">Dashboard comercial</h1>
+            <p class="ns-catalog-subtitle">Indicadores base de cotizaciones, pedidos, remisiones, facturas, devoluciones y notas de crédito.</p>
+        </div>
+        <div class="ns-catalog-badge">DevExtreme 25.1.6</div>
+    </div>
+
+    @if (_summary is null)
+    {
+        <div class="ns-catalog-loading"><div class="ns-loader"></div><span>Cargando dashboard...</span></div>
+    }
+    else
+    {
+        <div class="ns-kpi-grid">
+            <div class="ns-kpi-card"><div class="ns-kpi-label">Cotizaciones abiertas</div><div class="ns-kpi-value">@_summary.OpenQuotes</div></div>
+            <div class="ns-kpi-card ns-kpi-card-success"><div class="ns-kpi-label">Pedidos abiertos</div><div class="ns-kpi-value">@_summary.OpenOrders</div></div>
+            <div class="ns-kpi-card"><div class="ns-kpi-label">Remisiones recientes</div><div class="ns-kpi-value">@_summary.RecentShipments</div></div>
+            <div class="ns-kpi-card"><div class="ns-kpi-label">Facturas recientes</div><div class="ns-kpi-value">@_summary.RecentInvoices</div></div>
+            <div class="ns-kpi-card ns-kpi-card-success"><div class="ns-kpi-label">Ventas 30 días</div><div class="ns-kpi-value ns-kpi-value-small">@_summary.PeriodSales.ToString("C")</div></div>
+            <div class="ns-kpi-card ns-kpi-card-muted"><div class="ns-kpi-label">Devoluciones 30 días</div><div class="ns-kpi-value ns-kpi-value-small">@_summary.ReturnsAmount.ToString("C")</div></div>
+            <div class="ns-kpi-card"><div class="ns-kpi-label">Notas crédito 30 días</div><div class="ns-kpi-value ns-kpi-value-small">@_summary.CreditNotesAmount.ToString("C")</div></div>
+        </div>
+    }
+</div>
+
+@code {
+    private SalesDashboardSummaryDto? _summary;
+    protected override async Task OnInitializedAsync() => _summary = await SalesApiService.GetDashboardSummaryAsync();
+}

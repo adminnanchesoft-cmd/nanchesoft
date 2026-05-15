@@ -1,0 +1,79 @@
+@page "/select-tenant"
+@using Microsoft.AspNetCore.Components
+@using Nanchesoft.Web.State
+@implements IDisposable
+@inject AuthState AuthState
+@inject NavigationManager Navigation
+
+<PageTitle>Seleccionar tenant</PageTitle>
+
+<div class="ns-select-tenant-page">
+    <div class="ns-select-tenant-card">
+        <div class="ns-select-tenant-header">
+            <h3>Seleccionar tenant</h3>
+            <p>Elige el entorno de trabajo que deseas usar en este momento.</p>
+        </div>
+
+        @if (_options.Count == 0)
+        {
+            <div class="alert alert-warning">
+                No se encontraron tenants disponibles para este usuario.
+            </div>
+        }
+        else
+        {
+            <div class="ns-tenant-list">
+                @foreach (var option in _options)
+                {
+                    <button type="button"
+                            class="ns-tenant-option @(IsCurrent(option) ? "active" : string.Empty)"
+                            @onclick="() => OnTenantSelected(option)">
+                        <div class="ns-tenant-option__title">@option.Name</div>
+                        @if (!string.IsNullOrWhiteSpace(option.CompanyName))
+                        {
+                            <div class="ns-tenant-option__meta">Empresa: @option.CompanyName</div>
+                        }
+                        @if (!string.IsNullOrWhiteSpace(option.BranchName))
+                        {
+                            <div class="ns-tenant-option__meta">Sucursal: @option.BranchName</div>
+                        }
+                        @if (!string.IsNullOrWhiteSpace(option.Code))
+                        {
+                            <div class="ns-tenant-option__code">@option.Code</div>
+                        }
+                    </button>
+                }
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    private List<Nanchesoft.Web.State.TenantOption> _options = new();
+
+    protected override void OnInitialized()
+    {
+        _options = AuthState.TenantOptions.ToList();
+        AuthState.OnChange += HandleAuthChanged;
+    }
+
+    private void HandleAuthChanged()
+    {
+        _options = AuthState.TenantOptions.ToList();
+        InvokeAsync(StateHasChanged);
+    }
+
+    private bool IsCurrent(Nanchesoft.Web.State.TenantOption option)
+        => AuthState.TenantId.HasValue && AuthState.TenantId.Value == option.TenantId;
+
+    private void OnTenantSelected(Nanchesoft.Web.State.TenantOption option)
+    {
+        AuthState.SetTenantContext(option);
+        Navigation.NavigateTo("/", forceLoad: false);
+    }
+
+    public void Dispose()
+    {
+        AuthState.OnChange -= HandleAuthChanged;
+    }
+}

@@ -1,0 +1,206 @@
+
+@page "/products/cost-sheets"
+@using Nanchesoft.Web.Services.Products
+@inject ProductTechnicalCostingApiService Api
+
+<PageTitle>Hojas de costo</PageTitle>
+
+<h3>Hojas de costo</h3>
+<p>Genera costos base desde materiales y ajusta costos indirectos, mano de obra y margen.</p>
+
+@if (!string.IsNullOrWhiteSpace(_message))
+{
+    <div class="alert alert-info">@_message</div>
+}
+
+@if (_items is null || _products is null)
+{
+    <p>Cargando...</p>
+}
+else
+{
+    <div class="row">
+        <div class="col-7">
+            <table class="table table-sm table-striped">
+                <thead>
+                    <tr>
+                        <th>Código</th>
+                        <th>Total costo</th>
+                        <th>Precio sugerido</th>
+                        <th>Aprobada</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                @foreach (var item in _items)
+                {
+                    <tr>
+                        <td>@item.CostSheetCode</td>
+                        <td>@item.TotalCost</td>
+                        <td>@item.SuggestedSalePrice</td>
+                        <td>@(item.IsApproved ? "Sí" : "No")</td>
+                        <td><button class="btn btn-sm btn-outline-primary" @onclick="() => Edit(item)">Editar</button></td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        </div>
+        <div class="col-5">
+            <EditForm Model="_editor" OnValidSubmit="SaveAsync">
+                <div class="mb-2">
+                    <label>Producto</label>
+                    <select class="form-select" @bind="_editor.FinishedProductIdString">
+                        <option value="">Seleccione</option>
+                        @foreach (var product in _products)
+                        {
+                            <option value="@product.FinishedProductId">@product.ProductCode - @product.ProductName</option>
+                        }
+                    </select>
+                </div>
+                <div class="mb-2"><label>Código</label><input class="form-control" @bind="_editor.CostSheetCode" /></div>
+                <div class="mb-2"><label>Estatus</label><input class="form-control" @bind="_editor.Status" /></div>
+                <div class="mb-2"><label>Material directo</label><input class="form-control" type="number" step="0.0001" @bind="_editor.DirectMaterialCost" /></div>
+                <div class="mb-2"><label>Mano de obra</label><input class="form-control" type="number" step="0.0001" @bind="_editor.DirectLaborCost" /></div>
+                <div class="mb-2"><label>CIF</label><input class="form-control" type="number" step="0.0001" @bind="_editor.IndirectManufacturingCost" /></div>
+                <div class="mb-2"><label>Empaque</label><input class="form-control" type="number" step="0.0001" @bind="_editor.PackagingCost" /></div>
+                <div class="mb-2"><label>Servicios</label><input class="form-control" type="number" step="0.0001" @bind="_editor.ServiceCost" /></div>
+                <div class="mb-2"><label>Margen %</label><input class="form-control" type="number" step="0.0001" @bind="_editor.TargetMarginPercent" /></div>
+                <div class="mb-2"><label>Total costo calculado</label><input class="form-control" value="@_editor.TotalCost" readonly /></div>
+                <div class="mb-2"><label>Precio sugerido</label><input class="form-control" value="@_editor.SuggestedSalePrice" readonly /></div>
+                <div class="form-check mb-2"><input class="form-check-input" type="checkbox" @bind="_editor.IsApproved" /><label class="form-check-label">Aprobada</label></div>
+                <div class="mb-2"><label>Notas</label><textarea class="form-control" rows="3" @bind="_editor.Notes"></textarea></div>
+                <div class="d-flex gap-2">
+                    <button class="btn btn-primary" type="submit">Guardar</button>
+                    <button class="btn btn-outline-secondary" type="button" @onclick="New">Nuevo</button>
+                    <button class="btn btn-outline-info" type="button" @onclick="GenerateAsync" disabled="@(!_editor.FinishedProductId.HasValue)">Generar desde producto</button>
+                    @if (_editor.Id.HasValue)
+                    {
+                        <button class="btn btn-outline-danger" type="button" @onclick="DeleteAsync">Eliminar</button>
+                    }
+                </div>
+            </EditForm>
+        </div>
+    </div>
+}
+
+@code {
+    private List<ProductCostSheetDto>? _items;
+    private List<ProductTechnicalCenterRowDto>? _products;
+    private CostSheetEditor _editor = new();
+    private string? _message;
+
+    protected override async Task OnInitializedAsync() => await ReloadAsync();
+
+    private async Task ReloadAsync()
+    {
+        _items = await Api.GetCostSheetsAsync();
+        _products = await Api.GetTechnicalCenterOverviewAsync();
+        _editor = new CostSheetEditor();
+    }
+
+    private void Edit(ProductCostSheetDto item) => _editor = new CostSheetEditor(item);
+    private void New() => _editor = new CostSheetEditor();
+
+    private async Task GenerateAsync()
+    {
+        if (!_editor.FinishedProductId.HasValue) return;
+        var response = await Api.GenerateCostSheetAsync(_editor.FinishedProductId.Value);
+        _message = response?.Message;
+        await ReloadAsync();
+    }
+
+    private async Task SaveAsync()
+    {
+        if (!_editor.FinishedProductId.HasValue) return;
+        var selectedProduct = _products?.FirstOrDefault(x => x.FinishedProductId == _editor.FinishedProductId.Value);
+        if (selectedProduct is not null && _editor.TenantId == Guid.Empty)
+        {
+            _editor.TenantId = selectedProduct.TenantId;
+            _editor.CompanyId = selectedProduct.CompanyId;
+        }
+        var saved = await Api.SaveCostSheetAsync(_editor.ToRequest(), _editor.Id);
+        _message = saved is null ? "No se pudo guardar." : "Hoja de costo guardada.";
+        await ReloadAsync();
+        if (saved is not null)
+        {
+            _editor = new CostSheetEditor(saved);
+        }
+    }
+
+    private async Task DeleteAsync()
+    {
+        if (!_editor.Id.HasValue) return;
+        await Api.DeleteCostSheetAsync(_editor.Id.Value);
+        _message = "Hoja de costo eliminada.";
+        await ReloadAsync();
+    }
+
+    private sealed class CostSheetEditor
+    {
+        public Guid? Id { get; set; }
+        public Guid? FinishedProductId { get; set; }
+        public string FinishedProductIdString { get => FinishedProductId?.ToString() ?? string.Empty; set => FinishedProductId = Guid.TryParse(value, out var parsed) ? parsed : null; }
+        public Guid TenantId { get; set; }
+        public Guid CompanyId { get; set; }
+        public Guid? ProductTechnicalSheetId { get; set; }
+        public string CostSheetCode { get; set; } = string.Empty;
+        public string Status { get; set; } = "draft";
+        public decimal DirectMaterialCost { get; set; }
+        public decimal DirectLaborCost { get; set; }
+        public decimal IndirectManufacturingCost { get; set; }
+        public decimal PackagingCost { get; set; }
+        public decimal ServiceCost { get; set; }
+        public decimal TargetMarginPercent { get; set; } = 35m;
+        public decimal TotalCost => DirectMaterialCost + DirectLaborCost + IndirectManufacturingCost + PackagingCost + ServiceCost;
+        public decimal SuggestedSalePrice => Math.Round(TotalCost * (1m + (TargetMarginPercent / 100m)), 4, MidpointRounding.AwayFromZero);
+        public string CurrencyCode { get; set; } = "MXN";
+        public string Notes { get; set; } = string.Empty;
+        public bool IsApproved { get; set; }
+        public bool IsActive { get; set; } = true;
+
+        public CostSheetEditor() { }
+        public CostSheetEditor(ProductCostSheetDto dto)
+        {
+            Id = dto.Id;
+            FinishedProductId = dto.FinishedProductId;
+            TenantId = dto.TenantId;
+            CompanyId = dto.CompanyId;
+            ProductTechnicalSheetId = dto.ProductTechnicalSheetId;
+            CostSheetCode = dto.CostSheetCode;
+            Status = dto.Status;
+            DirectMaterialCost = dto.DirectMaterialCost;
+            DirectLaborCost = dto.DirectLaborCost;
+            IndirectManufacturingCost = dto.IndirectManufacturingCost;
+            PackagingCost = dto.PackagingCost;
+            ServiceCost = dto.ServiceCost;
+            TargetMarginPercent = dto.TargetMarginPercent;
+            CurrencyCode = dto.CurrencyCode;
+            Notes = dto.Notes;
+            IsApproved = dto.IsApproved;
+            IsActive = dto.IsActive;
+        }
+
+        public ProductCostSheetRequest ToRequest() => new(
+            TenantId,
+            CompanyId,
+            FinishedProductId ?? Guid.Empty,
+            ProductTechnicalSheetId,
+            CostSheetCode,
+            Status,
+            DirectMaterialCost,
+            DirectLaborCost,
+            IndirectManufacturingCost,
+            PackagingCost,
+            ServiceCost,
+            TotalCost,
+            TargetMarginPercent,
+            SuggestedSalePrice,
+            CurrencyCode,
+            Notes,
+            IsApproved,
+            IsApproved ? DateTime.UtcNow : null,
+            IsApproved ? "web" : string.Empty,
+            IsActive,
+            "web");
+    }
+}

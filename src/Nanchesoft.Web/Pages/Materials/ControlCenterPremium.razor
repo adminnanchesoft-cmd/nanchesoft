@@ -1,0 +1,89 @@
+@page "/materials/control-center"
+@inject NavigationManager Nav
+
+<PageTitle>Materiales | Nanchesoft</PageTitle>
+
+<div class="orange-cc shell-materials">
+    <section class="orange-cc__hero">
+        <img src="images/hero-materiales-orange.svg" alt="Materiales Orange" class="orange-cc__hero-image" />
+        <div class="orange-cc__overlay"></div>
+        <div class="orange-cc__content">
+            <div class="orange-cc__left">
+                <div class="orange-cc__eyebrow">Orange → ERP</div>
+                <h1>Materiales</h1>
+                <p>Captura y control maestro de familias, subfamilias y materiales para terminar el bloque operativo del Orange dentro de Nanchesoft.</p>
+
+                <div class="orange-cc__kpis">
+                    @foreach (var kpi in Kpis)
+                    {
+                        <div class="orange-cc__kpi">
+                            <div class="orange-cc__kpi-value">@kpi.Value</div>
+                            <div class="orange-cc__kpi-label">@kpi.Label</div>
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <aside class="orange-cc__rail">
+                <div class="orange-cc__rail-card">
+                    <div class="orange-cc__rail-title">Quick access</div>
+                    @foreach (var quick in QuickAccess)
+                    {
+                        <button class="orange-cc__quick" @onclick="() => Go(quick.Route)">
+                            <span>@quick.Code</span>
+                            <strong>@quick.Label</strong>
+                        </button>
+                    }
+                </div>
+            </aside>
+        </div>
+    </section>
+
+    <section class="orange-cc__grid-section">
+        <div class="orange-cc__breadcrumb">Inicio <span>›</span> Materiales</div>
+        <div class="orange-cc__grid">
+            @foreach (var card in Cards)
+            {
+                <button class="orange-cc__card" @onclick="() => Go(card.Route)">
+                    <div class="orange-cc__icon">@card.Icon</div>
+                    <div class="orange-cc__card-title">@card.Title</div>
+                    <div class="orange-cc__card-text">@card.Text</div>
+                </button>
+            }
+        </div>
+    </section>
+</div>
+
+@code {
+    private void Go(string route) => Nav.NavigateTo(route);
+
+    private readonly List<KpiVm> Kpis =
+    [
+        new("3", "Capas base"),
+        new("1", "Flujo Orange"),
+        new("100%", "Captura directa"),
+        new("ERP", "Preparado")
+    ];
+
+    private readonly List<QuickVm> QuickAccess =
+    [
+        new("FM", "Familias", "/products/material-families"),
+        new("SM", "Subfamilias", "/products/material-subfamilies"),
+        new("MT", "Materiales", "/products/material-items"),
+        new("MP", "Prov. material", "/products/material-suppliers"),
+        new("HC", "Hist. costos", "/products/material-supplier-cost-history")
+    ];
+
+    private readonly List<CardVm> Cards =
+    [
+        new("◈", "Familias de materiales", "Agrupa los materiales como en Orange para reportes e inventario.", "/products/material-families"),
+        new("◎", "Subfamilias de materiales", "Subclasificación directa/indirecta y estructura operativa.", "/products/material-subfamilies"),
+        new("⬢", "Catálogo de materiales", "Alta del material con unidad de compra, salida, proveedor y costos.", "/products/material-items"),
+        new("▣", "Componentes del producto", "Catálogo universal de componentes que luego usarás en producto y consumos.", "/products/product-components"),
+        new("⟐", "Perfiles de ingeniería", "Puente entre item, estilo, corrida y material principal.", "/products/item-engineering-profiles")
+    ];
+
+    private sealed record KpiVm(string Value, string Label);
+    private sealed record QuickVm(string Code, string Label, string Route);
+    private sealed record CardVm(string Icon, string Title, string Text, string Route);
+}

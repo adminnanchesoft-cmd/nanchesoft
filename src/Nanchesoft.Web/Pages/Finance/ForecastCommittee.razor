@@ -1,0 +1,326 @@
+@page "/finance/forecast-committee"
+@using Nanchesoft.Web.Services.Finance
+@inject FinanceApiService FinanceApiService
+
+<PageTitle>Comité de forecast | Nanchesoft</PageTitle>
+
+<h1 class="h3 mb-3">Comité de forecast</h1>
+<p class="text-muted">Integra rolling forecast, radar de liquidez, pruebas de estrés y evaluación de escenarios para comité financiero.</p>
+
+<div class="row g-2 align-items-end mb-3">
+    <div class="col-md-2">
+        <label class="form-label">Año</label>
+        <input class="form-control" type="number" min="2020" max="2100" @bind="_year" />
+    </div>
+    <div class="col-md-2">
+        <label class="form-label">Mes</label>
+        <select class="form-select" @bind="_month">
+            @for (var month = 1; month <= 12; month++)
+            {
+                <option value="@month">@(new DateTime(2000, month, 1).ToString("MMMM"))</option>
+            }
+        </select>
+    </div>
+    <div class="col-md-2">
+        <label class="form-label">Horizonte forecast</label>
+        <select class="form-select" @bind="_monthsHorizon">
+            <option value="6">6 meses</option>
+            <option value="9">9 meses</option>
+            <option value="12">12 meses</option>
+            <option value="18">18 meses</option>
+        </select>
+    </div>
+    <div class="col-md-3">
+        <label class="form-label">Escenario</label>
+        <select class="form-select" @bind="_selectedScenarioId">
+            <option value="">Sin evaluación</option>
+            @foreach (var row in _scenarios)
+            {
+                <option value="@row.Id.ToString()">@row.Name</option>
+            }
+        </select>
+    </div>
+    <div class="col-md-3 d-flex gap-2 flex-wrap">
+        <button class="btn btn-primary" @onclick="ReloadAsync">Actualizar</button>
+        <a class="btn btn-outline-secondary" href="/finance/rolling-forecast">Forecast rolling</a>
+        <a class="btn btn-outline-secondary" href="/finance/scenarios">Escenarios</a>
+    </div>
+</div>
+
+@if (_loading)
+{
+    <div class="alert alert-info">Cargando comité de forecast...</div>
+}
+else if (!string.IsNullOrWhiteSpace(_error))
+{
+    <div class="alert alert-danger">@_error</div>
+}
+else
+{
+    <div class="row g-3 mb-3">
+        <div class="col-md-3"><div class="card shadow-sm h-100"><div class="card-body"><div class="text-muted small">Liquidez base del mes</div><div class="fs-4 fw-bold text-success">@_stress.BaseLiquidity.ToString("N2")</div><div class="small text-muted">Cierre base @_stress.BaseClosingCash.ToString("N2")</div></div></div></div>
+        <div class="col-md-3"><div class="card shadow-sm h-100"><div class="card-body"><div class="text-muted small">Forecast último cierre</div><div class="fs-4 fw-bold @GetSignedClass(_forecast.LastOrDefault()?.ClosingLiquidity ?? 0m)">@((_forecast.LastOrDefault()?.ClosingLiquidity ?? 0m).ToString("N2"))</div><div class="small text-muted">Horizonte @_monthsHorizon meses</div></div></div></div>
+        <div class="col-md-3"><div class="card shadow-sm h-100"><div class="card-body"><div class="text-muted small">Cobertura mínima radar</div><div class="fs-4 fw-bold @GetCoverageClass(_radar.Count == 0 ? 0m : _radar.Min(x => x.CoverageRatio))">@(_radar.Count == 0 ? "0.00" : _radar.Min(x => x.CoverageRatio).ToString("N2"))</div><div class="small text-muted">Horizonte más presionado</div></div></div></div>
+        <div class="col-md-3"><div class="card shadow-sm h-100"><div class="card-body"><div class="text-muted small">Escenario seleccionado</div><div class="fs-4 fw-bold text-primary">@(_evaluation?.ScenarioClosingBalance.ToString("N2") ?? "-")</div><div class="small text-muted">Impacto @(_evaluation?.ImpactAmount.ToString("N2") ?? "-")</div></div></div></div>
+    </div>
+
+    <div class="row g-3">
+        <div class="col-lg-7">
+            <div class="card shadow-sm h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <div>
+                            <div class="h5 mb-0">Rolling forecast</div>
+                            <div class="small text-muted">Apertura, inflows, outflows y cierre por mes.</div>
+                        </div>
+                        <span class="badge bg-secondary">@_forecast.Count meses</span>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-sm align-middle">
+                            <thead>
+                                <tr>
+                                    <th>Periodo</th>
+                                    <th class="text-end">Apertura</th>
+                                    <th class="text-end">Entradas</th>
+                                    <th class="text-end">Salidas</th>
+                                    <th class="text-end">Cierre</th>
+                                    <th>Riesgo</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @if (_forecast.Count == 0)
+                                {
+                                    <tr><td colspan="6" class="text-center text-muted py-4">No hay forecast disponible.</td></tr>
+                                }
+                                else
+                                {
+                                    @foreach (var row in _forecast)
+                                    {
+                                        <tr>
+                                            <td>@row.Label</td>
+                                            <td class="text-end">@row.OpeningLiquidity.ToString("N2")</td>
+                                            <td class="text-end text-success">@row.ProjectedInflows.ToString("N2")</td>
+                                            <td class="text-end text-danger">@row.ProjectedOutflows.ToString("N2")</td>
+                                            <td class="text-end @GetSignedClass(row.ClosingLiquidity)">@row.ClosingLiquidity.ToString("N2")</td>
+                                            <td><span class="badge @GetRiskClass(row.RiskLevel)">@row.RiskLevel</span></td>
+                                        </tr>
+                                    }
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-5">
+            <div class="card shadow-sm mb-3">
+                <div class="card-body">
+                    <div class="h5 mb-2">Radar de liquidez</div>
+                    <div class="table-responsive">
+                        <table class="table table-sm align-middle mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Horizonte</th>
+                                    <th class="text-end">Cobertura</th>
+                                    <th>Riesgo</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @if (_radar.Count == 0)
+                                {
+                                    <tr><td colspan="3" class="text-center text-muted py-3">No hay radar disponible.</td></tr>
+                                }
+                                else
+                                {
+                                    @foreach (var row in _radar)
+                                    {
+                                        <tr>
+                                            <td>
+                                                <div class="fw-semibold">@row.HorizonLabel</div>
+                                                <div class="small text-muted">@row.SuggestedAction</div>
+                                            </td>
+                                            <td class="text-end">@row.CoverageRatio.ToString("N2")</td>
+                                            <td><span class="badge @GetRiskClass(row.RiskLevel)">@row.RiskLevel</span></td>
+                                        </tr>
+                                    }
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <div class="card shadow-sm">
+                <div class="card-body">
+                    <div class="h5 mb-2">Pruebas de estrés</div>
+                    <div class="table-responsive">
+                        <table class="table table-sm align-middle mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Escenario</th>
+                                    <th class="text-end">Cierre</th>
+                                    <th class="text-end">Var.</th>
+                                    <th>Impacto</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @if (_stress.Rows.Count == 0)
+                                {
+                                    <tr><td colspan="4" class="text-center text-muted py-3">No hay pruebas de estrés.</td></tr>
+                                }
+                                else
+                                {
+                                    @foreach (var row in _stress.Rows)
+                                    {
+                                        <tr>
+                                            <td>
+                                                <div class="fw-semibold">@row.Scenario</div>
+                                                <div class="small text-muted">@row.Notes</div>
+                                            </td>
+                                            <td class="text-end @GetSignedClass(row.ClosingCash)">@row.ClosingCash.ToString("N2")</td>
+                                            <td class="text-end @GetSignedClass(row.VarianceVsBase)">@row.VarianceVsBase.ToString("N2")</td>
+                                            <td><span class="badge @GetRiskClass(row.ImpactLevel)">@row.ImpactLevel</span></td>
+                                        </tr>
+                                    }
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-3 mt-1">
+        <div class="col-lg-6">
+            <div class="card shadow-sm h-100">
+                <div class="card-body">
+                    <div class="h5 mb-2">Resumen ejecutivo del mes</div>
+                    <div class="table-responsive">
+                        <table class="table table-sm align-middle mb-0">
+                            <tbody>
+                                <tr><th class="w-50">Mes</th><td>@_boardPack.MonthLabel</td></tr>
+                                <tr><th>Ventas del mes</th><td class="text-end">@_boardPack.SalesCurrentMonth.ToString("N2")</td></tr>
+                                <tr><th>Compras del mes</th><td class="text-end">@_boardPack.PurchasesCurrentMonth.ToString("N2")</td></tr>
+                                <tr><th>Cobros del mes</th><td class="text-end">@_boardPack.ReceiptsCurrentMonth.ToString("N2")</td></tr>
+                                <tr><th>Pagos del mes</th><td class="text-end">@_boardPack.PaymentsCurrentMonth.ToString("N2")</td></tr>
+                                <tr><th>Flujo neto</th><td class="text-end @GetSignedClass(_boardPack.NetCashCurrentMonth)">@_boardPack.NetCashCurrentMonth.ToString("N2")</td></tr>
+                                <tr><th>Cumplimiento presupuesto</th><td class="text-end">@_boardPack.BudgetCompliancePercent.ToString("N2")%</td></tr>
+                                <tr><th>Cumplimiento meta</th><td class="text-end">@_boardPack.GoalCompliancePercent.ToString("N2")%</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-6">
+            <div class="card shadow-sm h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <div>
+                            <div class="h5 mb-0">Evaluación de escenario</div>
+                            <div class="small text-muted">Compara baseline contra el escenario seleccionado.</div>
+                        </div>
+                        <span class="badge bg-secondary">@(_selectedScenario?.Name ?? "Sin escenario")</span>
+                    </div>
+                    @if (_evaluation is null)
+                    {
+                        <div class="alert alert-light border">Selecciona un escenario para ver el impacto proyectado.</div>
+                    }
+                    else
+                    {
+                        <div class="row g-2 mb-3">
+                            <div class="col-md-4"><div class="border rounded p-2"><div class="text-muted small">Baseline cierre</div><div class="fw-bold">@_evaluation.BaselineClosingBalance.ToString("N2")</div></div></div>
+                            <div class="col-md-4"><div class="border rounded p-2"><div class="text-muted small">Escenario cierre</div><div class="fw-bold @GetSignedClass(_evaluation.ScenarioClosingBalance)">@_evaluation.ScenarioClosingBalance.ToString("N2")</div></div></div>
+                            <div class="col-md-4"><div class="border rounded p-2"><div class="text-muted small">Impacto</div><div class="fw-bold @GetSignedClass(_evaluation.ImpactAmount)">@_evaluation.ImpactAmount.ToString("N2")</div></div></div>
+                        </div>
+                        <div class="table-responsive">
+                            <table class="table table-sm align-middle mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>Periodo</th>
+                                        <th class="text-end">Base cierre</th>
+                                        <th class="text-end">Escenario cierre</th>
+                                        <th class="text-end">Impacto</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var row in _evaluation.Rows.Take(8))
+                                    {
+                                        <tr>
+                                            <td>@row.PeriodStart.ToString("yyyy-MM-dd") a @row.PeriodEnd.ToString("yyyy-MM-dd")</td>
+                                            <td class="text-end">@row.BaselineClosing.ToString("N2")</td>
+                                            <td class="text-end @GetSignedClass(row.ScenarioClosing)">@row.ScenarioClosing.ToString("N2")</td>
+                                            <td class="text-end @GetSignedClass(row.ImpactAmount)">@row.ImpactAmount.ToString("N2")</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private int _year = DateTime.UtcNow.Year;
+    private int _month = DateTime.UtcNow.Month;
+    private int _monthsHorizon = 12;
+    private string _selectedScenarioId = string.Empty;
+    private bool _loading = true;
+    private string? _error;
+    private FinanceBoardPackDto _boardPack = new();
+    private FinanceStressTestDto _stress = new();
+    private List<FinanceRollingForecastRowDto> _forecast = new();
+    private List<FinanceLiquidityRadarRowDto> _radar = new();
+    private List<FinanceScenarioRowDto> _scenarios = new();
+    private FinanceScenarioEvaluationDto? _evaluation;
+
+    private FinanceScenarioRowDto? _selectedScenario => Guid.TryParse(_selectedScenarioId, out var id)
+        ? _scenarios.FirstOrDefault(x => x.Id == id)
+        : null;
+
+    protected override async Task OnInitializedAsync() => await ReloadAsync();
+
+    private async Task ReloadAsync()
+    {
+        _loading = true;
+        _error = null;
+
+        try
+        {
+            _boardPack = await FinanceApiService.GetBoardPackAsync(_year, _month);
+            _stress = await FinanceApiService.GetStressTestsAsync(_year, _month);
+            _forecast = await FinanceApiService.GetRollingForecastAsync(_monthsHorizon);
+            _radar = await FinanceApiService.GetLiquidityRadarAsync(_year, _month);
+            _scenarios = await FinanceApiService.GetScenariosAsync();
+
+            if (_selectedScenario is not null)
+            {
+                _evaluation = await FinanceApiService.EvaluateScenarioAsync(_selectedScenario);
+            }
+            else
+            {
+                _evaluation = null;
+            }
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private static string GetSignedClass(decimal value) => value >= 0m ? "text-success" : "text-danger";
+    private static string GetCoverageClass(decimal value) => value >= 1m ? "text-success" : value >= 0.8m ? "text-warning" : "text-danger";
+    private static string GetRiskClass(string? value) => (value ?? string.Empty).Trim().ToLowerInvariant() switch
+    {
+        "alta" or "crítica" or "critica" or "rojo" or "severo" => "bg-danger",
+        "media" or "amarillo" or "moderado" => "bg-warning text-dark",
+        _ => "bg-success"
+    };
+}

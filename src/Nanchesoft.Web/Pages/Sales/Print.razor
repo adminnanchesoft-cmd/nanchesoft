@@ -1,0 +1,11 @@
+@page "/sales/print/{CatalogKey}/{Id:guid}"
+@layout PrintLayout
+
+<PageTitle>Formato ventas | Nanchesoft</PageTitle>
+
+<SalesPrintDocument CatalogKey="@CatalogKey" Id="Id" />
+
+@code {
+    [Parameter] public string CatalogKey { get; set; } = string.Empty;
+    [Parameter] public Guid Id { get; set; }
+}

@@ -1,0 +1,118 @@
+@page "/finance/variation-rankings"
+@using Nanchesoft.Web.Services.Finance
+@inject FinanceApiService FinanceApiService
+
+<PageTitle>Rankings de variación | Nanchesoft</PageTitle>
+
+<h1 class="h3 mb-3">Rankings de variación</h1>
+<p class="text-muted">Identifica qué clientes y proveedores explican el mayor cambio entre el mes actual y el mes previo.</p>
+
+<div class="row g-2 align-items-end mb-3">
+    <div class="col-md-2">
+        <label class="form-label">Año</label>
+        <input class="form-control" type="number" min="2020" max="2100" @bind="_year" />
+    </div>
+    <div class="col-md-2">
+        <label class="form-label">Mes</label>
+        <select class="form-select" @bind="_month">
+            @for (var month = 1; month <= 12; month++)
+            {
+                <option value="@month">@(new DateTime(2000, month, 1).ToString("MMMM"))</option>
+            }
+        </select>
+    </div>
+    <div class="col-md-8 d-flex gap-2">
+        <button class="btn btn-primary" @onclick="ReloadAsync">Actualizar</button>
+        <a class="btn btn-outline-secondary" href="/finance/concentration-analysis">Concentración cartera</a>
+        <a class="btn btn-outline-secondary" href="/finance/executive-dashboard">Centro financiero</a>
+    </div>
+</div>
+
+@if (_loading)
+{
+    <div class="alert alert-info">Cargando rankings de variación...</div>
+}
+else if (!string.IsNullOrWhiteSpace(_error))
+{
+    <div class="alert alert-danger">@_error</div>
+}
+else
+{
+    <div class="row g-3">
+        <div class="col-md-6">@SectionCard("Clientes que más suben", _data.CustomerGrowth)</div>
+        <div class="col-md-6">@SectionCard("Clientes que más bajan", _data.CustomerDecline)</div>
+        <div class="col-md-6">@SectionCard("Proveedores que más suben", _data.SupplierGrowth)</div>
+        <div class="col-md-6">@SectionCard("Proveedores que más bajan", _data.SupplierDecline)</div>
+    </div>
+}
+
+@code {
+    private int _year = DateTime.UtcNow.Year;
+    private int _month = DateTime.UtcNow.Month;
+    private bool _loading = true;
+    private string? _error;
+    private FinanceVariationRankingDto _data = new();
+
+    protected override async Task OnInitializedAsync() => await ReloadAsync();
+
+    private async Task ReloadAsync()
+    {
+        _loading = true;
+        _error = null;
+        try
+        {
+            _data = await FinanceApiService.GetVariationRankingsAsync(_year, _month);
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private RenderFragment SectionCard(string title, List<FinanceVariationRankingRowDto> rows) => @<div class="card shadow-sm h-100">
+        <div class="card-body">
+            <h2 class="h5 mb-3">@title</h2>
+            <div class="table-responsive">
+                <table class="table table-sm table-striped align-middle mb-0">
+                    <thead>
+                        <tr>
+                            <th>Nombre</th>
+                            <th class="text-end">Mes actual</th>
+                            <th class="text-end">Mes previo</th>
+                            <th class="text-end">Variación</th>
+                            <th class="text-end">%</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (rows.Count == 0)
+                        {
+                            <tr><td colspan="5" class="text-center text-muted py-3">Sin movimientos en el periodo.</td></tr>
+                        }
+                        else
+                        {
+                            @foreach (var row in rows)
+                            {
+                                <tr>
+                                    <td>
+                                        <a href="@row.Route" class="text-decoration-none">@row.PartyName</a>
+                                        <div class="small text-muted">@row.Direction</div>
+                                    </td>
+                                    <td class="text-end">@row.CurrentAmount.ToString("N2")</td>
+                                    <td class="text-end">@row.PreviousAmount.ToString("N2")</td>
+                                    <td class="text-end @GetAmountClass(row.VariationAmount)">@row.VariationAmount.ToString("N2")</td>
+                                    <td class="text-end @GetAmountClass(row.VariationPercent)">@row.VariationPercent.ToString("N2")%</td>
+                                </tr>
+                            }
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>;
+
+    private static string GetAmountClass(decimal value) => value >= 0m ? "text-success" : "text-danger";
+}

@@ -1,0 +1,95 @@
+
+@page "/finance/credit-policy"
+@using Nanchesoft.Web.Services.Finance
+@inject FinanceApiService FinanceApiService
+
+<PageTitle>Política de crédito | Nanchesoft</PageTitle>
+
+<h1 class="h3 mb-3">Política de crédito</h1>
+<p class="text-muted">Monitorea utilización de línea, vencido, promesas y acción sugerida por cliente.</p>
+
+@if (_loading)
+{
+    <div class="alert alert-info">Cargando política de crédito...</div>
+}
+else if (!string.IsNullOrWhiteSpace(_error))
+{
+    <div class="alert alert-danger">@_error</div>
+}
+else
+{
+    <div class="row g-3 mb-3">
+        <div class="col-md-3"><div class="card shadow-sm"><div class="card-body"><div class="text-muted small">Clientes monitoreados</div><div class="fs-4 fw-bold">@_rows.Count</div></div></div></div>
+        <div class="col-md-3"><div class="card shadow-sm"><div class="card-body"><div class="text-muted small">Límite total</div><div class="fs-4 fw-bold text-primary">@_rows.Sum(x => x.CreditLimit).ToString("N2")</div></div></div></div>
+        <div class="col-md-3"><div class="card shadow-sm"><div class="card-body"><div class="text-muted small">Saldo abierto</div><div class="fs-4 fw-bold text-danger">@_rows.Sum(x => x.OpenAmount).ToString("N2")</div></div></div></div>
+        <div class="col-md-3"><div class="card shadow-sm"><div class="card-body"><div class="text-muted small">Críticos</div><div class="fs-4 fw-bold text-danger">@_rows.Count(x => x.Status == "Crítico")</div></div></div></div>
+    </div>
+
+    <div class="card shadow-sm">
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-sm table-striped align-middle mb-0">
+                    <thead>
+                        <tr>
+                            <th>Cliente</th>
+                            <th class="text-end">Límite</th>
+                            <th class="text-end">Abierto</th>
+                            <th class="text-end">Vencido</th>
+                            <th class="text-end">Disponible</th>
+                            <th class="text-end">Utilización %</th>
+                            <th class="text-end">Prometido</th>
+                            <th class="text-end">Ventas mes</th>
+                            <th class="text-end">Prom. atraso</th>
+                            <th>Estatus</th>
+                            <th>Acción sugerida</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var row in _rows)
+                        {
+                            <tr>
+                                <td>@row.CustomerName</td>
+                                <td class="text-end">@row.CreditLimit.ToString("N2")</td>
+                                <td class="text-end">@row.OpenAmount.ToString("N2")</td>
+                                <td class="text-end">@row.OverdueAmount.ToString("N2")</td>
+                                <td class="text-end">@row.AvailableCredit.ToString("N2")</td>
+                                <td class="text-end">@row.UtilizationPercent.ToString("N2")%</td>
+                                <td class="text-end">@row.PromisedAmount.ToString("N2")</td>
+                                <td class="text-end">@row.SalesThisMonth.ToString("N2")</td>
+                                <td class="text-end">@row.AveragePastDueDays.ToString("N2")</td>
+                                <td><span class="badge @GetStatusBadge(row.Status)">@row.Status</span></td>
+                                <td>@row.SuggestedAction</td>
+                                <td><a class="btn btn-sm btn-outline-primary" href="@row.Route">Abrir</a></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private bool _loading = true;
+    private string? _error;
+    private List<FinanceCreditPolicyRowDto> _rows = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _rows = await FinanceApiService.GetCreditPolicyAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private static string GetStatusBadge(string value) => value switch { "Crítico" => "text-bg-danger", "Alerta" => "text-bg-warning", _ => "text-bg-success" };
+}

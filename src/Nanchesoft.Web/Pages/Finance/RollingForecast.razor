@@ -1,0 +1,120 @@
+
+@page "/finance/rolling-forecast"
+@using Nanchesoft.Web.Services.Finance
+@inject FinanceApiService FinanceApiService
+
+<PageTitle>Forecast rolling | Nanchesoft</PageTitle>
+
+<h1 class="h3 mb-3">Forecast rolling</h1>
+<p class="text-muted">Proyección móvil de liquidez usando compromisos de cobro, programación de pagos, metas y presupuesto.</p>
+
+<div class="row g-2 mb-3">
+    <div class="col-md-3">
+        <label class="form-label">Horizonte</label>
+        <select class="form-select" @bind="_months">
+            <option value="6">6 meses</option>
+            <option value="9">9 meses</option>
+            <option value="12">12 meses</option>
+            <option value="18">18 meses</option>
+        </select>
+    </div>
+    <div class="col-md-2 d-flex align-items-end">
+        <button class="btn btn-primary w-100" @onclick="LoadAsync">Actualizar</button>
+    </div>
+</div>
+
+@if (_loading)
+{
+    <div class="alert alert-info">Cargando forecast...</div>
+}
+else if (!string.IsNullOrWhiteSpace(_error))
+{
+    <div class="alert alert-danger">@_error</div>
+}
+else
+{
+    <div class="row g-3 mb-3">
+        <div class="col-md-3"><div class="card shadow-sm"><div class="card-body"><div class="text-muted small">Liquidez inicial</div><div class="fs-4 fw-bold">@_rows.FirstOrDefault()?.OpeningLiquidity.ToString("N2")</div></div></div></div>
+        <div class="col-md-3"><div class="card shadow-sm"><div class="card-body"><div class="text-muted small">Entradas proyectadas</div><div class="fs-4 fw-bold text-success">@_rows.Sum(x => x.ProjectedInflows).ToString("N2")</div></div></div></div>
+        <div class="col-md-3"><div class="card shadow-sm"><div class="card-body"><div class="text-muted small">Salidas proyectadas</div><div class="fs-4 fw-bold text-danger">@_rows.Sum(x => x.ProjectedOutflows).ToString("N2")</div></div></div></div>
+        <div class="col-md-3"><div class="card shadow-sm"><div class="card-body"><div class="text-muted small">Liquidez final</div><div class="fs-4 fw-bold @GetSignedClass(_rows.LastOrDefault()?.ClosingLiquidity ?? 0m)">@(_rows.LastOrDefault()?.ClosingLiquidity.ToString("N2") ?? "0.00")</div></div></div></div>
+    </div>
+
+    <div class="card shadow-sm">
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-sm table-striped align-middle mb-0">
+                    <thead>
+                        <tr>
+                            <th>Mes</th>
+                            <th class="text-end">Apertura</th>
+                            <th class="text-end">Cobros programados</th>
+                            <th class="text-end">Cobros por vencer</th>
+                            <th class="text-end">Pagos programados</th>
+                            <th class="text-end">Pagos por vencer</th>
+                            <th class="text-end">Entradas</th>
+                            <th class="text-end">Salidas</th>
+                            <th class="text-end">Flujo neto</th>
+                            <th class="text-end">Cierre</th>
+                            <th class="text-end">Meta ventas</th>
+                            <th class="text-end">Meta compras</th>
+                            <th class="text-end">Presupuesto</th>
+                            <th>Riesgo</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var row in _rows)
+                        {
+                            <tr>
+                                <td>@row.Label</td>
+                                <td class="text-end">@row.OpeningLiquidity.ToString("N2")</td>
+                                <td class="text-end">@row.CollectionsScheduled.ToString("N2")</td>
+                                <td class="text-end">@row.CollectionsDue.ToString("N2")</td>
+                                <td class="text-end">@row.PaymentsScheduled.ToString("N2")</td>
+                                <td class="text-end">@row.PaymentsDue.ToString("N2")</td>
+                                <td class="text-end text-success">@row.ProjectedInflows.ToString("N2")</td>
+                                <td class="text-end text-danger">@row.ProjectedOutflows.ToString("N2")</td>
+                                <td class="text-end @GetSignedClass(row.NetFlow)">@row.NetFlow.ToString("N2")</td>
+                                <td class="text-end @GetSignedClass(row.ClosingLiquidity)">@row.ClosingLiquidity.ToString("N2")</td>
+                                <td class="text-end">@row.SalesTarget.ToString("N2")</td>
+                                <td class="text-end">@row.PurchasesTarget.ToString("N2")</td>
+                                <td class="text-end">@row.BudgetAmount.ToString("N2")</td>
+                                <td><span class="badge @GetRiskBadge(row.RiskLevel)">@row.RiskLevel</span></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private bool _loading = true;
+    private string? _error;
+    private int _months = 12;
+    private List<FinanceRollingForecastRowDto> _rows = new();
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _error = null;
+        try
+        {
+            _rows = await FinanceApiService.GetRollingForecastAsync(_months);
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private static string GetSignedClass(decimal value) => value >= 0m ? "text-success" : "text-danger";
+    private static string GetRiskBadge(string value) => value switch { "Crítico" => "text-bg-danger", "Tensión" => "text-bg-warning", _ => "text-bg-success" };
+}

@@ -1,0 +1,5 @@
+@page "/purchases/receipts/detail"
+@page "/purchases/receipts/detail/{Id:guid}"
+<PageTitle>Detalle recepción | Nanchesoft</PageTitle>
+<PurchaseDocumentEditor CatalogKey="purchase-receipts" DocumentId="Id" />
+@code { [Parameter] public Guid? Id { get; set; } }

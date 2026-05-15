@@ -1,0 +1,149 @@
+@page "/cfdi/documents"
+@using Nanchesoft.Web.Services.Cfdi
+@inject CfdiApiService CfdiApiService
+@inject NavigationManager Navigation
+<PageTitle>Documentos CFDI | Nanchesoft</PageTitle>
+
+<div class="container-fluid py-3">
+    <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-3">
+        <div>
+            <div class="text-uppercase small text-secondary fw-semibold">CFDI · documentos</div>
+            <h2 class="mb-1">Documentos CFDI</h2>
+            <div class="text-secondary">Facturas y notas de crédito con estado CFDI y acciones directas.</div>
+        </div>
+        <div class="d-flex gap-2 flex-wrap">
+            <button class="btn btn-outline-secondary" @onclick='() => Navigation.NavigateTo("/cfdi/dashboard")'>Dashboard CFDI</button>
+            <button class="btn btn-outline-secondary" @onclick="LoadAsync">Actualizar</button>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(_message))
+    {
+        <div class="alert alert-success">@_message</div>
+    }
+    @if (!string.IsNullOrWhiteSpace(_error))
+    {
+        <div class="alert alert-danger">@_error</div>
+    }
+
+    @if (_loading)
+    {
+        <div class="alert alert-info">Cargando documentos CFDI...</div>
+    }
+    else
+    {
+        <div class="card shadow-sm">
+            <div class="table-responsive">
+                <table class="table table-sm table-striped align-middle mb-0">
+                    <thead>
+                        <tr>
+                            <th>Tipo</th>
+                            <th>Folio</th>
+                            <th>Cliente</th>
+                            <th>Fecha</th>
+                            <th>Total</th>
+                            <th>Venta</th>
+                            <th>CFDI</th>
+                            <th>UUID</th>
+                            <th style="width: 260px;">Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var row in _rows)
+                        {
+                            <tr>
+                                <td>@GetSourceName(row.SourceType)</td>
+                                <td><a href="@row.SourceRoute">@row.Folio</a></td>
+                                <td>@row.CustomerName</td>
+                                <td>@row.DocumentDate.ToString("yyyy-MM-dd")</td>
+                                <td>@row.Total.ToString("N2")</td>
+                                <td>@row.BusinessStatus</td>
+                                <td>@row.CfdiStatus</td>
+                                <td>@(string.IsNullOrWhiteSpace(row.Uuid) ? "-" : row.Uuid)</td>
+                                <td>
+                                    <div class="d-flex gap-2 flex-wrap">
+                                        <a class="btn btn-sm btn-outline-secondary" href="@row.SourceRoute">Abrir</a>
+                                        @if (row.SourceType == "sales-invoice")
+                                        {
+                                            <button class="btn btn-sm btn-success" disabled="@(!CanStamp(row))" @onclick='() => StampInvoiceAsync(row.Id)'>Timbrar</button>
+                                            <button class="btn btn-sm btn-warning" disabled="@(!CanCancel(row))" @onclick='() => CancelInvoiceAsync(row.Id)'>Cancelar</button>
+                                        }
+                                        else
+                                        {
+                                            <button class="btn btn-sm btn-success" disabled="@(!CanStamp(row))" @onclick='() => StampCreditNoteAsync(row.Id)'>Timbrar</button>
+                                            <button class="btn btn-sm btn-warning" disabled="@(!CanCancel(row))" @onclick='() => CancelCreditNoteAsync(row.Id)'>Cancelar</button>
+                                        }
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private bool _loading = true;
+    private string? _message;
+    private string? _error;
+    private List<CfdiDocumentDto> _rows = [];
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _message = null;
+        _error = null;
+        _rows = await CfdiApiService.GetDocumentsAsync();
+        _loading = false;
+    }
+
+    private async Task StampInvoiceAsync(Guid id)
+    {
+        await ExecuteAsync(async () => await CfdiApiService.StampSalesInvoiceAsync(id), "Factura timbrada en modo demo.");
+    }
+
+    private async Task CancelInvoiceAsync(Guid id)
+    {
+        await ExecuteAsync(async () => await CfdiApiService.CancelSalesInvoiceAsync(id), "Factura cancelada en modo demo.");
+    }
+
+    private async Task StampCreditNoteAsync(Guid id)
+    {
+        await ExecuteAsync(async () => await CfdiApiService.StampCreditNoteAsync(id), "Nota de crédito timbrada en modo demo.");
+    }
+
+    private async Task CancelCreditNoteAsync(Guid id)
+    {
+        await ExecuteAsync(async () => await CfdiApiService.CancelCreditNoteAsync(id), "Nota de crédito cancelada en modo demo.");
+    }
+
+    private async Task ExecuteAsync(Func<Task> action, string successMessage)
+    {
+        _message = null;
+        _error = null;
+        try
+        {
+            await action();
+            _message = successMessage;
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private static bool CanStamp(CfdiDocumentDto row) => row.BusinessStatus is "approved" or "posted" && row.CfdiStatus is "pending" or "not-generated";
+    private static bool CanCancel(CfdiDocumentDto row) => row.CfdiStatus == "stamped";
+
+    private static string GetSourceName(string sourceType) => sourceType switch
+    {
+        "sales-invoice" => "Factura",
+        "credit-note" => "Nota crédito",
+        _ => sourceType
+    };
+}

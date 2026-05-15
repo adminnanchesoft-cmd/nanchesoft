@@ -1,0 +1,102 @@
+@page "/accounting/trial-balance"
+@using Nanchesoft.Web.Services.Accounting
+@inject AccountingApiService Api
+
+<PageTitle>Balanza | Nanchesoft</PageTitle>
+
+<h1 class="h3 mb-3">Contabilidad · Balanza</h1>
+
+<div class="card shadow-sm mb-3">
+    <div class="card-body row g-3 align-items-end">
+        <div class="col-md-2">
+            <label class="form-label">Año</label>
+            <input class="form-control" type="number" @bind="_year" />
+        </div>
+        <div class="col-md-2">
+            <label class="form-label">Mes</label>
+            <input class="form-control" type="number" min="1" max="12" @bind="_month" />
+        </div>
+        <div class="col-md-2">
+            <button class="btn btn-primary" @onclick="LoadAsync">Consultar</button>
+        </div>
+    </div>
+</div>
+
+@if (!string.IsNullOrWhiteSpace(_error))
+{
+    <div class="alert alert-danger">@_error</div>
+}
+
+<div class="card shadow-sm">
+    <div class="table-responsive">
+        <table class="table table-striped align-middle mb-0">
+            <thead>
+                <tr>
+                    <th>Código</th>
+                    <th>Cuenta</th>
+                    <th class="text-end">Debe</th>
+                    <th class="text-end">Haber</th>
+                    <th class="text-end">Saldo</th>
+                </tr>
+            </thead>
+            <tbody>
+                @if (_rows.Count == 0)
+                {
+                    <tr><td colspan="5" class="text-center text-muted py-4">Sin datos para la balanza.</td></tr>
+                }
+                else
+                {
+                    @foreach (var row in _rows)
+                    {
+                        <tr>
+                            <td>@row.Code</td>
+                            <td>@row.Name</td>
+                            <td class="text-end">@row.Debit.ToString("N2")</td>
+                            <td class="text-end">@row.Credit.ToString("N2")</td>
+                            <td class="text-end">@row.Balance.ToString("N2")</td>
+                        </tr>
+                    }
+                }
+            </tbody>
+            <tfoot>
+                <tr>
+                    <th colspan="2" class="text-end">Totales</th>
+                    <th class="text-end">@_rows.Sum(x => x.Debit).ToString("N2")</th>
+                    <th class="text-end">@_rows.Sum(x => x.Credit).ToString("N2")</th>
+                    <th class="text-end">@_rows.Sum(x => x.Balance).ToString("N2")</th>
+                </tr>
+            </tfoot>
+        </table>
+    </div>
+</div>
+
+@code {
+    private int _year = DateTime.Today.Year;
+    private int _month = DateTime.Today.Month;
+    private List<TrialBalanceRowDto> _rows = new();
+    private string? _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var lookups = await Api.GetLookupsAsync();
+        if (lookups.CurrentYear > 0)
+        {
+            _year = lookups.CurrentYear;
+            _month = lookups.CurrentMonth;
+        }
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _error = null;
+        try
+        {
+            _rows = await Api.GetTrialBalanceAsync(_year, _month);
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+    }
+}

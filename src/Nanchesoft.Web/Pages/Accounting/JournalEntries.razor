@@ -1,0 +1,415 @@
+@page "/accounting/journal-entries"
+@using Nanchesoft.Web.Services.Accounting
+@inject AccountingApiService Api
+
+<PageTitle>Pólizas | Nanchesoft</PageTitle>
+
+<h1 class="h3 mb-3">Contabilidad · Pólizas</h1>
+
+<div class="card shadow-sm mb-3">
+    <div class="card-header fw-semibold">Captura de póliza</div>
+    <div class="card-body">
+        <div class="row g-3 align-items-end mb-3">
+            <div class="col-md-2">
+                <label class="form-label">Folio</label>
+                <input class="form-control" @bind="_editor.Folio" placeholder="Auto" />
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">Fecha</label>
+                <input class="form-control" type="date" @bind="_editor.EntryDate" />
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">Tipo</label>
+                <select class="form-select" @bind="_editor.EntryType">
+                    @foreach (var item in _entryTypes)
+                    {
+                        <option value="@item">@item</option>
+                    }
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Referencia</label>
+                <input class="form-control" @bind="_editor.Reference" />
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Concepto</label>
+                <input class="form-control" @bind="_editor.Concept" />
+            </div>
+        </div>
+
+        <div class="border rounded p-3 bg-light-subtle mb-3">
+            <div class="row g-3 align-items-end">
+                <div class="col-md-4">
+                    <label class="form-label">Cuenta</label>
+                    <select class="form-select" @bind="_lineEditor.AccountId">
+                        <option value="">Selecciona...</option>
+                        @foreach (var item in _lookups.Accounts)
+                        {
+                            <option value="@item.Id">@item.Code - @item.Name</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Descripción</label>
+                    <input class="form-control" @bind="_lineEditor.Description" />
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Cargo</label>
+                    <input class="form-control" type="number" step="0.01" @bind="_lineEditor.Debit" />
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Abono</label>
+                    <input class="form-control" type="number" step="0.01" @bind="_lineEditor.Credit" />
+                </div>
+                <div class="col-md-12 text-end">
+                    <button class="btn btn-outline-primary btn-sm" @onclick="AddLine">Agregar línea</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="table-responsive mb-3">
+            <table class="table table-sm table-striped align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Cuenta</th>
+                        <th>Descripción</th>
+                        <th class="text-end">Cargo</th>
+                        <th class="text-end">Abono</th>
+                        <th class="text-end">Acción</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (_editor.Lines.Count == 0)
+                    {
+                        <tr><td colspan="6" class="text-center text-muted py-3">Sin líneas capturadas.</td></tr>
+                    }
+                    else
+                    {
+                        @foreach (var line in _editor.Lines)
+                        {
+                            <tr>
+                                <td>@line.LineNumber</td>
+                                <td>@line.AccountDisplay</td>
+                                <td>@line.Description</td>
+                                <td class="text-end">@line.Debit.ToString("N2")</td>
+                                <td class="text-end">@line.Credit.ToString("N2")</td>
+                                <td class="text-end"><button class="btn btn-sm btn-outline-danger" @onclick="() => RemoveLine(line.LineNumber)">Quitar</button></td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+                <tfoot>
+                    <tr>
+                        <th colspan="3" class="text-end">Totales</th>
+                        <th class="text-end">@_editor.TotalDebit.ToString("N2")</th>
+                        <th class="text-end">@_editor.TotalCredit.ToString("N2")</th>
+                        <th class="text-end">@(_editor.IsBalanced ? "Cuadrada" : "Descuadrada")</th>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+
+        <div class="d-flex justify-content-end gap-2">
+            <button class="btn btn-outline-secondary" @onclick="ResetEditor">Nueva</button>
+            <button class="btn btn-primary" @onclick="SaveAsync" disabled="@_saving">Guardar</button>
+        </div>
+    </div>
+</div>
+
+@if (!string.IsNullOrWhiteSpace(_message))
+{
+    <div class="alert alert-success">@_message</div>
+}
+@if (!string.IsNullOrWhiteSpace(_error))
+{
+    <div class="alert alert-danger">@_error</div>
+}
+
+<div class="card shadow-sm">
+    <div class="table-responsive">
+        <table class="table table-striped align-middle mb-0">
+            <thead>
+                <tr>
+                    <th>Folio</th>
+                    <th>Fecha</th>
+                    <th>Tipo</th>
+                    <th>Estatus</th>
+                    <th>Referencia</th>
+                    <th>Concepto</th>
+                    <th class="text-end">Cargo</th>
+                    <th class="text-end">Abono</th>
+                    <th class="text-end">Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                @if (_rows.Count == 0)
+                {
+                    <tr><td colspan="9" class="text-center text-muted py-4">Sin pólizas.</td></tr>
+                }
+                else
+                {
+                    @foreach (var row in _rows)
+                    {
+                        <tr>
+                            <td>@row.Folio</td>
+                            <td>@row.EntryDate.ToString("dd/MM/yyyy")</td>
+                            <td>@row.EntryType</td>
+                            <td>@row.Status</td>
+                            <td>@row.Reference</td>
+                            <td>@row.Concept</td>
+                            <td class="text-end">@row.TotalDebit.ToString("N2")</td>
+                            <td class="text-end">@row.TotalCredit.ToString("N2")</td>
+                            <td class="text-end">
+                                <div class="btn-group btn-group-sm">
+                                    @if (row.Status == "draft")
+                                    {
+                                        <button class="btn btn-outline-primary" @onclick="() => LoadForEditAsync(row.Id)">Editar</button>
+                                        <button class="btn btn-outline-warning" @onclick="() => ApproveAsync(row.Id)">Aprobar</button>
+                                        <button class="btn btn-outline-danger" @onclick="() => CancelAsync(row.Id)">Cancelar</button>
+                                    }
+                                    else if (row.Status == "approved")
+                                    {
+                                        <button class="btn btn-outline-success" @onclick="() => PostAsync(row.Id)">Postear</button>
+                                        <button class="btn btn-outline-danger" @onclick="() => CancelAsync(row.Id)">Cancelar</button>
+                                    }
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+@code {
+    private readonly List<string> _entryTypes = ["manual", "ingreso", "egreso", "diario"];
+    private AccountingLookupsDto _lookups = new();
+    private List<AccountingJournalEntryRowDto> _rows = new();
+    private JournalEntryEditor _editor = new();
+    private JournalEntryLineEditor _lineEditor = new();
+    private bool _saving;
+    private string? _message;
+    private string? _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await ReloadAsync();
+    }
+
+    private async Task ReloadAsync()
+    {
+        _lookups = await Api.GetLookupsAsync();
+        _rows = await Api.GetJournalEntriesAsync();
+        if (_editor.TenantId == Guid.Empty && _lookups.TenantId != Guid.Empty)
+        {
+            ResetEditor();
+        }
+    }
+
+    private void ResetEditor()
+    {
+        _editor = new JournalEntryEditor
+        {
+            TenantId = _lookups.TenantId,
+            CompanyId = _lookups.CompanyId,
+            BranchId = _lookups.BranchId,
+            EntryDate = DateTime.Today,
+            EntryType = "manual"
+        };
+        _lineEditor = new JournalEntryLineEditor();
+        _message = null;
+        _error = null;
+    }
+
+    private void AddLine()
+    {
+        _message = null;
+        _error = null;
+
+        if (_lineEditor.AccountId is null || _lineEditor.AccountId == Guid.Empty)
+        {
+            _error = "Selecciona una cuenta.";
+            return;
+        }
+
+        if ((_lineEditor.Debit <= 0m && _lineEditor.Credit <= 0m) || (_lineEditor.Debit > 0m && _lineEditor.Credit > 0m))
+        {
+            _error = "Cada línea debe tener solo cargo o solo abono.";
+            return;
+        }
+
+        var account = _lookups.Accounts.FirstOrDefault(x => x.Id == _lineEditor.AccountId.Value);
+        _editor.Lines.Add(new JournalEntryLineEditor
+        {
+            LineNumber = _editor.Lines.Count + 1,
+            AccountId = _lineEditor.AccountId,
+            AccountDisplay = account is null ? string.Empty : $"{account.Code} - {account.Name}",
+            Description = _lineEditor.Description,
+            Debit = _lineEditor.Debit,
+            Credit = _lineEditor.Credit
+        });
+
+        _lineEditor = new JournalEntryLineEditor();
+    }
+
+    private void RemoveLine(int lineNumber)
+    {
+        _editor.Lines = _editor.Lines.Where(x => x.LineNumber != lineNumber).ToList();
+        var index = 1;
+        foreach (var line in _editor.Lines)
+        {
+            line.LineNumber = index++;
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        _saving = true;
+        _message = null;
+        _error = null;
+        try
+        {
+            var request = new SaveJournalEntryRequest
+            {
+                TenantId = _editor.TenantId,
+                CompanyId = _editor.CompanyId,
+                BranchId = _editor.BranchId,
+                Folio = _editor.Folio,
+                EntryDate = _editor.EntryDate,
+                EntryType = _editor.EntryType,
+                Reference = _editor.Reference,
+                Concept = _editor.Concept,
+                Lines = _editor.Lines.Select(x => new SaveJournalEntryLineRequest
+                {
+                    AccountId = x.AccountId!.Value,
+                    Description = x.Description,
+                    Debit = x.Debit,
+                    Credit = x.Credit
+                }).ToList()
+            };
+
+            if (_editor.Id is null)
+            {
+                await Api.CreateJournalEntryAsync(request);
+                _message = "Póliza creada correctamente.";
+            }
+            else
+            {
+                await Api.UpdateJournalEntryAsync(_editor.Id.Value, request);
+                _message = "Póliza actualizada correctamente.";
+            }
+
+            await ReloadAsync();
+            ResetEditor();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private async Task LoadForEditAsync(Guid entryId)
+    {
+        _message = null;
+        _error = null;
+        try
+        {
+            var detail = await Api.GetJournalEntryAsync(entryId);
+            if (detail is null)
+            {
+                _error = "No se pudo cargar la póliza.";
+                return;
+            }
+
+            _editor = new JournalEntryEditor
+            {
+                Id = detail.Id,
+                TenantId = detail.TenantId,
+                CompanyId = detail.CompanyId,
+                BranchId = detail.BranchId,
+                Folio = detail.Folio,
+                EntryDate = detail.EntryDate.Date,
+                EntryType = detail.EntryType,
+                Reference = detail.Reference,
+                Concept = detail.Concept,
+                Lines = detail.Lines.Select(x => new JournalEntryLineEditor
+                {
+                    LineNumber = x.LineNumber,
+                    AccountId = x.AccountId,
+                    AccountDisplay = $"{x.AccountCode} - {x.AccountName}",
+                    Description = x.Description,
+                    Debit = x.Debit,
+                    Credit = x.Credit
+                }).ToList()
+            };
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private async Task ApproveAsync(Guid entryId)
+    {
+        await RunActionAsync(() => Api.ApproveJournalEntryAsync(entryId), "Póliza aprobada correctamente.");
+    }
+
+    private async Task PostAsync(Guid entryId)
+    {
+        await RunActionAsync(() => Api.PostJournalEntryAsync(entryId), "Póliza posteada correctamente.");
+    }
+
+    private async Task CancelAsync(Guid entryId)
+    {
+        await RunActionAsync(() => Api.CancelJournalEntryAsync(entryId), "Póliza cancelada correctamente.");
+    }
+
+    private async Task RunActionAsync(Func<Task> action, string successMessage)
+    {
+        _message = null;
+        _error = null;
+        try
+        {
+            await action();
+            _message = successMessage;
+            await ReloadAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private sealed class JournalEntryEditor
+    {
+        public Guid? Id { get; set; }
+        public Guid TenantId { get; set; }
+        public Guid CompanyId { get; set; }
+        public Guid BranchId { get; set; }
+        public string Folio { get; set; } = string.Empty;
+        public DateTime EntryDate { get; set; }
+        public string EntryType { get; set; } = "manual";
+        public string Reference { get; set; } = string.Empty;
+        public string Concept { get; set; } = string.Empty;
+        public List<JournalEntryLineEditor> Lines { get; set; } = new();
+        public decimal TotalDebit => Lines.Sum(x => x.Debit);
+        public decimal TotalCredit => Lines.Sum(x => x.Credit);
+        public bool IsBalanced => TotalDebit > 0m && TotalDebit == TotalCredit;
+    }
+
+    private sealed class JournalEntryLineEditor
+    {
+        public int LineNumber { get; set; }
+        public Guid? AccountId { get; set; }
+        public string AccountDisplay { get; set; } = string.Empty;
+        public string Description { get; set; } = string.Empty;
+        public decimal Debit { get; set; }
+        public decimal Credit { get; set; }
+    }
+}

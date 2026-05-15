@@ -1,0 +1,6 @@
+@page "/inventory/physical-counts/detail"
+@page "/inventory/physical-counts/detail/{Id:guid}"
+@using Nanchesoft.Web.Components.Inventory
+<PageTitle>Detalle conteo físico | Nanchesoft</PageTitle>
+<InventoryDocumentEditor CatalogKey="physical-counts" DocumentId="Id" />
+@code { [Parameter] public Guid? Id { get; set; } }

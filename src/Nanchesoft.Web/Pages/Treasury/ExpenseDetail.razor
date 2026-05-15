@@ -1,0 +1,5 @@
+@page "/treasury/expenses/detail"
+@page "/treasury/expenses/detail/{Id:guid}"
+<PageTitle>Detalle egreso | Nanchesoft</PageTitle>
+<TreasuryDocumentEditor CatalogKey="treasury-expenses" DocumentId="Id" />
+@code { [Parameter] public Guid? Id { get; set; } }

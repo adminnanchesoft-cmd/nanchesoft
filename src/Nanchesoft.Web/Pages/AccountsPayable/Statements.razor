@@ -1,0 +1,110 @@
+@page "/accounts-payable/statements"
+@using Nanchesoft.Web.Services.AccountsPayable
+@inject AccountsPayableApiService AccountsPayableApiService
+
+<PageTitle>Estado de cuenta CxP | Nanchesoft</PageTitle>
+
+<h1 class="h3 mb-3">Cuentas por pagar · Estado de cuenta</h1>
+
+<div class="card shadow-sm mb-3">
+    <div class="card-body row g-3 align-items-end">
+        <div class="col-md-6">
+            <label class="form-label">Proveedor</label>
+            <select class="form-select" @bind="_selectedSupplierIdString">
+                <option value="">Todos</option>
+                @foreach (var supplier in _lookups.Suppliers)
+                {
+                    <option value="@supplier.Id">@supplier.Name</option>
+                }
+            </select>
+        </div>
+        <div class="col-md-3">
+            <button class="btn btn-primary" @onclick="ReloadAsync">Consultar</button>
+        </div>
+    </div>
+</div>
+
+@if (_loading)
+{
+    <div class="alert alert-info">Cargando estado de cuenta...</div>
+}
+else if (!string.IsNullOrWhiteSpace(_error))
+{
+    <div class="alert alert-danger">@_error</div>
+}
+else
+{
+    <div class="card shadow-sm">
+        <div class="table-responsive">
+            <table class="table table-striped align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th>Fecha</th>
+                        <th>Proveedor</th>
+                        <th>Tipo</th>
+                        <th>Folio</th>
+                        <th>Referencia</th>
+                        <th class="text-end">Cargo</th>
+                        <th class="text-end">Crédito</th>
+                        <th class="text-end">Saldo</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (_rows.Count == 0)
+                    {
+                        <tr><td colspan="8" class="text-center text-muted py-4">Sin registros.</td></tr>
+                    }
+                    else
+                    {
+                        @foreach (var row in _rows)
+                        {
+                            <tr>
+                                <td>@row.MovementDate.ToString("dd/MM/yyyy")</td>
+                                <td>@row.SupplierName</td>
+                                <td>@row.DocumentType</td>
+                                <td>@row.Folio</td>
+                                <td>@row.Reference</td>
+                                <td class="text-end">@row.ChargeAmount.ToString("N2")</td>
+                                <td class="text-end">@row.CreditAmount.ToString("N2")</td>
+                                <td class="text-end fw-bold">@row.BalanceAfter.ToString("N2")</td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+}
+
+@code {
+    private bool _loading = true;
+    private string? _error;
+    private string? _selectedSupplierIdString;
+    private ApLookupsDto _lookups = new();
+    private List<ApStatementRowDto> _rows = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        _lookups = await AccountsPayableApiService.GetLookupsAsync();
+        await ReloadAsync();
+    }
+
+    private async Task ReloadAsync()
+    {
+        _loading = true;
+        _error = null;
+        try
+        {
+            Guid? supplierId = Guid.TryParse(_selectedSupplierIdString, out var parsed) ? parsed : null;
+            _rows = await AccountsPayableApiService.GetStatementsAsync(supplierId);
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+}

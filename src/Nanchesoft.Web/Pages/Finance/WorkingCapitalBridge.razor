@@ -1,0 +1,96 @@
+@page "/finance/working-capital-bridge"
+@using Nanchesoft.Web.Services.Finance
+@inject FinanceApiService FinanceApiService
+
+<PageTitle>Puente capital de trabajo | Nanchesoft</PageTitle>
+
+<h1 class="h3 mb-3">Puente de capital de trabajo</h1>
+<p class="text-muted">Descompone liquidez, cuentas por cobrar, inventario valorizado y cuentas por pagar para explicar el capital de trabajo actual.</p>
+
+<div class="mb-3 d-flex gap-2">
+    <button class="btn btn-primary" @onclick="ReloadAsync">Actualizar</button>
+    <a class="btn btn-outline-secondary" href="/finance/executive-dashboard">Centro financiero</a>
+    <a class="btn btn-outline-secondary" href="/finance/cash-flow">Flujo proyectado</a>
+</div>
+
+@if (_loading)
+{
+    <div class="alert alert-info">Cargando puente de capital de trabajo...</div>
+}
+else if (!string.IsNullOrWhiteSpace(_error))
+{
+    <div class="alert alert-danger">@_error</div>
+}
+else
+{
+    <div class="row g-3 mb-3">
+        @foreach (var row in _rows)
+        {
+            <div class="col-md-3">
+                <div class="card shadow-sm h-100">
+                    <div class="card-body">
+                        <div class="text-muted small">@row.Impact</div>
+                        <div class="h5 mb-1">@row.Label</div>
+                        <div class="fs-4 fw-bold @GetAmountClass(row.Amount)">@row.Amount.ToString("N2")</div>
+                        <div class="small text-muted">Peso @row.WeightPercent.ToString("N2")%</div>
+                        <div class="small text-muted mt-2">@row.Commentary</div>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+
+    <div class="table-responsive">
+        <table class="table table-sm table-striped align-middle">
+            <thead>
+                <tr>
+                    <th>Concepto</th>
+                    <th class="text-end">Importe</th>
+                    <th class="text-end">Peso %</th>
+                    <th>Impacto</th>
+                    <th>Comentario</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var row in _rows)
+                {
+                    <tr>
+                        <td>@row.Label</td>
+                        <td class="text-end @GetAmountClass(row.Amount)">@row.Amount.ToString("N2")</td>
+                        <td class="text-end">@row.WeightPercent.ToString("N2")%</td>
+                        <td>@row.Impact</td>
+                        <td>@row.Commentary</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+@code {
+    private bool _loading = true;
+    private string? _error;
+    private List<FinanceWorkingCapitalBridgeRowDto> _rows = new();
+
+    protected override async Task OnInitializedAsync() => await ReloadAsync();
+
+    private async Task ReloadAsync()
+    {
+        _loading = true;
+        _error = null;
+        try
+        {
+            _rows = await FinanceApiService.GetWorkingCapitalBridgeAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private static string GetAmountClass(decimal value) => value >= 0m ? "text-success" : "text-danger";
+}

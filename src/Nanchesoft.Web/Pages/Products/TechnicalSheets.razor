@@ -1,0 +1,220 @@
+
+@page "/products/technical-sheets"
+@using Nanchesoft.Web.Services.Products
+@inject ProductTechnicalCostingApiService Api
+
+<PageTitle>Fichas técnicas</PageTitle>
+
+<h3>Fichas técnicas</h3>
+<p>Genera la ficha desde el producto y después edita datos de encabezado y aprobación.</p>
+
+@if (!string.IsNullOrWhiteSpace(_message))
+{
+    <div class="alert alert-info">@_message</div>
+}
+
+@if (_items is null || _products is null)
+{
+    <p>Cargando...</p>
+}
+else
+{
+    <div class="row">
+        <div class="col-7">
+            <table class="table table-sm table-striped">
+                <thead>
+                    <tr>
+                        <th>Código</th>
+                        <th>Producto</th>
+                        <th>Estatus</th>
+                        <th>Aprobada</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                @foreach (var item in _items)
+                {
+                    <tr>
+                        <td>@item.SheetCode</td>
+                        <td>@item.ProductDisplayName</td>
+                        <td>@item.Status</td>
+                        <td>@(item.IsApproved ? "Sí" : "No")</td>
+                        <td>
+                            <button class="btn btn-sm btn-outline-primary" @onclick="() => Edit(item)">Editar</button>
+                        </td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        </div>
+        <div class="col-5">
+            <EditForm Model="_editor" OnValidSubmit="SaveAsync">
+                <div class="mb-2">
+                    <label>Producto</label>
+                    <select class="form-select" @bind="_editor.FinishedProductIdString">
+                        <option value="">Seleccione</option>
+                        @foreach (var product in _products)
+                        {
+                            <option value="@product.FinishedProductId">@product.ProductCode - @product.ProductName</option>
+                        }
+                    </select>
+                </div>
+                <div class="mb-2"><label>Código</label><input class="form-control" @bind="_editor.SheetCode" /></div>
+                <div class="mb-2"><label>Nombre</label><input class="form-control" @bind="_editor.SheetName" /></div>
+                <div class="mb-2"><label>Estatus</label><input class="form-control" @bind="_editor.Status" /></div>
+                <div class="mb-2"><label>Nombre producto</label><input class="form-control" @bind="_editor.ProductDisplayName" /></div>
+                <div class="mb-2"><label>URL foto</label><input class="form-control" @bind="_editor.PhotoUrl" /></div>
+                <div class="mb-2"><label>Material principal</label><input class="form-control" @bind="_editor.MainMaterialName" /></div>
+                <div class="mb-2"><label>Color principal</label><input class="form-control" @bind="_editor.MainColorName" /></div>
+                <div class="mb-2"><label>Corrida</label><input class="form-control" @bind="_editor.SizeRunCode" /></div>
+                <div class="form-check mb-2"><input class="form-check-input" type="checkbox" @bind="_editor.IsApproved" /><label class="form-check-label">Aprobada</label></div>
+                <div class="mb-2"><label>Notas</label><textarea class="form-control" rows="3" @bind="_editor.Notes"></textarea></div>
+                <div class="d-flex gap-2 mb-3">
+                    <button class="btn btn-primary" type="submit">Guardar</button>
+                    <button class="btn btn-outline-secondary" type="button" @onclick="New">Nuevo</button>
+                    <button class="btn btn-outline-info" type="button" @onclick="GenerateAsync" disabled="@(!_editor.FinishedProductId.HasValue)">Generar desde producto</button>
+                    @if (_editor.Id.HasValue)
+                    {
+                        <button class="btn btn-outline-danger" type="button" @onclick="DeleteAsync">Eliminar</button>
+                    }
+                </div>
+            </EditForm>
+
+            @if (_editor.Materials.Count > 0)
+            {
+                <h5>Materiales</h5>
+                <table class="table table-sm">
+                    <thead><tr><th>Componente</th><th>Material</th><th>Cantidad</th></tr></thead>
+                    <tbody>
+                    @foreach (var row in _editor.Materials)
+                    {
+                        <tr><td>@row.ComponentName</td><td>@row.MaterialName</td><td>@row.Quantity</td></tr>
+                    }
+                    </tbody>
+                </table>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    private List<ProductTechnicalSheetDto>? _items;
+    private List<ProductTechnicalCenterRowDto>? _products;
+    private TechnicalSheetEditor _editor = new();
+    private string? _message;
+
+    protected override async Task OnInitializedAsync() => await ReloadAsync();
+
+    private async Task ReloadAsync()
+    {
+        _items = await Api.GetTechnicalSheetsAsync();
+        _products = await Api.GetTechnicalCenterOverviewAsync();
+        _editor = new TechnicalSheetEditor();
+    }
+
+    private void Edit(ProductTechnicalSheetDto item) => _editor = new TechnicalSheetEditor(item);
+    private void New() => _editor = new TechnicalSheetEditor();
+
+    private async Task GenerateAsync()
+    {
+        if (!_editor.FinishedProductId.HasValue) return;
+        var response = await Api.GenerateTechnicalSheetAsync(_editor.FinishedProductId.Value);
+        _message = response?.Message;
+        await ReloadAsync();
+    }
+
+    private async Task SaveAsync()
+    {
+        if (!_editor.FinishedProductId.HasValue) return;
+        var selectedProduct = _products?.FirstOrDefault(x => x.FinishedProductId == _editor.FinishedProductId.Value);
+        if (selectedProduct is not null && _editor.TenantId == Guid.Empty)
+        {
+            _editor.TenantId = selectedProduct.TenantId;
+            _editor.CompanyId = selectedProduct.CompanyId;
+        }
+        var request = _editor.ToRequest();
+        var saved = await Api.SaveTechnicalSheetAsync(request, _editor.Id);
+        _message = saved is null ? "No se pudo guardar." : "Ficha técnica guardada.";
+        await ReloadAsync();
+        if (saved is not null)
+        {
+            _editor = new TechnicalSheetEditor(saved);
+        }
+    }
+
+    private async Task DeleteAsync()
+    {
+        if (!_editor.Id.HasValue) return;
+        await Api.DeleteTechnicalSheetAsync(_editor.Id.Value);
+        _message = "Ficha técnica eliminada.";
+        await ReloadAsync();
+    }
+
+    private sealed class TechnicalSheetEditor
+    {
+        public Guid? Id { get; set; }
+        public Guid? FinishedProductId { get; set; }
+        public string FinishedProductIdString { get => FinishedProductId?.ToString() ?? string.Empty; set => FinishedProductId = Guid.TryParse(value, out var parsed) ? parsed : null; }
+        public Guid TenantId { get; set; }
+        public Guid CompanyId { get; set; }
+        public Guid? ProductStyleId { get; set; }
+        public string SheetCode { get; set; } = string.Empty;
+        public string SheetName { get; set; } = string.Empty;
+        public string Status { get; set; } = "draft";
+        public string ProductDisplayName { get; set; } = string.Empty;
+        public string PhotoUrl { get; set; } = string.Empty;
+        public string MainMaterialName { get; set; } = string.Empty;
+        public string MainColorName { get; set; } = string.Empty;
+        public string SizeRunCode { get; set; } = string.Empty;
+        public string Notes { get; set; } = string.Empty;
+        public bool IsApproved { get; set; }
+        public bool IsActive { get; set; } = true;
+        public List<ProductTechnicalSheetMaterialDto> Materials { get; set; } = new();
+        public List<ProductTechnicalSheetProcessDto> Processes { get; set; } = new();
+
+        public TechnicalSheetEditor() { }
+        public TechnicalSheetEditor(ProductTechnicalSheetDto dto)
+        {
+            Id = dto.Id;
+            FinishedProductId = dto.FinishedProductId;
+            TenantId = dto.TenantId;
+            CompanyId = dto.CompanyId;
+            ProductStyleId = dto.ProductStyleId;
+            SheetCode = dto.SheetCode;
+            SheetName = dto.SheetName;
+            Status = dto.Status;
+            ProductDisplayName = dto.ProductDisplayName;
+            PhotoUrl = dto.PhotoUrl;
+            MainMaterialName = dto.MainMaterialName;
+            MainColorName = dto.MainColorName;
+            SizeRunCode = dto.SizeRunCode;
+            Notes = dto.Notes;
+            IsApproved = dto.IsApproved;
+            IsActive = dto.IsActive;
+            Materials = dto.Materials;
+            Processes = dto.Processes;
+        }
+
+        public ProductTechnicalSheetRequest ToRequest() => new(
+            TenantId,
+            CompanyId,
+            FinishedProductId ?? Guid.Empty,
+            ProductStyleId,
+            SheetCode,
+            SheetName,
+            Status,
+            ProductDisplayName,
+            PhotoUrl,
+            MainMaterialName,
+            MainColorName,
+            SizeRunCode,
+            Notes,
+            IsApproved,
+            IsApproved ? DateTime.UtcNow : null,
+            IsApproved ? "web" : string.Empty,
+            IsActive,
+            "web",
+            Materials.Select(x => new ProductTechnicalSheetMaterialRequest(x.MaterialItemId, x.ComponentCode, x.ComponentName, x.MaterialCode, x.MaterialName, x.UnitCode, x.Quantity, x.WastePercent, x.SortOrder, x.ShowOnTechnicalSheet, x.Notes)).ToList(),
+            Processes.Select(x => new ProductTechnicalSheetProcessRequest(x.ProcessCode, x.ProcessName, x.WorkstationCode, x.DeliverToWarehouseCode, x.RequiresVoucherCard, x.ShowMaterialsOnVoucher, x.SortOrder, x.Notes)).ToList());
+    }
+}

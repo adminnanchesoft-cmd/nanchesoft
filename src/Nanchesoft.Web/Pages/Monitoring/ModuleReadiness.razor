@@ -1,0 +1,56 @@
+@page "/monitoring/module-readiness"
+@using Nanchesoft.Web.Services.Monitoring
+@inject ModuleReadinessService ModuleReadinessService
+
+<PageTitle>Entrada de módulos</PageTitle>
+
+<h3>Entrada de módulos</h3>
+<p>Esta vista revisa si los catálogos principales están conectados al dispatcher compartido y listos para abrir sin romper el ERP.</p>
+
+@if (_rows is null)
+{
+    <p>Cargando...</p>
+}
+else
+{
+    <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-bottom:16px;">
+        <div class="card"><div class="card-body"><div>Total</div><h4>@_rows.Count</h4></div></div>
+        <div class="card"><div class="card-body"><div>Listos</div><h4>@_rows.Count(x => x.IsReady)</h4></div></div>
+        <div class="card"><div class="card-body"><div>Pendientes</div><h4>@_rows.Count(x => !x.IsReady)</h4></div></div>
+    </div>
+
+    <table class="table table-striped table-bordered">
+        <thead>
+            <tr>
+                <th>Módulo</th>
+                <th>Nombre</th>
+                <th>Ruta</th>
+                <th>Catálogo</th>
+                <th>Estatus</th>
+                <th>Notas</th>
+            </tr>
+        </thead>
+        <tbody>
+        @foreach (var row in _rows)
+        {
+            <tr>
+                <td>@row.Module</td>
+                <td>@row.Name</td>
+                <td><code>@row.Route</code></td>
+                <td><code>@row.CatalogKey</code></td>
+                <td>@row.Status</td>
+                <td>@row.Notes</td>
+            </tr>
+        }
+        </tbody>
+    </table>
+}
+
+@code {
+    private List<ModuleReadinessResult>? _rows;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _rows = await ModuleReadinessService.GetRowsAsync();
+    }
+}

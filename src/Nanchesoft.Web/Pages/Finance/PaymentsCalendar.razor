@@ -1,0 +1,129 @@
+@page "/finance/payments-calendar"
+@using Microsoft.AspNetCore.Components.Forms
+@using Nanchesoft.Web.Services.Finance
+@inject FinanceApiService FinanceApiService
+
+<PageTitle>Calendario de pagos | Nanchesoft</PageTitle>
+
+<h1 class="h3 mb-3">Calendario de pagos</h1>
+<p class="text-muted">Consulta compromisos por proveedor y vencimiento para planear tesorería y evitar atrasos.</p>
+
+<div class="row g-3 mb-3">
+    <div class="col-md-2">
+        <label class="form-label">Desde</label>
+        <InputDate @bind-Value="_from" class="form-control" />
+    </div>
+    <div class="col-md-2">
+        <label class="form-label">Hasta</label>
+        <InputDate @bind-Value="_to" class="form-control" />
+    </div>
+    <div class="col-md-3 d-flex align-items-end gap-2">
+        <button class="btn btn-outline-secondary" @onclick="ReloadAsync">Cargar</button>
+        <button class="btn btn-outline-primary" @onclick="SetNext30Days">Próximos 30 días</button>
+    </div>
+</div>
+
+@if (_loading)
+{
+    <div class="alert alert-info">Cargando calendario de pagos...</div>
+}
+else if (!string.IsNullOrWhiteSpace(_error))
+{
+    <div class="alert alert-danger">@_error</div>
+}
+else
+{
+    <div class="row g-3 mb-3">
+        <div class="col-md-3"><div class="card shadow-sm"><div class="card-body"><div class="text-muted small">Documentos</div><div class="display-6 fw-bold">@_rows.Count</div></div></div></div>
+        <div class="col-md-3"><div class="card shadow-sm"><div class="card-body"><div class="text-muted small">Compromiso abierto</div><div class="fs-4 fw-bold text-primary">@_rows.Sum(x => x.OpenAmount).ToString("N2")</div></div></div></div>
+        <div class="col-md-3"><div class="card shadow-sm"><div class="card-body"><div class="text-muted small">Vencido</div><div class="fs-4 fw-bold text-danger">@_rows.Where(x => x.DaysToDue < 0).Sum(x => x.OpenAmount).ToString("N2")</div></div></div></div>
+        <div class="col-md-3"><div class="card shadow-sm"><div class="card-body"><div class="text-muted small">Próximos 7 días</div><div class="fs-4 fw-bold text-warning">@_rows.Where(x => x.DaysToDue >= 0 && x.DaysToDue <= 7).Sum(x => x.OpenAmount).ToString("N2")</div></div></div></div>
+    </div>
+
+    <div class="card shadow-sm">
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-sm table-striped align-middle">
+                    <thead>
+                        <tr>
+                            <th>Proveedor</th>
+                            <th>Folio</th>
+                            <th>Fecha</th>
+                            <th>Vence</th>
+                            <th class="text-end">Total</th>
+                            <th class="text-end">Estimado aplicado</th>
+                            <th class="text-end">Abierto</th>
+                            <th>Estatus</th>
+                            <th class="text-end">Días</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var row in _rows)
+                        {
+                            <tr>
+                                <td>@row.SupplierName</td>
+                                <td>@row.Folio</td>
+                                <td>@row.InvoiceDate.ToString("dd/MM/yyyy")</td>
+                                <td>@row.DueDate.ToString("dd/MM/yyyy")</td>
+                                <td class="text-end">@row.Total.ToString("N2")</td>
+                                <td class="text-end">@row.AppliedAmount.ToString("N2")</td>
+                                <td class="text-end fw-bold">@row.OpenAmount.ToString("N2")</td>
+                                <td><span class="badge @GetStatusBadge(row.Status)">@row.Status</span></td>
+                                <td class="text-end">@row.DaysToDue</td>
+                                <td class="text-end"><a class="btn btn-sm btn-outline-primary" href="@row.Route">Abrir</a></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="alert alert-secondary mt-3">La columna <strong>Estimado aplicado</strong> usa pagos posteados acumulados del proveedor para proyectar el saldo pendiente sin requerir nuevas tablas.</div>
+}
+
+@code {
+    private bool _loading = true;
+    private string? _error;
+    private DateTime _from = DateTime.Today.AddDays(-7);
+    private DateTime _to = DateTime.Today.AddDays(30);
+    private List<FinancePaymentCalendarRowDto> _rows = new();
+
+    protected override async Task OnInitializedAsync() => await ReloadAsync();
+
+    private async Task ReloadAsync()
+    {
+        _loading = true;
+        _error = null;
+
+        try
+        {
+            _rows = await FinanceApiService.GetPaymentsCalendarAsync(_from.Date, _to.Date);
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+            _rows = new();
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task SetNext30Days()
+    {
+        _from = DateTime.Today;
+        _to = _from.AddDays(30);
+        await ReloadAsync();
+    }
+
+    private static string GetStatusBadge(string status) => status switch
+    {
+        "Vencido" => "text-bg-danger",
+        "Hoy" => "text-bg-warning",
+        "Próximo" => "text-bg-info",
+        _ => "text-bg-secondary"
+    };
+}
