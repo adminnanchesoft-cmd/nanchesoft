@@ -4,6 +4,7 @@ using Nanchesoft.Api.Endpoints;
 using Nanchesoft.Persistence.Context;
 using Nanchesoft.Persistence.Seed;
 using Npgsql;
+QuestPDF.Settings.License = QuestPDF.Infrastructure.LicenseType.Community;
 
 var builder = WebApplication.CreateBuilder(args);
 

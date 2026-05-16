@@ -1,6 +1,9 @@
 using Microsoft.EntityFrameworkCore;
 using Nanchesoft.Domain.Entities;
 using Nanchesoft.Persistence.Context;
+using QuestPDF.Fluent;
+using QuestPDF.Helpers;
+using QuestPDF.Infrastructure;
 
 namespace Nanchesoft.Api.Endpoints;
 
@@ -196,6 +199,250 @@ public static class MaterialExplosionEndpoints
                 Errors = errors
             });
         });
+
+        // Generates a PDF report from an already-calculated explosion result
+        g.MapPost("/report", (ExplosionReportRequest request) =>
+        {
+            if (request.Result is null)
+                return Results.BadRequest(new { message = "Result is required." });
+            try
+            {
+                var pdfBytes = BuildExplosionPdf(request);
+                var base64 = Convert.ToBase64String(pdfBytes);
+                var fileName = $"explosion_{request.Result.ProductCode}_{DateTime.UtcNow:yyyyMMdd_HHmm}.pdf";
+                return Results.Ok(new { base64, fileName });
+            }
+            catch (Exception ex)
+            {
+                return Results.Problem(ex.Message);
+            }
+        });
+    }
+
+    private static byte[] BuildExplosionPdf(ExplosionReportRequest request)
+    {
+        var result = request.Result;
+        var activeSizes = result.Sizes
+            .Where(s => request.QuantitiesPerSize.ContainsKey(s.SizeRunSizeId) && request.QuantitiesPerSize[s.SizeRunSizeId] > 0)
+            .OrderBy(s => s.Sequence)
+            .ToList();
+
+        return Document.Create(container =>
+        {
+            container.Page(page =>
+            {
+                page.Size(PageSizes.A4.Landscape());
+                page.Margin(20, QuestPDF.Infrastructure.Unit.Millimetre);
+                page.DefaultTextStyle(x => x.FontSize(9));
+
+                page.Header().PaddingBottom(6).BorderBottom(1).BorderColor(Colors.Blue.Darken2).Row(row =>
+                {
+                    row.RelativeItem(2).Column(col =>
+                    {
+                        col.Item().Text(string.IsNullOrWhiteSpace(request.CompanyName) ? "Nanchesoft ERP" : request.CompanyName)
+                            .FontSize(14).Bold().FontColor(Colors.Blue.Darken3);
+                        col.Item().Text("Sistema ERP Nanchesoft").FontSize(8).FontColor(Colors.Grey.Darken1);
+                    });
+                    row.RelativeItem(3).AlignRight().Column(col =>
+                    {
+                        col.Item().Text("EXPLOSIÓN DE MATERIALES").FontSize(13).Bold().FontColor(Colors.Blue.Darken2);
+                        col.Item().Text($"Fecha: {result.GeneratedAt.ToLocalTime():yyyy-MM-dd HH:mm}").FontSize(8).FontColor(Colors.Grey.Darken1);
+                        if (!string.IsNullOrWhiteSpace(request.GeneratedBy))
+                            col.Item().Text($"Generado por: {request.GeneratedBy}").FontSize(8).FontColor(Colors.Grey.Darken1);
+                    });
+                });
+
+                page.Content().PaddingTop(10).Column(col =>
+                {
+                    col.Spacing(10);
+
+                    // Info block
+                    col.Item().Background(Colors.Blue.Lighten5).Border(1).BorderColor(Colors.Blue.Lighten3).Padding(8).Row(row =>
+                    {
+                        row.RelativeItem().Column(c =>
+                        {
+                            c.Item().Text("PRODUCTO").FontSize(7).Bold().FontColor(Colors.Grey.Darken2);
+                            c.Item().Text($"{result.ProductCode} · {result.ProductName}").FontSize(9).Bold();
+                        });
+                        row.ConstantItem(1).Background(Colors.Blue.Lighten3);
+                        row.RelativeItem().PaddingLeft(8).Column(c =>
+                        {
+                            c.Item().Text("ESTILO").FontSize(7).Bold().FontColor(Colors.Grey.Darken2);
+                            c.Item().Text(result.StyleCode).FontSize(9);
+                        });
+                        row.ConstantItem(1).Background(Colors.Blue.Lighten3);
+                        row.RelativeItem().PaddingLeft(8).Column(c =>
+                        {
+                            c.Item().Text("CORRIDA").FontSize(7).Bold().FontColor(Colors.Grey.Darken2);
+                            c.Item().Text(result.SizeRunName).FontSize(9);
+                        });
+                    });
+
+                    // Quantities table
+                    if (activeSizes.Count > 0)
+                    {
+                        col.Item().Column(qcol =>
+                        {
+                            qcol.Item().Text("Cantidades a producir").FontSize(8).Bold().FontColor(Colors.Blue.Darken2);
+                            qcol.Item().Table(table =>
+                            {
+                                table.ColumnsDefinition(cols =>
+                                {
+                                    foreach (var _ in activeSizes) cols.RelativeColumn();
+                                    cols.RelativeColumn();
+                                });
+                                table.Header(header =>
+                                {
+                                    foreach (var s in activeSizes)
+                                        header.Cell().Background(Colors.Blue.Darken2).Padding(4).AlignCenter().Text(s.DisplayLabel).FontSize(8).Bold().FontColor(Colors.White);
+                                    header.Cell().Background(Colors.Blue.Darken3).Padding(4).AlignCenter().Text("TOTAL").FontSize(8).Bold().FontColor(Colors.White);
+                                });
+                                foreach (var s in activeSizes)
+                                    table.Cell().Padding(4).AlignCenter().Text(request.QuantitiesPerSize[s.SizeRunSizeId].ToString("N0")).FontSize(9);
+                                table.Cell().Background(Colors.Blue.Lighten4).Padding(4).AlignCenter().Text(request.QuantitiesPerSize.Where(kv => activeSizes.Any(s => s.SizeRunSizeId == kv.Key)).Sum(kv => kv.Value).ToString("N0")).FontSize(9).Bold();
+                            });
+                        });
+                    }
+
+                    // Detail by component
+                    if (result.Lines.Count > 0)
+                    {
+                        col.Item().Column(dcol =>
+                        {
+                            dcol.Item().Text("Detalle por componente").FontSize(8).Bold().FontColor(Colors.Blue.Darken2);
+                            dcol.Item().Table(table =>
+                            {
+                                table.ColumnsDefinition(cols =>
+                                {
+                                    cols.ConstantColumn(55);
+                                    cols.RelativeColumn(2);
+                                    cols.RelativeColumn(1.5f);
+                                    cols.ConstantColumn(28);
+                                    foreach (var _ in activeSizes) cols.ConstantColumn(26);
+                                    cols.ConstantColumn(38);
+                                    cols.ConstantColumn(40);
+                                    cols.ConstantColumn(45);
+                                });
+
+                                table.Header(header =>
+                                {
+                                    header.Cell().Background(Colors.Blue.Darken2).Padding(4).Text("Componente").FontSize(7).Bold().FontColor(Colors.White);
+                                    header.Cell().Background(Colors.Blue.Darken2).Padding(4).Text("Material").FontSize(7).Bold().FontColor(Colors.White);
+                                    header.Cell().Background(Colors.Blue.Darken2).Padding(4).Text("Proveedor").FontSize(7).Bold().FontColor(Colors.White);
+                                    header.Cell().Background(Colors.Blue.Darken2).Padding(4).AlignCenter().Text("Unidad").FontSize(7).Bold().FontColor(Colors.White);
+                                    foreach (var s in activeSizes)
+                                        header.Cell().Background(Colors.Blue.Darken2).Padding(4).AlignRight().Text(s.DisplayLabel).FontSize(7).Bold().FontColor(Colors.White);
+                                    header.Cell().Background(Colors.Blue.Darken2).Padding(4).AlignRight().Text("Total").FontSize(7).Bold().FontColor(Colors.White);
+                                    header.Cell().Background(Colors.Blue.Darken2).Padding(4).AlignRight().Text("Costo U.").FontSize(7).Bold().FontColor(Colors.White);
+                                    header.Cell().Background(Colors.Blue.Darken2).Padding(4).AlignRight().Text("Costo Total").FontSize(7).Bold().FontColor(Colors.White);
+                                });
+
+                                var rowAlt = false;
+                                foreach (var line in result.Lines)
+                                {
+                                    var bg = rowAlt ? Colors.Grey.Lighten4 : Colors.White;
+                                    rowAlt = !rowAlt;
+                                    table.Cell().Background(bg).Padding(3).Column(c =>
+                                    {
+                                        c.Item().Text(line.ComponentCode).FontSize(7).Bold().FontColor(Colors.Blue.Darken2);
+                                        c.Item().Text(line.ComponentName).FontSize(6).FontColor(Colors.Grey.Darken1);
+                                    });
+                                    table.Cell().Background(bg).Padding(3).Column(c =>
+                                    {
+                                        c.Item().Text(line.MaterialCode).FontSize(7).Bold();
+                                        c.Item().Text(line.MaterialName).FontSize(6).FontColor(Colors.Grey.Darken1);
+                                    });
+                                    table.Cell().Background(bg).Padding(3).Text(string.IsNullOrWhiteSpace(line.SupplierName) ? "—" : line.SupplierName).FontSize(7).FontColor(Colors.Grey.Darken1);
+                                    table.Cell().Background(bg).Padding(3).AlignCenter().Text(line.IssueUnit).FontSize(7);
+                                    foreach (var s in activeSizes)
+                                    {
+                                        var v = line.TotalBySize.TryGetValue(s.SizeRunSizeId, out var tv) ? tv : 0;
+                                        table.Cell().Background(bg).Padding(3).AlignRight().Text(v > 0 ? v.ToString("F2") : "—").FontSize(7).FontColor(v > 0 ? Colors.Black : Colors.Grey.Lighten1);
+                                    }
+                                    table.Cell().Background(bg).Padding(3).AlignRight().Text(line.TotalConsumption.ToString("F4")).FontSize(7).Bold();
+                                    table.Cell().Background(bg).Padding(3).AlignRight().Text(line.UnitCost.ToString("C4")).FontSize(7).FontColor(Colors.Grey.Darken1);
+                                    table.Cell().Background(bg).Padding(3).AlignRight().Text(line.TotalCost.ToString("C2")).FontSize(8).Bold().FontColor(Colors.Blue.Darken2);
+                                }
+                            });
+                        });
+                    }
+
+                    // Consolidated by material
+                    if (result.Consolidated.Count > 0)
+                    {
+                        col.Item().Column(ccol =>
+                        {
+                            ccol.Item().Text("Resumen consolidado por material").FontSize(8).Bold().FontColor(Colors.Blue.Darken2);
+                            ccol.Item().Table(table =>
+                            {
+                                table.ColumnsDefinition(cols =>
+                                {
+                                    cols.ConstantColumn(50);
+                                    cols.RelativeColumn(3);
+                                    cols.RelativeColumn(2);
+                                    cols.ConstantColumn(35);
+                                    cols.ConstantColumn(55);
+                                    cols.ConstantColumn(55);
+                                    cols.ConstantColumn(60);
+                                });
+
+                                table.Header(header =>
+                                {
+                                    header.Cell().Background(Colors.Blue.Darken2).Padding(5).Text("Código").FontSize(8).Bold().FontColor(Colors.White);
+                                    header.Cell().Background(Colors.Blue.Darken2).Padding(5).Text("Material").FontSize(8).Bold().FontColor(Colors.White);
+                                    header.Cell().Background(Colors.Blue.Darken2).Padding(5).Text("Proveedor").FontSize(8).Bold().FontColor(Colors.White);
+                                    header.Cell().Background(Colors.Blue.Darken2).Padding(5).AlignRight().Text("Unidad").FontSize(8).Bold().FontColor(Colors.White);
+                                    header.Cell().Background(Colors.Blue.Darken2).Padding(5).AlignRight().Text("Total Consumo").FontSize(8).Bold().FontColor(Colors.White);
+                                    header.Cell().Background(Colors.Blue.Darken2).Padding(5).AlignRight().Text("Costo U.").FontSize(8).Bold().FontColor(Colors.White);
+                                    header.Cell().Background(Colors.Blue.Darken2).Padding(5).AlignRight().Text("Costo Total").FontSize(8).Bold().FontColor(Colors.White);
+                                });
+
+                                var rowAlt = false;
+                                foreach (var mat in result.Consolidated)
+                                {
+                                    var bg = rowAlt ? Colors.Grey.Lighten4 : Colors.White;
+                                    rowAlt = !rowAlt;
+                                    table.Cell().Background(bg).Padding(5).Text(mat.MaterialCode).FontSize(8).Bold().FontColor(Colors.Blue.Darken2);
+                                    table.Cell().Background(bg).Padding(5).Text(mat.MaterialName).FontSize(8);
+                                    table.Cell().Background(bg).Padding(5).Text(string.IsNullOrWhiteSpace(mat.SupplierName) ? "—" : mat.SupplierName).FontSize(8).FontColor(Colors.Grey.Darken1);
+                                    table.Cell().Background(bg).Padding(5).AlignRight().Text(mat.IssueUnit).FontSize(8);
+                                    table.Cell().Background(bg).Padding(5).AlignRight().Text(mat.TotalConsumption.ToString("F4")).FontSize(8).Bold();
+                                    table.Cell().Background(bg).Padding(5).AlignRight().Text(mat.UnitCost.ToString("C4")).FontSize(8).FontColor(Colors.Grey.Darken1);
+                                    table.Cell().Background(bg).Padding(5).AlignRight().Text(mat.TotalCost.ToString("C2")).FontSize(9).Bold().FontColor(Colors.Blue.Darken2);
+                                }
+
+                                table.Cell().ColumnSpan(6).Background(Colors.Blue.Darken2).Padding(6)
+                                    .AlignRight().Text("COSTO TOTAL GENERAL").FontSize(9).Bold().FontColor(Colors.White);
+                                table.Cell().Background(Colors.Blue.Darken1).Padding(6)
+                                    .AlignRight().Text(result.GrandTotalCost.ToString("C2")).FontSize(12).Bold().FontColor(Colors.White);
+                            });
+                        });
+                    }
+
+                    if (result.Errors?.Count > 0)
+                    {
+                        col.Item().Background(Colors.Yellow.Lighten3).Border(1).BorderColor(Colors.Yellow.Darken1).Padding(8).Column(c =>
+                        {
+                            c.Item().Text("Advertencias:").FontSize(8).Bold().FontColor(Colors.Orange.Darken3);
+                            foreach (var err in result.Errors)
+                                c.Item().Text($"• {err}").FontSize(8).FontColor(Colors.Orange.Darken2);
+                        });
+                    }
+                });
+
+                page.Footer().Row(row =>
+                {
+                    row.RelativeItem().Text("Nanchesoft ERP · Explosión de materiales").FontSize(7).FontColor(Colors.Grey.Darken1);
+                    row.ConstantItem(100).AlignRight().Text(x =>
+                    {
+                        x.Span("Página ").FontSize(7).FontColor(Colors.Grey.Darken1);
+                        x.CurrentPageNumber().FontSize(7).FontColor(Colors.Grey.Darken1);
+                        x.Span(" de ").FontSize(7).FontColor(Colors.Grey.Darken1);
+                        x.TotalPages().FontSize(7).FontColor(Colors.Grey.Darken1);
+                    });
+                });
+            });
+        }).GeneratePdf();
     }
 
     private static decimal ApplyUnitConversion(
@@ -268,4 +515,12 @@ public sealed class ExplosionResultDto
     public List<ConsolidatedMaterialDto> Consolidated { get; set; } = new();
     public decimal GrandTotalCost { get; set; }
     public List<string> Errors { get; set; } = new();
+}
+
+public sealed class ExplosionReportRequest
+{
+    public string CompanyName { get; set; } = string.Empty;
+    public string GeneratedBy { get; set; } = string.Empty;
+    public ExplosionResultDto Result { get; set; } = new();
+    public Dictionary<Guid, decimal> QuantitiesPerSize { get; set; } = new();
 }

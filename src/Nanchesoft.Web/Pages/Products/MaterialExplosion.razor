@@ -72,6 +72,7 @@
                 @if (_result is not null)
                 {
                     <button class="ns-secondary-btn" @onclick="ExportCsvAsync">Exportar CSV</button>
+                    <button class="ns-secondary-btn" @onclick="DownloadPdfAsync" disabled="@_generatingPdf">@(_generatingPdf ? "Generando PDF…" : "Descargar PDF")</button>
                     <button class="ns-secondary-btn" @onclick="PrintAsync">Imprimir</button>
                 }
             </div>
@@ -110,12 +111,12 @@
                 {
                     <div style="background:#f1f5f9;border-radius:8px;padding:6px 14px;text-align:center;min-width:70px;">
                         <div style="font-size:11px;color:#64748b;">@size.DisplayLabel</div>
-                        <div style="font-size:15px;font-weight:700;color:#0f172a;">@_quantities[size.SizeRunSizeId]:N0</div>
+                        <div style="font-size:15px;font-weight:700;color:#0f172a;">@(_quantities[size.SizeRunSizeId].ToString("N0"))</div>
                     </div>
                 }
                 <div style="background:#1e40af;border-radius:8px;padding:6px 14px;text-align:center;min-width:70px;">
                     <div style="font-size:11px;color:#93c5fd;">TOTAL</div>
-                    <div style="font-size:15px;font-weight:700;color:#fff;">@_quantities.Values.Sum():N0</div>
+                    <div style="font-size:15px;font-weight:700;color:#fff;">@(_quantities.Values.Sum().ToString("N0"))</div>
                 </div>
             </div>
         </div>
@@ -224,6 +225,7 @@
     private List<SizeDto> _sizes = [];
     private Dictionary<Guid, decimal> _quantities = new();
     private bool _exploding;
+    private bool _generatingPdf;
     private string? _error;
     private ExplosionResult? _result;
 
@@ -338,6 +340,37 @@
     private async Task PrintAsync()
         => await JS.InvokeVoidAsync("window.print");
 
+    private async Task DownloadPdfAsync()
+    {
+        if (_result is null) return;
+        _generatingPdf = true;
+        _error = null;
+        try
+        {
+            var client = HttpClientFactory.CreateClient("Nanchesoft.Api");
+            var activeQtys = _quantities.Where(kv => kv.Value > 0).ToDictionary(kv => kv.Key, kv => kv.Value);
+            var body = new
+            {
+                CompanyName = string.Empty,
+                GeneratedBy = string.Empty,
+                Result = _result,
+                QuantitiesPerSize = activeQtys
+            };
+            var resp = await client.PostAsJsonAsync("/api/products/material-explosion/report", body);
+            if (!resp.IsSuccessStatusCode)
+            {
+                _error = $"Error generando PDF: {resp.StatusCode}";
+                return;
+            }
+            using var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync());
+            var base64 = doc.RootElement.GetProperty("base64").GetString() ?? string.Empty;
+            var fileName = doc.RootElement.TryGetProperty("fileName", out var fn) ? fn.GetString() ?? "explosion.pdf" : "explosion.pdf";
+            await JS.InvokeVoidAsync("downloadFileBase64", fileName, base64);
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _generatingPdf = false; }
+    }
+
     private static string? GetStr(JsonElement el, string name)
     {
         foreach (var prop in el.EnumerateObject())
@@ -362,14 +395,6 @@
         public int Sequence { get; set; }
     }
 
-    private sealed class SizeInfo
-    {
-        public Guid SizeRunSizeId { get; set; }
-        public string SizeCode { get; set; } = string.Empty;
-        public string DisplayLabel { get; set; } = string.Empty;
-        public int Sequence { get; set; }
-    }
-
     private sealed class ExplosionResult
     {
         public string ProductCode { get; set; } = string.Empty;
@@ -377,7 +402,7 @@
         public string StyleCode { get; set; } = string.Empty;
         public string SizeRunName { get; set; } = string.Empty;
         public DateTime GeneratedAt { get; set; }
-        public List<SizeInfo> Sizes { get; set; } = [];
+        public List<SizeDto> Sizes { get; set; } = [];
         public List<ExplosionLine> Lines { get; set; } = [];
         public List<ConsolidatedMaterial> Consolidated { get; set; } = [];
         public decimal GrandTotalCost { get; set; }
