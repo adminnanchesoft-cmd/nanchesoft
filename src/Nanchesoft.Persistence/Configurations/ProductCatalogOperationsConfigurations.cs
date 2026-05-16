@@ -110,6 +110,7 @@ public sealed class FinishedProductConfiguration : IEntityTypeConfiguration<Fini
         builder.HasOne(x => x.ProductSizeRun).WithMany().HasForeignKey(x => x.ProductSizeRunId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne(x => x.ProductLine).WithMany().HasForeignKey(x => x.ProductLineId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne(x => x.ProductLast).WithMany().HasForeignKey(x => x.ProductLastId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne(x => x.ProductManufacturingType).WithMany().HasForeignKey(x => x.ProductManufacturingTypeId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne(x => x.MainMaterialItem).WithMany().HasForeignKey(x => x.MainMaterialItemId).OnDelete(DeleteBehavior.Restrict);
     }
 }

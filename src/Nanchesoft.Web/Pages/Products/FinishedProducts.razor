@@ -51,6 +51,8 @@
                         <th style="padding:10px 12px;border-bottom:2px solid #e2e8f0;">Marca</th>
                         <th style="padding:10px 12px;border-bottom:2px solid #e2e8f0;">Corrida</th>
                         <th style="padding:10px 12px;border-bottom:2px solid #e2e8f0;">Horma</th>
+                        <th style="padding:10px 12px;border-bottom:2px solid #e2e8f0;">Piel</th>
+                        <th style="padding:10px 12px;border-bottom:2px solid #e2e8f0;">Color</th>
                         <th style="padding:10px 12px;border-bottom:2px solid #e2e8f0;width:60px;">Activo</th>
                         <th style="padding:10px 12px;border-bottom:2px solid #e2e8f0;width:80px;"></th>
                     </tr>
@@ -66,6 +68,8 @@
                             <td style="padding:9px 12px;color:#475569;">@item.ItemBrandName</td>
                             <td style="padding:9px 12px;color:#475569;">@item.ProductSizeRunName</td>
                             <td style="padding:9px 12px;color:#475569;">@item.ProductLastName</td>
+                            <td style="padding:9px 12px;color:#475569;">@item.ProductLeatherTypeName</td>
+                            <td style="padding:9px 12px;color:#475569;">@item.ProductColorName</td>
                             <td style="padding:9px 12px;text-align:center;">
                                 @if (item.IsActive) { <span style="color:#16a34a;font-weight:600;">✓</span> } else { <span style="color:#9ca3af;">—</span> }
                             </td>
@@ -76,7 +80,7 @@
                     }
                     @if (!FilteredItems.Any())
                     {
-                        <tr><td colspan="9" style="padding:24px;text-align:center;color:#94a3b8;">Sin resultados</td></tr>
+                        <tr><td colspan="11" style="padding:24px;text-align:center;color:#94a3b8;">Sin resultados</td></tr>
                     }
                 </tbody>
             </table>
@@ -88,7 +92,7 @@
 @if (_showModal)
 {
     <div style="position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:1050;display:flex;align-items:center;justify-content:center;padding:16px;" @onclick="CloseModal">
-        <div style="background:#fff;border-radius:18px;padding:28px 32px;max-width:800px;width:100%;max-height:92vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.25);" @onclick:stopPropagation>
+        <div style="background:#fff;border-radius:18px;padding:28px 32px;max-width:900px;width:100%;max-height:92vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.25);" @onclick:stopPropagation>
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
                 <h2 style="margin:0;font-size:20px;color:#0f172a;">@(_editingId.HasValue ? "Editar producto terminado" : "Nuevo producto terminado")</h2>
                 <button @onclick="CloseModal" style="background:none;border:none;font-size:22px;cursor:pointer;color:#64748b;">×</button>
@@ -161,6 +165,78 @@
                     </div>
                 </div>
 
+                @* Piel *@
+                <div>
+                    <label style="display:block;font-size:12px;font-weight:600;color:#475569;margin-bottom:4px;">PIEL</label>
+                    <div style="display:flex;gap:6px;">
+                        <select @bind="_form.ProductLeatherTypeId" style="flex:1;padding:9px 12px;border-radius:8px;border:1px solid #cbd5e1;font-size:14px;">
+                            <option value="">— ninguno —</option>
+                            @foreach (var o in _leatherOptions) { <option value="@o.Id">@o.Label</option> }
+                        </select>
+                        <button @onclick='() => OpenQuickCreate("leather")' title="Crear tipo de piel" style="padding:9px 12px;border-radius:8px;border:1px solid #cbd5e1;background:#f8fafc;cursor:pointer;font-size:16px;">+</button>
+                    </div>
+                </div>
+
+                @* Color *@
+                <div>
+                    <label style="display:block;font-size:12px;font-weight:600;color:#475569;margin-bottom:4px;">COLOR</label>
+                    <div style="display:flex;gap:6px;">
+                        <select @bind="_form.ProductColorId" style="flex:1;padding:9px 12px;border-radius:8px;border:1px solid #cbd5e1;font-size:14px;">
+                            <option value="">— ninguno —</option>
+                            @foreach (var o in _colorOptions) { <option value="@o.Id">@o.Label</option> }
+                        </select>
+                        <button @onclick='() => OpenQuickCreate("color")' title="Crear color" style="padding:9px 12px;border-radius:8px;border:1px solid #cbd5e1;background:#f8fafc;cursor:pointer;font-size:16px;">+</button>
+                    </div>
+                </div>
+
+                @* Casco / Horma *@
+                <div>
+                    <label style="display:block;font-size:12px;font-weight:600;color:#475569;margin-bottom:4px;">CASCO / HORMA (TOECAP)</label>
+                    <div style="display:flex;gap:6px;">
+                        <select @bind="_form.ProductToeCapId" style="flex:1;padding:9px 12px;border-radius:8px;border:1px solid #cbd5e1;font-size:14px;">
+                            <option value="">— ninguno —</option>
+                            @foreach (var o in _toeCapOptions) { <option value="@o.Id">@o.Label</option> }
+                        </select>
+                        <button @onclick='() => OpenQuickCreate("toecap")' title="Crear casco/horma" style="padding:9px 12px;border-radius:8px;border:1px solid #cbd5e1;background:#f8fafc;cursor:pointer;font-size:16px;">+</button>
+                    </div>
+                </div>
+
+                @* Horma (Last) *@
+                <div>
+                    <label style="display:block;font-size:12px;font-weight:600;color:#475569;margin-bottom:4px;">HORMA (LAST)</label>
+                    <div style="display:flex;gap:6px;">
+                        <select @bind="_form.ProductLastId" style="flex:1;padding:9px 12px;border-radius:8px;border:1px solid #cbd5e1;font-size:14px;">
+                            <option value="">— ninguno —</option>
+                            @foreach (var o in _lastOptions) { <option value="@o.Id">@o.Label</option> }
+                        </select>
+                        <button @onclick='() => OpenQuickCreate("last")' title="Crear horma" style="padding:9px 12px;border-radius:8px;border:1px solid #cbd5e1;background:#f8fafc;cursor:pointer;font-size:16px;">+</button>
+                    </div>
+                </div>
+
+                @* Suela *@
+                <div>
+                    <label style="display:block;font-size:12px;font-weight:600;color:#475569;margin-bottom:4px;">SUELA</label>
+                    <div style="display:flex;gap:6px;">
+                        <select @bind="_form.ProductSoleId" style="flex:1;padding:9px 12px;border-radius:8px;border:1px solid #cbd5e1;font-size:14px;">
+                            <option value="">— ninguno —</option>
+                            @foreach (var o in _soleOptions) { <option value="@o.Id">@o.Label</option> }
+                        </select>
+                        <button @onclick='() => OpenQuickCreate("sole")' title="Crear suela" style="padding:9px 12px;border-radius:8px;border:1px solid #cbd5e1;background:#f8fafc;cursor:pointer;font-size:16px;">+</button>
+                    </div>
+                </div>
+
+                @* Color de suela *@
+                <div>
+                    <label style="display:block;font-size:12px;font-weight:600;color:#475569;margin-bottom:4px;">COLOR DE SUELA</label>
+                    <div style="display:flex;gap:6px;">
+                        <select @bind="_form.ProductSoleColorId" style="flex:1;padding:9px 12px;border-radius:8px;border:1px solid #cbd5e1;font-size:14px;">
+                            <option value="">— ninguno —</option>
+                            @foreach (var o in _soleColorOptions) { <option value="@o.Id">@o.Label</option> }
+                        </select>
+                        <button @onclick='() => OpenQuickCreate("solecolor")' title="Crear color de suela" style="padding:9px 12px;border-radius:8px;border:1px solid #cbd5e1;background:#f8fafc;cursor:pointer;font-size:16px;">+</button>
+                    </div>
+                </div>
+
                 @* Corrida *@
                 <div>
                     <label style="display:block;font-size:12px;font-weight:600;color:#475569;margin-bottom:4px;">CORRIDA</label>
@@ -170,15 +246,27 @@
                     </select>
                 </div>
 
-                @* Horma *@
+                @* Foliado *@
                 <div>
-                    <label style="display:block;font-size:12px;font-weight:600;color:#475569;margin-bottom:4px;">HORMA</label>
+                    <label style="display:block;font-size:12px;font-weight:600;color:#475569;margin-bottom:4px;">FOLIADO</label>
                     <div style="display:flex;gap:6px;">
-                        <select @bind="_form.ProductLastId" style="flex:1;padding:9px 12px;border-radius:8px;border:1px solid #cbd5e1;font-size:14px;">
+                        <select @bind="_form.ProductFolioPatternId" style="flex:1;padding:9px 12px;border-radius:8px;border:1px solid #cbd5e1;font-size:14px;">
                             <option value="">— ninguno —</option>
-                            @foreach (var o in _lastOptions) { <option value="@o.Id">@o.Label</option> }
+                            @foreach (var o in _folioOptions) { <option value="@o.Id">@o.Label</option> }
                         </select>
-                        <button @onclick='() => OpenQuickCreate("last")' title="Crear horma" style="padding:9px 12px;border-radius:8px;border:1px solid #cbd5e1;background:#f8fafc;cursor:pointer;font-size:16px;">+</button>
+                        <button @onclick='() => OpenQuickCreate("folio")' title="Crear foliado" style="padding:9px 12px;border-radius:8px;border:1px solid #cbd5e1;background:#f8fafc;cursor:pointer;font-size:16px;">+</button>
+                    </div>
+                </div>
+
+                @* Manufactura *@
+                <div>
+                    <label style="display:block;font-size:12px;font-weight:600;color:#475569;margin-bottom:4px;">MANUFACTURA</label>
+                    <div style="display:flex;gap:6px;">
+                        <select @bind="_form.ProductManufacturingTypeId" style="flex:1;padding:9px 12px;border-radius:8px;border:1px solid #cbd5e1;font-size:14px;">
+                            <option value="">— ninguno —</option>
+                            @foreach (var o in _manufacturingOptions) { <option value="@o.Id">@o.Label</option> }
+                        </select>
+                        <button @onclick='() => OpenQuickCreate("manufacturing")' title="Crear tipo de manufactura" style="padding:9px 12px;border-radius:8px;border:1px solid #cbd5e1;background:#f8fafc;cursor:pointer;font-size:16px;">+</button>
                     </div>
                 </div>
 
@@ -247,12 +335,19 @@
     private string _search = string.Empty;
 
     // ── options ───────────────────────────────────────────────────────────────
-    private List<Opt> _styleOptions = [];
-    private List<Opt> _lineOptions  = [];
-    private List<Opt> _lastOptions  = [];
-    private List<Opt> _brandOptions = [];
-    private List<Opt> _modelOptions = [];
-    private List<Opt> _runOptions   = [];
+    private List<Opt> _styleOptions        = [];
+    private List<Opt> _lineOptions         = [];
+    private List<Opt> _lastOptions         = [];
+    private List<Opt> _brandOptions        = [];
+    private List<Opt> _modelOptions        = [];
+    private List<Opt> _runOptions          = [];
+    private List<Opt> _leatherOptions      = [];
+    private List<Opt> _colorOptions        = [];
+    private List<Opt> _toeCapOptions       = [];
+    private List<Opt> _soleOptions         = [];
+    private List<Opt> _soleColorOptions    = [];
+    private List<Opt> _folioOptions        = [];
+    private List<Opt> _manufacturingOptions = [];
 
     // ── main modal ────────────────────────────────────────────────────────────
     private bool _showModal;
@@ -299,35 +394,59 @@
 
     private async Task LoadAllOptionsAsync(HttpClient client)
     {
-        var t1 = FetchOpts(client, "/api/products/styles/options", "productStyleId");
-        var t2 = FetchOpts(client, "/api/products/lines/options",  "productLineId");
-        var t3 = FetchOpts(client, "/api/products/lasts/options",  "productLastId");
-        var t4 = FetchOpts(client, "/api/products/brands/options", "brandId");
-        var t5 = FetchOpts(client, "/api/products/models/options", "modelId");
-        var t6 = FetchOpts(client, "/api/products/size-runs/options", "productSizeRunId");
-        await Task.WhenAll(t1, t2, t3, t4, t5, t6);
-        _styleOptions = await t1;
-        _lineOptions  = await t2;
-        _lastOptions  = await t3;
-        _brandOptions = await t4;
-        _modelOptions = await t5;
-        _runOptions   = await t6;
+        // ── named-id endpoints (use specific id property name) ──
+        var tStyle    = FetchOpts(client, "/api/products/styles/options",   "productStyleId");
+        var tLine     = FetchOpts(client, "/api/products/lines/options",    "productLineId");
+        var tLast     = FetchOpts(client, "/api/products/lasts/options",    "productLastId");
+        var tBrand    = FetchOpts(client, "/api/products/brands/options",   "brandId");
+        var tModel    = FetchOpts(client, "/api/products/models/options",   "modelId");
+        var tRun      = FetchOpts(client, "/api/products/size-runs/options","productSizeRunId");
+
+        // ── orange catalog endpoints (use generic "id" property) ──
+        var tLeather  = FetchOpts(client, "/api/products/leather-types/options",      "id");
+        var tColor    = FetchOpts(client, "/api/products/colors/options",             "id");
+        var tToeCap   = FetchOpts(client, "/api/products/toe-caps/options",           "id");
+        var tSole     = FetchOpts(client, "/api/products/soles/options",              "id");
+        var tSoleCol  = FetchOpts(client, "/api/products/sole-colors/options",        "id");
+        var tFolio    = FetchOpts(client, "/api/products/folio-patterns/options",     "id");
+        var tMfg      = FetchOpts(client, "/api/products/manufacturing-types/options","id");
+
+        await Task.WhenAll(tStyle, tLine, tLast, tBrand, tModel, tRun,
+                           tLeather, tColor, tToeCap, tSole, tSoleCol, tFolio, tMfg);
+
+        _styleOptions        = await tStyle;
+        _lineOptions         = await tLine;
+        _lastOptions         = await tLast;
+        _brandOptions        = await tBrand;
+        _modelOptions        = await tModel;
+        _runOptions          = await tRun;
+        _leatherOptions      = await tLeather;
+        _colorOptions        = await tColor;
+        _toeCapOptions       = await tToeCap;
+        _soleOptions         = await tSole;
+        _soleColorOptions    = await tSoleCol;
+        _folioOptions        = await tFolio;
+        _manufacturingOptions = await tMfg;
     }
 
     private static async Task<List<Opt>> FetchOpts(HttpClient client, string url, string idField)
     {
-        var json = await client.GetStringAsync(url);
-        using var doc = JsonDocument.Parse(json);
-        var list = new List<Opt>();
-        foreach (var el in doc.RootElement.EnumerateArray())
+        try
         {
-            var id = FindStringProp(el, idField);
-            var code = FindStringProp(el, "code") ?? string.Empty;
-            var name = FindStringProp(el, "name") ?? string.Empty;
-            if (!string.IsNullOrEmpty(id))
-                list.Add(new Opt(id, $"{code} · {name}"));
+            var json = await client.GetStringAsync(url);
+            using var doc = JsonDocument.Parse(json);
+            var list = new List<Opt>();
+            foreach (var el in doc.RootElement.EnumerateArray())
+            {
+                var id = FindStringProp(el, idField);
+                var code = FindStringProp(el, "code") ?? string.Empty;
+                var name = FindStringProp(el, "name") ?? string.Empty;
+                if (!string.IsNullOrEmpty(id))
+                    list.Add(new Opt(id, $"{code} · {name}"));
+            }
+            return list;
         }
-        return list;
+        catch { return []; }
     }
 
     private static string? FindStringProp(JsonElement el, string nameLower)
@@ -352,16 +471,23 @@
         _editingId = item.FinishedProductId;
         _form = new FpForm
         {
-            Code = item.Code,
-            Name = item.Name,
-            BillingName = item.BillingName,
-            ProductStyleId   = item.ProductStyleId?.ToString("D"),
-            ProductLineId    = item.ProductLineId?.ToString("D"),
-            ProductLastId    = item.ProductLastId?.ToString("D"),
-            ItemBrandId      = item.ItemBrandId?.ToString("D"),
-            ItemModelId      = item.ItemModelId?.ToString("D"),
-            ProductSizeRunId = item.ProductSizeRunId?.ToString("D"),
-            Notes = item.Notes,
+            Code                    = item.Code,
+            Name                    = item.Name,
+            BillingName             = item.BillingName,
+            ProductStyleId          = item.ProductStyleId?.ToString("D"),
+            ProductLineId           = item.ProductLineId?.ToString("D"),
+            ProductLastId           = item.ProductLastId?.ToString("D"),
+            ItemBrandId             = item.ItemBrandId?.ToString("D"),
+            ItemModelId             = item.ItemModelId?.ToString("D"),
+            ProductSizeRunId        = item.ProductSizeRunId?.ToString("D"),
+            ProductLeatherTypeId    = item.ProductLeatherTypeId?.ToString("D"),
+            ProductColorId          = item.ProductColorId?.ToString("D"),
+            ProductToeCapId         = item.ProductToeCapId?.ToString("D"),
+            ProductSoleId           = item.ProductSoleId?.ToString("D"),
+            ProductSoleColorId      = item.ProductSoleColorId?.ToString("D"),
+            ProductFolioPatternId   = item.ProductFolioPatternId?.ToString("D"),
+            ProductManufacturingTypeId = item.ProductManufacturingTypeId?.ToString("D"),
+            Notes    = item.Notes,
             IsActive = item.IsActive
         };
         _modalError = null;
@@ -380,27 +506,28 @@
             var client = HttpClientFactory.CreateClient("Nanchesoft.Api");
             var body = new
             {
-                Code = _form.Code.Trim().ToUpperInvariant(),
-                Name = string.IsNullOrWhiteSpace(_form.Name) ? (string?)null : _form.Name.Trim(),
-                BillingName = _form.BillingName ?? string.Empty,
-                ProductStyleId   = ParseGuid(_form.ProductStyleId),
-                ProductLineId    = ParseGuid(_form.ProductLineId),
-                ProductLastId    = ParseGuid(_form.ProductLastId),
-                ItemBrandId      = ParseGuid(_form.ItemBrandId),
-                ItemModelId      = ParseGuid(_form.ItemModelId),
-                ProductSizeRunId = ParseGuid(_form.ProductSizeRunId),
-                ProductLeatherTypeId  = (Guid?)null,
-                ProductColorId        = (Guid?)null,
-                ProductToeCapId       = (Guid?)null,
-                ProductSoleId         = (Guid?)null,
-                ProductSoleColorId    = (Guid?)null,
-                ProductFolioPatternId = (Guid?)null,
-                MainMaterialItemId    = (Guid?)null,
-                Notes = _form.Notes ?? string.Empty,
+                Code            = _form.Code.Trim().ToUpperInvariant(),
+                Name            = string.IsNullOrWhiteSpace(_form.Name) ? (string?)null : _form.Name.Trim(),
+                BillingName     = _form.BillingName ?? string.Empty,
+                ProductStyleId          = ParseGuid(_form.ProductStyleId),
+                ProductLineId           = ParseGuid(_form.ProductLineId),
+                ProductLastId           = ParseGuid(_form.ProductLastId),
+                ItemBrandId             = ParseGuid(_form.ItemBrandId),
+                ItemModelId             = ParseGuid(_form.ItemModelId),
+                ProductSizeRunId        = ParseGuid(_form.ProductSizeRunId),
+                ProductLeatherTypeId    = ParseGuid(_form.ProductLeatherTypeId),
+                ProductColorId          = ParseGuid(_form.ProductColorId),
+                ProductToeCapId         = ParseGuid(_form.ProductToeCapId),
+                ProductSoleId           = ParseGuid(_form.ProductSoleId),
+                ProductSoleColorId      = ParseGuid(_form.ProductSoleColorId),
+                ProductFolioPatternId   = ParseGuid(_form.ProductFolioPatternId),
+                ProductManufacturingTypeId = ParseGuid(_form.ProductManufacturingTypeId),
+                MainMaterialItemId      = (Guid?)null,
+                Notes    = _form.Notes ?? string.Empty,
                 IsActive = _form.IsActive,
                 HasPhoto = false,
                 HasConsumptionDefinition = false,
-                HasMaterialAssignments = false,
+                HasMaterialAssignments   = false,
                 IsAuthorizedForExplosion = false
             };
 
@@ -446,12 +573,19 @@
         _qcType = type;
         _quickCreateTitle = type switch
         {
-            "style" => "Nuevo estilo",
-            "line"  => "Nueva línea",
-            "last"  => "Nueva horma",
-            "brand" => "Nueva marca",
-            "model" => "Nuevo modelo",
-            _       => "Nuevo"
+            "style"         => "Nuevo estilo",
+            "line"          => "Nueva línea",
+            "last"          => "Nueva horma (last)",
+            "brand"         => "Nueva marca",
+            "model"         => "Nuevo modelo",
+            "leather"       => "Nuevo tipo de piel",
+            "color"         => "Nuevo color",
+            "toecap"        => "Nuevo casco / horma (toecap)",
+            "sole"          => "Nueva suela",
+            "solecolor"     => "Nuevo color de suela",
+            "folio"         => "Nuevo patrón de foliado",
+            "manufacturing" => "Nuevo tipo de manufactura",
+            _               => "Nuevo"
         };
         _qcCode = _qcName = string.Empty;
         _quickCreateError = null;
@@ -474,38 +608,90 @@
             var client = HttpClientFactory.CreateClient("Nanchesoft.Api");
             var code = _qcCode.Trim().ToUpperInvariant();
             var name = _qcName.Trim();
-            var (apiUrl, optUrl, idField, selector) = _qcType switch
-            {
-                "style" => ("/api/products/styles",  "/api/products/styles/options",  "productStyleId",   (Action<string>)(v => _form.ProductStyleId   = v)),
-                "line"  => ("/api/products/lines",   "/api/products/lines/options",   "productLineId",    (Action<string>)(v => _form.ProductLineId    = v)),
-                "last"  => ("/api/products/lasts",   "/api/products/lasts/options",   "productLastId",    (Action<string>)(v => _form.ProductLastId    = v)),
-                "brand" => ("/api/products/brands",  "/api/products/brands/options",  "brandId",          (Action<string>)(v => _form.ItemBrandId      = v)),
-                "model" => ("/api/products/models",  "/api/products/models/options",  "modelId",          (Action<string>)(v => _form.ItemModelId      = v)),
-                _       => throw new InvalidOperationException()
-            };
 
+            // Orange catalog types use OrangeSimpleCatalogRequest (Code+Name+IsActive)
+            // Standard catalog types use specific request bodies
+            string apiUrl, optUrl, idField;
+            Action<string> selector;
+
+            switch (_qcType)
+            {
+                case "style":
+                    (apiUrl, optUrl, idField, selector) = ("/api/products/styles", "/api/products/styles/options", "productStyleId", v => _form.ProductStyleId = v);
+                    break;
+                case "line":
+                    (apiUrl, optUrl, idField, selector) = ("/api/products/lines", "/api/products/lines/options", "productLineId", v => _form.ProductLineId = v);
+                    break;
+                case "last":
+                    (apiUrl, optUrl, idField, selector) = ("/api/products/lasts", "/api/products/lasts/options", "productLastId", v => _form.ProductLastId = v);
+                    break;
+                case "brand":
+                    (apiUrl, optUrl, idField, selector) = ("/api/products/brands", "/api/products/brands/options", "brandId", v => _form.ItemBrandId = v);
+                    break;
+                case "model":
+                    (apiUrl, optUrl, idField, selector) = ("/api/products/models", "/api/products/models/options", "modelId", v => _form.ItemModelId = v);
+                    break;
+                case "leather":
+                    (apiUrl, optUrl, idField, selector) = ("/api/products/leather-types", "/api/products/leather-types/options", "id", v => _form.ProductLeatherTypeId = v);
+                    break;
+                case "color":
+                    (apiUrl, optUrl, idField, selector) = ("/api/products/colors", "/api/products/colors/options", "id", v => _form.ProductColorId = v);
+                    break;
+                case "toecap":
+                    (apiUrl, optUrl, idField, selector) = ("/api/products/toe-caps", "/api/products/toe-caps/options", "id", v => _form.ProductToeCapId = v);
+                    break;
+                case "sole":
+                    (apiUrl, optUrl, idField, selector) = ("/api/products/soles", "/api/products/soles/options", "id", v => _form.ProductSoleId = v);
+                    break;
+                case "solecolor":
+                    (apiUrl, optUrl, idField, selector) = ("/api/products/sole-colors", "/api/products/sole-colors/options", "id", v => _form.ProductSoleColorId = v);
+                    break;
+                case "folio":
+                    (apiUrl, optUrl, idField, selector) = ("/api/products/folio-patterns", "/api/products/folio-patterns/options", "id", v => _form.ProductFolioPatternId = v);
+                    break;
+                case "manufacturing":
+                    (apiUrl, optUrl, idField, selector) = ("/api/products/manufacturing-types", "/api/products/manufacturing-types/options", "id", v => _form.ProductManufacturingTypeId = v);
+                    break;
+                default:
+                    throw new InvalidOperationException($"Unknown quick-create type: {_qcType}");
+            }
+
+            // POST to create
             var resp = await client.PostAsJsonAsync(apiUrl, new { Code = code, Name = name, IsActive = true });
             if (!resp.IsSuccessStatusCode) { _quickCreateError = await ParseErrorAsync(resp); return; }
 
+            // Extract new id from response
             var resultTxt = await resp.Content.ReadAsStringAsync();
             var newId = string.Empty;
             try
             {
                 using var doc = JsonDocument.Parse(resultTxt);
-                if (doc.RootElement.TryGetProperty("id", out var p) && p.ValueKind == JsonValueKind.String)
-                    newId = p.GetString() ?? string.Empty;
+                // Orange catalog returns plain guid string; others may return { id: "..." } or just a guid string
+                if (doc.RootElement.ValueKind == JsonValueKind.String)
+                    newId = doc.RootElement.GetString() ?? string.Empty;
+                else if (doc.RootElement.TryGetProperty("id", out var p))
+                    newId = p.ValueKind == JsonValueKind.String ? (p.GetString() ?? string.Empty) : p.ToString();
             }
             catch { /* ignore parse error */ }
 
+            // Reload options list
             var fresh = await FetchOpts(client, optUrl, idField);
             switch (_qcType)
             {
-                case "style": _styleOptions = fresh; break;
-                case "line":  _lineOptions  = fresh; break;
-                case "last":  _lastOptions  = fresh; break;
-                case "brand": _brandOptions = fresh; break;
-                case "model": _modelOptions = fresh; break;
+                case "style":   _styleOptions        = fresh; break;
+                case "line":    _lineOptions         = fresh; break;
+                case "last":    _lastOptions         = fresh; break;
+                case "brand":   _brandOptions        = fresh; break;
+                case "model":   _modelOptions        = fresh; break;
+                case "leather": _leatherOptions      = fresh; break;
+                case "color":   _colorOptions        = fresh; break;
+                case "toecap":  _toeCapOptions       = fresh; break;
+                case "sole":    _soleOptions         = fresh; break;
+                case "solecolor": _soleColorOptions  = fresh; break;
+                case "folio":   _folioOptions        = fresh; break;
+                case "manufacturing": _manufacturingOptions = fresh; break;
             }
+
             if (!string.IsNullOrEmpty(newId)) selector(newId);
             _showQuickCreate = false;
         }
@@ -540,6 +726,13 @@
         public Guid? ProductSizeRunId { get; set; }
         public Guid? ProductLineId { get; set; }
         public Guid? ProductLastId { get; set; }
+        public Guid? ProductLeatherTypeId { get; set; }
+        public Guid? ProductColorId { get; set; }
+        public Guid? ProductToeCapId { get; set; }
+        public Guid? ProductSoleId { get; set; }
+        public Guid? ProductSoleColorId { get; set; }
+        public Guid? ProductFolioPatternId { get; set; }
+        public Guid? ProductManufacturingTypeId { get; set; }
         public string Code { get; set; } = string.Empty;
         public string? Name { get; set; }
         public string BillingName { get; set; } = string.Empty;
@@ -549,6 +742,13 @@
         public string ProductSizeRunName { get; set; } = string.Empty;
         public string ProductLineName { get; set; } = string.Empty;
         public string ProductLastName { get; set; } = string.Empty;
+        public string ProductLeatherTypeName { get; set; } = string.Empty;
+        public string ProductColorName { get; set; } = string.Empty;
+        public string ProductToeCapName { get; set; } = string.Empty;
+        public string ProductSoleName { get; set; } = string.Empty;
+        public string ProductSoleColorName { get; set; } = string.Empty;
+        public string ProductFolioPatternName { get; set; } = string.Empty;
+        public string ProductManufacturingTypeName { get; set; } = string.Empty;
         public string Notes { get; set; } = string.Empty;
         public bool IsActive { get; set; }
     }
@@ -564,6 +764,13 @@
         public string? ItemBrandId { get; set; }
         public string? ItemModelId { get; set; }
         public string? ProductSizeRunId { get; set; }
+        public string? ProductLeatherTypeId { get; set; }
+        public string? ProductColorId { get; set; }
+        public string? ProductToeCapId { get; set; }
+        public string? ProductSoleId { get; set; }
+        public string? ProductSoleColorId { get; set; }
+        public string? ProductFolioPatternId { get; set; }
+        public string? ProductManufacturingTypeId { get; set; }
         public string? Notes { get; set; }
         public bool IsActive { get; set; } = true;
     }

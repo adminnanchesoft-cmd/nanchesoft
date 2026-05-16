@@ -137,93 +137,93 @@ public static class PayrollCalculatedSeeder
     private static async Task EnsureSchemaAsync(NanchesoftDbContext dbContext)
     {
         await dbContext.Database.ExecuteSqlRawAsync("""
-CREATE TABLE IF NOT EXISTS payroll_source_applications (
-    "Id" uuid PRIMARY KEY,
-    "TenantId" uuid NOT NULL,
-    "CompanyId" uuid NOT NULL,
-    "PayrollRunId" uuid NOT NULL,
-    "PayrollRunLineId" uuid NULL,
-    "EmployeeId" uuid NOT NULL,
-    "PayrollPeriodId" uuid NULL,
-    "PayrollConceptId" uuid NULL,
-    "SourceId" uuid NULL,
-    "SourceType" character varying(40) NOT NULL,
-    "ApplicationCode" character varying(40) NOT NULL,
-    "ApplicationName" character varying(180) NOT NULL,
-    "MovementType" character varying(30) NOT NULL,
-    "Quantity" numeric(18,4) NOT NULL,
-    "Amount" numeric(18,2) NOT NULL,
-    "TaxableAmount" numeric(18,2) NOT NULL,
-    "ExemptAmount" numeric(18,2) NOT NULL,
-    "AppliedAt" timestamp with time zone NOT NULL,
-    "Status" character varying(30) NOT NULL,
-    "Notes" character varying(1200) NOT NULL,
-    "IsActive" boolean NOT NULL,
-    "CreatedAt" timestamp with time zone NOT NULL,
-    "CreatedBy" text NULL,
-    "UpdatedAt" timestamp with time zone NULL,
-    "UpdatedBy" text NULL
+CREATE TABLE IF NOT EXISTS payroll.payroll_source_applications (
+    id uuid PRIMARY KEY,
+    tenant_id uuid NOT NULL,
+    company_id uuid NOT NULL,
+    payroll_run_id uuid NOT NULL,
+    payroll_run_line_id uuid NULL,
+    employee_id uuid NOT NULL,
+    payroll_period_id uuid NULL,
+    payroll_concept_id uuid NULL,
+    source_id uuid NULL,
+    source_type character varying(40) NOT NULL,
+    application_code character varying(40) NOT NULL,
+    application_name character varying(180) NOT NULL,
+    movement_type character varying(30) NOT NULL,
+    quantity numeric(18,4) NOT NULL,
+    amount numeric(18,2) NOT NULL,
+    taxable_amount numeric(18,2) NOT NULL,
+    exempt_amount numeric(18,2) NOT NULL,
+    applied_at timestamp with time zone NOT NULL,
+    status character varying(30) NOT NULL,
+    notes character varying(1200) NOT NULL,
+    is_active boolean NOT NULL,
+    created_at timestamp with time zone NOT NULL,
+    created_by text NULL,
+    updated_at timestamp with time zone NULL,
+    updated_by text NULL
 );
 CREATE UNIQUE INDEX IF NOT EXISTS ix_payroll_source_applications_run_employee_code_source
-ON payroll_source_applications ("PayrollRunId", "EmployeeId", "ApplicationCode", "SourceId");
+ON payroll.payroll_source_applications (payroll_run_id, employee_id, application_code, source_id);
 """);
 
         await dbContext.Database.ExecuteSqlRawAsync("""
-CREATE TABLE IF NOT EXISTS payroll_receipt_controls (
-    "Id" uuid PRIMARY KEY,
-    "TenantId" uuid NOT NULL,
-    "CompanyId" uuid NOT NULL,
-    "PayrollRunId" uuid NOT NULL,
-    "PayrollRunLineId" uuid NOT NULL,
-    "EmployeeId" uuid NOT NULL,
-    "ReceiptNumber" character varying(40) NOT NULL,
-    "ReceiptStatus" character varying(30) NOT NULL,
-    "GeneratedAt" timestamp with time zone NOT NULL,
-    "ReviewedAt" timestamp with time zone NULL,
-    "DeliveredAt" timestamp with time zone NULL,
-    "StampedAt" timestamp with time zone NULL,
-    "DeliveryChannel" character varying(40) NOT NULL,
-    "DeliveryReference" character varying(120) NOT NULL,
-    "AckBy" character varying(120) NOT NULL,
-    "NetAmount" numeric(18,2) NOT NULL,
-    "Notes" character varying(1200) NOT NULL,
-    "IsActive" boolean NOT NULL,
-    "CreatedAt" timestamp with time zone NOT NULL,
-    "CreatedBy" text NULL,
-    "UpdatedAt" timestamp with time zone NULL,
-    "UpdatedBy" text NULL
+CREATE TABLE IF NOT EXISTS payroll.payroll_receipt_controls (
+    id uuid PRIMARY KEY,
+    tenant_id uuid NOT NULL,
+    company_id uuid NOT NULL,
+    payroll_run_id uuid NOT NULL,
+    payroll_run_line_id uuid NOT NULL,
+    employee_id uuid NOT NULL,
+    receipt_number character varying(40) NOT NULL,
+    receipt_status character varying(30) NOT NULL,
+    generated_at timestamp with time zone NOT NULL,
+    reviewed_at timestamp with time zone NULL,
+    delivered_at timestamp with time zone NULL,
+    stamped_at timestamp with time zone NULL,
+    delivery_channel character varying(40) NOT NULL,
+    delivery_reference character varying(120) NOT NULL,
+    ack_by character varying(120) NOT NULL,
+    net_amount numeric(18,2) NOT NULL,
+    notes character varying(1200) NOT NULL,
+    is_active boolean NOT NULL,
+    created_at timestamp with time zone NOT NULL,
+    created_by text NULL,
+    updated_at timestamp with time zone NULL,
+    updated_by text NULL
 );
-CREATE UNIQUE INDEX IF NOT EXISTS ix_payroll_receipt_controls_runline ON payroll_receipt_controls ("PayrollRunLineId");
-CREATE UNIQUE INDEX IF NOT EXISTS ix_payroll_receipt_controls_run_receipt ON payroll_receipt_controls ("PayrollRunId", "ReceiptNumber");
+CREATE UNIQUE INDEX IF NOT EXISTS ix_payroll_receipt_controls_runline ON payroll.payroll_receipt_controls (payroll_run_line_id);
+CREATE UNIQUE INDEX IF NOT EXISTS ix_payroll_receipt_controls_run_receipt ON payroll.payroll_receipt_controls (payroll_run_id, receipt_number);
 """);
 
         await dbContext.Database.ExecuteSqlRawAsync("""
-CREATE TABLE IF NOT EXISTS payroll_run_closings (
-    "Id" uuid PRIMARY KEY,
-    "TenantId" uuid NOT NULL,
-    "CompanyId" uuid NOT NULL,
-    "PayrollRunId" uuid NOT NULL,
-    "ClosingCode" character varying(40) NOT NULL,
-    "ClosingDate" timestamp with time zone NOT NULL,
-    "EmployeesIncluded" integer NOT NULL,
-    "GrossAmount" numeric(18,2) NOT NULL,
-    "DeductionsAmount" numeric(18,2) NOT NULL,
-    "NetAmount" numeric(18,2) NOT NULL,
-    "SourceApplicationsCount" integer NOT NULL,
-    "ReceiptsGeneratedCount" integer NOT NULL,
-    "IssuesDetected" integer NOT NULL,
-    "Status" character varying(30) NOT NULL,
-    "IsLocked" boolean NOT NULL,
-    "LockedAt" timestamp with time zone NULL,
-    "ClosedBy" character varying(120) NOT NULL,
-    "Notes" character varying(1200) NOT NULL,
-    "IsActive" boolean NOT NULL,
-    "CreatedAt" timestamp with time zone NOT NULL,
-    "CreatedBy" text NULL,
-    "UpdatedAt" timestamp with time zone NULL,
-    "UpdatedBy" text NULL
+CREATE TABLE IF NOT EXISTS payroll.payroll_run_closings (
+    id uuid PRIMARY KEY,
+    tenant_id uuid NOT NULL,
+    company_id uuid NOT NULL,
+    payroll_run_id uuid NOT NULL,
+    closing_code character varying(40) NOT NULL,
+    closing_date timestamp with time zone NOT NULL,
+    employees_included integer NOT NULL,
+    gross_amount numeric(18,2) NOT NULL,
+    deductions_amount numeric(18,2) NOT NULL,
+    net_amount numeric(18,2) NOT NULL,
+    source_applications_count integer NOT NULL,
+    receipts_generated_count integer NOT NULL,
+    issues_detected integer NOT NULL,
+    status character varying(30) NOT NULL,
+    is_locked boolean NOT NULL,
+    locked_at timestamp with time zone NULL,
+    closed_by character varying(120) NOT NULL,
+    notes character varying(1200) NOT NULL,
+    is_active boolean NOT NULL,
+    created_at timestamp with time zone NOT NULL,
+    created_by text NULL,
+    updated_at timestamp with time zone NULL,
+    updated_by text NULL
 );
-CREATE UNIQUE INDEX IF NOT EXISTS ix_payroll_run_closings_run_code ON payroll_run_closings ("PayrollRunId", "ClosingCode");
+CREATE UNIQUE INDEX IF NOT EXISTS ix_payroll_run_closings_run_code ON payroll.payroll_run_closings (payroll_run_id, closing_code);
 """);
     }
 }

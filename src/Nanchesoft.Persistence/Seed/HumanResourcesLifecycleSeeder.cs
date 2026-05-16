@@ -116,93 +116,93 @@ public static class HumanResourcesLifecycleSeeder
     {
         await dbContext.Database.ExecuteSqlRawAsync(
             """
-            CREATE TABLE IF NOT EXISTS hr_employee_documents (
-                "Id" uuid PRIMARY KEY,
-                "TenantId" uuid NOT NULL,
-                "CompanyId" uuid NOT NULL,
-                "BranchId" uuid NULL,
-                "EmployeeId" uuid NOT NULL,
-                "DocumentCode" character varying(30) NOT NULL,
-                "DocumentName" character varying(160) NOT NULL,
-                "DocumentType" character varying(60) NOT NULL,
-                "DocumentNumber" character varying(80) NOT NULL,
-                "IssueDate" timestamp with time zone NULL,
-                "ExpirationDate" timestamp with time zone NULL,
-                "UploadedAt" timestamp with time zone NULL,
-                "VerifiedAt" timestamp with time zone NULL,
-                "FileName" character varying(180) NOT NULL,
-                "FilePath" character varying(300) NOT NULL,
-                "Status" character varying(30) NOT NULL,
-                "IsRequired" boolean NOT NULL,
-                "IsVerified" boolean NOT NULL,
-                "VerifiedBy" character varying(120) NOT NULL,
-                "Notes" character varying(800) NOT NULL,
-                "IsActive" boolean NOT NULL,
-                "CreatedAt" timestamp with time zone NOT NULL,
-                "CreatedBy" text NULL,
-                "UpdatedAt" timestamp with time zone NULL,
-                "UpdatedBy" text NULL
+            CREATE TABLE IF NOT EXISTS hr.hr_employee_documents (
+                id uuid PRIMARY KEY,
+                tenant_id uuid NOT NULL,
+                company_id uuid NOT NULL,
+                branch_id uuid NULL,
+                employee_id uuid NOT NULL,
+                document_code character varying(30) NOT NULL,
+                document_name character varying(160) NOT NULL,
+                document_type character varying(60) NOT NULL,
+                document_number character varying(80) NOT NULL,
+                issue_date timestamp with time zone NULL,
+                expiration_date timestamp with time zone NULL,
+                uploaded_at timestamp with time zone NULL,
+                verified_at timestamp with time zone NULL,
+                file_name character varying(180) NOT NULL,
+                file_path character varying(300) NOT NULL,
+                status character varying(30) NOT NULL,
+                is_required boolean NOT NULL,
+                is_verified boolean NOT NULL,
+                verified_by character varying(120) NOT NULL,
+                notes character varying(800) NOT NULL,
+                is_active boolean NOT NULL,
+                created_at timestamp with time zone NOT NULL,
+                created_by text NULL,
+                updated_at timestamp with time zone NULL,
+                updated_by text NULL
             );
-            CREATE UNIQUE INDEX IF NOT EXISTS ix_hr_employee_documents_company_employee_code ON hr_employee_documents ("CompanyId", "EmployeeId", "DocumentCode");
+            CREATE UNIQUE INDEX IF NOT EXISTS ix_hr_employee_documents_company_employee_code ON hr.hr_employee_documents (company_id, employee_id, document_code);
             """);
 
         await dbContext.Database.ExecuteSqlRawAsync(
             """
-            CREATE TABLE IF NOT EXISTS hr_employee_movements (
-                "Id" uuid PRIMARY KEY,
-                "TenantId" uuid NOT NULL,
-                "CompanyId" uuid NOT NULL,
-                "BranchId" uuid NULL,
-                "EmployeeId" uuid NOT NULL,
-                "DepartmentId" uuid NULL,
-                "PositionId" uuid NULL,
-                "MovementCode" character varying(40) NOT NULL,
-                "MovementType" character varying(40) NOT NULL,
-                "EffectiveDate" timestamp with time zone NOT NULL,
-                "AppliedAt" timestamp with time zone NULL,
-                "PreviousValue" character varying(180) NOT NULL,
-                "NewValue" character varying(180) NOT NULL,
-                "SalaryBefore" numeric(18,2) NOT NULL,
-                "SalaryAfter" numeric(18,2) NOT NULL,
-                "AuthorizedBy" character varying(120) NOT NULL,
-                "Status" character varying(30) NOT NULL,
-                "ImpactsPayroll" boolean NOT NULL,
-                "Notes" character varying(800) NOT NULL,
-                "IsActive" boolean NOT NULL,
-                "CreatedAt" timestamp with time zone NOT NULL,
-                "CreatedBy" text NULL,
-                "UpdatedAt" timestamp with time zone NULL,
-                "UpdatedBy" text NULL
+            CREATE TABLE IF NOT EXISTS hr.hr_employee_movements (
+                id uuid PRIMARY KEY,
+                tenant_id uuid NOT NULL,
+                company_id uuid NOT NULL,
+                branch_id uuid NULL,
+                employee_id uuid NOT NULL,
+                department_id uuid NULL,
+                position_id uuid NULL,
+                movement_code character varying(40) NOT NULL,
+                movement_type character varying(40) NOT NULL,
+                effective_date timestamp with time zone NOT NULL,
+                applied_at timestamp with time zone NULL,
+                previous_value character varying(180) NOT NULL,
+                new_value character varying(180) NOT NULL,
+                salary_before numeric(18,2) NOT NULL,
+                salary_after numeric(18,2) NOT NULL,
+                authorized_by character varying(120) NOT NULL,
+                status character varying(30) NOT NULL,
+                impacts_payroll boolean NOT NULL,
+                notes character varying(800) NOT NULL,
+                is_active boolean NOT NULL,
+                created_at timestamp with time zone NOT NULL,
+                created_by text NULL,
+                updated_at timestamp with time zone NULL,
+                updated_by text NULL
             );
-            CREATE UNIQUE INDEX IF NOT EXISTS ix_hr_employee_movements_company_code ON hr_employee_movements ("CompanyId", "MovementCode");
+            CREATE UNIQUE INDEX IF NOT EXISTS ix_hr_employee_movements_company_code ON hr.hr_employee_movements (company_id, movement_code);
             """);
 
         await dbContext.Database.ExecuteSqlRawAsync(
             """
-            CREATE TABLE IF NOT EXISTS hr_employee_certifications (
-                "Id" uuid PRIMARY KEY,
-                "TenantId" uuid NOT NULL,
-                "CompanyId" uuid NOT NULL,
-                "BranchId" uuid NULL,
-                "EmployeeId" uuid NOT NULL,
-                "CertificationCode" character varying(40) NOT NULL,
-                "CertificationName" character varying(160) NOT NULL,
-                "Category" character varying(60) NOT NULL,
-                "IssuedBy" character varying(160) NOT NULL,
-                "IssueDate" timestamp with time zone NOT NULL,
-                "ExpirationDate" timestamp with time zone NULL,
-                "Score" numeric(18,2) NOT NULL,
-                "Status" character varying(30) NOT NULL,
-                "IsMandatory" boolean NOT NULL,
-                "RenewalRequired" boolean NOT NULL,
-                "Notes" character varying(800) NOT NULL,
-                "IsActive" boolean NOT NULL,
-                "CreatedAt" timestamp with time zone NOT NULL,
-                "CreatedBy" text NULL,
-                "UpdatedAt" timestamp with time zone NULL,
-                "UpdatedBy" text NULL
+            CREATE TABLE IF NOT EXISTS hr.hr_employee_certifications (
+                id uuid PRIMARY KEY,
+                tenant_id uuid NOT NULL,
+                company_id uuid NOT NULL,
+                branch_id uuid NULL,
+                employee_id uuid NOT NULL,
+                certification_code character varying(40) NOT NULL,
+                certification_name character varying(160) NOT NULL,
+                category character varying(60) NOT NULL,
+                issued_by character varying(160) NOT NULL,
+                issue_date timestamp with time zone NOT NULL,
+                expiration_date timestamp with time zone NULL,
+                score numeric(18,2) NOT NULL,
+                status character varying(30) NOT NULL,
+                is_mandatory boolean NOT NULL,
+                renewal_required boolean NOT NULL,
+                notes character varying(800) NOT NULL,
+                is_active boolean NOT NULL,
+                created_at timestamp with time zone NOT NULL,
+                created_by text NULL,
+                updated_at timestamp with time zone NULL,
+                updated_by text NULL
             );
-            CREATE UNIQUE INDEX IF NOT EXISTS ix_hr_employee_certifications_company_employee_code ON hr_employee_certifications ("CompanyId", "EmployeeId", "CertificationCode");
+            CREATE UNIQUE INDEX IF NOT EXISTS ix_hr_employee_certifications_company_employee_code ON hr.hr_employee_certifications (company_id, employee_id, certification_code);
             """);
     }
 }

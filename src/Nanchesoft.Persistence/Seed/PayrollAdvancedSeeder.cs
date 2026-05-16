@@ -192,112 +192,112 @@ public static class PayrollAdvancedSeeder
     private static async Task EnsureSchemaAsync(NanchesoftDbContext dbContext)
     {
         await dbContext.Database.ExecuteSqlRawAsync(@"
-CREATE TABLE IF NOT EXISTS hr_attendance_punches (
-    ""Id"" uuid PRIMARY KEY,
-    ""TenantId"" uuid NOT NULL,
-    ""CompanyId"" uuid NOT NULL,
-    ""BranchId"" uuid NULL,
-    ""EmployeeId"" uuid NOT NULL,
-    ""WorkDate"" timestamp with time zone NOT NULL,
-    ""PunchDateTime"" timestamp with time zone NOT NULL,
-    ""PunchType"" character varying(20) NOT NULL,
-    ""Source"" character varying(30) NOT NULL,
-    ""DeviceName"" character varying(120) NOT NULL,
-    ""DeviceSerial"" character varying(120) NOT NULL,
-    ""ExternalReference"" character varying(120) NOT NULL,
-    ""Status"" character varying(30) NOT NULL,
-    ""Notes"" character varying(600) NOT NULL,
-    ""IsActive"" boolean NOT NULL,
-    ""CreatedAt"" timestamp with time zone NOT NULL,
-    ""CreatedBy"" text NULL,
-    ""UpdatedAt"" timestamp with time zone NULL,
-    ""UpdatedBy"" text NULL
+CREATE TABLE IF NOT EXISTS hr.hr_attendance_punches (
+    id uuid PRIMARY KEY,
+    tenant_id uuid NOT NULL,
+    company_id uuid NOT NULL,
+    branch_id uuid NULL,
+    employee_id uuid NOT NULL,
+    work_date timestamp with time zone NOT NULL,
+    punch_date_time timestamp with time zone NOT NULL,
+    punch_type character varying(20) NOT NULL,
+    source character varying(30) NOT NULL,
+    device_name character varying(120) NOT NULL,
+    device_serial character varying(120) NOT NULL,
+    external_reference character varying(120) NOT NULL,
+    status character varying(30) NOT NULL,
+    notes character varying(600) NOT NULL,
+    is_active boolean NOT NULL,
+    created_at timestamp with time zone NOT NULL,
+    created_by text NULL,
+    updated_at timestamp with time zone NULL,
+    updated_by text NULL
 );
-CREATE INDEX IF NOT EXISTS ix_hr_attendance_punches_company_employee_datetime ON hr_attendance_punches (""CompanyId"", ""EmployeeId"", ""PunchDateTime"");
+CREATE INDEX IF NOT EXISTS ix_hr_attendance_punches_company_employee_datetime ON hr.hr_attendance_punches (company_id, employee_id, punch_date_time);
 ");
 
         await dbContext.Database.ExecuteSqlRawAsync(@"
-CREATE TABLE IF NOT EXISTS payroll_recurring_movements (
-    ""Id"" uuid PRIMARY KEY,
-    ""TenantId"" uuid NOT NULL,
-    ""CompanyId"" uuid NOT NULL,
-    ""EmployeeId"" uuid NOT NULL,
-    ""PayrollConceptId"" uuid NOT NULL,
-    ""MovementCode"" character varying(40) NOT NULL,
-    ""MovementName"" character varying(160) NOT NULL,
-    ""MovementType"" character varying(30) NOT NULL,
-    ""CalculationMode"" character varying(40) NOT NULL,
-    ""Quantity"" numeric(18,4) NOT NULL,
-    ""Amount"" numeric(18,2) NOT NULL,
-    ""Percentage"" numeric(18,4) NOT NULL,
-    ""EffectiveStartDate"" timestamp with time zone NOT NULL,
-    ""EffectiveEndDate"" timestamp with time zone NULL,
-    ""ApplyEveryRun"" boolean NOT NULL,
-    ""DayOfPeriod"" integer NULL,
-    ""IsProrated"" boolean NOT NULL,
-    ""Status"" character varying(30) NOT NULL,
-    ""Notes"" character varying(600) NOT NULL,
-    ""IsActive"" boolean NOT NULL,
-    ""CreatedAt"" timestamp with time zone NOT NULL,
-    ""CreatedBy"" text NULL,
-    ""UpdatedAt"" timestamp with time zone NULL,
-    ""UpdatedBy"" text NULL
+CREATE TABLE IF NOT EXISTS payroll.payroll_recurring_movements (
+    id uuid PRIMARY KEY,
+    tenant_id uuid NOT NULL,
+    company_id uuid NOT NULL,
+    employee_id uuid NOT NULL,
+    payroll_concept_id uuid NOT NULL,
+    movement_code character varying(40) NOT NULL,
+    movement_name character varying(160) NOT NULL,
+    movement_type character varying(30) NOT NULL,
+    calculation_mode character varying(40) NOT NULL,
+    quantity numeric(18,4) NOT NULL,
+    amount numeric(18,2) NOT NULL,
+    percentage numeric(18,4) NOT NULL,
+    effective_start_date timestamp with time zone NOT NULL,
+    effective_end_date timestamp with time zone NULL,
+    apply_every_run boolean NOT NULL,
+    day_of_period integer NULL,
+    is_prorated boolean NOT NULL,
+    status character varying(30) NOT NULL,
+    notes character varying(600) NOT NULL,
+    is_active boolean NOT NULL,
+    created_at timestamp with time zone NOT NULL,
+    created_by text NULL,
+    updated_at timestamp with time zone NULL,
+    updated_by text NULL
 );
-CREATE UNIQUE INDEX IF NOT EXISTS ix_payroll_recurring_movements_company_employee_code ON payroll_recurring_movements (""CompanyId"", ""EmployeeId"", ""MovementCode"");
+CREATE UNIQUE INDEX IF NOT EXISTS ix_payroll_recurring_movements_company_employee_code ON payroll.payroll_recurring_movements (company_id, employee_id, movement_code);
 ");
 
         await dbContext.Database.ExecuteSqlRawAsync(@"
-CREATE TABLE IF NOT EXISTS employee_loans (
-    ""Id"" uuid PRIMARY KEY,
-    ""TenantId"" uuid NOT NULL,
-    ""CompanyId"" uuid NOT NULL,
-    ""EmployeeId"" uuid NOT NULL,
-    ""PayrollConceptId"" uuid NOT NULL,
-    ""LoanNumber"" character varying(40) NOT NULL,
-    ""LoanDate"" timestamp with time zone NOT NULL,
-    ""StartDate"" timestamp with time zone NOT NULL,
-    ""EndDate"" timestamp with time zone NULL,
-    ""PrincipalAmount"" numeric(18,2) NOT NULL,
-    ""BalanceAmount"" numeric(18,2) NOT NULL,
-    ""InstallmentAmount"" numeric(18,2) NOT NULL,
-    ""Installments"" integer NOT NULL,
-    ""InstallmentsPaid"" integer NOT NULL,
-    ""Status"" character varying(30) NOT NULL,
-    ""Notes"" character varying(600) NOT NULL,
-    ""IsActive"" boolean NOT NULL,
-    ""CreatedAt"" timestamp with time zone NOT NULL,
-    ""CreatedBy"" text NULL,
-    ""UpdatedAt"" timestamp with time zone NULL,
-    ""UpdatedBy"" text NULL
+CREATE TABLE IF NOT EXISTS payroll.employee_loans (
+    id uuid PRIMARY KEY,
+    tenant_id uuid NOT NULL,
+    company_id uuid NOT NULL,
+    employee_id uuid NOT NULL,
+    payroll_concept_id uuid NOT NULL,
+    loan_number character varying(40) NOT NULL,
+    loan_date timestamp with time zone NOT NULL,
+    start_date timestamp with time zone NOT NULL,
+    end_date timestamp with time zone NULL,
+    principal_amount numeric(18,2) NOT NULL,
+    balance_amount numeric(18,2) NOT NULL,
+    installment_amount numeric(18,2) NOT NULL,
+    installments integer NOT NULL,
+    installments_paid integer NOT NULL,
+    status character varying(30) NOT NULL,
+    notes character varying(600) NOT NULL,
+    is_active boolean NOT NULL,
+    created_at timestamp with time zone NOT NULL,
+    created_by text NULL,
+    updated_at timestamp with time zone NULL,
+    updated_by text NULL
 );
-CREATE UNIQUE INDEX IF NOT EXISTS ix_employee_loans_company_number ON employee_loans (""CompanyId"", ""LoanNumber"");
+CREATE UNIQUE INDEX IF NOT EXISTS ix_employee_loans_company_number ON payroll.employee_loans (company_id, loan_number);
 ");
 
         await dbContext.Database.ExecuteSqlRawAsync(@"
-CREATE TABLE IF NOT EXISTS employee_loan_deductions (
-    ""Id"" uuid PRIMARY KEY,
-    ""TenantId"" uuid NOT NULL,
-    ""CompanyId"" uuid NOT NULL,
-    ""EmployeeLoanId"" uuid NOT NULL,
-    ""EmployeeId"" uuid NOT NULL,
-    ""PayrollPeriodId"" uuid NULL,
-    ""PayrollRunId"" uuid NULL,
-    ""PayrollRunLineId"" uuid NULL,
-    ""DeductionDate"" timestamp with time zone NOT NULL,
-    ""InstallmentNumber"" integer NOT NULL,
-    ""Amount"" numeric(18,2) NOT NULL,
-    ""PrincipalApplied"" numeric(18,2) NOT NULL,
-    ""InterestApplied"" numeric(18,2) NOT NULL,
-    ""RemainingBalance"" numeric(18,2) NOT NULL,
-    ""Status"" character varying(30) NOT NULL,
-    ""Notes"" character varying(600) NOT NULL,
-    ""IsActive"" boolean NOT NULL,
-    ""CreatedAt"" timestamp with time zone NOT NULL,
-    ""CreatedBy"" text NULL,
-    ""UpdatedAt"" timestamp with time zone NULL,
-    ""UpdatedBy"" text NULL
+CREATE TABLE IF NOT EXISTS payroll.employee_loan_deductions (
+    id uuid PRIMARY KEY,
+    tenant_id uuid NOT NULL,
+    company_id uuid NOT NULL,
+    employee_loan_id uuid NOT NULL,
+    employee_id uuid NOT NULL,
+    payroll_period_id uuid NULL,
+    payroll_run_id uuid NULL,
+    payroll_run_line_id uuid NULL,
+    deduction_date timestamp with time zone NOT NULL,
+    installment_number integer NOT NULL,
+    amount numeric(18,2) NOT NULL,
+    principal_applied numeric(18,2) NOT NULL,
+    interest_applied numeric(18,2) NOT NULL,
+    remaining_balance numeric(18,2) NOT NULL,
+    status character varying(30) NOT NULL,
+    notes character varying(600) NOT NULL,
+    is_active boolean NOT NULL,
+    created_at timestamp with time zone NOT NULL,
+    created_by text NULL,
+    updated_at timestamp with time zone NULL,
+    updated_by text NULL
 );
-CREATE UNIQUE INDEX IF NOT EXISTS ix_employee_loan_deductions_loan_installment ON employee_loan_deductions (""EmployeeLoanId"", ""InstallmentNumber"");
+CREATE UNIQUE INDEX IF NOT EXISTS ix_employee_loan_deductions_loan_installment ON payroll.employee_loan_deductions (employee_loan_id, installment_number);
 ");
     }
 }

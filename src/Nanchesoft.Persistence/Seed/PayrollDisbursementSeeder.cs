@@ -125,91 +125,91 @@ public static class PayrollDisbursementSeeder
     private static async Task EnsureSchemaAsync(NanchesoftDbContext dbContext)
     {
         await dbContext.Database.ExecuteSqlRawAsync("""
-CREATE TABLE IF NOT EXISTS payroll_dispersion_batches (
-    "Id" uuid PRIMARY KEY,
-    "TenantId" uuid NOT NULL,
-    "CompanyId" uuid NOT NULL,
-    "PayrollRunId" uuid NOT NULL,
-    "BatchCode" character varying(40) NOT NULL,
-    "DispersionDate" timestamp with time zone NOT NULL,
-    "LayoutFormat" character varying(30) NOT NULL,
-    "BankName" character varying(120) NOT NULL,
-    "FundingAccount" character varying(60) NOT NULL,
-    "BeneficiariesCount" integer NOT NULL,
-    "TotalAmount" numeric(18,2) NOT NULL,
-    "Status" character varying(30) NOT NULL,
-    "ApprovedAt" timestamp with time zone NULL,
-    "ExportedAt" timestamp with time zone NULL,
-    "ConfirmedAt" timestamp with time zone NULL,
-    "FileReference" character varying(240) NOT NULL,
-    "Notes" character varying(1200) NOT NULL,
-    "IsActive" boolean NOT NULL,
-    "CreatedAt" timestamp with time zone NOT NULL,
-    "CreatedBy" text NULL,
-    "UpdatedAt" timestamp with time zone NULL,
-    "UpdatedBy" text NULL
+CREATE TABLE IF NOT EXISTS payroll.payroll_dispersion_batches (
+    id uuid PRIMARY KEY,
+    tenant_id uuid NOT NULL,
+    company_id uuid NOT NULL,
+    payroll_run_id uuid NOT NULL,
+    batch_code character varying(40) NOT NULL,
+    dispersion_date timestamp with time zone NOT NULL,
+    layout_format character varying(30) NOT NULL,
+    bank_name character varying(120) NOT NULL,
+    funding_account character varying(60) NOT NULL,
+    beneficiaries_count integer NOT NULL,
+    total_amount numeric(18,2) NOT NULL,
+    status character varying(30) NOT NULL,
+    approved_at timestamp with time zone NULL,
+    exported_at timestamp with time zone NULL,
+    confirmed_at timestamp with time zone NULL,
+    file_reference character varying(240) NOT NULL,
+    notes character varying(1200) NOT NULL,
+    is_active boolean NOT NULL,
+    created_at timestamp with time zone NOT NULL,
+    created_by text NULL,
+    updated_at timestamp with time zone NULL,
+    updated_by text NULL
 );
-CREATE UNIQUE INDEX IF NOT EXISTS ix_payroll_dispersion_batches_run_code ON payroll_dispersion_batches ("PayrollRunId", "BatchCode");
+CREATE UNIQUE INDEX IF NOT EXISTS ix_payroll_dispersion_batches_run_code ON payroll.payroll_dispersion_batches (payroll_run_id, batch_code);
 """);
 
         await dbContext.Database.ExecuteSqlRawAsync("""
-CREATE TABLE IF NOT EXISTS payroll_dispersion_lines (
-    "Id" uuid PRIMARY KEY,
-    "TenantId" uuid NOT NULL,
-    "CompanyId" uuid NOT NULL,
-    "PayrollDispersionBatchId" uuid NOT NULL,
-    "PayrollRunId" uuid NOT NULL,
-    "PayrollRunLineId" uuid NOT NULL,
-    "EmployeeId" uuid NOT NULL,
-    "Sequence" integer NOT NULL,
-    "EmployeeNumber" character varying(40) NOT NULL,
-    "BeneficiaryName" character varying(180) NOT NULL,
-    "BankName" character varying(120) NOT NULL,
-    "BankAccount" character varying(60) NOT NULL,
-    "Clabe" character varying(40) NOT NULL,
-    "NetAmount" numeric(18,2) NOT NULL,
-    "PaymentReference" character varying(80) NOT NULL,
-    "ValidationStatus" character varying(30) NOT NULL,
-    "IsRejected" boolean NOT NULL,
-    "PaidAt" timestamp with time zone NULL,
-    "Status" character varying(30) NOT NULL,
-    "Notes" character varying(1200) NOT NULL,
-    "IsActive" boolean NOT NULL,
-    "CreatedAt" timestamp with time zone NOT NULL,
-    "CreatedBy" text NULL,
-    "UpdatedAt" timestamp with time zone NULL,
-    "UpdatedBy" text NULL
+CREATE TABLE IF NOT EXISTS payroll.payroll_dispersion_lines (
+    id uuid PRIMARY KEY,
+    tenant_id uuid NOT NULL,
+    company_id uuid NOT NULL,
+    payroll_dispersion_batch_id uuid NOT NULL,
+    payroll_run_id uuid NOT NULL,
+    payroll_run_line_id uuid NOT NULL,
+    employee_id uuid NOT NULL,
+    sequence integer NOT NULL,
+    employee_number character varying(40) NOT NULL,
+    beneficiary_name character varying(180) NOT NULL,
+    bank_name character varying(120) NOT NULL,
+    bank_account character varying(60) NOT NULL,
+    clabe character varying(40) NOT NULL,
+    net_amount numeric(18,2) NOT NULL,
+    payment_reference character varying(80) NOT NULL,
+    validation_status character varying(30) NOT NULL,
+    is_rejected boolean NOT NULL,
+    paid_at timestamp with time zone NULL,
+    status character varying(30) NOT NULL,
+    notes character varying(1200) NOT NULL,
+    is_active boolean NOT NULL,
+    created_at timestamp with time zone NOT NULL,
+    created_by text NULL,
+    updated_at timestamp with time zone NULL,
+    updated_by text NULL
 );
-CREATE UNIQUE INDEX IF NOT EXISTS ix_payroll_dispersion_lines_batch_sequence ON payroll_dispersion_lines ("PayrollDispersionBatchId", "Sequence");
-CREATE UNIQUE INDEX IF NOT EXISTS ix_payroll_dispersion_lines_runline ON payroll_dispersion_lines ("PayrollRunLineId");
+CREATE UNIQUE INDEX IF NOT EXISTS ix_payroll_dispersion_lines_batch_sequence ON payroll.payroll_dispersion_lines (payroll_dispersion_batch_id, sequence);
+CREATE UNIQUE INDEX IF NOT EXISTS ix_payroll_dispersion_lines_runline ON payroll.payroll_dispersion_lines (payroll_run_line_id);
 """);
 
         await dbContext.Database.ExecuteSqlRawAsync("""
-CREATE TABLE IF NOT EXISTS payroll_accounting_postings (
-    "Id" uuid PRIMARY KEY,
-    "TenantId" uuid NOT NULL,
-    "CompanyId" uuid NOT NULL,
-    "PayrollRunId" uuid NOT NULL,
-    "PostingCode" character varying(40) NOT NULL,
-    "PostingDate" timestamp with time zone NOT NULL,
-    "LedgerBook" character varying(40) NOT NULL,
-    "JournalNumber" character varying(40) NOT NULL,
-    "DebitAmount" numeric(18,2) NOT NULL,
-    "CreditAmount" numeric(18,2) NOT NULL,
-    "LinesCount" integer NOT NULL,
-    "Status" character varying(30) NOT NULL,
-    "ExportedAt" timestamp with time zone NULL,
-    "PostedAt" timestamp with time zone NULL,
-    "LockedAt" timestamp with time zone NULL,
-    "ExportReference" character varying(180) NOT NULL,
-    "Notes" character varying(1200) NOT NULL,
-    "IsActive" boolean NOT NULL,
-    "CreatedAt" timestamp with time zone NOT NULL,
-    "CreatedBy" text NULL,
-    "UpdatedAt" timestamp with time zone NULL,
-    "UpdatedBy" text NULL
+CREATE TABLE IF NOT EXISTS payroll.payroll_accounting_postings (
+    id uuid PRIMARY KEY,
+    tenant_id uuid NOT NULL,
+    company_id uuid NOT NULL,
+    payroll_run_id uuid NOT NULL,
+    posting_code character varying(40) NOT NULL,
+    posting_date timestamp with time zone NOT NULL,
+    ledger_book character varying(40) NOT NULL,
+    journal_number character varying(40) NOT NULL,
+    debit_amount numeric(18,2) NOT NULL,
+    credit_amount numeric(18,2) NOT NULL,
+    lines_count integer NOT NULL,
+    status character varying(30) NOT NULL,
+    exported_at timestamp with time zone NULL,
+    posted_at timestamp with time zone NULL,
+    locked_at timestamp with time zone NULL,
+    export_reference character varying(180) NOT NULL,
+    notes character varying(1200) NOT NULL,
+    is_active boolean NOT NULL,
+    created_at timestamp with time zone NOT NULL,
+    created_by text NULL,
+    updated_at timestamp with time zone NULL,
+    updated_by text NULL
 );
-CREATE UNIQUE INDEX IF NOT EXISTS ix_payroll_accounting_postings_run_code ON payroll_accounting_postings ("PayrollRunId", "PostingCode");
+CREATE UNIQUE INDEX IF NOT EXISTS ix_payroll_accounting_postings_run_code ON payroll.payroll_accounting_postings (payroll_run_id, posting_code);
 """);
     }
 }

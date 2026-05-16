@@ -29,11 +29,14 @@
         }
     </select>
     <button class="btn btn-primary" @onclick="LoadSuppliesAsync">Ver insumos</button>
-    @if (_supplies.Count > 0)
+    @if (!string.IsNullOrEmpty(_selectedProductId))
     {
         <button class="btn btn-outline-secondary" @onclick="InitializeSuppliesAsync" disabled="@_initializing">
             @(_initializing ? "Inicializando..." : "Inicializar desde plantilla")
         </button>
+    }
+    @if (_supplies.Count > 0)
+    {
         <button class="btn btn-primary ms-auto" @onclick="SaveAllAsync" disabled="@_saving">
             @(_saving ? "Guardando..." : "Guardar")
         </button>

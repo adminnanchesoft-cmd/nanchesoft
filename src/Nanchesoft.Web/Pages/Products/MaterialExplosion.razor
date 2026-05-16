@@ -1,0 +1,414 @@
+@page "/products/material-explosion"
+@using System.Net.Http.Json
+@using System.Text.Json
+@inject IHttpClientFactory HttpClientFactory
+@inject IJSRuntime JS
+
+<PageTitle>Explosión de materiales | Nanchesoft</PageTitle>
+
+<div class="ns-catalog-page">
+    <div class="ns-catalog-header">
+        <div>
+            <div class="ns-catalog-eyebrow">Nanchesoft ERP · Módulo de Productos</div>
+            <h1 class="ns-catalog-title">Explosión de Materiales</h1>
+            <p class="ns-catalog-subtitle">Calcula materiales necesarios para producir un producto terminado por talla.</p>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(_error))
+    {
+        <div style="margin-bottom:16px;padding:12px 16px;border-radius:12px;background:#fff1f2;color:#991b1b;border:1px solid #fecdd3;">
+            <strong>Error:</strong> @_error
+        </div>
+    }
+
+    @* ── PASO 1: Selección de producto ── *@
+    <div style="background:#f8fafc;border-radius:16px;padding:24px;margin-bottom:24px;border:1px solid #e2e8f0;">
+        <h3 style="margin:0 0 16px 0;font-size:15px;font-weight:700;color:#1e40af;">Paso 1 — Selecciona el producto terminado</h3>
+        <div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;">
+            <div style="flex:1;min-width:260px;">
+                <label style="display:block;font-size:12px;font-weight:600;color:#475569;margin-bottom:4px;">PRODUCTO TERMINADO *</label>
+                <select @bind="_selectedProductId" style="width:100%;padding:9px 12px;border-radius:8px;border:1px solid #cbd5e1;font-size:14px;">
+                    <option value="">— seleccionar —</option>
+                    @foreach (var p in _products)
+                    {
+                        <option value="@p.Id">@p.Code · @p.Name</option>
+                    }
+                </select>
+            </div>
+            <button class="ns-primary-btn" @onclick="LoadProductSizesAsync" disabled="@(_loadingSizes || string.IsNullOrEmpty(_selectedProductId))">
+                @(_loadingSizes ? "Cargando…" : "Cargar tallas")
+            </button>
+        </div>
+    </div>
+
+    @* ── PASO 2: Captura de cantidades por talla ── *@
+    @if (_sizes.Count > 0)
+    {
+        <div style="background:#f8fafc;border-radius:16px;padding:24px;margin-bottom:24px;border:1px solid #e2e8f0;">
+            <h3 style="margin:0 0 8px 0;font-size:15px;font-weight:700;color:#1e40af;">Paso 2 — Captura cantidades a producir por talla</h3>
+            <p style="margin:0 0 16px 0;font-size:13px;color:#64748b;">Ingresa 0 o deja vacío para excluir una talla de la explosión.</p>
+
+            <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(100px,1fr));gap:10px;">
+                @foreach (var size in _sizes)
+                {
+                    <div style="background:#fff;border-radius:10px;padding:10px;border:1px solid #e2e8f0;text-align:center;">
+                        <div style="font-size:13px;font-weight:700;color:#0f172a;margin-bottom:6px;">@size.DisplayLabel</div>
+                        <input type="number"
+                               min="0"
+                               step="1"
+                               value="@GetQty(size.SizeRunSizeId)"
+                               @onchange="e => SetQty(size.SizeRunSizeId, e.Value?.ToString())"
+                               style="width:100%;padding:6px 8px;border-radius:6px;border:1px solid #cbd5e1;font-size:13px;text-align:center;box-sizing:border-box;" />
+                    </div>
+                }
+            </div>
+
+            <div style="display:flex;gap:10px;margin-top:20px;align-items:center;flex-wrap:wrap;">
+                <button class="ns-primary-btn" @onclick="ExplodeAsync" disabled="@_exploding">
+                    @(_exploding ? "Calculando…" : "Generar explosión")
+                </button>
+                <button class="ns-secondary-btn" @onclick="ClearQuantities">Limpiar cantidades</button>
+                @if (_result is not null)
+                {
+                    <button class="ns-secondary-btn" @onclick="ExportCsvAsync">Exportar CSV</button>
+                    <button class="ns-secondary-btn" @onclick="PrintAsync">Imprimir</button>
+                }
+            </div>
+        </div>
+    }
+
+    @* ── PASO 3: Resultado ── *@
+    @if (_result is not null)
+    {
+        @* Header info *@
+        <div style="background:#fff;border-radius:16px;padding:20px 24px;margin-bottom:16px;border:1px solid #e2e8f0;">
+            <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;">
+                <div><span style="font-size:11px;color:#64748b;font-weight:600;">PRODUCTO</span><div style="font-size:14px;font-weight:700;color:#0f172a;">@_result.ProductCode · @_result.ProductName</div></div>
+                <div><span style="font-size:11px;color:#64748b;font-weight:600;">ESTILO</span><div style="font-size:14px;color:#0f172a;">@_result.StyleCode</div></div>
+                <div><span style="font-size:11px;color:#64748b;font-weight:600;">CORRIDA</span><div style="font-size:14px;color:#0f172a;">@_result.SizeRunName</div></div>
+                <div><span style="font-size:11px;color:#64748b;font-weight:600;">FECHA GENERACIÓN</span><div style="font-size:14px;color:#0f172a;">@_result.GeneratedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</div></div>
+                <div><span style="font-size:11px;color:#64748b;font-weight:600;">COSTO TOTAL</span><div style="font-size:18px;font-weight:700;color:#1e40af;">@_result.GrandTotalCost.ToString("C2")</div></div>
+            </div>
+        </div>
+
+        @if (_result.Errors.Count > 0)
+        {
+            <div style="margin-bottom:16px;padding:12px 16px;border-radius:12px;background:#fefce8;color:#854d0e;border:1px solid #fde68a;">
+                <strong>Advertencias:</strong>
+                <ul style="margin:8px 0 0 0;padding-left:20px;">
+                    @foreach (var e in _result.Errors) { <li>@e</li> }
+                </ul>
+            </div>
+        }
+
+        @* Quantities summary *@
+        <div style="background:#fff;border-radius:16px;padding:20px 24px;margin-bottom:16px;border:1px solid #e2e8f0;">
+            <h3 style="margin:0 0 12px 0;font-size:14px;font-weight:700;color:#475569;text-transform:uppercase;letter-spacing:.04em;">Cantidades a producir</h3>
+            <div style="display:flex;gap:10px;flex-wrap:wrap;">
+                @foreach (var size in _result.Sizes.Where(s => _quantities.ContainsKey(s.SizeRunSizeId) && _quantities[s.SizeRunSizeId] > 0))
+                {
+                    <div style="background:#f1f5f9;border-radius:8px;padding:6px 14px;text-align:center;min-width:70px;">
+                        <div style="font-size:11px;color:#64748b;">@size.DisplayLabel</div>
+                        <div style="font-size:15px;font-weight:700;color:#0f172a;">@_quantities[size.SizeRunSizeId]:N0</div>
+                    </div>
+                }
+                <div style="background:#1e40af;border-radius:8px;padding:6px 14px;text-align:center;min-width:70px;">
+                    <div style="font-size:11px;color:#93c5fd;">TOTAL</div>
+                    <div style="font-size:15px;font-weight:700;color:#fff;">@_quantities.Values.Sum():N0</div>
+                </div>
+            </div>
+        </div>
+
+        @* Detail by component *@
+        <div style="background:#fff;border-radius:16px;padding:20px 24px;margin-bottom:16px;border:1px solid #e2e8f0;">
+            <h3 style="margin:0 0 12px 0;font-size:14px;font-weight:700;color:#475569;text-transform:uppercase;letter-spacing:.04em;">Detalle por componente</h3>
+            <div style="overflow-x:auto;">
+                <table style="width:100%;border-collapse:collapse;font-size:12px;white-space:nowrap;">
+                    <thead>
+                        <tr style="background:#f1f5f9;">
+                            <th style="padding:8px 10px;border-bottom:2px solid #e2e8f0;text-align:left;">Componente</th>
+                            <th style="padding:8px 10px;border-bottom:2px solid #e2e8f0;text-align:left;">Material</th>
+                            <th style="padding:8px 10px;border-bottom:2px solid #e2e8f0;text-align:left;">Proveedor</th>
+                            <th style="padding:8px 10px;border-bottom:2px solid #e2e8f0;text-align:left;">Unidad</th>
+                            @foreach (var size in _result.Sizes.Where(s => _quantities.ContainsKey(s.SizeRunSizeId) && _quantities[s.SizeRunSizeId] > 0))
+                            {
+                                <th style="padding:8px 10px;border-bottom:2px solid #e2e8f0;text-align:right;">@size.DisplayLabel</th>
+                            }
+                            <th style="padding:8px 10px;border-bottom:2px solid #e2e8f0;text-align:right;">Total</th>
+                            <th style="padding:8px 10px;border-bottom:2px solid #e2e8f0;text-align:right;">Costo U.</th>
+                            <th style="padding:8px 10px;border-bottom:2px solid #e2e8f0;text-align:right;">Costo Total</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var line in _result.Lines)
+                        {
+                            <tr style="border-bottom:1px solid #f1f5f9;">
+                                <td style="padding:7px 10px;color:#1e40af;font-weight:600;">@line.ComponentCode<br/><span style="font-weight:400;color:#64748b;font-size:11px;">@line.ComponentName</span></td>
+                                <td style="padding:7px 10px;font-weight:500;">@line.MaterialCode<br/><span style="color:#64748b;font-size:11px;white-space:normal;max-width:180px;display:block;">@line.MaterialName</span></td>
+                                <td style="padding:7px 10px;color:#475569;">@(string.IsNullOrWhiteSpace(line.SupplierName) ? "—" : line.SupplierName)</td>
+                                <td style="padding:7px 10px;color:#475569;">@line.IssueUnit</td>
+                                @foreach (var size in _result.Sizes.Where(s => _quantities.ContainsKey(s.SizeRunSizeId) && _quantities[s.SizeRunSizeId] > 0))
+                                {
+                                    <td style="padding:7px 10px;text-align:right;">
+                                        @if (line.TotalBySize.TryGetValue(size.SizeRunSizeId, out var tot))
+                                        {
+                                            <span title="Consumo: @(line.ConsumptionBySize.TryGetValue(size.SizeRunSizeId, out var c) ? c.ToString("F4") : "—") × Qty: @(line.QuantityBySize.TryGetValue(size.SizeRunSizeId, out var q) ? q.ToString("N0") : "—")">
+                                                @tot.ToString("F4")
+                                            </span>
+                                        }
+                                        else
+                                        {
+                                            <span style="color:#cbd5e1;">—</span>
+                                        }
+                                    </td>
+                                }
+                                <td style="padding:7px 10px;text-align:right;font-weight:600;">@line.TotalConsumption.ToString("F4")</td>
+                                <td style="padding:7px 10px;text-align:right;color:#475569;">@line.UnitCost.ToString("C4")</td>
+                                <td style="padding:7px 10px;text-align:right;font-weight:600;color:#1e40af;">@line.TotalCost.ToString("C2")</td>
+                            </tr>
+                        }
+                        @if (!_result.Lines.Any())
+                        {
+                            <tr><td colspan="20" style="padding:20px;text-align:center;color:#94a3b8;">Sin resultados. Verifica que el producto tenga plantilla de consumo e insumos autorizados.</td></tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        @* Consolidated by material *@
+        <div style="background:#fff;border-radius:16px;padding:20px 24px;border:1px solid #e2e8f0;">
+            <h3 style="margin:0 0 12px 0;font-size:14px;font-weight:700;color:#475569;text-transform:uppercase;letter-spacing:.04em;">Resumen consolidado por material</h3>
+            <div style="overflow-x:auto;">
+                <table style="width:100%;border-collapse:collapse;font-size:13px;">
+                    <thead>
+                        <tr style="background:#f1f5f9;">
+                            <th style="padding:8px 12px;border-bottom:2px solid #e2e8f0;text-align:left;">Código</th>
+                            <th style="padding:8px 12px;border-bottom:2px solid #e2e8f0;text-align:left;">Material</th>
+                            <th style="padding:8px 12px;border-bottom:2px solid #e2e8f0;text-align:left;">Proveedor</th>
+                            <th style="padding:8px 12px;border-bottom:2px solid #e2e8f0;text-align:right;">Unidad</th>
+                            <th style="padding:8px 12px;border-bottom:2px solid #e2e8f0;text-align:right;">Total Consumo</th>
+                            <th style="padding:8px 12px;border-bottom:2px solid #e2e8f0;text-align:right;">Costo Unitario</th>
+                            <th style="padding:8px 12px;border-bottom:2px solid #e2e8f0;text-align:right;">Costo Total</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var mat in _result.Consolidated)
+                        {
+                            <tr style="border-bottom:1px solid #f1f5f9;">
+                                <td style="padding:8px 12px;font-weight:600;color:#1e40af;">@mat.MaterialCode</td>
+                                <td style="padding:8px 12px;">@mat.MaterialName</td>
+                                <td style="padding:8px 12px;color:#475569;">@(string.IsNullOrWhiteSpace(mat.SupplierName) ? "—" : mat.SupplierName)</td>
+                                <td style="padding:8px 12px;text-align:right;color:#475569;">@mat.IssueUnit</td>
+                                <td style="padding:8px 12px;text-align:right;font-weight:600;">@mat.TotalConsumption.ToString("F4")</td>
+                                <td style="padding:8px 12px;text-align:right;color:#475569;">@mat.UnitCost.ToString("C4")</td>
+                                <td style="padding:8px 12px;text-align:right;font-weight:700;color:#1e40af;">@mat.TotalCost.ToString("C2")</td>
+                            </tr>
+                        }
+                        <tr style="background:#1e40af;color:#fff;">
+                            <td colspan="6" style="padding:10px 12px;font-weight:700;text-align:right;">COSTO TOTAL GENERAL</td>
+                            <td style="padding:10px 12px;text-align:right;font-weight:700;font-size:16px;">@_result.GrandTotalCost.ToString("C2")</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private List<ProductOption> _products = [];
+    private string _selectedProductId = string.Empty;
+    private bool _loadingSizes;
+    private List<SizeDto> _sizes = [];
+    private Dictionary<Guid, decimal> _quantities = new();
+    private bool _exploding;
+    private string? _error;
+    private ExplosionResult? _result;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var client = HttpClientFactory.CreateClient("Nanchesoft.Api");
+            var json = await client.GetStringAsync("/api/products/finished-products/options");
+            using var doc = JsonDocument.Parse(json);
+            _products = doc.RootElement.EnumerateArray()
+                .Select(el => new ProductOption
+                {
+                    Id = GetStr(el, "finishedProductId") ?? string.Empty,
+                    Code = GetStr(el, "code") ?? string.Empty,
+                    Name = GetStr(el, "name") ?? string.Empty
+                })
+                .Where(x => !string.IsNullOrEmpty(x.Id))
+                .OrderBy(x => x.Code)
+                .ToList();
+        }
+        catch (Exception ex) { _error = ex.Message; }
+    }
+
+    private async Task LoadProductSizesAsync()
+    {
+        if (string.IsNullOrEmpty(_selectedProductId)) return;
+        _loadingSizes = true;
+        _error = null;
+        _sizes = [];
+        _quantities = new();
+        _result = null;
+        try
+        {
+            var client = HttpClientFactory.CreateClient("Nanchesoft.Api");
+            var json = await client.GetStringAsync($"/api/products/material-explosion/{_selectedProductId}/sizes");
+            using var doc = JsonDocument.Parse(json);
+            var sizesEl = doc.RootElement.GetProperty("sizes");
+            _sizes = sizesEl.EnumerateArray().Select(el => new SizeDto
+            {
+                SizeRunSizeId = Guid.Parse(GetStr(el, "sizeRunSizeId")!),
+                SizeCode = GetStr(el, "sizeCode") ?? string.Empty,
+                DisplayLabel = GetStr(el, "displayLabel") ?? string.Empty,
+                Sequence = el.TryGetProperty("sequence", out var seq) ? seq.GetInt32() : 0
+            }).OrderBy(x => x.Sequence).ToList();
+
+            foreach (var s in _sizes) _quantities[s.SizeRunSizeId] = 0;
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _loadingSizes = false; }
+    }
+
+    private decimal GetQty(Guid sizeId)
+        => _quantities.TryGetValue(sizeId, out var v) ? v : 0;
+
+    private void SetQty(Guid sizeId, string? raw)
+    {
+        if (decimal.TryParse(raw, out var v) && v >= 0)
+            _quantities[sizeId] = v;
+        else
+            _quantities[sizeId] = 0;
+    }
+
+    private void ClearQuantities()
+    {
+        foreach (var k in _quantities.Keys.ToList()) _quantities[k] = 0;
+        _result = null;
+    }
+
+    private async Task ExplodeAsync()
+    {
+        if (string.IsNullOrEmpty(_selectedProductId)) return;
+        var activeQtys = _quantities.Where(kv => kv.Value > 0).ToDictionary(kv => kv.Key, kv => kv.Value);
+        if (!activeQtys.Any()) { _error = "Capture al menos una cantidad mayor a 0."; return; }
+
+        _exploding = true;
+        _error = null;
+        _result = null;
+        try
+        {
+            var client = HttpClientFactory.CreateClient("Nanchesoft.Api");
+            var body = new { FinishedProductId = Guid.Parse(_selectedProductId), QuantitiesPerSize = activeQtys };
+            var resp = await client.PostAsJsonAsync("/api/products/material-explosion/calculate", body);
+            if (!resp.IsSuccessStatusCode)
+            {
+                var txt = await resp.Content.ReadAsStringAsync();
+                try
+                {
+                    using var doc = JsonDocument.Parse(txt);
+                    _error = doc.RootElement.TryGetProperty("message", out var m) ? m.GetString() : txt;
+                }
+                catch { _error = txt; }
+                return;
+            }
+            _result = await resp.Content.ReadFromJsonAsync<ExplosionResult>();
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _exploding = false; }
+    }
+
+    private async Task ExportCsvAsync()
+    {
+        if (_result is null) return;
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine("Componente,Material,Proveedor,Unidad,Total Consumo,Costo Unitario,Costo Total");
+        foreach (var line in _result.Consolidated)
+            sb.AppendLine($"\"{line.MaterialCode}\",\"{line.MaterialName}\",\"{line.SupplierName}\",\"{line.IssueUnit}\",{line.TotalConsumption:F4},{line.UnitCost:F4},{line.TotalCost:F2}");
+        var csv = sb.ToString();
+        await JS.InvokeVoidAsync("downloadFile", $"explosion_{_result.ProductCode}_{DateTime.Now:yyyyMMdd_HHmm}.csv", "text/csv", csv);
+    }
+
+    private async Task PrintAsync()
+        => await JS.InvokeVoidAsync("window.print");
+
+    private static string? GetStr(JsonElement el, string name)
+    {
+        foreach (var prop in el.EnumerateObject())
+            if (prop.Name.Equals(name, StringComparison.OrdinalIgnoreCase) && prop.Value.ValueKind == JsonValueKind.String)
+                return prop.Value.GetString();
+        return null;
+    }
+
+    // ── local DTOs ─────────────────────────────────────────────────────────────
+    private sealed class ProductOption
+    {
+        public string Id { get; set; } = string.Empty;
+        public string Code { get; set; } = string.Empty;
+        public string Name { get; set; } = string.Empty;
+    }
+
+    private sealed class SizeDto
+    {
+        public Guid SizeRunSizeId { get; set; }
+        public string SizeCode { get; set; } = string.Empty;
+        public string DisplayLabel { get; set; } = string.Empty;
+        public int Sequence { get; set; }
+    }
+
+    private sealed class SizeInfo
+    {
+        public Guid SizeRunSizeId { get; set; }
+        public string SizeCode { get; set; } = string.Empty;
+        public string DisplayLabel { get; set; } = string.Empty;
+        public int Sequence { get; set; }
+    }
+
+    private sealed class ExplosionResult
+    {
+        public string ProductCode { get; set; } = string.Empty;
+        public string ProductName { get; set; } = string.Empty;
+        public string StyleCode { get; set; } = string.Empty;
+        public string SizeRunName { get; set; } = string.Empty;
+        public DateTime GeneratedAt { get; set; }
+        public List<SizeInfo> Sizes { get; set; } = [];
+        public List<ExplosionLine> Lines { get; set; } = [];
+        public List<ConsolidatedMaterial> Consolidated { get; set; } = [];
+        public decimal GrandTotalCost { get; set; }
+        public List<string> Errors { get; set; } = [];
+    }
+
+    private sealed class ExplosionLine
+    {
+        public string ComponentCode { get; set; } = string.Empty;
+        public string ComponentName { get; set; } = string.Empty;
+        public string MaterialCode { get; set; } = string.Empty;
+        public string MaterialName { get; set; } = string.Empty;
+        public string SupplierName { get; set; } = string.Empty;
+        public string ConsumptionUnit { get; set; } = string.Empty;
+        public string IssueUnit { get; set; } = string.Empty;
+        public Dictionary<Guid, decimal> ConsumptionBySize { get; set; } = new();
+        public Dictionary<Guid, decimal> QuantityBySize { get; set; } = new();
+        public Dictionary<Guid, decimal> TotalBySize { get; set; } = new();
+        public decimal TotalConsumption { get; set; }
+        public decimal UnitCost { get; set; }
+        public decimal TotalCost { get; set; }
+    }
+
+    private sealed class ConsolidatedMaterial
+    {
+        public string MaterialCode { get; set; } = string.Empty;
+        public string MaterialName { get; set; } = string.Empty;
+        public string SupplierName { get; set; } = string.Empty;
+        public string IssueUnit { get; set; } = string.Empty;
+        public decimal TotalConsumption { get; set; }
+        public decimal UnitCost { get; set; }
+        public decimal TotalCost { get; set; }
+    }
+}

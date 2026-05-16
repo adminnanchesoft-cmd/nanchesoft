@@ -141,128 +141,128 @@ public static class HumanResourcesEnterpriseSeeder
     private static async Task EnsureSchemaAsync(NanchesoftDbContext dbContext)
     {
         await dbContext.Database.ExecuteSqlRawAsync(@"
-CREATE TABLE IF NOT EXISTS hr_work_shifts (
-    ""Id"" uuid PRIMARY KEY,
-    ""TenantId"" uuid NOT NULL,
-    ""CompanyId"" uuid NOT NULL,
-    ""Code"" character varying(30) NOT NULL,
-    ""Name"" character varying(160) NOT NULL,
-    ""StartTime"" character varying(10) NOT NULL,
-    ""EndTime"" character varying(10) NOT NULL,
-    ""BreakMinutes"" integer NOT NULL,
-    ""ToleranceMinutes"" integer NOT NULL,
-    ""IsOvernight"" boolean NOT NULL,
-    ""Notes"" character varying(600) NOT NULL,
-    ""IsActive"" boolean NOT NULL,
-    ""CreatedAt"" timestamp with time zone NOT NULL,
-    ""CreatedBy"" text NULL,
-    ""UpdatedAt"" timestamp with time zone NULL,
-    ""UpdatedBy"" text NULL
+CREATE TABLE IF NOT EXISTS hr.hr_work_shifts (
+    id uuid PRIMARY KEY,
+    tenant_id uuid NOT NULL,
+    company_id uuid NOT NULL,
+    code character varying(30) NOT NULL,
+    name character varying(160) NOT NULL,
+    start_time character varying(10) NOT NULL,
+    end_time character varying(10) NOT NULL,
+    break_minutes integer NOT NULL,
+    tolerance_minutes integer NOT NULL,
+    is_overnight boolean NOT NULL,
+    notes character varying(600) NOT NULL,
+    is_active boolean NOT NULL,
+    created_at timestamp with time zone NOT NULL,
+    created_by text NULL,
+    updated_at timestamp with time zone NULL,
+    updated_by text NULL
 );
-CREATE UNIQUE INDEX IF NOT EXISTS ix_hr_work_shifts_company_code ON hr_work_shifts (""CompanyId"", ""Code"");
+CREATE UNIQUE INDEX IF NOT EXISTS ix_hr_work_shifts_company_code ON hr.hr_work_shifts (company_id, code);
 ");
 
         await dbContext.Database.ExecuteSqlRawAsync(@"
-CREATE TABLE IF NOT EXISTS hr_work_schedules (
-    ""Id"" uuid PRIMARY KEY,
-    ""TenantId"" uuid NOT NULL,
-    ""CompanyId"" uuid NOT NULL,
-    ""WorkShiftId"" uuid NULL,
-    ""Code"" character varying(30) NOT NULL,
-    ""Name"" character varying(160) NOT NULL,
-    ""Monday"" boolean NOT NULL,
-    ""Tuesday"" boolean NOT NULL,
-    ""Wednesday"" boolean NOT NULL,
-    ""Thursday"" boolean NOT NULL,
-    ""Friday"" boolean NOT NULL,
-    ""Saturday"" boolean NOT NULL,
-    ""Sunday"" boolean NOT NULL,
-    ""WeeklyHours"" numeric(18,2) NOT NULL,
-    ""IsFlexible"" boolean NOT NULL,
-    ""Notes"" character varying(600) NOT NULL,
-    ""IsActive"" boolean NOT NULL,
-    ""CreatedAt"" timestamp with time zone NOT NULL,
-    ""CreatedBy"" text NULL,
-    ""UpdatedAt"" timestamp with time zone NULL,
-    ""UpdatedBy"" text NULL
+CREATE TABLE IF NOT EXISTS hr.hr_work_schedules (
+    id uuid PRIMARY KEY,
+    tenant_id uuid NOT NULL,
+    company_id uuid NOT NULL,
+    work_shift_id uuid NULL,
+    code character varying(30) NOT NULL,
+    name character varying(160) NOT NULL,
+    monday boolean NOT NULL,
+    tuesday boolean NOT NULL,
+    wednesday boolean NOT NULL,
+    thursday boolean NOT NULL,
+    friday boolean NOT NULL,
+    saturday boolean NOT NULL,
+    sunday boolean NOT NULL,
+    weekly_hours numeric(18,2) NOT NULL,
+    is_flexible boolean NOT NULL,
+    notes character varying(600) NOT NULL,
+    is_active boolean NOT NULL,
+    created_at timestamp with time zone NOT NULL,
+    created_by text NULL,
+    updated_at timestamp with time zone NULL,
+    updated_by text NULL
 );
-CREATE UNIQUE INDEX IF NOT EXISTS ix_hr_work_schedules_company_code ON hr_work_schedules (""CompanyId"", ""Code"");
+CREATE UNIQUE INDEX IF NOT EXISTS ix_hr_work_schedules_company_code ON hr.hr_work_schedules (company_id, code);
 ");
 
         await dbContext.Database.ExecuteSqlRawAsync(@"
-CREATE TABLE IF NOT EXISTS hr_time_clock_devices (
-    ""Id"" uuid PRIMARY KEY,
-    ""TenantId"" uuid NOT NULL,
-    ""CompanyId"" uuid NOT NULL,
-    ""BranchId"" uuid NULL,
-    ""Code"" character varying(30) NOT NULL,
-    ""Name"" character varying(160) NOT NULL,
-    ""Brand"" character varying(100) NOT NULL,
-    ""Model"" character varying(100) NOT NULL,
-    ""SerialNumber"" character varying(80) NOT NULL,
-    ""IpAddress"" character varying(50) NOT NULL,
-    ""ApiUrl"" character varying(250) NOT NULL,
-    ""Location"" character varying(160) NOT NULL,
-    ""Status"" character varying(30) NOT NULL,
-    ""LastSyncAt"" timestamp with time zone NULL,
-    ""Notes"" character varying(600) NOT NULL,
-    ""IsActive"" boolean NOT NULL,
-    ""CreatedAt"" timestamp with time zone NOT NULL,
-    ""CreatedBy"" text NULL,
-    ""UpdatedAt"" timestamp with time zone NULL,
-    ""UpdatedBy"" text NULL
+CREATE TABLE IF NOT EXISTS hr.hr_time_clock_devices (
+    id uuid PRIMARY KEY,
+    tenant_id uuid NOT NULL,
+    company_id uuid NOT NULL,
+    branch_id uuid NULL,
+    code character varying(30) NOT NULL,
+    name character varying(160) NOT NULL,
+    brand character varying(100) NOT NULL,
+    model character varying(100) NOT NULL,
+    serial_number character varying(80) NOT NULL,
+    ip_address character varying(50) NOT NULL,
+    api_url character varying(250) NOT NULL,
+    location character varying(160) NOT NULL,
+    status character varying(30) NOT NULL,
+    last_sync_at timestamp with time zone NULL,
+    notes character varying(600) NOT NULL,
+    is_active boolean NOT NULL,
+    created_at timestamp with time zone NOT NULL,
+    created_by text NULL,
+    updated_at timestamp with time zone NULL,
+    updated_by text NULL
 );
-CREATE UNIQUE INDEX IF NOT EXISTS ix_hr_time_clock_devices_company_code ON hr_time_clock_devices (""CompanyId"", ""Code"");
+CREATE UNIQUE INDEX IF NOT EXISTS ix_hr_time_clock_devices_company_code ON hr.hr_time_clock_devices (company_id, code);
 ");
 
         await dbContext.Database.ExecuteSqlRawAsync(@"
-CREATE TABLE IF NOT EXISTS hr_leave_types (
-    ""Id"" uuid PRIMARY KEY,
-    ""TenantId"" uuid NOT NULL,
-    ""CompanyId"" uuid NOT NULL,
-    ""PayrollConceptId"" uuid NULL,
-    ""Code"" character varying(30) NOT NULL,
-    ""Name"" character varying(160) NOT NULL,
-    ""Category"" character varying(50) NOT NULL,
-    ""WithPay"" boolean NOT NULL,
-    ""ImpactsPayroll"" boolean NOT NULL,
-    ""DefaultDays"" numeric(18,2) NOT NULL,
-    ""Notes"" character varying(600) NOT NULL,
-    ""IsActive"" boolean NOT NULL,
-    ""CreatedAt"" timestamp with time zone NOT NULL,
-    ""CreatedBy"" text NULL,
-    ""UpdatedAt"" timestamp with time zone NULL,
-    ""UpdatedBy"" text NULL
+CREATE TABLE IF NOT EXISTS hr.hr_leave_types (
+    id uuid PRIMARY KEY,
+    tenant_id uuid NOT NULL,
+    company_id uuid NOT NULL,
+    payroll_concept_id uuid NULL,
+    code character varying(30) NOT NULL,
+    name character varying(160) NOT NULL,
+    category character varying(50) NOT NULL,
+    with_pay boolean NOT NULL,
+    impacts_payroll boolean NOT NULL,
+    default_days numeric(18,2) NOT NULL,
+    notes character varying(600) NOT NULL,
+    is_active boolean NOT NULL,
+    created_at timestamp with time zone NOT NULL,
+    created_by text NULL,
+    updated_at timestamp with time zone NULL,
+    updated_by text NULL
 );
-CREATE UNIQUE INDEX IF NOT EXISTS ix_hr_leave_types_company_code ON hr_leave_types (""CompanyId"", ""Code"");
+CREATE UNIQUE INDEX IF NOT EXISTS ix_hr_leave_types_company_code ON hr.hr_leave_types (company_id, code);
 ");
 
         await dbContext.Database.ExecuteSqlRawAsync(@"
-CREATE TABLE IF NOT EXISTS hr_vacation_requests (
-    ""Id"" uuid PRIMARY KEY,
-    ""TenantId"" uuid NOT NULL,
-    ""CompanyId"" uuid NOT NULL,
-    ""BranchId"" uuid NULL,
-    ""EmployeeId"" uuid NOT NULL,
-    ""LeaveTypeId"" uuid NULL,
-    ""Folio"" character varying(40) NOT NULL,
-    ""RequestDate"" timestamp with time zone NOT NULL,
-    ""StartDate"" timestamp with time zone NOT NULL,
-    ""EndDate"" timestamp with time zone NOT NULL,
-    ""ReturnDate"" timestamp with time zone NULL,
-    ""RequestedDays"" numeric(18,2) NOT NULL,
-    ""ApprovedDays"" numeric(18,2) NOT NULL,
-    ""Status"" character varying(30) NOT NULL,
-    ""ApprovedBy"" character varying(120) NOT NULL,
-    ""ApprovedAt"" timestamp with time zone NULL,
-    ""Notes"" character varying(600) NOT NULL,
-    ""IsActive"" boolean NOT NULL,
-    ""CreatedAt"" timestamp with time zone NOT NULL,
-    ""CreatedBy"" text NULL,
-    ""UpdatedAt"" timestamp with time zone NULL,
-    ""UpdatedBy"" text NULL
+CREATE TABLE IF NOT EXISTS hr.hr_vacation_requests (
+    id uuid PRIMARY KEY,
+    tenant_id uuid NOT NULL,
+    company_id uuid NOT NULL,
+    branch_id uuid NULL,
+    employee_id uuid NOT NULL,
+    leave_type_id uuid NULL,
+    folio character varying(40) NOT NULL,
+    request_date timestamp with time zone NOT NULL,
+    start_date timestamp with time zone NOT NULL,
+    end_date timestamp with time zone NOT NULL,
+    return_date timestamp with time zone NULL,
+    requested_days numeric(18,2) NOT NULL,
+    approved_days numeric(18,2) NOT NULL,
+    status character varying(30) NOT NULL,
+    approved_by character varying(120) NOT NULL,
+    approved_at timestamp with time zone NULL,
+    notes character varying(600) NOT NULL,
+    is_active boolean NOT NULL,
+    created_at timestamp with time zone NOT NULL,
+    created_by text NULL,
+    updated_at timestamp with time zone NULL,
+    updated_by text NULL
 );
-CREATE UNIQUE INDEX IF NOT EXISTS ix_hr_vacation_requests_company_folio ON hr_vacation_requests (""CompanyId"", ""Folio"");
+CREATE UNIQUE INDEX IF NOT EXISTS ix_hr_vacation_requests_company_folio ON hr.hr_vacation_requests (company_id, folio);
 ");
     }
 }

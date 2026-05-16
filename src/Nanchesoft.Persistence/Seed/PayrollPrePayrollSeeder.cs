@@ -142,90 +142,90 @@ public static class PayrollPrePayrollSeeder
     private static async Task EnsureSchemaAsync(NanchesoftDbContext dbContext)
     {
         await dbContext.Database.ExecuteSqlRawAsync("""
-CREATE TABLE IF NOT EXISTS payroll_attendance_daily_summaries (
-    "Id" uuid PRIMARY KEY,
-    "TenantId" uuid NOT NULL,
-    "CompanyId" uuid NOT NULL,
-    "BranchId" uuid NULL,
-    "EmployeeId" uuid NOT NULL,
-    "PayrollPeriodId" uuid NULL,
-    "WorkDate" timestamp with time zone NOT NULL,
-    "ScheduledEntryTime" timestamp with time zone NULL,
-    "ScheduledExitTime" timestamp with time zone NULL,
-    "FirstPunchDateTime" timestamp with time zone NULL,
-    "LastPunchDateTime" timestamp with time zone NULL,
-    "WorkedHours" numeric(18,4) NOT NULL,
-    "DelayMinutes" integer NOT NULL,
-    "EarlyLeaveMinutes" integer NOT NULL,
-    "OvertimeHours" numeric(18,4) NOT NULL,
-    "AbsenceUnits" numeric(18,4) NOT NULL,
-    "DayType" character varying(30) NOT NULL,
-    "Status" character varying(30) NOT NULL,
-    "Source" character varying(40) NOT NULL,
-    "Notes" character varying(800) NOT NULL,
-    "IsActive" boolean NOT NULL,
-    "CreatedAt" timestamp with time zone NOT NULL,
-    "CreatedBy" text NULL,
-    "UpdatedAt" timestamp with time zone NULL,
-    "UpdatedBy" text NULL
+CREATE TABLE IF NOT EXISTS payroll.payroll_attendance_daily_summaries (
+    id uuid PRIMARY KEY,
+    tenant_id uuid NOT NULL,
+    company_id uuid NOT NULL,
+    branch_id uuid NULL,
+    employee_id uuid NOT NULL,
+    payroll_period_id uuid NULL,
+    work_date timestamp with time zone NOT NULL,
+    scheduled_entry_time timestamp with time zone NULL,
+    scheduled_exit_time timestamp with time zone NULL,
+    first_punch_date_time timestamp with time zone NULL,
+    last_punch_date_time timestamp with time zone NULL,
+    worked_hours numeric(18,4) NOT NULL,
+    delay_minutes integer NOT NULL,
+    early_leave_minutes integer NOT NULL,
+    overtime_hours numeric(18,4) NOT NULL,
+    absence_units numeric(18,4) NOT NULL,
+    day_type character varying(30) NOT NULL,
+    status character varying(30) NOT NULL,
+    source character varying(40) NOT NULL,
+    notes character varying(800) NOT NULL,
+    is_active boolean NOT NULL,
+    created_at timestamp with time zone NOT NULL,
+    created_by text NULL,
+    updated_at timestamp with time zone NULL,
+    updated_by text NULL
 );
-CREATE UNIQUE INDEX IF NOT EXISTS ix_payroll_attendance_daily_summaries_company_employee_workdate ON payroll_attendance_daily_summaries ("CompanyId", "EmployeeId", "WorkDate");
+CREATE UNIQUE INDEX IF NOT EXISTS ix_payroll_attendance_daily_summaries_company_employee_workdate ON payroll.payroll_attendance_daily_summaries (company_id, employee_id, work_date);
 """);
 
         await dbContext.Database.ExecuteSqlRawAsync("""
-CREATE TABLE IF NOT EXISTS payroll_prepayroll_adjustments (
-    "Id" uuid PRIMARY KEY,
-    "TenantId" uuid NOT NULL,
-    "CompanyId" uuid NOT NULL,
-    "EmployeeId" uuid NOT NULL,
-    "PayrollPeriodId" uuid NOT NULL,
-    "PayrollConceptId" uuid NULL,
-    "AdjustmentCode" character varying(40) NOT NULL,
-    "AdjustmentName" character varying(160) NOT NULL,
-    "AdjustmentType" character varying(30) NOT NULL,
-    "CaptureSource" character varying(30) NOT NULL,
-    "ReferenceDate" timestamp with time zone NOT NULL,
-    "Quantity" numeric(18,4) NOT NULL,
-    "Amount" numeric(18,2) NOT NULL,
-    "TaxableAmount" numeric(18,2) NOT NULL,
-    "ExemptAmount" numeric(18,2) NOT NULL,
-    "Status" character varying(30) NOT NULL,
-    "Notes" character varying(800) NOT NULL,
-    "IsActive" boolean NOT NULL,
-    "CreatedAt" timestamp with time zone NOT NULL,
-    "CreatedBy" text NULL,
-    "UpdatedAt" timestamp with time zone NULL,
-    "UpdatedBy" text NULL
+CREATE TABLE IF NOT EXISTS payroll.payroll_prepayroll_adjustments (
+    id uuid PRIMARY KEY,
+    tenant_id uuid NOT NULL,
+    company_id uuid NOT NULL,
+    employee_id uuid NOT NULL,
+    payroll_period_id uuid NOT NULL,
+    payroll_concept_id uuid NULL,
+    adjustment_code character varying(40) NOT NULL,
+    adjustment_name character varying(160) NOT NULL,
+    adjustment_type character varying(30) NOT NULL,
+    capture_source character varying(30) NOT NULL,
+    reference_date timestamp with time zone NOT NULL,
+    quantity numeric(18,4) NOT NULL,
+    amount numeric(18,2) NOT NULL,
+    taxable_amount numeric(18,2) NOT NULL,
+    exempt_amount numeric(18,2) NOT NULL,
+    status character varying(30) NOT NULL,
+    notes character varying(800) NOT NULL,
+    is_active boolean NOT NULL,
+    created_at timestamp with time zone NOT NULL,
+    created_by text NULL,
+    updated_at timestamp with time zone NULL,
+    updated_by text NULL
 );
-CREATE UNIQUE INDEX IF NOT EXISTS ix_payroll_prepayroll_adjustments_company_employee_period_code ON payroll_prepayroll_adjustments ("CompanyId", "EmployeeId", "PayrollPeriodId", "AdjustmentCode");
+CREATE UNIQUE INDEX IF NOT EXISTS ix_payroll_prepayroll_adjustments_company_employee_period_code ON payroll.payroll_prepayroll_adjustments (company_id, employee_id, payroll_period_id, adjustment_code);
 """);
 
         await dbContext.Database.ExecuteSqlRawAsync("""
-CREATE TABLE IF NOT EXISTS payroll_prepayroll_cutoffs (
-    "Id" uuid PRIMARY KEY,
-    "TenantId" uuid NOT NULL,
-    "CompanyId" uuid NOT NULL,
-    "BranchId" uuid NULL,
-    "PayrollPeriodId" uuid NOT NULL,
-    "CutoffCode" character varying(40) NOT NULL,
-    "CutoffName" character varying(160) NOT NULL,
-    "StartDate" timestamp with time zone NOT NULL,
-    "EndDate" timestamp with time zone NOT NULL,
-    "EmployeesReviewed" integer NOT NULL,
-    "IncidentsDetected" integer NOT NULL,
-    "WorkedDaysTotal" numeric(18,4) NOT NULL,
-    "OvertimeHoursTotal" numeric(18,4) NOT NULL,
-    "Status" character varying(30) NOT NULL,
-    "IsClosed" boolean NOT NULL,
-    "ClosedAt" timestamp with time zone NULL,
-    "Notes" character varying(800) NOT NULL,
-    "IsActive" boolean NOT NULL,
-    "CreatedAt" timestamp with time zone NOT NULL,
-    "CreatedBy" text NULL,
-    "UpdatedAt" timestamp with time zone NULL,
-    "UpdatedBy" text NULL
+CREATE TABLE IF NOT EXISTS payroll.payroll_prepayroll_cutoffs (
+    id uuid PRIMARY KEY,
+    tenant_id uuid NOT NULL,
+    company_id uuid NOT NULL,
+    branch_id uuid NULL,
+    payroll_period_id uuid NOT NULL,
+    cutoff_code character varying(40) NOT NULL,
+    cutoff_name character varying(160) NOT NULL,
+    start_date timestamp with time zone NOT NULL,
+    end_date timestamp with time zone NOT NULL,
+    employees_reviewed integer NOT NULL,
+    incidents_detected integer NOT NULL,
+    worked_days_total numeric(18,4) NOT NULL,
+    overtime_hours_total numeric(18,4) NOT NULL,
+    status character varying(30) NOT NULL,
+    is_closed boolean NOT NULL,
+    closed_at timestamp with time zone NULL,
+    notes character varying(800) NOT NULL,
+    is_active boolean NOT NULL,
+    created_at timestamp with time zone NOT NULL,
+    created_by text NULL,
+    updated_at timestamp with time zone NULL,
+    updated_by text NULL
 );
-CREATE UNIQUE INDEX IF NOT EXISTS ix_payroll_prepayroll_cutoffs_company_period_code ON payroll_prepayroll_cutoffs ("CompanyId", "PayrollPeriodId", "CutoffCode");
+CREATE UNIQUE INDEX IF NOT EXISTS ix_payroll_prepayroll_cutoffs_company_period_code ON payroll.payroll_prepayroll_cutoffs (company_id, payroll_period_id, cutoff_code);
 """);
     }
 }

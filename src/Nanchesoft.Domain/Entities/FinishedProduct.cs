@@ -20,6 +20,7 @@ public sealed class FinishedProduct
     public Guid? ProductSizeRunId { get; set; }
     public Guid? ProductLineId { get; set; }
     public Guid? ProductLastId { get; set; }
+    public Guid? ProductManufacturingTypeId { get; set; }
     public Guid? MainMaterialItemId { get; set; }
     [MaxLength(60)] public string Code { get; set; } = string.Empty;
     [MaxLength(220)] public string? Name { get; set; }
@@ -47,5 +48,6 @@ public sealed class FinishedProduct
     public ProductSizeRun? ProductSizeRun { get; set; }
     public ProductLine? ProductLine { get; set; }
     public ProductLast? ProductLast { get; set; }
+    public ProductManufacturingType? ProductManufacturingType { get; set; }
     public MaterialItem? MainMaterialItem { get; set; }
 }

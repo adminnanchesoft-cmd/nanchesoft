@@ -86,15 +86,15 @@ public static class NanchesoftSchemaCatalog
         modelBuilder.Entity<ProductLast>().ToTable("product_lasts", ProductSchema);
         modelBuilder.Entity<ProductLine>().ToTable("product_lines", ProductSchema);
         modelBuilder.Entity<ProductStyle>().ToTable("product_styles", ProductSchema);
-        modelBuilder.Entity<ProductColor>().ToTable("product_colors", ProductSchema);
-        modelBuilder.Entity<ProductManufacturingType>().ToTable("product_manufacturing_types", ProductSchema);
-        modelBuilder.Entity<ProductToeCap>().ToTable("product_toe_caps", ProductSchema);
-        modelBuilder.Entity<ProductSoleColor>().ToTable("product_sole_colors", ProductSchema);
+        modelBuilder.Entity<ProductColor>().ToTable("colors", ProductSchema);
+        modelBuilder.Entity<ProductManufacturingType>().ToTable("manufacture_types", ProductSchema);
+        modelBuilder.Entity<ProductToeCap>().ToTable("toe_caps", ProductSchema);
+        modelBuilder.Entity<ProductSoleColor>().ToTable("sole_colors", ProductSchema);
         modelBuilder.Entity<ProductDie>().ToTable("product_dies", ProductSchema);
         modelBuilder.Entity<QualityControlDie>().ToTable("quality_control_dies", ProductSchema);
         modelBuilder.Entity<ProductLeatherType>().ToTable("product_leather_types", ProductSchema);
         modelBuilder.Entity<ProductSole>().ToTable("product_soles", ProductSchema);
-        modelBuilder.Entity<ProductFolioPattern>().ToTable("product_folio_patterns", ProductSchema);
+        modelBuilder.Entity<ProductFolioPattern>().ToTable("product_foliations", ProductSchema);
         modelBuilder.Entity<EmbroideryPattern>().ToTable("embroidery_patterns", ProductSchema);
         modelBuilder.Entity<ItemEngineeringProfile>().ToTable("item_engineering_profiles", ProductSchema);
         modelBuilder.Entity<ProductionPhase>().ToTable("production_phases", ProductSchema);
@@ -116,6 +116,7 @@ public static class NanchesoftSchemaCatalog
         modelBuilder.Entity<FinishedProductSupplySize>().ToTable("finished_product_supply_sizes", ProductSchema);
         modelBuilder.Entity<MaterialSizeDistribution>().ToTable("material_size_distributions", ProductSchema);
         modelBuilder.Entity<MaterialSizeDistributionDetail>().ToTable("material_size_distribution_details", ProductSchema);
+        modelBuilder.Entity<ProductVariant>().ToTable("product_variants", ProductSchema);
         modelBuilder.Entity<ProductTechnicalSheet>().ToTable("product_technical_sheets", ProductSchema);
         modelBuilder.Entity<ProductTechnicalSheetMaterial>().ToTable("product_technical_sheet_materials", ProductSchema);
         modelBuilder.Entity<ProductTechnicalSheetProcess>().ToTable("product_technical_sheet_processes", ProductSchema);

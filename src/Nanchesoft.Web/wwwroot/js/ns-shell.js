@@ -362,3 +362,16 @@ window.nsShell = (() => {
         dispose
     };
 })();
+
+// Descarga un archivo desde Blazor (CSV, PDF, etc.)
+window.downloadFile = function (filename, mimeType, content) {
+    const blob = new Blob([content], { type: mimeType });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+};

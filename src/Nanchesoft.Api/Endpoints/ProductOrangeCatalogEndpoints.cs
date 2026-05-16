@@ -18,6 +18,29 @@ public static class ProductOrangeCatalogEndpoints
         MapSimpleCatalog<ProductDie>(app, "/api/products/dies", "Product Orange Catalogs");
         MapSimpleCatalog<QualityControlDie>(app, "/api/products/quality-control-dies", "Product Orange Catalogs");
         MapSimpleCatalog<ProductFolioPattern>(app, "/api/products/folio-patterns", "Product Orange Catalogs");
+
+        // /options endpoints for orange catalog types (used by finished-product form)
+        app.MapGet("/api/products/leather-types/options", async (NanchesoftDbContext db) => Results.Ok(
+            await db.ProductLeatherTypes.AsNoTracking().Where(x => x.IsActive).OrderBy(x => x.Sequence).ThenBy(x => x.Code)
+                .Select(x => new { id = x.Id.ToString(), code = x.Code, name = x.Name }).ToListAsync())).WithTags("Product Orange Catalogs");
+        app.MapGet("/api/products/colors/options", async (NanchesoftDbContext db) => Results.Ok(
+            await db.ProductColors.AsNoTracking().Where(x => x.IsActive).OrderBy(x => x.Sequence).ThenBy(x => x.Code)
+                .Select(x => new { id = x.Id.ToString(), code = x.Code, name = x.Name }).ToListAsync())).WithTags("Product Orange Catalogs");
+        app.MapGet("/api/products/toe-caps/options", async (NanchesoftDbContext db) => Results.Ok(
+            await db.ProductToeCaps.AsNoTracking().Where(x => x.IsActive).OrderBy(x => x.Sequence).ThenBy(x => x.Code)
+                .Select(x => new { id = x.Id.ToString(), code = x.Code, name = x.Name }).ToListAsync())).WithTags("Product Orange Catalogs");
+        app.MapGet("/api/products/soles/options", async (NanchesoftDbContext db) => Results.Ok(
+            await db.ProductSoles.AsNoTracking().Where(x => x.IsActive).OrderBy(x => x.Sequence).ThenBy(x => x.Code)
+                .Select(x => new { id = x.Id.ToString(), code = x.Code, name = x.Name }).ToListAsync())).WithTags("Product Orange Catalogs");
+        app.MapGet("/api/products/sole-colors/options", async (NanchesoftDbContext db) => Results.Ok(
+            await db.ProductSoleColors.AsNoTracking().Where(x => x.IsActive).OrderBy(x => x.Sequence).ThenBy(x => x.Code)
+                .Select(x => new { id = x.Id.ToString(), code = x.Code, name = x.Name }).ToListAsync())).WithTags("Product Orange Catalogs");
+        app.MapGet("/api/products/folio-patterns/options", async (NanchesoftDbContext db) => Results.Ok(
+            await db.ProductFolioPatterns.AsNoTracking().Where(x => x.IsActive).OrderBy(x => x.Sequence).ThenBy(x => x.Code)
+                .Select(x => new { id = x.Id.ToString(), code = x.Code, name = x.Name }).ToListAsync())).WithTags("Product Orange Catalogs");
+        app.MapGet("/api/products/manufacturing-types/options", async (NanchesoftDbContext db) => Results.Ok(
+            await db.ProductManufacturingTypes.AsNoTracking().Where(x => x.IsActive).OrderBy(x => x.Sequence).ThenBy(x => x.Code)
+                .Select(x => new { id = x.Id.ToString(), code = x.Code, name = x.Name }).ToListAsync())).WithTags("Product Orange Catalogs");
     }
 
     private static void MapSimpleCatalog<TEntity>(IEndpointRouteBuilder app, string route, string tag)

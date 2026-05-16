@@ -221,6 +221,7 @@ app.MapPayrollFiscalEndpoints();
 app.MapProductTechnicalCostingEndpoints();
 app.MapProductTechnicalCenterEndpoints();
 app.MapConsumptionTemplateEndpoints();
+app.MapMaterialExplosionEndpoints();
 app.MapServiceBillingEndpoints();
 app.MapTenantEndpoints();
 app.MapPlanEndpoints();
