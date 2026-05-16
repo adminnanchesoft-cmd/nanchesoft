@@ -1,0 +1,358 @@
+@page "/products/material-size-distributions"
+@using System.Net.Http.Json
+@using System.Text.Json
+@inject IHttpClientFactory HttpClientFactory
+@inject IJSRuntime JS
+
+<PageTitle>Distribución de tallas | Nanchesoft</PageTitle>
+
+<div class="page-header">
+    <h1 class="page-title">Distribución de tallas por material</h1>
+    <p class="page-subtitle">Define qué material corresponde a cada talla de corrida, por subfamilia y horma. Se usa para auto-asignar materiales en insumos.</p>
+</div>
+
+@if (!string.IsNullOrEmpty(_errorMessage))
+{
+    <div class="alert alert-danger">@_errorMessage</div>
+}
+@if (!string.IsNullOrEmpty(_successMessage))
+{
+    <div class="alert alert-success">@_successMessage</div>
+}
+
+<div class="d-flex gap-2 mb-3 flex-wrap align-items-center">
+    <button class="btn btn-success" @onclick="ShowCreateModal">+ Nueva distribución</button>
+</div>
+
+@if (_loading)
+{
+    <p>Cargando...</p>
+}
+else if (_distributions.Count == 0)
+{
+    <p class="text-muted">No hay distribuciones registradas.</p>
+}
+else
+{
+    <div class="list-group mb-3">
+        @foreach (var d in _distributions)
+        {
+            <div class="list-group-item list-group-item-action @(d.MaterialSizeDistributionId == _selected?.MaterialSizeDistributionId ? "active" : "")"
+                 @onclick="() => SelectDistribution(d)" style="cursor:pointer;">
+                <div class="d-flex justify-content-between align-items-center">
+                    <span>
+                        <strong>@d.MaterialSubfamilyName</strong>
+                        <span class="mx-2 text-muted">|</span>
+                        @d.ProductSizeRunName
+                        @if (!string.IsNullOrEmpty(d.ProductLastName))
+                        {
+                            <span class="ms-2 badge bg-secondary">@d.ProductLastName</span>
+                        }
+                    </span>
+                    <button class="btn btn-sm btn-outline-danger"
+                            @onclick:stopPropagation="true"
+                            @onclick="() => DeleteDistributionAsync(d.MaterialSizeDistributionId)">
+                        Eliminar
+                    </button>
+                </div>
+            </div>
+        }
+    </div>
+}
+
+@if (_selected is not null)
+{
+    <div class="card mb-3">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <span>
+                <strong>@_selected.MaterialSubfamilyName</strong> / @_selected.ProductSizeRunName
+                @if (!string.IsNullOrEmpty(_selected.ProductLastName))
+                {
+                    <span class="ms-2 badge bg-secondary">@_selected.ProductLastName</span>
+                }
+            </span>
+            <button class="btn btn-sm btn-primary" @onclick="SaveDetailsAsync" disabled="@_saving">
+                @(_saving ? "Guardando..." : "Guardar")
+            </button>
+        </div>
+        <div class="card-body p-0" style="overflow-x:auto;">
+            <table class="table table-sm table-bordered mb-0">
+                <thead class="table-dark">
+                    <tr>
+                        @foreach (var d in _selected.Details)
+                        {
+                            <th style="min-width:120px">@d.SizeLabel</th>
+                        }
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        @foreach (var d in _selected.Details)
+                        {
+                            <td class="p-1 align-middle">
+                                <select class="form-select form-select-sm"
+                                        value="@d.MaterialItemId?.ToString()"
+                                        @onchange="e => OnDetailChanged(_selected, d, e.Value?.ToString())">
+                                    <option value="">— ninguno —</option>
+                                    @foreach (var m in FilteredMaterials(_selected.MaterialSubfamilyId))
+                                    {
+                                        <option value="@m.MaterialItemId">@m.Name</option>
+                                    }
+                                </select>
+                            </td>
+                        }
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+}
+
+@if (_showCreateModal)
+{
+    <div class="modal-backdrop fade show"></div>
+    <div class="modal d-block" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Nueva distribución de tallas</h5>
+                    <button type="button" class="btn-close" @onclick="CloseModal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Subfamilia *</label>
+                        <select class="form-select" @bind="_formSubfamilyId">
+                            <option value="">— Selecciona —</option>
+                            @foreach (var s in _subfamilies)
+                            {
+                                <option value="@s.MaterialSubfamilyId">@s.Name</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Corrida *</label>
+                        <select class="form-select" @bind="_formRunId">
+                            <option value="">— Selecciona —</option>
+                            @foreach (var r in _runs)
+                            {
+                                <option value="@r.ProductSizeRunId">@r.Name</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Horma (opcional)</label>
+                        <select class="form-select" @bind="_formLastId">
+                            <option value="">— Sin horma —</option>
+                            @foreach (var l in _lasts)
+                            {
+                                <option value="@l.ProductLastId">@l.Name</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Notas</label>
+                        <textarea class="form-control" @bind="_formNotes" rows="2"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" @onclick="CloseModal">Cancelar</button>
+                    <button class="btn btn-primary" @onclick="CreateDistributionAsync" disabled="@_creating">
+                        @(_creating ? "Creando..." : "Crear")
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<DistributionDto> _distributions = [];
+    private DistributionDto? _selected;
+
+    private List<SubfamilyOptionDto> _subfamilies = [];
+    private List<RunOptionDto> _runs = [];
+    private List<LastOptionDto> _lasts = [];
+    private List<MaterialOptionDto> _materials = [];
+
+    private bool _loading;
+    private bool _saving;
+    private bool _creating;
+    private bool _showCreateModal;
+
+    private string _formSubfamilyId = string.Empty;
+    private string _formRunId = string.Empty;
+    private string _formLastId = string.Empty;
+    private string _formNotes = string.Empty;
+
+    private string _errorMessage = string.Empty;
+    private string _successMessage = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadLookupsAsync();
+        await LoadDistributionsAsync();
+    }
+
+    private HttpClient Client => HttpClientFactory.CreateClient("Nanchesoft.Api");
+
+    private async Task LoadLookupsAsync()
+    {
+        _subfamilies = await Client.GetFromJsonAsync<List<SubfamilyOptionDto>>("/api/products/material-subfamilies/options") ?? [];
+        _runs = await Client.GetFromJsonAsync<List<RunOptionDto>>("/api/products/size-runs/options") ?? [];
+        _lasts = await Client.GetFromJsonAsync<List<LastOptionDto>>("/api/products/lasts/options") ?? [];
+        _materials = await Client.GetFromJsonAsync<List<MaterialOptionDto>>("/api/products/material-items/options") ?? [];
+    }
+
+    private async Task LoadDistributionsAsync()
+    {
+        _loading = true; _errorMessage = string.Empty;
+        try
+        {
+            _distributions = await Client.GetFromJsonAsync<List<DistributionDto>>(
+                "/api/products/material-size-distributions") ?? [];
+        }
+        catch (Exception ex) { _errorMessage = ex.Message; }
+        finally { _loading = false; }
+    }
+
+    private void SelectDistribution(DistributionDto d) => _selected = d;
+
+    private void OnDetailChanged(DistributionDto dist, DistDetailDto detail, string? rawId)
+    {
+        detail.MaterialItemId = string.IsNullOrEmpty(rawId) ? null : Guid.Parse(rawId);
+        var item = _materials.FirstOrDefault(m => m.MaterialItemId == detail.MaterialItemId);
+        detail.MaterialItemName = item?.Name ?? string.Empty;
+
+        // Copy first size to all remaining sizes
+        bool isFirst = dist.Details.Count > 0 && dist.Details[0].ProductSizeRunSizeId == detail.ProductSizeRunSizeId;
+        if (isFirst && detail.MaterialItemId.HasValue)
+        {
+            foreach (var other in dist.Details)
+            {
+                other.MaterialItemId = detail.MaterialItemId;
+                other.MaterialItemName = detail.MaterialItemName;
+            }
+        }
+    }
+
+    private async Task SaveDetailsAsync()
+    {
+        if (_selected is null) return;
+        _saving = true; _errorMessage = string.Empty; _successMessage = string.Empty;
+        try
+        {
+            var payload = _selected.Details.Select(d => new
+            {
+                productSizeRunSizeId = d.ProductSizeRunSizeId,
+                materialItemId = d.MaterialItemId,
+                notes = string.Empty
+            }).ToList();
+            var resp = await Client.PutAsJsonAsync(
+                $"/api/products/material-size-distributions/{_selected.MaterialSizeDistributionId}/details", payload);
+            if (resp.IsSuccessStatusCode)
+                _successMessage = "Distribución guardada.";
+            else
+            {
+                var err = await resp.Content.ReadFromJsonAsync<JsonElement>();
+                _errorMessage = err.TryGetProperty("message", out var m) ? m.GetString() ?? "Error." : "Error.";
+            }
+        }
+        catch (Exception ex) { _errorMessage = ex.Message; }
+        finally { _saving = false; }
+    }
+
+    private void ShowCreateModal()
+    {
+        _formSubfamilyId = string.Empty;
+        _formRunId = string.Empty;
+        _formLastId = string.Empty;
+        _formNotes = string.Empty;
+        _showCreateModal = true;
+    }
+
+    private void CloseModal() => _showCreateModal = false;
+
+    private async Task CreateDistributionAsync()
+    {
+        if (string.IsNullOrEmpty(_formSubfamilyId) || string.IsNullOrEmpty(_formRunId))
+        {
+            _errorMessage = "Subfamilia y corrida son obligatorias."; return;
+        }
+        _creating = true; _errorMessage = string.Empty;
+        try
+        {
+            var payload = new
+            {
+                materialSubfamilyId = Guid.Parse(_formSubfamilyId),
+                productSizeRunId = Guid.Parse(_formRunId),
+                productLastId = string.IsNullOrEmpty(_formLastId) ? (Guid?)null : Guid.Parse(_formLastId),
+                notes = _formNotes,
+                isActive = true
+            };
+            var resp = await Client.PostAsJsonAsync("/api/products/material-size-distributions", payload);
+            if (resp.IsSuccessStatusCode)
+            {
+                CloseModal();
+                _successMessage = "Distribución creada.";
+                await LoadDistributionsAsync();
+            }
+            else
+            {
+                var err = await resp.Content.ReadFromJsonAsync<JsonElement>();
+                _errorMessage = err.TryGetProperty("message", out var m) ? m.GetString() ?? "Error." : "Error.";
+            }
+        }
+        catch (Exception ex) { _errorMessage = ex.Message; }
+        finally { _creating = false; }
+    }
+
+    private async Task DeleteDistributionAsync(Guid id)
+    {
+        if (!await JS.InvokeAsync<bool>("confirm", "¿Eliminar esta distribución?")) return;
+        _errorMessage = string.Empty;
+        try
+        {
+            var resp = await Client.DeleteAsync($"/api/products/material-size-distributions/{id}");
+            if (resp.IsSuccessStatusCode)
+            {
+                if (_selected?.MaterialSizeDistributionId == id) _selected = null;
+                await LoadDistributionsAsync();
+            }
+        }
+        catch (Exception ex) { _errorMessage = ex.Message; }
+    }
+
+    private IEnumerable<MaterialOptionDto> FilteredMaterials(Guid subfamilyId)
+    {
+        // Ideally we'd filter by subfamily, but showing all for now
+        return _materials;
+    }
+
+    // DTOs
+    private sealed record SubfamilyOptionDto(Guid MaterialSubfamilyId, string Code, string Name);
+    private sealed record RunOptionDto(Guid ProductSizeRunId, string Code, string Name);
+    private sealed record LastOptionDto(Guid ProductLastId, string Code, string Name);
+    private sealed record MaterialOptionDto(Guid MaterialItemId, string Code, string Name);
+
+    private sealed class DistributionDto
+    {
+        public Guid MaterialSizeDistributionId { get; set; }
+        public Guid MaterialSubfamilyId { get; set; }
+        public string MaterialSubfamilyName { get; set; } = string.Empty;
+        public Guid ProductSizeRunId { get; set; }
+        public string ProductSizeRunName { get; set; } = string.Empty;
+        public Guid? ProductLastId { get; set; }
+        public string ProductLastName { get; set; } = string.Empty;
+        public string Notes { get; set; } = string.Empty;
+        public List<DistDetailDto> Details { get; set; } = [];
+    }
+
+    private sealed class DistDetailDto
+    {
+        public Guid MaterialSizeDistributionDetailId { get; set; }
+        public Guid ProductSizeRunSizeId { get; set; }
+        public string SizeLabel { get; set; } = string.Empty;
+        public Guid? MaterialItemId { get; set; }
+        public string MaterialItemName { get; set; } = string.Empty;
+    }
+}

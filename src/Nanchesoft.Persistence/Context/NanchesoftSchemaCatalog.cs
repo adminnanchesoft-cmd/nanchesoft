@@ -97,6 +97,9 @@ public static class NanchesoftSchemaCatalog
         modelBuilder.Entity<ProductFolioPattern>().ToTable("product_folio_patterns", ProductSchema);
         modelBuilder.Entity<EmbroideryPattern>().ToTable("embroidery_patterns", ProductSchema);
         modelBuilder.Entity<ItemEngineeringProfile>().ToTable("item_engineering_profiles", ProductSchema);
+        modelBuilder.Entity<ProductionPhase>().ToTable("production_phases", ProductSchema);
+        modelBuilder.Entity<MaterialCharacteristic>().ToTable("material_characteristics", ProductSchema);
+        modelBuilder.Entity<MaterialSize>().ToTable("material_sizes", ProductSchema);
         modelBuilder.Entity<MaterialFamily>().ToTable("material_families", ProductSchema);
         modelBuilder.Entity<MaterialSubfamily>().ToTable("material_subfamilies", ProductSchema);
         modelBuilder.Entity<MaterialItem>().ToTable("material_items", ProductSchema);
@@ -106,6 +109,13 @@ public static class NanchesoftSchemaCatalog
         modelBuilder.Entity<ProductComponent>().ToTable("product_components", ProductSchema);
         modelBuilder.Entity<FinishedProductMaterial>().ToTable("finished_product_materials", ProductSchema);
         modelBuilder.Entity<ProductConsumptionProfile>().ToTable("product_consumption_profiles", ProductSchema);
+        modelBuilder.Entity<ConsumptionTemplate>().ToTable("consumption_templates", ProductSchema);
+        modelBuilder.Entity<ConsumptionTemplateDetail>().ToTable("consumption_template_details", ProductSchema);
+        modelBuilder.Entity<ConsumptionTemplateSize>().ToTable("consumption_template_sizes", ProductSchema);
+        modelBuilder.Entity<FinishedProductSupply>().ToTable("finished_product_supplies", ProductSchema);
+        modelBuilder.Entity<FinishedProductSupplySize>().ToTable("finished_product_supply_sizes", ProductSchema);
+        modelBuilder.Entity<MaterialSizeDistribution>().ToTable("material_size_distributions", ProductSchema);
+        modelBuilder.Entity<MaterialSizeDistributionDetail>().ToTable("material_size_distribution_details", ProductSchema);
         modelBuilder.Entity<ProductTechnicalSheet>().ToTable("product_technical_sheets", ProductSchema);
         modelBuilder.Entity<ProductTechnicalSheetMaterial>().ToTable("product_technical_sheet_materials", ProductSchema);
         modelBuilder.Entity<ProductTechnicalSheetProcess>().ToTable("product_technical_sheet_processes", ProductSchema);

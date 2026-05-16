@@ -46,12 +46,18 @@ public static class ThirdPartiesAndProductsEndpoints
 
         var brands = app.MapGroup("/api/products/brands").WithTags("ItemBrands");
         brands.MapGet("/", GetBrandsAsync);
+        brands.MapGet("/options", async (NanchesoftDbContext db) => Results.Ok(
+            await db.ItemBrands.AsNoTracking().Where(x => x.IsActive).OrderBy(x => x.Code)
+                .Select(x => new { BrandId = x.Id, x.Code, x.Name }).ToListAsync()));
         brands.MapPost("/", CreateBrandAsync);
         brands.MapPut("/{id:guid}", UpdateBrandAsync);
         brands.MapDelete("/{id:guid}", DeleteBrandAsync);
 
         var models = app.MapGroup("/api/products/models").WithTags("ItemModels");
         models.MapGet("/", GetModelsAsync);
+        models.MapGet("/options", async (NanchesoftDbContext db) => Results.Ok(
+            await db.ItemModels.AsNoTracking().Where(x => x.IsActive).OrderBy(x => x.Code)
+                .Select(x => new { ModelId = x.Id, x.Code, x.Name }).ToListAsync()));
         models.MapPost("/", CreateModelAsync);
         models.MapPut("/{id:guid}", UpdateModelAsync);
         models.MapDelete("/{id:guid}", DeleteModelAsync);

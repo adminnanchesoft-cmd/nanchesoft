@@ -14,6 +14,8 @@ public sealed class MaterialItem
     public Guid TenantId { get; set; }
     public Guid CompanyId { get; set; }
     public Guid MaterialSubfamilyId { get; set; }
+    public Guid? MaterialCharacteristicId { get; set; }
+    public Guid? MaterialSizeId { get; set; }
     public Guid? PurchaseUnitId { get; set; }
     public Guid? IssueUnitId { get; set; }
     public Guid? SupplierId { get; set; }
@@ -34,9 +36,16 @@ public sealed class MaterialItem
     [MaxLength(120)] public string? UpdatedBy { get; set; }
 
     public MaterialSubfamily? MaterialSubfamily { get; set; }
+    public MaterialCharacteristic? MaterialCharacteristic { get; set; }
+    public MaterialSize? MaterialSize { get; set; }
     public Unit? PurchaseUnit { get; set; }
     public Unit? IssueUnit { get; set; }
     public Supplier? Supplier { get; set; }
+
+    public static string BuildName(string characteristicName, string sizeName)
+        => string.Join(" ", new[] { characteristicName.Trim(), sizeName.Trim() }
+            .Where(s => !string.IsNullOrWhiteSpace(s)))
+            .ToUpperInvariant();
 
     public bool RequiresUnits => !IsServiceItem;
 

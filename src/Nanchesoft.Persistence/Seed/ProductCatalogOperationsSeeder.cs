@@ -135,9 +135,9 @@ public static class ProductCatalogOperationsSeeder
         if (!await dbContext.ProductComponents.AnyAsync())
         {
             dbContext.ProductComponents.AddRange(
-                new ProductComponent { TenantId = company.TenantId, CompanyId = company.Id, ConsumptionUnitId = unit?.Id, Code = "UPPER", Name = "Upper", ProductionPhase = "CUTTING", WarehouseDeliveryRole = "cutting-store", DefaultConsumption = 1m, ActivateForAllProducts = true, ShowOnProductionCard = true, CreatedBy = "seed" },
-                new ProductComponent { TenantId = company.TenantId, CompanyId = company.Id, ConsumptionUnitId = unit?.Id, Code = "SOLE", Name = "Sole", ProductionPhase = "ASSEMBLY", WarehouseDeliveryRole = "assembly-store", DefaultConsumption = 1m, ActivateForAllProducts = true, ShowOnProductionCard = true, CreatedBy = "seed" },
-                new ProductComponent { TenantId = company.TenantId, CompanyId = company.Id, ConsumptionUnitId = unit?.Id, Code = "BOX", Name = "Box", ProductionPhase = "PACKING", WarehouseDeliveryRole = "packing-store", DefaultConsumption = 1m, ActivateForAllProducts = true, ShowOnProductionCard = true, CreatedBy = "seed" }
+                new ProductComponent { TenantId = company.TenantId, CompanyId = company.Id, ConsumptionUnitId = unit?.Id, Code = "UPPER", Name = "Upper", DefaultConsumption = 1m, ActivateForAllProducts = true, ShowOnProductionCard = true, CreatedBy = "seed" },
+                new ProductComponent { TenantId = company.TenantId, CompanyId = company.Id, ConsumptionUnitId = unit?.Id, Code = "SOLE", Name = "Sole", DefaultConsumption = 1m, ActivateForAllProducts = true, ShowOnProductionCard = true, CreatedBy = "seed" },
+                new ProductComponent { TenantId = company.TenantId, CompanyId = company.Id, ConsumptionUnitId = unit?.Id, Code = "BOX", Name = "Box", DefaultConsumption = 1m, ActivateForAllProducts = true, ShowOnProductionCard = true, CreatedBy = "seed" }
             );
             await dbContext.SaveChangesAsync();
         }

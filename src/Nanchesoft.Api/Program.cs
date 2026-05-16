@@ -220,6 +220,7 @@ app.MapPayrollDisbursementEndpoints();
 app.MapPayrollFiscalEndpoints();
 app.MapProductTechnicalCostingEndpoints();
 app.MapProductTechnicalCenterEndpoints();
+app.MapConsumptionTemplateEndpoints();
 app.MapServiceBillingEndpoints();
 app.MapTenantEndpoints();
 app.MapPlanEndpoints();

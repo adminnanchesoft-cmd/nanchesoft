@@ -17,6 +17,7 @@ public static class ProductEngineeringEndpoints
         MapEmbroideryPatterns(app);
         MapEngineeringProfiles(app);
         MapItemOptions(app);
+        MapLastsOptions(app);
         ProductCatalogOperationsEndpoints.MapProductCatalogOperations(app);
         return app;
     }
@@ -176,6 +177,22 @@ public static class ProductEngineeringEndpoints
             await db.SaveChangesAsync();
             return Results.Ok(new { success = true });
         });
+        group.MapGet("/options", async (NanchesoftDbContext db) => Results.Ok(
+            await db.ProductSizeRuns.AsNoTracking().Where(x => x.IsActive).OrderBy(x => x.Code)
+                .Select(x => new { ProductSizeRunId = x.Id, x.Code, x.Name }).ToListAsync()));
+    }
+
+    private static void MapLastsOptions(IEndpointRouteBuilder app)
+    {
+        app.MapGet("/api/products/lasts/options", async (NanchesoftDbContext db) => Results.Ok(
+            await db.ProductLasts.AsNoTracking().Where(x => x.IsActive).OrderBy(x => x.Code)
+                .Select(x => new { ProductLastId = x.Id, x.Code, x.Name }).ToListAsync())).WithTags("ProductEngineering");
+        app.MapGet("/api/products/lines/options", async (NanchesoftDbContext db) => Results.Ok(
+            await db.ProductLines.AsNoTracking().Where(x => x.IsActive).OrderBy(x => x.Code)
+                .Select(x => new { ProductLineId = x.Id, x.Code, x.Name }).ToListAsync())).WithTags("ProductEngineering");
+        app.MapGet("/api/products/families/options", async (NanchesoftDbContext db) => Results.Ok(
+            await db.ProductFamilies.AsNoTracking().Where(x => x.IsActive).OrderBy(x => x.Code)
+                .Select(x => new { ProductFamilyId = x.Id, x.Code, x.Name }).ToListAsync())).WithTags("ProductEngineering");
     }
 
     private static async Task ReplaceRunSizesAsync(NanchesoftDbContext db, Guid runId, string? definitions, string user)
@@ -227,7 +244,7 @@ public static class ProductEngineeringEndpoints
         group.MapGet("/", async (NanchesoftDbContext db) => Results.Ok(await db.ProductLasts.AsNoTracking().OrderBy(x => x.Code).Select(x => new ProductLastDto { ProductLastId = x.Id, CompanyId = x.CompanyId, Code = x.Code, Name = x.Name, WidthReference = x.WidthReference, IsActive = x.IsActive }).ToListAsync()));
         group.MapPost("/", async (ProductLastRequest request, NanchesoftDbContext db) => await UpsertProductLastAsync(null, request, db));
         group.MapPut("/{id:guid}", async (Guid id, ProductLastRequest request, NanchesoftDbContext db) => await UpsertProductLastAsync(id, request, db));
-        group.MapDelete("/{id:guid}", async (Guid id, NanchesoftDbContext db) => await DeleteEntityAsync<ProductLast>(db, id, async x => await db.ProductLines.AnyAsync(y => y.ProductLastId == x.Id) || await db.ProductStyles.AnyAsync(y => y.ProductLastId == x.Id), "La horma tiene líneas o estilos relacionados."));
+        group.MapDelete("/{id:guid}", async (Guid id, NanchesoftDbContext db) => await DeleteEntityAsync<ProductLast>(db, id, async x => await db.FinishedProducts.AnyAsync(y => y.ProductLastId == x.Id), "La horma está ligada a productos terminados."));
     }
 
     private static void MapLines(IEndpointRouteBuilder app)
@@ -235,8 +252,8 @@ public static class ProductEngineeringEndpoints
         var group = app.MapGroup("/api/products/lines").WithTags("ProductEngineering");
         group.MapGet("/", async (NanchesoftDbContext db) =>
         {
-            var rows = await db.ProductLines.AsNoTracking().Include(x => x.ProductFamily).Include(x => x.ProductLast).OrderBy(x => x.Code)
-                .Select(x => new ProductLineDto { ProductLineId = x.Id, CompanyId = x.CompanyId, ProductFamilyId = x.ProductFamilyId, ProductFamilyName = x.ProductFamily != null ? x.ProductFamily.Name : string.Empty, ProductLastId = x.ProductLastId, ProductLastName = x.ProductLast != null ? x.ProductLast.Name : string.Empty, Code = x.Code, Name = x.Name, ShortName = x.ShortName, AllowsDiscount = x.AllowsDiscount, IsActive = x.IsActive }).ToListAsync();
+            var rows = await db.ProductLines.AsNoTracking().Include(x => x.ProductFamily).OrderBy(x => x.Code)
+                .Select(x => new ProductLineDto { ProductLineId = x.Id, CompanyId = x.CompanyId, ProductFamilyId = x.ProductFamilyId, ProductFamilyName = x.ProductFamily != null ? x.ProductFamily.Name : string.Empty, Code = x.Code, Name = x.Name, ShortName = x.ShortName, AllowsDiscount = x.AllowsDiscount, IsActive = x.IsActive }).ToListAsync();
             return Results.Ok(rows);
         });
         group.MapPost("/", async (ProductLineRequest request, NanchesoftDbContext db) => await UpsertProductLineAsync(null, request, db));
@@ -249,13 +266,16 @@ public static class ProductEngineeringEndpoints
         var group = app.MapGroup("/api/products/styles").WithTags("ProductEngineering");
         group.MapGet("/", async (NanchesoftDbContext db) =>
         {
-            var rows = await db.ProductStyles.AsNoTracking().Include(x => x.ProductLine).Include(x => x.ProductLast).OrderBy(x => x.Code)
-                .Select(x => new ProductStyleDto { ProductStyleId = x.Id, CompanyId = x.CompanyId, ProductLineId = x.ProductLineId, ProductLineName = x.ProductLine != null ? x.ProductLine.Name : string.Empty, ProductLastId = x.ProductLastId, ProductLastName = x.ProductLast != null ? x.ProductLast.Name : string.Empty, Code = x.Code, Name = x.Name, CustomerLabel1 = x.CustomerLabel1, CustomerLabel2 = x.CustomerLabel2, ColorLabel = x.ColorLabel, DieCutReference = x.DieCutReference, MaxLotSize = x.MaxLotSize, HasAuthorizedConsumption = x.HasAuthorizedConsumption, HandlesFractionsByStyle = x.HandlesFractionsByStyle, OutsourcedProcessName = x.OutsourcedProcessName, PhotoUrl = x.PhotoUrl, IsActive = x.IsActive }).ToListAsync();
+            var rows = await db.ProductStyles.AsNoTracking().Include(x => x.ProductLine).OrderBy(x => x.Code)
+                .Select(x => new ProductStyleDto { ProductStyleId = x.Id, CompanyId = x.CompanyId, ProductLineId = x.ProductLineId, ProductLineName = x.ProductLine != null ? x.ProductLine.Name : string.Empty, Code = x.Code, Name = x.Name, CustomerLabel1 = x.CustomerLabel1, CustomerLabel2 = x.CustomerLabel2, ColorLabel = x.ColorLabel, DieCutReference = x.DieCutReference, MaxLotSize = x.MaxLotSize, HasAuthorizedConsumption = x.HasAuthorizedConsumption, HandlesFractionsByStyle = x.HandlesFractionsByStyle, OutsourcedProcessName = x.OutsourcedProcessName, PhotoUrl = x.PhotoUrl, IsActive = x.IsActive }).ToListAsync();
             return Results.Ok(rows);
         });
         group.MapPost("/", async (ProductStyleRequest request, NanchesoftDbContext db) => await UpsertProductStyleAsync(null, request, db));
         group.MapPut("/{id:guid}", async (Guid id, ProductStyleRequest request, NanchesoftDbContext db) => await UpsertProductStyleAsync(id, request, db));
         group.MapDelete("/{id:guid}", async (Guid id, NanchesoftDbContext db) => await DeleteEntityAsync<ProductStyle>(db, id, x => db.ItemEngineeringProfiles.AnyAsync(y => y.ProductStyleId == x.Id), "El estilo está ligado a perfiles de ingeniería."));
+        group.MapGet("/options", async (NanchesoftDbContext db) => Results.Ok(
+            await db.ProductStyles.AsNoTracking().Where(x => x.IsActive).OrderBy(x => x.Code)
+                .Select(x => new { ProductStyleId = x.Id, x.Code, x.Name }).ToListAsync()));
     }
 
     private static void MapEmbroideryPatterns(IEndpointRouteBuilder app)
@@ -371,10 +391,10 @@ public static class ProductEngineeringEndpoints
         {
             var entity = await db.ProductLines.FirstOrDefaultAsync(x => x.Id == id.Value);
             if (entity is null) return Results.NotFound();
-            entity.ProductFamilyId = request.ProductFamilyId; entity.ProductLastId = request.ProductLastId; entity.Code = code; entity.Name = NormalizeText(request.Name); entity.ShortName = NormalizeText(request.ShortName); entity.AllowsDiscount = request.AllowsDiscount; entity.IsActive = request.IsActive; entity.UpdatedAt = DateTime.UtcNow; entity.UpdatedBy = "web-api"; await db.SaveChangesAsync(); return Results.Ok(new { success = true });
+            entity.ProductFamilyId = request.ProductFamilyId; entity.Code = code; entity.Name = NormalizeText(request.Name); entity.ShortName = NormalizeText(request.ShortName); entity.AllowsDiscount = request.AllowsDiscount; entity.IsActive = request.IsActive; entity.UpdatedAt = DateTime.UtcNow; entity.UpdatedBy = "web-api"; await db.SaveChangesAsync(); return Results.Ok(new { success = true });
         }
         if (await db.ProductLines.AnyAsync(x => x.CompanyId == ctx.CompanyId && x.Code == code)) return Results.BadRequest(new { message = "Ya existe la línea." });
-        var created = new ProductLine { TenantId = ctx.TenantId.Value, CompanyId = ctx.CompanyId.Value, ProductFamilyId = request.ProductFamilyId, ProductLastId = request.ProductLastId, Code = code, Name = NormalizeText(request.Name), ShortName = NormalizeText(request.ShortName), AllowsDiscount = request.AllowsDiscount, IsActive = request.IsActive, CreatedBy = "web-api" };
+        var created = new ProductLine { TenantId = ctx.TenantId.Value, CompanyId = ctx.CompanyId.Value, ProductFamilyId = request.ProductFamilyId, Code = code, Name = NormalizeText(request.Name), ShortName = NormalizeText(request.ShortName), AllowsDiscount = request.AllowsDiscount, IsActive = request.IsActive, CreatedBy = "web-api" };
         db.ProductLines.Add(created); await db.SaveChangesAsync(); return Results.Ok(new { success = true, id = created.Id });
     }
 
@@ -387,7 +407,8 @@ public static class ProductEngineeringEndpoints
         ProductStyle entity;
         if (id.HasValue)
         {
-            entity = await db.ProductStyles.FirstOrDefaultAsync(x => x.Id == id.Value) ?? throw new InvalidOperationException();
+            entity = await db.ProductStyles.FirstOrDefaultAsync(x => x.Id == id.Value);
+            if (entity is null) return Results.NotFound(new { message = "No se encontró el estilo." });
             entity.UpdatedAt = DateTime.UtcNow; entity.UpdatedBy = "web-api";
         }
         else
@@ -396,7 +417,7 @@ public static class ProductEngineeringEndpoints
             entity = new ProductStyle { TenantId = ctx.TenantId.Value, CompanyId = ctx.CompanyId.Value, CreatedBy = "web-api" };
             db.ProductStyles.Add(entity);
         }
-        entity.ProductLineId = request.ProductLineId; entity.ProductLastId = request.ProductLastId; entity.Code = code; entity.Name = NormalizeText(request.Name); entity.CustomerLabel1 = NormalizeText(request.CustomerLabel1); entity.CustomerLabel2 = NormalizeText(request.CustomerLabel2); entity.ColorLabel = NormalizeText(request.ColorLabel); entity.DieCutReference = NormalizeText(request.DieCutReference); entity.MaxLotSize = request.MaxLotSize; entity.HasAuthorizedConsumption = request.HasAuthorizedConsumption; entity.HandlesFractionsByStyle = request.HandlesFractionsByStyle; entity.TechnicalNotes = NormalizeText(request.TechnicalNotes); entity.ProductionCardNotes = NormalizeText(request.ProductionCardNotes); entity.OutsourcedProcessName = NormalizeText(request.OutsourcedProcessName); entity.PhotoUrl = NormalizeText(request.PhotoUrl); entity.IsActive = request.IsActive; await db.SaveChangesAsync();
+        entity.ProductLineId = request.ProductLineId; entity.Code = code; entity.Name = NormalizeText(request.Name); entity.CustomerLabel1 = NormalizeText(request.CustomerLabel1); entity.CustomerLabel2 = NormalizeText(request.CustomerLabel2); entity.ColorLabel = NormalizeText(request.ColorLabel); entity.DieCutReference = NormalizeText(request.DieCutReference); entity.MaxLotSize = request.MaxLotSize; entity.HasAuthorizedConsumption = request.HasAuthorizedConsumption; entity.HandlesFractionsByStyle = request.HandlesFractionsByStyle; entity.TechnicalNotes = NormalizeText(request.TechnicalNotes); entity.ProductionCardNotes = NormalizeText(request.ProductionCardNotes); entity.OutsourcedProcessName = NormalizeText(request.OutsourcedProcessName); entity.PhotoUrl = NormalizeText(request.PhotoUrl); entity.IsActive = request.IsActive; await db.SaveChangesAsync();
         return Results.Ok(new { success = true, id = entity.Id });
     }
 
@@ -508,7 +529,6 @@ public sealed class ProductLastDto : ProductLastRequest
 public class ProductLineRequest
 {
     public Guid? ProductFamilyId { get; set; }
-    public Guid? ProductLastId { get; set; }
     public string Code { get; set; } = string.Empty;
     public string Name { get; set; } = string.Empty;
     public string ShortName { get; set; } = string.Empty;
@@ -520,13 +540,11 @@ public sealed class ProductLineDto : ProductLineRequest
     public Guid ProductLineId { get; set; }
     public Guid CompanyId { get; set; }
     public string ProductFamilyName { get; set; } = string.Empty;
-    public string ProductLastName { get; set; } = string.Empty;
 }
 
 public class ProductStyleRequest
 {
     public Guid? ProductLineId { get; set; }
-    public Guid? ProductLastId { get; set; }
     public string Code { get; set; } = string.Empty;
     public string Name { get; set; } = string.Empty;
     public string CustomerLabel1 { get; set; } = string.Empty;
@@ -547,7 +565,6 @@ public sealed class ProductStyleDto : ProductStyleRequest
     public Guid ProductStyleId { get; set; }
     public Guid CompanyId { get; set; }
     public string ProductLineName { get; set; } = string.Empty;
-    public string ProductLastName { get; set; } = string.Empty;
 }
 
 public class EmbroideryPatternRequest

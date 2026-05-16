@@ -20,6 +20,12 @@ public static class ProductTechnicalCostingEndpoints
             return Results.Ok(items);
         });
 
+        group.MapGet("/engineering-readiness", async (NanchesoftDbContext db) =>
+        {
+            var rows = await BuildEngineeringReadinessAsync(db);
+            return Results.Ok(rows);
+        });
+
         group.MapGet("/technical-center/overview/{finishedProductId:guid}", async (Guid finishedProductId, NanchesoftDbContext db) =>
         {
             var items = await BuildTechnicalCenterOverviewAsync(db, finishedProductId);
@@ -373,11 +379,20 @@ public static class ProductTechnicalCostingEndpoints
             .GroupBy(x => x.FinishedProductId)
             .Select(x => new { FinishedProductId = x.Key, Count = x.Count() })
             .ToDictionaryAsync(x => x.FinishedProductId, x => x.Count);
-        var consumptionCounts = await db.Set<ProductConsumptionProfile>().AsNoTracking()
+        var legacyConsumptionCounts = await db.Set<ProductConsumptionProfile>().AsNoTracking()
             .Where(x => productIds.Contains(x.FinishedProductId) && x.IsActive)
             .GroupBy(x => x.FinishedProductId)
             .Select(x => new { FinishedProductId = x.Key, Count = x.Count() })
             .ToDictionaryAsync(x => x.FinishedProductId, x => x.Count);
+
+        // Authorized consumption templates (style + size run)
+        var overviewStyleIds = products.Where(x => x.ProductStyleId.HasValue).Select(x => x.ProductStyleId!.Value).ToHashSet();
+        var overviewRunIds = products.Where(x => x.ProductSizeRunId.HasValue).Select(x => x.ProductSizeRunId!.Value).ToHashSet();
+        var authorizedTemplateKeys2 = await db.Set<ConsumptionTemplate>().AsNoTracking()
+            .Where(x => x.IsActive && x.IsAuthorized && overviewStyleIds.Contains(x.ProductStyleId) && overviewRunIds.Contains(x.ProductSizeRunId))
+            .Select(x => new { x.ProductStyleId, x.ProductSizeRunId })
+            .ToListAsync();
+        var templateKeySet = authorizedTemplateKeys2.Select(x => (x.ProductStyleId, x.ProductSizeRunId)).ToHashSet();
 
         var results = new List<ProductTechnicalCenterProductOverviewDto>();
         foreach (var product in products)
@@ -385,9 +400,13 @@ public static class ProductTechnicalCostingEndpoints
             var sheet = technicalSheets.FirstOrDefault(x => x.FinishedProductId == product.Id);
             var cost = costSheets.FirstOrDefault(x => x.FinishedProductId == product.Id);
             var authorization = authorizations.FirstOrDefault(x => x.FinishedProductId == product.Id);
+            var legacyCount = legacyConsumptionCounts.TryGetValue(product.Id, out var lc) ? lc : 0;
+            var hasTemplate = product.ProductStyleId.HasValue && product.ProductSizeRunId.HasValue
+                && templateKeySet.Contains((product.ProductStyleId.Value, product.ProductSizeRunId.Value));
+            var conCount = legacyCount > 0 ? legacyCount : (hasTemplate ? 1 : 0);
             var row = BuildOverview(product, sheet, cost, authorization,
                 materialCounts.TryGetValue(product.Id, out var matCount) ? matCount : 0,
-                consumptionCounts.TryGetValue(product.Id, out var conCount) ? conCount : 0);
+                conCount);
             results.Add(row);
         }
 
@@ -476,6 +495,7 @@ public static class ProductTechnicalCostingEndpoints
     {
         var assignments = await db.Set<FinishedProductMaterial>()
             .Include(x => x.ProductComponent)
+                .ThenInclude(x => x!.ProductionPhase)
             .Include(x => x.MaterialItem)
                 .ThenInclude(x => x!.IssueUnit)
             .Include(x => x.MaterialItem)
@@ -543,8 +563,8 @@ public static class ProductTechnicalCostingEndpoints
             ProductTechnicalSheetId = sheet.Id,
             ProcessCode = x.Code,
             ProcessName = x.Name,
-            WorkstationCode = x.ProductionPhase,
-            DeliverToWarehouseCode = x.WarehouseDeliveryRole,
+            WorkstationCode = x.ProductionPhase?.Code ?? string.Empty,
+            DeliverToWarehouseCode = string.Empty,
             RequiresVoucherCard = x.ShowOnProductionCard,
             ShowMaterialsOnVoucher = x.ShowOnProductionCard,
             SortOrder = index + 1,
@@ -646,7 +666,12 @@ public static class ProductTechnicalCostingEndpoints
             .OrderByDescending(x => x.CreatedAt)
             .FirstOrDefaultAsync();
         var materialCount = await db.Set<FinishedProductMaterial>().CountAsync(x => x.FinishedProductId == finishedProductId && x.IsActive);
-        var consumptionCount = await db.Set<ProductConsumptionProfile>().CountAsync(x => x.FinishedProductId == finishedProductId && x.IsActive);
+        var legacyConsumptionCount = await db.Set<ProductConsumptionProfile>().CountAsync(x => x.FinishedProductId == finishedProductId && x.IsActive);
+        var hasTemplateConsumption = product.ProductStyleId.HasValue && product.ProductSizeRunId.HasValue
+            && await db.Set<ConsumptionTemplate>().AnyAsync(x => x.IsActive && x.IsAuthorized
+                && x.ProductStyleId == product.ProductStyleId.Value
+                && x.ProductSizeRunId == product.ProductSizeRunId.Value);
+        var consumptionCount = legacyConsumptionCount > 0 ? legacyConsumptionCount : (hasTemplateConsumption ? 1 : 0);
 
         var hasPhoto = product.HasPhoto || !string.IsNullOrWhiteSpace(sheet?.PhotoUrl) || !string.IsNullOrWhiteSpace(product.ProductStyle?.PhotoUrl);
         var hasConsumption = product.HasConsumptionDefinition || consumptionCount > 0;
@@ -736,7 +761,12 @@ public static class ProductTechnicalCostingEndpoints
         var hasPhoto = product.HasPhoto
             || !string.IsNullOrWhiteSpace(product.ProductStyle?.PhotoUrl)
             || await db.Set<ProductTechnicalSheet>().AnyAsync(x => x.FinishedProductId == finishedProductId && !string.IsNullOrWhiteSpace(x.PhotoUrl));
-        var hasConsumption = await db.Set<ProductConsumptionProfile>().AnyAsync(x => x.FinishedProductId == finishedProductId && x.IsActive);
+        var hasLegacyConsumption = await db.Set<ProductConsumptionProfile>().AnyAsync(x => x.FinishedProductId == finishedProductId && x.IsActive);
+        var hasTemplateConsumptionSync = product.ProductStyleId.HasValue && product.ProductSizeRunId.HasValue
+            && await db.Set<ConsumptionTemplate>().AnyAsync(x => x.IsActive && x.IsAuthorized
+                && x.ProductStyleId == product.ProductStyleId!.Value
+                && x.ProductSizeRunId == product.ProductSizeRunId!.Value);
+        var hasConsumption = hasLegacyConsumption || hasTemplateConsumptionSync;
         var hasMaterials = await db.Set<FinishedProductMaterial>().AnyAsync(x => x.FinishedProductId == finishedProductId && x.IsActive);
         var hasApprovedTechnicalSheet = await db.Set<ProductTechnicalSheet>().AnyAsync(x => x.FinishedProductId == finishedProductId && x.IsApproved);
         var hasApprovedCostSheet = await db.Set<ProductCostSheet>().AnyAsync(x => x.FinishedProductId == finishedProductId && x.IsApproved);
@@ -938,6 +968,102 @@ public static class ProductTechnicalCostingEndpoints
         x.Id, x.TenantId, x.CompanyId, x.FinishedProductId, x.ProductComponentId, x.BaseSizeCode, x.TargetSizeCode,
         x.VariationPercent, x.QuantityDelta, x.AppliesToConsumption, x.AppliesToCosting, x.Notes, x.IsActive,
         x.CreatedAt, x.CreatedBy, x.UpdatedAt, x.UpdatedBy);
+
+    private static async Task<List<EngineeringReadinessRowDto>> BuildEngineeringReadinessAsync(NanchesoftDbContext db)
+    {
+        var products = await db.Set<FinishedProduct>()
+            .AsNoTracking()
+            .Include(x => x.ProductStyle)
+            .Include(x => x.ProductSizeRun)
+            .Include(x => x.MainMaterialItem)
+            .OrderBy(x => x.Code)
+            .ToListAsync();
+
+        if (products.Count == 0) return [];
+
+        var productIds = products.Select(x => x.Id).ToHashSet();
+
+        var materialCounts = await db.Set<FinishedProductMaterial>().AsNoTracking()
+            .Where(x => productIds.Contains(x.FinishedProductId) && x.IsActive)
+            .GroupBy(x => x.FinishedProductId)
+            .Select(x => new { x.Key, Count = x.Count() })
+            .ToDictionaryAsync(x => x.Key, x => x.Count);
+
+        var legacyConsumptionCounts = await db.Set<ProductConsumptionProfile>().AsNoTracking()
+            .Where(x => productIds.Contains(x.FinishedProductId) && x.IsActive)
+            .GroupBy(x => x.FinishedProductId)
+            .Select(x => new { x.Key, Count = x.Count() })
+            .ToDictionaryAsync(x => x.Key, x => x.Count);
+
+        var styleIds = products.Where(x => x.ProductStyleId.HasValue).Select(x => x.ProductStyleId!.Value).ToHashSet();
+        var runIds = products.Where(x => x.ProductSizeRunId.HasValue).Select(x => x.ProductSizeRunId!.Value).ToHashSet();
+        var authorizedTemplates = await db.Set<ConsumptionTemplate>().AsNoTracking()
+            .Where(x => x.IsActive && x.IsAuthorized && styleIds.Contains(x.ProductStyleId) && runIds.Contains(x.ProductSizeRunId))
+            .Select(x => new { x.ProductStyleId, x.ProductSizeRunId })
+            .ToListAsync();
+        var templateKeySet = authorizedTemplates.Select(x => (x.ProductStyleId, x.ProductSizeRunId)).ToHashSet();
+
+        var technicalSheetCounts = await db.Set<ProductTechnicalSheet>().AsNoTracking()
+            .Where(x => productIds.Contains(x.FinishedProductId))
+            .GroupBy(x => x.FinishedProductId)
+            .Select(x => new { x.Key, Count = x.Count() })
+            .ToDictionaryAsync(x => x.Key, x => x.Count);
+
+        var costSheetCounts = await db.Set<ProductCostSheet>().AsNoTracking()
+            .Where(x => productIds.Contains(x.FinishedProductId))
+            .GroupBy(x => x.FinishedProductId)
+            .Select(x => new { x.Key, Count = x.Count() })
+            .ToDictionaryAsync(x => x.Key, x => x.Count);
+
+        var authCounts = await db.Set<ProductAuthorizationRecord>().AsNoTracking()
+            .Where(x => productIds.Contains(x.FinishedProductId))
+            .GroupBy(x => x.FinishedProductId)
+            .Select(x => new { x.Key, Count = x.Count() })
+            .ToDictionaryAsync(x => x.Key, x => x.Count);
+
+        var rows = new List<EngineeringReadinessRowDto>();
+        foreach (var p in products)
+        {
+            var legacyCount = legacyConsumptionCounts.TryGetValue(p.Id, out var lc) ? lc : 0;
+            var hasTemplate = p.ProductStyleId.HasValue && p.ProductSizeRunId.HasValue
+                && templateKeySet.Contains((p.ProductStyleId.Value, p.ProductSizeRunId.Value));
+            var consumptionCount = legacyCount > 0 ? legacyCount : (hasTemplate ? 1 : 0);
+            var matCount = materialCounts.TryGetValue(p.Id, out var mc) ? mc : 0;
+            var sheetCount = technicalSheetCounts.TryGetValue(p.Id, out var sc) ? sc : 0;
+            var costCount = costSheetCounts.TryGetValue(p.Id, out var cc) ? cc : 0;
+            var authCount = authCounts.TryGetValue(p.Id, out var ac) ? ac : 0;
+
+            var hasPhoto = p.HasPhoto;
+            var hasConsumption = p.HasConsumptionDefinition || consumptionCount > 0;
+            var hasMaterials = p.HasMaterialAssignments || matCount > 0;
+            var hasTechSheet = sheetCount > 0;
+            var hasCostSheet = costCount > 0;
+            var isReady = p.IsAuthorizedForExplosion;
+
+            var checks = new[] { hasPhoto, hasConsumption, hasMaterials, hasTechSheet, hasCostSheet, isReady };
+            var readiness = (int)Math.Round(checks.Count(x => x) * 100m / checks.Length, 0);
+
+            var missing = new List<string>();
+            if (!hasPhoto) missing.Add("foto");
+            if (!hasConsumption) missing.Add("consumos");
+            if (!hasMaterials) missing.Add("materiales");
+            if (!hasTechSheet) missing.Add("ficha técnica");
+            if (!hasCostSheet) missing.Add("hoja de costo");
+            if (!isReady) missing.Add("autorización");
+
+            rows.Add(new EngineeringReadinessRowDto(
+                p.Id, p.Code, p.Name ?? string.Empty,
+                p.ProductStyle?.Name ?? string.Empty,
+                p.ProductSizeRun?.Name ?? string.Empty,
+                p.MainMaterialItem?.Name ?? string.Empty,
+                hasPhoto, p.HasConsumptionDefinition, p.HasMaterialAssignments,
+                p.IsAuthorizedForExplosion, p.IsActive,
+                matCount, consumptionCount, sheetCount, costCount, authCount,
+                readiness, string.Join(", ", missing), isReady));
+        }
+
+        return rows;
+    }
 }
 
 public sealed record ProductTechnicalSheetUpsertRequest(
@@ -1209,3 +1335,24 @@ public sealed record ProductTechnicalActionResponseDto(
     bool IsAuthorizedForExplosion,
     int ReadinessPercent,
     string PrincipalBlocker);
+
+public sealed record EngineeringReadinessRowDto(
+    Guid FinishedProductId,
+    string Code,
+    string Name,
+    string ProductStyleName,
+    string ProductSizeRunName,
+    string MainMaterialItemName,
+    bool HasPhoto,
+    bool HeaderHasConsumptionDefinition,
+    bool HeaderHasMaterialAssignments,
+    bool IsAuthorizedForExplosion,
+    bool IsActive,
+    int MaterialAssignmentsCount,
+    int ConsumptionProfilesCount,
+    int TechnicalSheetsCount,
+    int CostSheetsCount,
+    int AuthorizationRecordsCount,
+    int ReadinessPercent,
+    string MissingSteps,
+    bool IsReadyForExplosion);

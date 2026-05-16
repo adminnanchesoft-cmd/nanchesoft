@@ -1,5 +1,562 @@
 @page "/products/material-items"
+@using System.Net.Http.Json
+@using System.Text.Json
+@inject IHttpClientFactory HttpClientFactory
 
 <PageTitle>Catálogo de materiales | Nanchesoft</PageTitle>
 
-<CatalogCrudPage CatalogKey="material-items" />
+<div class="page-header mb-3">
+    <h1 class="page-title">Catálogo de materiales</h1>
+    <p class="page-subtitle">Gestión de materiales por característica y talla.</p>
+</div>
+
+@if (!string.IsNullOrEmpty(_errorMessage))
+{
+    <div class="alert alert-danger">@_errorMessage</div>
+}
+@if (!string.IsNullOrEmpty(_successMessage))
+{
+    <div class="alert alert-success">@_successMessage</div>
+}
+
+<div class="d-flex gap-2 mb-3 flex-wrap align-items-center">
+    <input class="form-control w-auto" placeholder="Buscar por código, nombre, característica o subfamilia..."
+           @bind="_search" @bind:event="oninput" style="min-width:280px" />
+    <button class="btn btn-primary ms-auto" @onclick="() => OpenItemModal(null)">+ Nuevo material</button>
+</div>
+
+@if (_loading)
+{
+    <p class="text-muted">Cargando...</p>
+}
+else
+{
+    <div style="overflow-x:auto;">
+        <table class="table table-sm table-hover align-middle">
+            <thead class="table-dark">
+                <tr>
+                    <th>Código</th>
+                    <th>Nombre</th>
+                    <th>Característica</th>
+                    <th>Talla</th>
+                    <th>Subfamilia</th>
+                    <th>Activo</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var item in FilteredItems)
+                {
+                    <tr>
+                        <td>@item.Code</td>
+                        <td>@item.Name</td>
+                        <td>@item.MaterialCharacteristicName</td>
+                        <td>@item.MaterialSizeName</td>
+                        <td>@item.MaterialSubfamilyName</td>
+                        <td>
+                            @if (item.IsActive)
+                            { <span class="badge bg-success">Activo</span> }
+                            else
+                            { <span class="badge bg-secondary">Inactivo</span> }
+                        </td>
+                        <td>
+                            <button class="btn btn-sm btn-outline-secondary" @onclick="() => OpenItemModal(item)">Editar</button>
+                        </td>
+                    </tr>
+                }
+                @if (!FilteredItems.Any())
+                {
+                    <tr><td colspan="7" class="text-center text-muted py-3">No hay materiales que coincidan.</td></tr>
+                }
+            </tbody>
+        </table>
+    </div>
+    <small class="text-muted">@FilteredItems.Count() de @_items.Count materiales</small>
+}
+
+@if (_showItemModal)
+{
+    <div class="modal-backdrop fade show"></div>
+    <div class="modal d-block" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">@(_editingItemId.HasValue ? "Editar material" : "Nuevo material")</h5>
+                    <button type="button" class="btn-close" @onclick="CloseItemModal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Subfamilia <span class="text-danger">*</span></label>
+                        <select class="form-select" @bind="_formSubfamilyId">
+                            <option value="">— Selecciona subfamilia —</option>
+                            @foreach (var sf in _subfamilies)
+                            {
+                                <option value="@sf.MaterialSubfamilyId">@sf.Code – @sf.Name</option>
+                            }
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Característica</label>
+                        <div class="input-group">
+                            <select class="form-select" @bind="_formCharacteristicId">
+                                <option value="">— Sin característica —</option>
+                                @foreach (var c in _characteristics)
+                                {
+                                    <option value="@c.MaterialCharacteristicId">@c.Name</option>
+                                }
+                            </select>
+                            <button class="btn btn-outline-secondary" type="button" title="Nueva característica" @onclick="OpenCharacteristicModal">+</button>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Talla</label>
+                        <div class="input-group">
+                            <select class="form-select" @bind="_formSizeId">
+                                <option value="">— Sin talla —</option>
+                                @foreach (var s in _sizes)
+                                {
+                                    <option value="@s.MaterialSizeId">@s.Name</option>
+                                }
+                            </select>
+                            <button class="btn btn-outline-secondary" type="button" title="Nueva talla" @onclick="OpenSizeModal">+</button>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Nombre del material</label>
+                        @if (!string.IsNullOrEmpty(ComputedName))
+                        {
+                            <div class="form-control bg-light text-uppercase fw-bold" style="letter-spacing:.05em;">
+                                @ComputedName
+                            </div>
+                            <small class="text-muted">Generado automáticamente desde característica + talla.</small>
+                        }
+                        else
+                        {
+                            <input type="text" class="form-control" placeholder="Nombre del material"
+                                   @bind="_formName" />
+                            <small class="text-muted">Selecciona característica y talla para generar el nombre automáticamente.</small>
+                        }
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-sm-4">
+                            <label class="form-label fw-semibold">Código</label>
+                            <input type="text" class="form-control" @bind="_formCode" />
+                        </div>
+                        <div class="col-sm-8">
+                            <label class="form-label fw-semibold">Descripción</label>
+                            <input type="text" class="form-control" @bind="_formDescription" />
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Notas</label>
+                        <textarea class="form-control" rows="2" @bind="_formNotes"></textarea>
+                    </div>
+
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="chkMaterialActive" @bind="_formIsActive" />
+                        <label class="form-check-label" for="chkMaterialActive">Activo</label>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    @if (_editingItemId.HasValue)
+                    {
+                        <button class="btn btn-danger me-auto" @onclick="DeleteItemAsync" disabled="@_saving">Eliminar</button>
+                    }
+                    <button class="btn btn-secondary" @onclick="CloseItemModal">Cancelar</button>
+                    <button class="btn btn-primary" @onclick="SaveItemAsync" disabled="@_saving">
+                        @(_saving ? "Guardando..." : "Guardar")
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@if (_showCharacteristicModal)
+{
+    <div class="modal-backdrop fade show" style="z-index:1060;"></div>
+    <div class="modal d-block" style="z-index:1065;" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Nueva característica de material</h5>
+                    <button type="button" class="btn-close" @onclick="CloseCharacteristicModal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Código <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" @bind="_qcCode" placeholder="Ej. SFLEX" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Nombre <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" @bind="_qcName" placeholder="Ej. SUELA FLEX" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Descripción</label>
+                        <input type="text" class="form-control" @bind="_qcDescription" />
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" @onclick="CloseCharacteristicModal">Cancelar</button>
+                    <button class="btn btn-primary" @onclick="SaveCharacteristicAsync" disabled="@_savingQc">
+                        @(_savingQc ? "Guardando..." : "Guardar")
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@if (_showSizeModal)
+{
+    <div class="modal-backdrop fade show" style="z-index:1060;"></div>
+    <div class="modal d-block" style="z-index:1065;" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Nueva talla de material</h5>
+                    <button type="button" class="btn-close" @onclick="CloseSizeModal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Código <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" @bind="_qsCode" placeholder="Ej. T22" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Nombre <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" @bind="_qsName" placeholder="Ej. #22" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Orden</label>
+                        <input type="number" class="form-control" @bind="_qsSortOrder" min="0" />
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" @onclick="CloseSizeModal">Cancelar</button>
+                    <button class="btn btn-primary" @onclick="SaveSizeAsync" disabled="@_savingQs">
+                        @(_savingQs ? "Guardando..." : "Guardar")
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<MaterialItemListDto> _items = [];
+    private List<SubfamilyOptionDto> _subfamilies = [];
+    private List<CharacteristicOptionDto> _characteristics = [];
+    private List<SizeOptionDto> _sizes = [];
+
+    private bool _loading;
+    private string _search = string.Empty;
+
+    private bool _showItemModal;
+    private bool _showCharacteristicModal;
+    private bool _showSizeModal;
+    private bool _saving;
+    private bool _savingQc;
+    private bool _savingQs;
+
+    private Guid? _editingItemId;
+
+    private string _formSubfamilyId = string.Empty;
+    private string _formCharacteristicId = string.Empty;
+    private string _formSizeId = string.Empty;
+    private string _formCode = string.Empty;
+    private string _formName = string.Empty;
+    private string _formDescription = string.Empty;
+    private string _formNotes = string.Empty;
+    private bool _formIsActive = true;
+
+    private string _qcCode = string.Empty;
+    private string _qcName = string.Empty;
+    private string _qcDescription = string.Empty;
+
+    private string _qsCode = string.Empty;
+    private string _qsName = string.Empty;
+    private int _qsSortOrder;
+
+    private string _errorMessage = string.Empty;
+    private string _successMessage = string.Empty;
+
+    private HttpClient Client => HttpClientFactory.CreateClient("Nanchesoft.Api");
+
+    private string ComputedName
+    {
+        get
+        {
+            if (string.IsNullOrEmpty(_formCharacteristicId) || string.IsNullOrEmpty(_formSizeId))
+                return string.Empty;
+            var charName = _characteristics.FirstOrDefault(x => x.MaterialCharacteristicId.ToString("D") == _formCharacteristicId)?.Name ?? string.Empty;
+            var sizeName = _sizes.FirstOrDefault(x => x.MaterialSizeId.ToString("D") == _formSizeId)?.Name ?? string.Empty;
+            return $"{charName.Trim()} {sizeName.Trim()}".Trim().ToUpperInvariant();
+        }
+    }
+
+    private IEnumerable<MaterialItemListDto> FilteredItems =>
+        string.IsNullOrWhiteSpace(_search)
+            ? _items
+            : _items.Where(x =>
+                x.Code.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
+                x.Name.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
+                x.MaterialCharacteristicName.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
+                x.MaterialSizeName.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
+                x.MaterialSubfamilyName.Contains(_search, StringComparison.OrdinalIgnoreCase));
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadLookupsAsync();
+        await LoadItemsAsync();
+    }
+
+    private async Task LoadLookupsAsync()
+    {
+        var t1 = Client.GetFromJsonAsync<List<SubfamilyOptionDto>>("/api/products/material-subfamilies/options");
+        var t2 = Client.GetFromJsonAsync<List<CharacteristicOptionDto>>("/api/products/material-characteristics/options");
+        var t3 = Client.GetFromJsonAsync<List<SizeOptionDto>>("/api/products/material-sizes/options");
+        await Task.WhenAll(t1, t2, t3);
+        _subfamilies = t1.Result ?? [];
+        _characteristics = t2.Result ?? [];
+        _sizes = t3.Result ?? [];
+    }
+
+    private async Task LoadItemsAsync()
+    {
+        _loading = true;
+        _errorMessage = string.Empty;
+        try
+        {
+            _items = await Client.GetFromJsonAsync<List<MaterialItemListDto>>("/api/products/material-items") ?? [];
+        }
+        catch (Exception ex) { _errorMessage = $"Error al cargar materiales: {ex.Message}"; }
+        finally { _loading = false; }
+    }
+
+    private void OpenItemModal(MaterialItemListDto? item)
+    {
+        _errorMessage = _successMessage = string.Empty;
+        if (item is null)
+        {
+            _editingItemId = null;
+            _formSubfamilyId = _formCharacteristicId = _formSizeId = string.Empty;
+            _formCode = _formName = _formDescription = _formNotes = string.Empty;
+            _formIsActive = true;
+        }
+        else
+        {
+            _editingItemId = item.MaterialItemId;
+            _formSubfamilyId = item.MaterialSubfamilyId.ToString("D");
+            _formCharacteristicId = item.MaterialCharacteristicId?.ToString("D") ?? string.Empty;
+            _formSizeId = item.MaterialSizeId?.ToString("D") ?? string.Empty;
+            _formCode = item.Code;
+            _formName = item.Name;
+            _formDescription = item.Description;
+            _formNotes = item.Notes;
+            _formIsActive = item.IsActive;
+        }
+        _showItemModal = true;
+    }
+
+    private async Task SaveItemAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_formSubfamilyId))
+        {
+            _errorMessage = "La subfamilia es requerida.";
+            return;
+        }
+        var effectiveName = string.IsNullOrEmpty(ComputedName) ? _formName : ComputedName;
+        if (string.IsNullOrWhiteSpace(effectiveName))
+        {
+            _errorMessage = "El nombre del material es requerido.";
+            return;
+        }
+
+        _saving = true; _errorMessage = string.Empty;
+        try
+        {
+            var payload = new
+            {
+                materialSubfamilyId = Guid.Parse(_formSubfamilyId),
+                materialCharacteristicId = string.IsNullOrEmpty(_formCharacteristicId) ? (Guid?)null : Guid.Parse(_formCharacteristicId),
+                materialSizeId = string.IsNullOrEmpty(_formSizeId) ? (Guid?)null : Guid.Parse(_formSizeId),
+                code = _formCode,
+                name = effectiveName,
+                description = _formDescription,
+                legacyMaterialName = string.Empty,
+                authorizedCost = 0m,
+                lastPurchaseCost = 0m,
+                standardCost = 0m,
+                costStatus = string.Empty,
+                isServiceItem = false,
+                notes = _formNotes,
+                isActive = _formIsActive
+            };
+
+            HttpResponseMessage resp = _editingItemId.HasValue
+                ? await Client.PutAsJsonAsync($"/api/products/material-items/{_editingItemId.Value}", payload)
+                : await Client.PostAsJsonAsync("/api/products/material-items", payload);
+
+            if (resp.IsSuccessStatusCode)
+            {
+                _successMessage = _editingItemId.HasValue ? "Material actualizado." : "Material creado.";
+                CloseItemModal();
+                await LoadItemsAsync();
+            }
+            else
+            {
+                var err = await resp.Content.ReadFromJsonAsync<JsonElement>();
+                _errorMessage = err.TryGetProperty("message", out var m) ? m.GetString() ?? "Error al guardar." : "Error al guardar.";
+            }
+        }
+        catch (Exception ex) { _errorMessage = ex.Message; }
+        finally { _saving = false; }
+    }
+
+    private async Task DeleteItemAsync()
+    {
+        if (!_editingItemId.HasValue) return;
+        _saving = true; _errorMessage = string.Empty;
+        try
+        {
+            var resp = await Client.DeleteAsync($"/api/products/material-items/{_editingItemId.Value}");
+            if (resp.IsSuccessStatusCode)
+            {
+                _successMessage = "Material eliminado.";
+                CloseItemModal();
+                await LoadItemsAsync();
+            }
+            else
+            {
+                var err = await resp.Content.ReadFromJsonAsync<JsonElement>();
+                _errorMessage = err.TryGetProperty("message", out var m) ? m.GetString() ?? "Error al eliminar." : "Error al eliminar.";
+            }
+        }
+        catch (Exception ex) { _errorMessage = ex.Message; }
+        finally { _saving = false; }
+    }
+
+    private void OpenCharacteristicModal()
+    {
+        _qcCode = _qcName = _qcDescription = string.Empty;
+        _showCharacteristicModal = true;
+    }
+
+    private void CloseCharacteristicModal() => _showCharacteristicModal = false;
+
+    private async Task SaveCharacteristicAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_qcCode) || string.IsNullOrWhiteSpace(_qcName))
+        {
+            _errorMessage = "Código y nombre de la característica son requeridos.";
+            return;
+        }
+        _savingQc = true;
+        try
+        {
+            var payload = new { code = _qcCode.Trim(), name = _qcName.Trim(), description = _qcDescription.Trim(), isActive = true };
+            var resp = await Client.PostAsJsonAsync("/api/products/material-characteristics", payload);
+            if (resp.IsSuccessStatusCode)
+            {
+                var created = await resp.Content.ReadFromJsonAsync<CreatedIdDto>();
+                _characteristics = await Client.GetFromJsonAsync<List<CharacteristicOptionDto>>("/api/products/material-characteristics/options") ?? [];
+                if (created is not null)
+                    _formCharacteristicId = created.MaterialCharacteristicId.ToString("D");
+                CloseCharacteristicModal();
+            }
+            else
+            {
+                var err = await resp.Content.ReadFromJsonAsync<JsonElement>();
+                _errorMessage = err.TryGetProperty("message", out var m) ? m.GetString() ?? "Error." : "Error al guardar la característica.";
+            }
+        }
+        catch (Exception ex) { _errorMessage = ex.Message; }
+        finally { _savingQc = false; }
+    }
+
+    private void OpenSizeModal()
+    {
+        _qsCode = _qsName = string.Empty;
+        _qsSortOrder = 0;
+        _showSizeModal = true;
+    }
+
+    private void CloseSizeModal() => _showSizeModal = false;
+
+    private async Task SaveSizeAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_qsCode) || string.IsNullOrWhiteSpace(_qsName))
+        {
+            _errorMessage = "Código y nombre de la talla son requeridos.";
+            return;
+        }
+        _savingQs = true;
+        try
+        {
+            var payload = new { code = _qsCode.Trim(), name = _qsName.Trim(), description = string.Empty, sortOrder = _qsSortOrder, isActive = true };
+            var resp = await Client.PostAsJsonAsync("/api/products/material-sizes", payload);
+            if (resp.IsSuccessStatusCode)
+            {
+                var created = await resp.Content.ReadFromJsonAsync<CreatedSizeIdDto>();
+                _sizes = await Client.GetFromJsonAsync<List<SizeOptionDto>>("/api/products/material-sizes/options") ?? [];
+                if (created is not null)
+                    _formSizeId = created.MaterialSizeId.ToString("D");
+                CloseSizeModal();
+            }
+            else
+            {
+                var err = await resp.Content.ReadFromJsonAsync<JsonElement>();
+                _errorMessage = err.TryGetProperty("message", out var m) ? m.GetString() ?? "Error." : "Error al guardar la talla.";
+            }
+        }
+        catch (Exception ex) { _errorMessage = ex.Message; }
+        finally { _savingQs = false; }
+    }
+
+    private void CloseItemModal() => _showItemModal = false;
+
+    private sealed class SubfamilyOptionDto
+    {
+        public Guid MaterialSubfamilyId { get; set; }
+        public string Code { get; set; } = string.Empty;
+        public string Name { get; set; } = string.Empty;
+    }
+
+    private sealed class CharacteristicOptionDto
+    {
+        public Guid MaterialCharacteristicId { get; set; }
+        public string Code { get; set; } = string.Empty;
+        public string Name { get; set; } = string.Empty;
+    }
+
+    private sealed class SizeOptionDto
+    {
+        public Guid MaterialSizeId { get; set; }
+        public string Code { get; set; } = string.Empty;
+        public string Name { get; set; } = string.Empty;
+    }
+
+    private sealed class CreatedIdDto { public Guid MaterialCharacteristicId { get; set; } }
+    private sealed class CreatedSizeIdDto { public Guid MaterialSizeId { get; set; } }
+
+    private sealed class MaterialItemListDto
+    {
+        public Guid MaterialItemId { get; set; }
+        public Guid MaterialSubfamilyId { get; set; }
+        public string MaterialSubfamilyName { get; set; } = string.Empty;
+        public Guid? MaterialCharacteristicId { get; set; }
+        public string MaterialCharacteristicName { get; set; } = string.Empty;
+        public Guid? MaterialSizeId { get; set; }
+        public string MaterialSizeName { get; set; } = string.Empty;
+        public string Code { get; set; } = string.Empty;
+        public string Name { get; set; } = string.Empty;
+        public string Description { get; set; } = string.Empty;
+        public string Notes { get; set; } = string.Empty;
+        public bool IsActive { get; set; }
+    }
+}

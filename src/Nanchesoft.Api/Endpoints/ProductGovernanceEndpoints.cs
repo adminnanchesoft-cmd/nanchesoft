@@ -75,10 +75,32 @@ public static class ProductGovernanceEndpoints
             .Where(x => finishedProductIds.Contains(x.FinishedProductId) && x.IsActive)
             .ToListAsync();
 
-        var consumptions = await db.Set<ProductConsumptionProfile>()
+        // Legacy consumption profiles (by finished product)
+        var legacyConsumptions = await db.Set<ProductConsumptionProfile>()
             .AsNoTracking()
             .Where(x => finishedProductIds.Contains(x.FinishedProductId) && x.IsActive)
+            .Select(x => new { x.FinishedProductId })
             .ToListAsync();
+
+        // New consumption templates (by style + size run)
+        var styleRunPairs = finishedProducts
+            .Where(x => x.ProductStyleId.HasValue && x.ProductSizeRunId.HasValue)
+            .Select(x => new { StyleId = x.ProductStyleId!.Value, RunId = x.ProductSizeRunId!.Value })
+            .Distinct()
+            .ToList();
+
+        var styleIds = styleRunPairs.Select(x => x.StyleId).ToHashSet();
+        var runIds = styleRunPairs.Select(x => x.RunId).ToHashSet();
+
+        var activeTemplates = await db.Set<ConsumptionTemplate>()
+            .AsNoTracking()
+            .Where(x => x.IsActive && x.IsAuthorized && styleIds.Contains(x.ProductStyleId) && runIds.Contains(x.ProductSizeRunId))
+            .Select(x => new { x.ProductStyleId, x.ProductSizeRunId })
+            .ToListAsync();
+
+        var authorizedTemplateKeys = activeTemplates
+            .Select(x => (x.ProductStyleId, x.ProductSizeRunId))
+            .ToHashSet();
 
         var components = await db.Set<ProductComponent>()
             .AsNoTracking()
@@ -87,7 +109,6 @@ public static class ProductGovernanceEndpoints
 
         var componentIds = components.Select(x => x.Id).ToHashSet();
         productMaterials = productMaterials.Where(x => componentIds.Contains(x.ProductComponentId)).ToList();
-        consumptions = consumptions.Where(x => componentIds.Contains(x.ProductComponentId)).ToList();
 
         var rows = new List<ProductTechnicalCenterSummaryDto>();
 
@@ -111,12 +132,17 @@ public static class ProductGovernanceEndpoints
                 .FirstOrDefault();
 
             var assignedMaterialCount = productMaterials.Count(x => x.FinishedProductId == product.Id);
-            var consumptionLineCount = consumptions.Count(x => x.FinishedProductId == product.Id);
+
+            // Has consumption = legacy profiles OR authorized consumption template for this style+run
+            var hasLegacyConsumption = legacyConsumptions.Any(x => x.FinishedProductId == product.Id);
+            var hasTemplateConsumption = product.ProductStyleId.HasValue && product.ProductSizeRunId.HasValue
+                && authorizedTemplateKeys.Contains((product.ProductStyleId.Value, product.ProductSizeRunId.Value));
+            var consumptionLineCount = hasLegacyConsumption ? legacyConsumptions.Count(x => x.FinishedProductId == product.Id) : (hasTemplateConsumption ? 1 : 0);
             var technicalSheetMaterialCount = technicalSheet?.Materials.Count ?? 0;
             var technicalSheetProcessCount = technicalSheet?.Processes.Count ?? 0;
 
             var hasPhoto = product.HasPhoto || !string.IsNullOrWhiteSpace(technicalSheet?.PhotoUrl) || authorization?.HasPhoto == true;
-            var hasConsumption = product.HasConsumptionDefinition || consumptionLineCount > 0 || authorization?.HasConsumption == true;
+            var hasConsumption = product.HasConsumptionDefinition || hasLegacyConsumption || hasTemplateConsumption || authorization?.HasConsumption == true;
             var hasMaterialAssignment = product.HasMaterialAssignments || assignedMaterialCount > 0 || authorization?.HasMaterialAssignment == true;
             var hasTechnicalSheet = technicalSheet is not null;
             var hasCostSheet = costSheet is not null || authorization?.HasCostSheet == true;

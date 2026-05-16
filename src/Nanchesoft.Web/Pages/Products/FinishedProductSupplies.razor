@@ -1,0 +1,318 @@
+@page "/products/finished-product-supplies"
+@using System.Net.Http.Json
+@using System.Text.Json
+@inject IHttpClientFactory HttpClientFactory
+@inject IJSRuntime JS
+
+<PageTitle>Insumos por producto | Nanchesoft</PageTitle>
+
+<div class="page-header">
+    <h1 class="page-title">Insumos por producto</h1>
+    <p class="page-subtitle">Asignación de materiales por componente y talla para cada producto terminado.</p>
+</div>
+
+@if (!string.IsNullOrEmpty(_errorMessage))
+{
+    <div class="alert alert-danger">@_errorMessage</div>
+}
+@if (!string.IsNullOrEmpty(_successMessage))
+{
+    <div class="alert alert-success">@_successMessage</div>
+}
+
+<div class="filter-bar d-flex gap-2 mb-3 flex-wrap align-items-center">
+    <select class="form-select w-auto" @bind="_selectedProductId">
+        <option value="">— Selecciona un producto —</option>
+        @foreach (var p in _products)
+        {
+            <option value="@p.FinishedProductId">@p.Code — @p.Name</option>
+        }
+    </select>
+    <button class="btn btn-primary" @onclick="LoadSuppliesAsync">Ver insumos</button>
+    @if (_supplies.Count > 0)
+    {
+        <button class="btn btn-outline-secondary" @onclick="InitializeSuppliesAsync" disabled="@_initializing">
+            @(_initializing ? "Inicializando..." : "Inicializar desde plantilla")
+        </button>
+        <button class="btn btn-primary ms-auto" @onclick="SaveAllAsync" disabled="@_saving">
+            @(_saving ? "Guardando..." : "Guardar")
+        </button>
+        @if (!_allAuthorized)
+        {
+            <button class="btn btn-success" @onclick="AuthorizeAsync" disabled="@_authorizing">
+                @(_authorizing ? "Autorizando..." : "Autorizar")
+            </button>
+        }
+        else
+        {
+            <span class="badge bg-success fs-6 align-self-center">Autorizado</span>
+        }
+    }
+</div>
+
+@if (_loading)
+{
+    <p>Cargando...</p>
+}
+else if (_supplies.Count == 0 && !string.IsNullOrEmpty(_selectedProductId))
+{
+    <div class="alert alert-info">
+        No hay insumos para este producto. Usa «Inicializar desde plantilla» para crear las filas automáticamente.
+    </div>
+}
+else if (_supplies.Count > 0)
+{
+    <div style="overflow-x:auto;">
+        <table class="table table-sm table-bordered supply-matrix">
+            <thead class="table-dark sticky-top">
+                <tr>
+                    <th class="sticky-col" style="min-width:180px">Componente</th>
+                    <th style="min-width:60px">Fase</th>
+                    <th style="min-width:60px">Auth.</th>
+                    @foreach (var sz in SizeHeaders)
+                    {
+                        <th style="min-width:120px">@sz</th>
+                    }
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var row in _supplies)
+                {
+                    bool authorized = row.IsAuthorized;
+                    <tr class="@(authorized ? "table-success" : "")">
+                        <td class="sticky-col">
+                            <strong>@row.ProductComponentCode</strong><br />
+                            <small class="text-muted">@row.ProductComponentName</small>
+                        </td>
+                        <td class="text-center align-middle">
+                            <small>@(_componentPhase.GetValueOrDefault(row.ProductComponentId, string.Empty))</small>
+                        </td>
+                        <td class="text-center align-middle">
+                            @if (authorized)
+                            {
+                                <span class="text-success">✓</span>
+                            }
+                            else
+                            {
+                                <span class="text-muted">—</span>
+                            }
+                        </td>
+                        @foreach (var sz in row.Sizes)
+                        {
+                            <td class="align-middle p-1">
+                                @if (!authorized)
+                                {
+                                    <select class="form-select form-select-sm"
+                                            value="@sz.MaterialItemId?.ToString()"
+                                            @onchange="e => OnMaterialChanged(row, sz, e.Value?.ToString())">
+                                        <option value="">— ninguno —</option>
+                                        @foreach (var m in FilteredMaterials(row.ProductComponentId))
+                                        {
+                                            <option value="@m.MaterialItemId">@m.Name</option>
+                                        }
+                                    </select>
+                                }
+                                else
+                                {
+                                    <small>@(sz.MaterialItemName ?? "—")</small>
+                                }
+                            </td>
+                        }
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+<style>
+    .supply-matrix .sticky-col {
+        position: sticky;
+        left: 0;
+        background: white;
+        z-index: 1;
+        border-right: 2px solid #dee2e6;
+    }
+    .supply-matrix thead th.sticky-col {
+        background: #212529;
+    }
+    .supply-matrix tr.table-success .sticky-col {
+        background: #d1e7dd;
+    }
+</style>
+
+@code {
+    private List<ProductOptionDto> _products = [];
+    private List<MaterialOptionDto> _materials = [];
+    private List<ComponentOptionDto> _components = [];
+
+    private string _selectedProductId = string.Empty;
+    private List<SupplyRowDto> _supplies = [];
+    private Dictionary<Guid, string> _componentPhase = new();
+
+    private bool _loading;
+    private bool _saving;
+    private bool _initializing;
+    private bool _authorizing;
+    private string _errorMessage = string.Empty;
+    private string _successMessage = string.Empty;
+
+    private bool _allAuthorized => _supplies.Count > 0 && _supplies.All(s => s.IsAuthorized);
+
+    private IEnumerable<string> SizeHeaders
+        => _supplies.FirstOrDefault()?.Sizes.Select(s => s.SizeLabel) ?? [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadLookupsAsync();
+    }
+
+    private HttpClient Client => HttpClientFactory.CreateClient("Nanchesoft.Api");
+
+    private async Task LoadLookupsAsync()
+    {
+        _products = await Client.GetFromJsonAsync<List<ProductOptionDto>>("/api/products/finished-products/options") ?? [];
+        _materials = await Client.GetFromJsonAsync<List<MaterialOptionDto>>("/api/products/material-items/options") ?? [];
+        _components = await Client.GetFromJsonAsync<List<ComponentOptionDto>>("/api/products/product-components/options") ?? [];
+        _componentPhase = _components.ToDictionary(c => c.ProductComponentId, c => c.ProductionPhaseName);
+    }
+
+    private async Task LoadSuppliesAsync()
+    {
+        if (string.IsNullOrEmpty(_selectedProductId)) return;
+        _loading = true; _errorMessage = string.Empty; _successMessage = string.Empty;
+        try
+        {
+            _supplies = await Client.GetFromJsonAsync<List<SupplyRowDto>>(
+                $"/api/products/finished-product-supplies/{_selectedProductId}") ?? [];
+        }
+        catch (Exception ex) { _errorMessage = ex.Message; }
+        finally { _loading = false; }
+    }
+
+    private async Task InitializeSuppliesAsync()
+    {
+        if (string.IsNullOrEmpty(_selectedProductId)) return;
+        _initializing = true; _errorMessage = string.Empty; _successMessage = string.Empty;
+        try
+        {
+            var resp = await Client.PostAsync(
+                $"/api/products/finished-product-supplies/{_selectedProductId}/initialize", null);
+            if (resp.IsSuccessStatusCode)
+            {
+                _successMessage = "Insumos inicializados.";
+                await LoadSuppliesAsync();
+            }
+            else
+            {
+                var err = await resp.Content.ReadFromJsonAsync<JsonElement>();
+                _errorMessage = err.TryGetProperty("message", out var m) ? m.GetString() ?? "Error." : "Error.";
+            }
+        }
+        catch (Exception ex) { _errorMessage = ex.Message; }
+        finally { _initializing = false; }
+    }
+
+    private void OnMaterialChanged(SupplyRowDto row, SupplySizeDto sz, string? rawId)
+    {
+        sz.MaterialItemId = string.IsNullOrEmpty(rawId) ? null : Guid.Parse(rawId);
+        var item = _materials.FirstOrDefault(m => m.MaterialItemId == sz.MaterialItemId);
+        sz.MaterialItemName = item?.Name ?? string.Empty;
+
+        // Copy to all sizes in the row when first size is set
+        bool isFirst = row.Sizes.Count > 0 && row.Sizes[0].ProductSizeRunSizeId == sz.ProductSizeRunSizeId;
+        if (isFirst && sz.MaterialItemId.HasValue)
+        {
+            foreach (var other in row.Sizes)
+            {
+                other.MaterialItemId = sz.MaterialItemId;
+                other.MaterialItemName = sz.MaterialItemName;
+            }
+        }
+    }
+
+    private async Task SaveAllAsync()
+    {
+        _saving = true; _errorMessage = string.Empty; _successMessage = string.Empty;
+        try
+        {
+            foreach (var row in _supplies.Where(s => !s.IsAuthorized))
+            {
+                var payload = row.Sizes.Select(s => new
+                {
+                    productSizeRunSizeId = s.ProductSizeRunSizeId,
+                    materialItemId = s.MaterialItemId,
+                    notes = string.Empty
+                }).ToList();
+                var resp = await Client.PutAsJsonAsync(
+                    $"/api/products/finished-product-supplies/{row.FinishedProductSupplyId}/sizes", payload);
+                if (!resp.IsSuccessStatusCode)
+                {
+                    _errorMessage = $"Error guardando fila {row.ProductComponentCode}.";
+                    return;
+                }
+            }
+            _successMessage = "Cambios guardados.";
+        }
+        catch (Exception ex) { _errorMessage = ex.Message; }
+        finally { _saving = false; }
+    }
+
+    private async Task AuthorizeAsync()
+    {
+        if (string.IsNullOrEmpty(_selectedProductId)) return;
+        _authorizing = true; _errorMessage = string.Empty; _successMessage = string.Empty;
+        try
+        {
+            var resp = await Client.PostAsync(
+                $"/api/products/finished-product-supplies/{_selectedProductId}/authorize", null);
+            if (resp.IsSuccessStatusCode)
+            {
+                _successMessage = "Insumos autorizados.";
+                await LoadSuppliesAsync();
+            }
+            else
+            {
+                var err = await resp.Content.ReadFromJsonAsync<JsonElement>();
+                _errorMessage = err.TryGetProperty("message", out var m) ? m.GetString() ?? "Error." : "Error.";
+            }
+        }
+        catch (Exception ex) { _errorMessage = ex.Message; }
+        finally { _authorizing = false; }
+    }
+
+    private IEnumerable<MaterialOptionDto> FilteredMaterials(Guid componentId) => _materials;
+
+    // DTOs
+    private sealed record ProductOptionDto(Guid FinishedProductId, string Code, string Name);
+    private sealed record MaterialOptionDto(Guid MaterialItemId, string Code, string Name);
+    private sealed class ComponentOptionDto
+    {
+        public Guid ProductComponentId { get; set; }
+        public string Code { get; set; } = string.Empty;
+        public string Name { get; set; } = string.Empty;
+        public string ProductionPhaseName { get; set; } = string.Empty;
+    }
+
+    private sealed class SupplyRowDto
+    {
+        public Guid FinishedProductSupplyId { get; set; }
+        public Guid FinishedProductId { get; set; }
+        public Guid ProductComponentId { get; set; }
+        public string ProductComponentCode { get; set; } = string.Empty;
+        public string ProductComponentName { get; set; } = string.Empty;
+        public bool IsAuthorized { get; set; }
+        public string Notes { get; set; } = string.Empty;
+        public List<SupplySizeDto> Sizes { get; set; } = [];
+    }
+
+    private sealed class SupplySizeDto
+    {
+        public Guid FinishedProductSupplySizeId { get; set; }
+        public Guid ProductSizeRunSizeId { get; set; }
+        public string SizeLabel { get; set; } = string.Empty;
+        public Guid? MaterialItemId { get; set; }
+        public string MaterialItemName { get; set; } = string.Empty;
+        public string Notes { get; set; } = string.Empty;
+    }
+}

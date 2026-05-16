@@ -33,6 +33,9 @@ public sealed class ProductEngineeringApiService
             "styles" => GetStylesAsync(),
             "embroidery-patterns" => GetEmbroideryPatternsAsync(),
             "item-engineering-profiles" => GetEngineeringProfilesAsync(),
+            "production-phases" => GetProductionPhasesAsync(),
+            "material-characteristics" => GetMaterialCharacteristicsAsync(),
+            "material-sizes" => GetMaterialSizesAsync(),
             "material-families" => GetMaterialFamiliesAsync(),
             "material-subfamilies" => GetMaterialSubfamiliesAsync(),
             "material-items" => GetMaterialItemsAsync(),
@@ -67,6 +70,9 @@ public sealed class ProductEngineeringApiService
             "styles" => await client.PostAsJsonAsync("/api/products/styles", MapStyleRequest(payload)),
             "embroidery-patterns" => await client.PostAsJsonAsync("/api/products/embroidery-patterns", MapEmbroideryPatternRequest(payload)),
             "item-engineering-profiles" => await client.PostAsJsonAsync("/api/products/item-engineering-profiles", MapEngineeringProfileRequest(payload)),
+            "production-phases" => await client.PostAsJsonAsync("/api/products/production-phases", MapProductionPhaseRequest(payload)),
+            "material-characteristics" => await client.PostAsJsonAsync("/api/products/material-characteristics", MapMaterialCharacteristicRequest(payload)),
+            "material-sizes" => await client.PostAsJsonAsync("/api/products/material-sizes", MapMaterialSizeRequest(payload)),
             "material-families" => await client.PostAsJsonAsync("/api/products/material-families", MapMaterialFamilyRequest(payload)),
             "material-subfamilies" => await client.PostAsJsonAsync("/api/products/material-subfamilies", MapMaterialSubfamilyRequest(payload)),
             "material-items" => await client.PostAsJsonAsync("/api/products/material-items", MapMaterialItemRequest(payload)),
@@ -104,6 +110,9 @@ public sealed class ProductEngineeringApiService
             "styles" => await client.PutAsJsonAsync($"/api/products/styles/{key}", MapStyleRequest(payload)),
             "embroidery-patterns" => await client.PutAsJsonAsync($"/api/products/embroidery-patterns/{key}", MapEmbroideryPatternRequest(payload)),
             "item-engineering-profiles" => await client.PutAsJsonAsync($"/api/products/item-engineering-profiles/{key}", MapEngineeringProfileRequest(payload)),
+            "production-phases" => await client.PutAsJsonAsync($"/api/products/production-phases/{key}", MapProductionPhaseRequest(payload)),
+            "material-characteristics" => await client.PutAsJsonAsync($"/api/products/material-characteristics/{key}", MapMaterialCharacteristicRequest(payload)),
+            "material-sizes" => await client.PutAsJsonAsync($"/api/products/material-sizes/{key}", MapMaterialSizeRequest(payload)),
             "material-families" => await client.PutAsJsonAsync($"/api/products/material-families/{key}", MapMaterialFamilyRequest(payload)),
             "material-subfamilies" => await client.PutAsJsonAsync($"/api/products/material-subfamilies/{key}", MapMaterialSubfamilyRequest(payload)),
             "material-items" => await client.PutAsJsonAsync($"/api/products/material-items/{key}", MapMaterialItemRequest(payload)),
@@ -141,6 +150,9 @@ public sealed class ProductEngineeringApiService
             "styles" => $"/api/products/styles/{key}",
             "embroidery-patterns" => $"/api/products/embroidery-patterns/{key}",
             "item-engineering-profiles" => $"/api/products/item-engineering-profiles/{key}",
+            "production-phases" => $"/api/products/production-phases/{key}",
+            "material-characteristics" => $"/api/products/material-characteristics/{key}",
+            "material-sizes" => $"/api/products/material-sizes/{key}",
             "material-families" => $"/api/products/material-families/{key}",
             "material-subfamilies" => $"/api/products/material-subfamilies/{key}",
             "material-items" => $"/api/products/material-items/{key}",
@@ -222,17 +234,15 @@ public sealed class ProductEngineeringApiService
         var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
         var rows = await client.GetFromJsonAsync<List<ProductLineDto>>("/api/products/lines") ?? [];
         var families = await GetProductFamilyLookupsAsync();
-        var lasts = await GetProductLastLookupsAsync();
-        return BuildView("lines", "Product Lines", "Legacy Linea aligned to family and last.", "ProductLineId", [
+        return BuildView("lines", "Product Lines", "Catálogo de líneas de producto.", "ProductLineId", [
             TextColumn("ProductLineId", "ID", allowEditing: false, width: 220),
             LookupColumn("ProductFamilyId", "Family", families, width: 180),
-            LookupColumn("ProductLastId", "Last", lasts, width: 180),
             TextColumn("Code", "Code", required: true, width: 120),
             TextColumn("Name", "Name", required: true, width: 220),
             TextColumn("ShortName", "Short Name", width: 120),
             BoolColumn("AllowsDiscount", "Allows Discount", width: 120),
             BoolColumn("IsActive", "Active", width: 90)
-        ], rows.Select(x => Row(("ProductLineId", x.ProductLineId.ToString("D")), ("ProductFamilyId", x.ProductFamilyId?.ToString("D")), ("ProductLastId", x.ProductLastId?.ToString("D")), ("Code", x.Code), ("Name", x.Name), ("ShortName", x.ShortName), ("AllowsDiscount", x.AllowsDiscount), ("IsActive", x.IsActive))).ToList());
+        ], rows.Select(x => Row(("ProductLineId", x.ProductLineId.ToString("D")), ("ProductFamilyId", x.ProductFamilyId?.ToString("D")), ("Code", x.Code), ("Name", x.Name), ("ShortName", x.ShortName), ("AllowsDiscount", x.AllowsDiscount), ("IsActive", x.IsActive))).ToList());
     }
 
     private async Task<CatalogViewDefinition> GetStylesAsync()
@@ -240,11 +250,9 @@ public sealed class ProductEngineeringApiService
         var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
         var rows = await client.GetFromJsonAsync<List<ProductStyleDto>>("/api/products/styles") ?? [];
         var lines = await GetProductLineLookupsAsync();
-        var lasts = await GetProductLastLookupsAsync();
         return BuildView("styles", "Product Styles", "Legacy Estilo translated to standardized product style catalog.", "ProductStyleId", [
             TextColumn("ProductStyleId", "ID", allowEditing: false, width: 220),
             LookupColumn("ProductLineId", "Line", lines, width: 180),
-            LookupColumn("ProductLastId", "Last", lasts, width: 180),
             TextColumn("Code", "Code", required: true, width: 120),
             TextColumn("Name", "Name", required: true, width: 220),
             TextColumn("CustomerLabel1", "Customer Label 1", width: 160),
@@ -257,7 +265,7 @@ public sealed class ProductEngineeringApiService
             TextColumn("OutsourcedProcessName", "Outsourced Process", width: 180),
             TextColumn("PhotoUrl", "Photo Url", width: 220),
             BoolColumn("IsActive", "Active", width: 90)
-        ], rows.Select(x => Row(("ProductStyleId", x.ProductStyleId.ToString("D")), ("ProductLineId", x.ProductLineId?.ToString("D")), ("ProductLastId", x.ProductLastId?.ToString("D")), ("Code", x.Code), ("Name", x.Name), ("CustomerLabel1", x.CustomerLabel1), ("CustomerLabel2", x.CustomerLabel2), ("ColorLabel", x.ColorLabel), ("DieCutReference", x.DieCutReference), ("MaxLotSize", x.MaxLotSize), ("HasAuthorizedConsumption", x.HasAuthorizedConsumption), ("HandlesFractionsByStyle", x.HandlesFractionsByStyle), ("OutsourcedProcessName", x.OutsourcedProcessName), ("PhotoUrl", x.PhotoUrl), ("IsActive", x.IsActive))).ToList());
+        ], rows.Select(x => Row(("ProductStyleId", x.ProductStyleId.ToString("D")), ("ProductLineId", x.ProductLineId?.ToString("D")), ("Code", x.Code), ("Name", x.Name), ("CustomerLabel1", x.CustomerLabel1), ("CustomerLabel2", x.CustomerLabel2), ("ColorLabel", x.ColorLabel), ("DieCutReference", x.DieCutReference), ("MaxLotSize", x.MaxLotSize), ("HasAuthorizedConsumption", x.HasAuthorizedConsumption), ("HandlesFractionsByStyle", x.HandlesFractionsByStyle), ("OutsourcedProcessName", x.OutsourcedProcessName), ("PhotoUrl", x.PhotoUrl), ("IsActive", x.IsActive))).ToList());
     }
 
     private async Task<CatalogViewDefinition> GetEmbroideryPatternsAsync()
@@ -299,6 +307,47 @@ public sealed class ProductEngineeringApiService
         ], rows.Select(x => Row(("ItemEngineeringProfileId", x.ItemEngineeringProfileId.ToString("D")), ("ItemId", x.ItemId.ToString("D")), ("ProductStyleId", x.ProductStyleId?.ToString("D")), ("ProductSizeRunId", x.ProductSizeRunId?.ToString("D")), ("EmbroideryPatternId", x.EmbroideryPatternId?.ToString("D")), ("PrimaryMaterialItemId", x.PrimaryMaterialItemId?.ToString("D")), ("FolioPattern", x.FolioPattern), ("TechnicalSheetMode", x.TechnicalSheetMode), ("ProcessVoucherProfile", x.ProcessVoucherProfile), ("HasPhoto", x.HasPhoto), ("HasConsumptionDefinition", x.HasConsumptionDefinition), ("HasMaterialAssignments", x.HasMaterialAssignments), ("IsAuthorizedForExplosion", x.IsAuthorizedForExplosion), ("IsActive", x.IsActive))).ToList());
     }
 
+    private async Task<CatalogViewDefinition> GetProductionPhasesAsync()
+    {
+        var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
+        var rows = await client.GetFromJsonAsync<List<ProductionPhaseDto>>("/api/products/production-phases") ?? [];
+        return BuildView("production-phases", "Fases de producción", "Catálogo de fases del flujo de producción: corte, costura, montado, terminado, etc.", "ProductionPhaseId", [
+            TextColumn("ProductionPhaseId", "ID", allowEditing: false, width: 220),
+            TextColumn("Code", "Código", required: true, width: 120),
+            TextColumn("Name", "Nombre", required: true, width: 220),
+            TextColumn("Description", "Descripción", width: 300),
+            NumberColumn("Sequence", "Orden", width: 90),
+            BoolColumn("IsActive", "Activo", width: 90)
+        ], rows.Select(x => Row(("ProductionPhaseId", x.ProductionPhaseId.ToString("D")), ("Code", x.Code), ("Name", x.Name), ("Description", x.Description), ("Sequence", x.Sequence), ("IsActive", x.IsActive))).ToList());
+    }
+
+    private async Task<CatalogViewDefinition> GetMaterialCharacteristicsAsync()
+    {
+        var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
+        var rows = await client.GetFromJsonAsync<List<MaterialCharacteristicDto>>("/api/products/material-characteristics") ?? [];
+        return BuildView("material-characteristics", "Características de material", "Catálogo de características de material (p. ej. SUELA FLEX, EMPEINE CUERO). Se combina con tallas para generar el nombre del material.", "MaterialCharacteristicId", [
+            TextColumn("MaterialCharacteristicId", "ID", allowEditing: false, width: 220),
+            TextColumn("Code", "Código", required: true, width: 120),
+            TextColumn("Name", "Nombre", required: true, width: 260),
+            TextColumn("Description", "Descripción", width: 300),
+            BoolColumn("IsActive", "Activo", width: 90)
+        ], rows.Select(x => Row(("MaterialCharacteristicId", x.MaterialCharacteristicId.ToString("D")), ("Code", x.Code), ("Name", x.Name), ("Description", x.Description), ("IsActive", x.IsActive))).ToList());
+    }
+
+    private async Task<CatalogViewDefinition> GetMaterialSizesAsync()
+    {
+        var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
+        var rows = await client.GetFromJsonAsync<List<MaterialSizeDto>>("/api/products/material-sizes") ?? [];
+        return BuildView("material-sizes", "Tallas de material", "Catálogo de tallas de material (p. ej. #22, #24, M, L). Se combina con características para generar el nombre del material.", "MaterialSizeId", [
+            TextColumn("MaterialSizeId", "ID", allowEditing: false, width: 220),
+            TextColumn("Code", "Código", required: true, width: 120),
+            TextColumn("Name", "Talla", required: true, width: 160),
+            TextColumn("Description", "Descripción", width: 260),
+            NumberColumn("SortOrder", "Orden", width: 90),
+            BoolColumn("IsActive", "Activo", width: 90)
+        ], rows.Select(x => Row(("MaterialSizeId", x.MaterialSizeId.ToString("D")), ("Code", x.Code), ("Name", x.Name), ("Description", x.Description), ("SortOrder", x.SortOrder), ("IsActive", x.IsActive))).ToList());
+    }
+
     private async Task<CatalogViewDefinition> GetMaterialFamiliesAsync()
     {
         var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
@@ -335,24 +384,45 @@ public sealed class ProductEngineeringApiService
         var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
         var rows = await client.GetFromJsonAsync<List<MaterialItemDto>>("/api/products/material-items") ?? [];
         var subfamilies = await GetMaterialSubfamilyLookupsAsync();
+        var characteristics = await GetMaterialCharacteristicLookupsAsync();
+        var sizes = await GetMaterialSizeLookupsAsync();
         var units = await GetUnitLookupsAsync();
         var suppliers = await GetSupplierLookupsAsync();
-        return BuildView("material-items", "Material Items", "Orange materials with authorized cost, supplier and purchase/issue units.", "MaterialItemId", [
+        return BuildView("material-items", "Catálogo de materiales", "Materiales con generación automática de nombre a partir de característica + talla.", "MaterialItemId", [
             TextColumn("MaterialItemId", "ID", allowEditing: false, width: 220),
-            LookupColumn("MaterialSubfamilyId", "Subfamily", subfamilies, required: true, width: 180),
-            LookupColumn("PurchaseUnitId", "Purchase Unit", units, width: 160),
-            LookupColumn("IssueUnitId", "Issue Unit", units, width: 160),
-            LookupColumn("SupplierId", "Supplier", suppliers, width: 220),
-            TextColumn("Code", "Code", required: true, width: 120),
-            TextColumn("Name", "Name", required: true, width: 220),
-            TextColumn("LegacyMaterialName", "Legacy Name", width: 180),
-            NumberColumn("AuthorizedCost", "Authorized Cost", width: 120),
-            NumberColumn("LastPurchaseCost", "Last Cost", width: 120),
-            NumberColumn("StandardCost", "Standard Cost", width: 120),
-            TextColumn("CostStatus", "Cost Status", width: 120),
-            BoolColumn("IsServiceItem", "Service", width: 90),
-            BoolColumn("IsActive", "Active", width: 90)
-        ], rows.Select(x => Row(("MaterialItemId", x.MaterialItemId.ToString("D")), ("MaterialSubfamilyId", x.MaterialSubfamilyId.ToString("D")), ("PurchaseUnitId", x.PurchaseUnitId?.ToString("D")), ("IssueUnitId", x.IssueUnitId?.ToString("D")), ("SupplierId", x.SupplierId?.ToString("D")), ("Code", x.Code), ("Name", x.Name), ("LegacyMaterialName", x.LegacyMaterialName), ("AuthorizedCost", x.AuthorizedCost), ("LastPurchaseCost", x.LastPurchaseCost), ("StandardCost", x.StandardCost), ("CostStatus", x.CostStatus), ("IsServiceItem", x.IsServiceItem), ("IsActive", x.IsActive))).ToList());
+            LookupColumn("MaterialSubfamilyId", "Subfamilia", subfamilies, required: true, width: 180),
+            LookupColumn("MaterialCharacteristicId", "Característica", characteristics, width: 220),
+            LookupColumn("MaterialSizeId", "Talla", sizes, width: 160),
+            TextColumn("Name", "Nombre (generado)", allowEditing: false, width: 260),
+            LookupColumn("PurchaseUnitId", "Unidad compra", units, width: 160),
+            LookupColumn("IssueUnitId", "Unidad consumo", units, width: 160),
+            LookupColumn("SupplierId", "Proveedor", suppliers, width: 220),
+            TextColumn("Code", "Clave", required: true, width: 120),
+            TextColumn("Description", "Descripción", width: 220),
+            NumberColumn("AuthorizedCost", "Costo autorizado", width: 130),
+            NumberColumn("LastPurchaseCost", "Último costo", width: 120),
+            NumberColumn("StandardCost", "Costo estándar", width: 120),
+            TextColumn("CostStatus", "Estado costo", width: 120),
+            BoolColumn("IsServiceItem", "Servicio", width: 90),
+            BoolColumn("IsActive", "Activo", width: 90)
+        ], rows.Select(x => Row(
+            ("MaterialItemId", x.MaterialItemId.ToString("D")),
+            ("MaterialSubfamilyId", x.MaterialSubfamilyId.ToString("D")),
+            ("MaterialCharacteristicId", x.MaterialCharacteristicId?.ToString("D")),
+            ("MaterialSizeId", x.MaterialSizeId?.ToString("D")),
+            ("PurchaseUnitId", x.PurchaseUnitId?.ToString("D")),
+            ("IssueUnitId", x.IssueUnitId?.ToString("D")),
+            ("SupplierId", x.SupplierId?.ToString("D")),
+            ("Code", x.Code),
+            ("Name", x.Name),
+            ("Description", x.Description),
+            ("LegacyMaterialName", x.LegacyMaterialName),
+            ("AuthorizedCost", x.AuthorizedCost),
+            ("LastPurchaseCost", x.LastPurchaseCost),
+            ("StandardCost", x.StandardCost),
+            ("CostStatus", x.CostStatus),
+            ("IsServiceItem", x.IsServiceItem),
+            ("IsActive", x.IsActive))).ToList());
     }
 
     private async Task<CatalogViewDefinition> GetMaterialSuppliersAsync()
@@ -471,18 +541,18 @@ public sealed class ProductEngineeringApiService
         var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
         var rows = await client.GetFromJsonAsync<List<ProductComponentDto>>("/api/products/product-components") ?? [];
         var units = await GetUnitLookupsAsync();
-        return BuildView("product-components", "Componentes del producto", "Catálogo universal de componentes por fase de producción y almacén entregará.", "ProductComponentId", [
+        var phases = await GetProductionPhaseLookupsAsync();
+        return BuildView("product-components", "Componentes del producto", "Catálogo universal de componentes por fase de producción.", "ProductComponentId", [
             TextColumn("ProductComponentId", "ID", allowEditing: false, width: 220),
-            LookupColumn("ConsumptionUnitId", "Consumption Unit", units, width: 160),
-            TextColumn("Code", "Code", required: true, width: 120),
-            TextColumn("Name", "Name", required: true, width: 200),
-            TextColumn("ProductionPhase", "Phase", width: 120),
-            TextColumn("WarehouseDeliveryRole", "Warehouse Delivery", width: 180),
-            NumberColumn("DefaultConsumption", "Default Consumption", width: 130),
-            BoolColumn("ActivateForAllProducts", "Activate for All", width: 120),
-            BoolColumn("ShowOnProductionCard", "Show on Card", width: 110),
-            BoolColumn("IsActive", "Active", width: 90)
-        ], rows.Select(x => Row(("ProductComponentId", x.ProductComponentId.ToString("D")), ("ConsumptionUnitId", x.ConsumptionUnitId?.ToString("D")), ("Code", x.Code), ("Name", x.Name), ("ProductionPhase", x.ProductionPhase), ("WarehouseDeliveryRole", x.WarehouseDeliveryRole), ("DefaultConsumption", x.DefaultConsumption), ("ActivateForAllProducts", x.ActivateForAllProducts), ("ShowOnProductionCard", x.ShowOnProductionCard), ("IsActive", x.IsActive))).ToList());
+            LookupColumn("ConsumptionUnitId", "Unidad consumo", units, width: 160),
+            TextColumn("Code", "Código", required: true, width: 120),
+            TextColumn("Name", "Nombre", required: true, width: 200),
+            LookupColumn("ProductionPhaseId", "Fase", phases, width: 180),
+            NumberColumn("DefaultConsumption", "Consumo base", width: 130),
+            BoolColumn("ActivateForAllProducts", "Activar para todos", width: 130),
+            BoolColumn("ShowOnProductionCard", "Ver en tarjeta", width: 115),
+            BoolColumn("IsActive", "Activo", width: 90)
+        ], rows.Select(x => Row(("ProductComponentId", x.ProductComponentId.ToString("D")), ("ConsumptionUnitId", x.ConsumptionUnitId?.ToString("D")), ("Code", x.Code), ("Name", x.Name), ("ProductionPhaseId", x.ProductionPhaseId?.ToString("D")), ("DefaultConsumption", x.DefaultConsumption), ("ActivateForAllProducts", x.ActivateForAllProducts), ("ShowOnProductionCard", x.ShowOnProductionCard), ("IsActive", x.IsActive))).ToList());
     }
 
     private async Task<CatalogViewDefinition> GetFinishedProductMaterialsAsync()
@@ -524,6 +594,9 @@ public sealed class ProductEngineeringApiService
         ], rows.Select(x => Row(("ProductConsumptionProfileId", x.ProductConsumptionProfileId.ToString("D")), ("FinishedProductId", x.FinishedProductId.ToString("D")), ("ProductComponentId", x.ProductComponentId.ToString("D")), ("SizeCode", x.SizeCode), ("Pieces", x.Pieces), ("Consumption", x.Consumption), ("Status", x.Status), ("Notes", x.Notes), ("IsActive", x.IsActive))).ToList());
     }
 
+    private async Task<List<CatalogLookupItem>> GetProductionPhaseLookupsAsync() => (await _httpClientFactory.CreateClient("Nanchesoft.Api").GetFromJsonAsync<List<ProductionPhaseOptionDto>>("/api/products/production-phases/options"))?.Select(x => new CatalogLookupItem { Id = x.ProductionPhaseId.ToString("D"), Name = $"{x.Code} · {x.Name}" }).ToList() ?? [];
+    private async Task<List<CatalogLookupItem>> GetMaterialCharacteristicLookupsAsync() => (await _httpClientFactory.CreateClient("Nanchesoft.Api").GetFromJsonAsync<List<MaterialCharacteristicOptionDto>>("/api/products/material-characteristics/options"))?.Select(x => new CatalogLookupItem { Id = x.MaterialCharacteristicId.ToString("D"), Name = x.Name }).ToList() ?? [];
+    private async Task<List<CatalogLookupItem>> GetMaterialSizeLookupsAsync() => (await _httpClientFactory.CreateClient("Nanchesoft.Api").GetFromJsonAsync<List<MaterialSizeOptionDto>>("/api/products/material-sizes/options"))?.Select(x => new CatalogLookupItem { Id = x.MaterialSizeId.ToString("D"), Name = x.Name }).ToList() ?? [];
     private async Task<List<CatalogLookupItem>> GetMaterialFamilyLookupsAsync() => (await _httpClientFactory.CreateClient("Nanchesoft.Api").GetFromJsonAsync<List<MaterialFamilyOptionDto>>("/api/products/material-families/options"))?.Select(x => new CatalogLookupItem { Id = x.MaterialFamilyId.ToString("D"), Name = $"{x.Code} - {x.Name}" }).ToList() ?? [];
     private async Task<List<CatalogLookupItem>> GetMaterialSubfamilyLookupsAsync() => (await _httpClientFactory.CreateClient("Nanchesoft.Api").GetFromJsonAsync<List<MaterialSubfamilyOptionDto>>("/api/products/material-subfamilies/options"))?.Select(x => new CatalogLookupItem { Id = x.MaterialSubfamilyId.ToString("D"), Name = $"{x.Code} - {x.Name}" }).ToList() ?? [];
     private async Task<List<CatalogLookupItem>> GetMaterialItemLookupsAsync() => (await _httpClientFactory.CreateClient("Nanchesoft.Api").GetFromJsonAsync<List<MaterialItemOptionDto>>("/api/products/material-items/options"))?.Select(x => new CatalogLookupItem { Id = x.MaterialItemId.ToString("D"), Name = $"{x.Code} - {x.Name}" }).ToList() ?? [];
@@ -566,13 +639,16 @@ public sealed class ProductEngineeringApiService
             .ToList();
     }
 
+    private static MaterialCharacteristicRequest MapMaterialCharacteristicRequest(JsonElement payload) => new() { Code = ReadString(payload, "Code"), Name = ReadString(payload, "Name"), Description = ReadString(payload, "Description"), IsActive = ReadBool(payload, "IsActive", true) };
+    private static MaterialSizeRequest MapMaterialSizeRequest(JsonElement payload) => new() { Code = ReadString(payload, "Code"), Name = ReadString(payload, "Name"), Description = ReadString(payload, "Description"), SortOrder = ReadInt(payload, "SortOrder"), IsActive = ReadBool(payload, "IsActive", true) };
     private static MaterialFamilyRequest MapMaterialFamilyRequest(JsonElement payload) => new() { Code = ReadString(payload, "Code"), Name = ReadString(payload, "Name"), InventoryGroup = ReadString(payload, "InventoryGroup"), Notes = ReadString(payload, "Notes"), IsActive = ReadBool(payload, "IsActive", true) };
     private static MaterialSubfamilyRequest MapMaterialSubfamilyRequest(JsonElement payload) => new() { MaterialFamilyId = ReadGuid(payload, "MaterialFamilyId"), Code = ReadString(payload, "Code"), Name = ReadString(payload, "Name"), MaterialType = ReadString(payload, "MaterialType"), IsDirectMaterial = ReadBool(payload, "IsDirectMaterial", true), Notes = ReadString(payload, "Notes"), IsActive = ReadBool(payload, "IsActive", true) };
-    private static MaterialItemRequest MapMaterialItemRequest(JsonElement payload) => new() { MaterialSubfamilyId = ReadGuid(payload, "MaterialSubfamilyId"), PurchaseUnitId = ReadNullableGuid(payload, "PurchaseUnitId"), IssueUnitId = ReadNullableGuid(payload, "IssueUnitId"), SupplierId = ReadNullableGuid(payload, "SupplierId"), Code = ReadString(payload, "Code"), Name = ReadString(payload, "Name"), Description = ReadString(payload, "Description"), LegacyMaterialName = ReadString(payload, "LegacyMaterialName"), AuthorizedCost = ReadDecimal(payload, "AuthorizedCost"), LastPurchaseCost = ReadDecimal(payload, "LastPurchaseCost"), StandardCost = ReadDecimal(payload, "StandardCost"), CostStatus = ReadString(payload, "CostStatus"), IsServiceItem = ReadBool(payload, "IsServiceItem"), Notes = ReadString(payload, "Notes"), IsActive = ReadBool(payload, "IsActive", true) };
+    private static MaterialItemRequest MapMaterialItemRequest(JsonElement payload) => new() { MaterialSubfamilyId = ReadGuid(payload, "MaterialSubfamilyId"), MaterialCharacteristicId = ReadNullableGuid(payload, "MaterialCharacteristicId"), MaterialSizeId = ReadNullableGuid(payload, "MaterialSizeId"), PurchaseUnitId = ReadNullableGuid(payload, "PurchaseUnitId"), IssueUnitId = ReadNullableGuid(payload, "IssueUnitId"), SupplierId = ReadNullableGuid(payload, "SupplierId"), Code = ReadString(payload, "Code"), Name = ReadString(payload, "Name"), Description = ReadString(payload, "Description"), LegacyMaterialName = ReadString(payload, "LegacyMaterialName"), AuthorizedCost = ReadDecimal(payload, "AuthorizedCost"), LastPurchaseCost = ReadDecimal(payload, "LastPurchaseCost"), StandardCost = ReadDecimal(payload, "StandardCost"), CostStatus = ReadString(payload, "CostStatus"), IsServiceItem = ReadBool(payload, "IsServiceItem"), Notes = ReadString(payload, "Notes"), IsActive = ReadBool(payload, "IsActive", true) };
     private static MaterialSupplierAssignmentRequest MapMaterialSupplierRequest(JsonElement payload) => new() { MaterialItemId = ReadGuid(payload, "MaterialItemId"), SupplierId = ReadGuid(payload, "SupplierId"), PurchaseUnitId = ReadNullableGuid(payload, "PurchaseUnitId"), CurrencyId = ReadNullableGuid(payload, "CurrencyId"), SupplierItemCode = ReadString(payload, "SupplierItemCode"), SupplierItemName = ReadString(payload, "SupplierItemName"), ConversionFactor = ReadDecimal(payload, "ConversionFactor", 1m), AuthorizedCost = ReadDecimal(payload, "AuthorizedCost"), LastCost = ReadDecimal(payload, "LastCost"), LeadTimeDays = ReadInt(payload, "LeadTimeDays"), MinimumOrderQuantity = ReadDecimal(payload, "MinimumOrderQuantity"), IsPreferred = ReadBool(payload, "IsPreferred"), ValidFrom = ReadNullableDate(payload, "ValidFrom"), ValidTo = ReadNullableDate(payload, "ValidTo"), Notes = ReadString(payload, "Notes"), IsActive = ReadBool(payload, "IsActive", true) };
     private static MaterialSupplierCostHistoryRequest MapMaterialSupplierCostHistoryRequest(JsonElement payload) => new() { MaterialSupplierAssignmentId = ReadGuid(payload, "MaterialSupplierAssignmentId"), CurrencyId = ReadNullableGuid(payload, "CurrencyId"), CostDate = ReadDate(payload, "CostDate"), Cost = ReadDecimal(payload, "Cost"), ExchangeRate = ReadDecimal(payload, "ExchangeRate", 1m), SourceDocumentType = ReadString(payload, "SourceDocumentType"), SourceDocumentId = ReadNullableGuid(payload, "SourceDocumentId"), SourceDocumentNumber = ReadString(payload, "SourceDocumentNumber"), Notes = ReadString(payload, "Notes"), IsActive = ReadBool(payload, "IsActive", true) };
     private static FinishedProductRequest MapFinishedProductRequest(JsonElement payload) => new() { ProductStyleId = ReadNullableGuid(payload, "ProductStyleId"), ItemModelId = ReadNullableGuid(payload, "ItemModelId"), ItemBrandId = ReadNullableGuid(payload, "ItemBrandId"), ProductColorId = ReadNullableGuid(payload, "ProductColorId"), ProductToeCapId = ReadNullableGuid(payload, "ProductToeCapId"), ProductSoleId = ReadNullableGuid(payload, "ProductSoleId"), ProductSoleColorId = ReadNullableGuid(payload, "ProductSoleColorId"), ProductFolioPatternId = ReadNullableGuid(payload, "ProductFolioPatternId"), ProductSizeRunId = ReadNullableGuid(payload, "ProductSizeRunId"), ProductLineId = ReadNullableGuid(payload, "ProductLineId"), ProductLastId = ReadNullableGuid(payload, "ProductLastId"), MainMaterialItemId = ReadNullableGuid(payload, "MainMaterialItemId"), Code = ReadString(payload, "Code"), Name = ReadString(payload, "Name"), BillingName = ReadString(payload, "BillingName"), HasPhoto = ReadBool(payload, "HasPhoto"), HasConsumptionDefinition = ReadBool(payload, "HasConsumptionDefinition"), HasMaterialAssignments = ReadBool(payload, "HasMaterialAssignments"), IsAuthorizedForExplosion = ReadBool(payload, "IsAuthorizedForExplosion"), Notes = ReadString(payload, "Notes"), IsActive = ReadBool(payload, "IsActive", true) };
-    private static ProductComponentRequest MapProductComponentRequest(JsonElement payload) => new() { ConsumptionUnitId = ReadNullableGuid(payload, "ConsumptionUnitId"), Code = ReadString(payload, "Code"), Name = ReadString(payload, "Name"), ProductionPhase = ReadString(payload, "ProductionPhase"), WarehouseDeliveryRole = ReadString(payload, "WarehouseDeliveryRole"), DefaultConsumption = ReadDecimal(payload, "DefaultConsumption"), ActivateForAllProducts = ReadBool(payload, "ActivateForAllProducts"), ShowOnProductionCard = ReadBool(payload, "ShowOnProductionCard"), Notes = ReadString(payload, "Notes"), IsActive = ReadBool(payload, "IsActive", true) };
+    private static ProductionPhaseRequest MapProductionPhaseRequest(JsonElement payload) => new() { Code = ReadString(payload, "Code"), Name = ReadString(payload, "Name"), Description = ReadString(payload, "Description"), Sequence = ReadInt(payload, "Sequence"), IsActive = ReadBool(payload, "IsActive", true) };
+    private static ProductComponentRequest MapProductComponentRequest(JsonElement payload) => new() { ConsumptionUnitId = ReadNullableGuid(payload, "ConsumptionUnitId"), ProductionPhaseId = ReadNullableGuid(payload, "ProductionPhaseId"), Code = ReadString(payload, "Code"), Name = ReadString(payload, "Name"), DefaultConsumption = ReadDecimal(payload, "DefaultConsumption"), ActivateForAllProducts = ReadBool(payload, "ActivateForAllProducts"), ShowOnProductionCard = ReadBool(payload, "ShowOnProductionCard"), Notes = ReadString(payload, "Notes"), IsActive = ReadBool(payload, "IsActive", true) };
     private static FinishedProductMaterialRequest MapFinishedProductMaterialRequest(JsonElement payload) => new() { FinishedProductId = ReadGuid(payload, "FinishedProductId"), ProductComponentId = ReadGuid(payload, "ProductComponentId"), MaterialItemId = ReadGuid(payload, "MaterialItemId"), SizeCode = ReadString(payload, "SizeCode"), Quantity = ReadDecimal(payload, "Quantity"), IsRequired = ReadBool(payload, "IsRequired", true), Notes = ReadString(payload, "Notes"), IsActive = ReadBool(payload, "IsActive", true) };
     private static ProductConsumptionProfileRequest MapProductConsumptionProfileRequest(JsonElement payload) => new() { FinishedProductId = ReadGuid(payload, "FinishedProductId"), ProductComponentId = ReadGuid(payload, "ProductComponentId"), SizeCode = ReadString(payload, "SizeCode"), Pieces = ReadInt(payload, "Pieces"), Consumption = ReadDecimal(payload, "Consumption"), Status = ReadString(payload, "Status"), Notes = ReadString(payload, "Notes"), IsActive = ReadBool(payload, "IsActive", true) };
 
@@ -580,8 +656,8 @@ public sealed class ProductEngineeringApiService
     private static ProductSizeRunRequest MapSizeRunRequest(JsonElement payload) => new() { Code = ReadString(payload, "Code"), Name = ReadString(payload, "Name"), DisplayName = ReadString(payload, "DisplayName"), IsUniqueSizeRun = ReadBool(payload, "IsUniqueSizeRun"), SizeCount = ReadInt(payload, "SizeCount"), SizeDefinitions = ReadString(payload, "SizeDefinitions"), IsActive = ReadBool(payload, "IsActive", true) };
     private static ProductFamilyRequest MapFamilyRequest(JsonElement payload) => new() { Code = ReadString(payload, "Code"), Name = ReadString(payload, "Name"), StatisticsGroup = ReadString(payload, "StatisticsGroup"), IsFinishedProductFamily = ReadBool(payload, "IsFinishedProductFamily", true), IsActive = ReadBool(payload, "IsActive", true) };
     private static ProductLastRequest MapLastRequest(JsonElement payload) => new() { Code = ReadString(payload, "Code"), Name = ReadString(payload, "Name"), WidthReference = ReadString(payload, "WidthReference"), IsActive = ReadBool(payload, "IsActive", true) };
-    private static ProductLineRequest MapLineRequest(JsonElement payload) => new() { ProductFamilyId = ReadNullableGuid(payload, "ProductFamilyId"), ProductLastId = ReadNullableGuid(payload, "ProductLastId"), Code = ReadString(payload, "Code"), Name = ReadString(payload, "Name"), ShortName = ReadString(payload, "ShortName"), AllowsDiscount = ReadBool(payload, "AllowsDiscount"), IsActive = ReadBool(payload, "IsActive", true) };
-    private static ProductStyleRequest MapStyleRequest(JsonElement payload) => new() { ProductLineId = ReadNullableGuid(payload, "ProductLineId"), ProductLastId = ReadNullableGuid(payload, "ProductLastId"), Code = ReadString(payload, "Code"), Name = ReadString(payload, "Name"), CustomerLabel1 = ReadString(payload, "CustomerLabel1"), CustomerLabel2 = ReadString(payload, "CustomerLabel2"), ColorLabel = ReadString(payload, "ColorLabel"), DieCutReference = ReadString(payload, "DieCutReference"), MaxLotSize = ReadDecimal(payload, "MaxLotSize"), HasAuthorizedConsumption = ReadBool(payload, "HasAuthorizedConsumption"), HandlesFractionsByStyle = ReadBool(payload, "HandlesFractionsByStyle"), TechnicalNotes = ReadString(payload, "TechnicalNotes"), ProductionCardNotes = ReadString(payload, "ProductionCardNotes"), OutsourcedProcessName = ReadString(payload, "OutsourcedProcessName"), PhotoUrl = ReadString(payload, "PhotoUrl"), IsActive = ReadBool(payload, "IsActive", true) };
+    private static ProductLineRequest MapLineRequest(JsonElement payload) => new() { ProductFamilyId = ReadNullableGuid(payload, "ProductFamilyId"), Code = ReadString(payload, "Code"), Name = ReadString(payload, "Name"), ShortName = ReadString(payload, "ShortName"), AllowsDiscount = ReadBool(payload, "AllowsDiscount"), IsActive = ReadBool(payload, "IsActive", true) };
+    private static ProductStyleRequest MapStyleRequest(JsonElement payload) => new() { ProductLineId = ReadNullableGuid(payload, "ProductLineId"), Code = ReadString(payload, "Code"), Name = ReadString(payload, "Name"), CustomerLabel1 = ReadString(payload, "CustomerLabel1"), CustomerLabel2 = ReadString(payload, "CustomerLabel2"), ColorLabel = ReadString(payload, "ColorLabel"), DieCutReference = ReadString(payload, "DieCutReference"), MaxLotSize = ReadDecimal(payload, "MaxLotSize"), HasAuthorizedConsumption = ReadBool(payload, "HasAuthorizedConsumption"), HandlesFractionsByStyle = ReadBool(payload, "HandlesFractionsByStyle"), TechnicalNotes = ReadString(payload, "TechnicalNotes"), ProductionCardNotes = ReadString(payload, "ProductionCardNotes"), OutsourcedProcessName = ReadString(payload, "OutsourcedProcessName"), PhotoUrl = ReadString(payload, "PhotoUrl"), IsActive = ReadBool(payload, "IsActive", true) };
     private static EmbroideryPatternRequest MapEmbroideryPatternRequest(JsonElement payload) => new() { Code = ReadString(payload, "Code"), Name = ReadString(payload, "Name"), Sequence = ReadInt(payload, "Sequence"), IsActive = ReadBool(payload, "IsActive", true) };
     private static ItemEngineeringProfileRequest MapEngineeringProfileRequest(JsonElement payload) => new() { ItemId = ReadGuid(payload, "ItemId"), ProductStyleId = ReadNullableGuid(payload, "ProductStyleId"), ProductSizeRunId = ReadNullableGuid(payload, "ProductSizeRunId"), EmbroideryPatternId = ReadNullableGuid(payload, "EmbroideryPatternId"), PrimaryMaterialItemId = ReadNullableGuid(payload, "PrimaryMaterialItemId"), FolioPattern = ReadString(payload, "FolioPattern"), TechnicalSheetMode = ReadString(payload, "TechnicalSheetMode", "style"), ProcessVoucherProfile = ReadString(payload, "ProcessVoucherProfile"), TechnicalSheetNotes = ReadString(payload, "TechnicalSheetNotes"), ProductionCardNotes = ReadString(payload, "ProductionCardNotes"), HasPhoto = ReadBool(payload, "HasPhoto"), HasConsumptionDefinition = ReadBool(payload, "HasConsumptionDefinition"), HasMaterialAssignments = ReadBool(payload, "HasMaterialAssignments"), IsAuthorizedForExplosion = ReadBool(payload, "IsAuthorizedForExplosion"), IsActive = ReadBool(payload, "IsActive", true) };
 
@@ -786,10 +862,10 @@ public class ProductFamilyRequest { public string Code { get; set; } = string.Em
 public sealed class ProductFamilyDto : ProductFamilyRequest { public Guid ProductFamilyId { get; set; } public Guid CompanyId { get; set; } }
 public class ProductLastRequest { public string Code { get; set; } = string.Empty; public string Name { get; set; } = string.Empty; public string WidthReference { get; set; } = string.Empty; public bool IsActive { get; set; } = true; }
 public sealed class ProductLastDto : ProductLastRequest { public Guid ProductLastId { get; set; } public Guid CompanyId { get; set; } }
-public class ProductLineRequest { public Guid? ProductFamilyId { get; set; } public Guid? ProductLastId { get; set; } public string Code { get; set; } = string.Empty; public string Name { get; set; } = string.Empty; public string ShortName { get; set; } = string.Empty; public bool AllowsDiscount { get; set; } public bool IsActive { get; set; } = true; }
-public sealed class ProductLineDto : ProductLineRequest { public Guid ProductLineId { get; set; } public Guid CompanyId { get; set; } public string ProductFamilyName { get; set; } = string.Empty; public string ProductLastName { get; set; } = string.Empty; }
-public class ProductStyleRequest { public Guid? ProductLineId { get; set; } public Guid? ProductLastId { get; set; } public string Code { get; set; } = string.Empty; public string Name { get; set; } = string.Empty; public string CustomerLabel1 { get; set; } = string.Empty; public string CustomerLabel2 { get; set; } = string.Empty; public string ColorLabel { get; set; } = string.Empty; public string DieCutReference { get; set; } = string.Empty; public decimal MaxLotSize { get; set; } public bool HasAuthorizedConsumption { get; set; } public bool HandlesFractionsByStyle { get; set; } public string TechnicalNotes { get; set; } = string.Empty; public string ProductionCardNotes { get; set; } = string.Empty; public string OutsourcedProcessName { get; set; } = string.Empty; public string PhotoUrl { get; set; } = string.Empty; public bool IsActive { get; set; } = true; }
-public sealed class ProductStyleDto : ProductStyleRequest { public Guid ProductStyleId { get; set; } public Guid CompanyId { get; set; } public string ProductLineName { get; set; } = string.Empty; public string ProductLastName { get; set; } = string.Empty; }
+public class ProductLineRequest { public Guid? ProductFamilyId { get; set; } public string Code { get; set; } = string.Empty; public string Name { get; set; } = string.Empty; public string ShortName { get; set; } = string.Empty; public bool AllowsDiscount { get; set; } public bool IsActive { get; set; } = true; }
+public sealed class ProductLineDto : ProductLineRequest { public Guid ProductLineId { get; set; } public Guid CompanyId { get; set; } public string ProductFamilyName { get; set; } = string.Empty; }
+public class ProductStyleRequest { public Guid? ProductLineId { get; set; } public string Code { get; set; } = string.Empty; public string Name { get; set; } = string.Empty; public string CustomerLabel1 { get; set; } = string.Empty; public string CustomerLabel2 { get; set; } = string.Empty; public string ColorLabel { get; set; } = string.Empty; public string DieCutReference { get; set; } = string.Empty; public decimal MaxLotSize { get; set; } public bool HasAuthorizedConsumption { get; set; } public bool HandlesFractionsByStyle { get; set; } public string TechnicalNotes { get; set; } = string.Empty; public string ProductionCardNotes { get; set; } = string.Empty; public string OutsourcedProcessName { get; set; } = string.Empty; public string PhotoUrl { get; set; } = string.Empty; public bool IsActive { get; set; } = true; }
+public sealed class ProductStyleDto : ProductStyleRequest { public Guid ProductStyleId { get; set; } public Guid CompanyId { get; set; } public string ProductLineName { get; set; } = string.Empty; }
 public class EmbroideryPatternRequest { public string Code { get; set; } = string.Empty; public string Name { get; set; } = string.Empty; public int Sequence { get; set; } public bool IsActive { get; set; } = true; }
 public sealed class EmbroideryPatternDto : EmbroideryPatternRequest { public Guid EmbroideryPatternId { get; set; } public Guid CompanyId { get; set; } }
 public class ItemEngineeringProfileRequest { public Guid ItemId { get; set; } public Guid? ProductStyleId { get; set; } public Guid? ProductSizeRunId { get; set; } public Guid? EmbroideryPatternId { get; set; } public Guid? PrimaryMaterialItemId { get; set; } public string FolioPattern { get; set; } = string.Empty; public string TechnicalSheetMode { get; set; } = "style"; public string ProcessVoucherProfile { get; set; } = string.Empty; public string TechnicalSheetNotes { get; set; } = string.Empty; public string ProductionCardNotes { get; set; } = string.Empty; public bool HasPhoto { get; set; } public bool HasConsumptionDefinition { get; set; } public bool HasMaterialAssignments { get; set; } public bool IsAuthorizedForExplosion { get; set; } public bool IsActive { get; set; } = true; }
@@ -809,16 +885,25 @@ public sealed class MaterialSubfamilyOptionDto { public Guid MaterialSubfamilyId
 public sealed class MaterialItemOptionDto { public Guid MaterialItemId { get; set; } public string Code { get; set; } = string.Empty; public string Name { get; set; } = string.Empty; }
 public sealed class FinishedProductOptionDto { public Guid FinishedProductId { get; set; } public string Code { get; set; } = string.Empty; public string Name { get; set; } = string.Empty; }
 public sealed class ProductComponentOptionDto { public Guid ProductComponentId { get; set; } public string Code { get; set; } = string.Empty; public string Name { get; set; } = string.Empty; }
+public class MaterialCharacteristicRequest { public string Code { get; set; } = string.Empty; public string Name { get; set; } = string.Empty; public string Description { get; set; } = string.Empty; public bool IsActive { get; set; } = true; }
+public sealed class MaterialCharacteristicDto : MaterialCharacteristicRequest { public Guid MaterialCharacteristicId { get; set; } public Guid CompanyId { get; set; } }
+public sealed class MaterialCharacteristicOptionDto { public Guid MaterialCharacteristicId { get; set; } public string Code { get; set; } = string.Empty; public string Name { get; set; } = string.Empty; }
+public class MaterialSizeRequest { public string Code { get; set; } = string.Empty; public string Name { get; set; } = string.Empty; public string Description { get; set; } = string.Empty; public int SortOrder { get; set; } public bool IsActive { get; set; } = true; }
+public sealed class MaterialSizeDto : MaterialSizeRequest { public Guid MaterialSizeId { get; set; } public Guid CompanyId { get; set; } }
+public sealed class MaterialSizeOptionDto { public Guid MaterialSizeId { get; set; } public string Code { get; set; } = string.Empty; public string Name { get; set; } = string.Empty; }
 public class MaterialFamilyRequest { public string Code { get; set; } = string.Empty; public string Name { get; set; } = string.Empty; public string InventoryGroup { get; set; } = string.Empty; public string Notes { get; set; } = string.Empty; public bool IsActive { get; set; } = true; }
 public sealed class MaterialFamilyDto : MaterialFamilyRequest { public Guid MaterialFamilyId { get; set; } public Guid CompanyId { get; set; } }
 public class MaterialSubfamilyRequest { public Guid MaterialFamilyId { get; set; } public string Code { get; set; } = string.Empty; public string Name { get; set; } = string.Empty; public string MaterialType { get; set; } = string.Empty; public bool IsDirectMaterial { get; set; } = true; public string Notes { get; set; } = string.Empty; public bool IsActive { get; set; } = true; }
 public sealed class MaterialSubfamilyDto : MaterialSubfamilyRequest { public Guid MaterialSubfamilyId { get; set; } public Guid CompanyId { get; set; } public string MaterialFamilyName { get; set; } = string.Empty; }
-public class MaterialItemRequest { public Guid MaterialSubfamilyId { get; set; } public Guid? PurchaseUnitId { get; set; } public Guid? IssueUnitId { get; set; } public Guid? SupplierId { get; set; } public string Code { get; set; } = string.Empty; public string Name { get; set; } = string.Empty; public string Description { get; set; } = string.Empty; public string LegacyMaterialName { get; set; } = string.Empty; public decimal AuthorizedCost { get; set; } public decimal LastPurchaseCost { get; set; } public decimal StandardCost { get; set; } public string CostStatus { get; set; } = string.Empty; public bool IsServiceItem { get; set; } public string Notes { get; set; } = string.Empty; public bool IsActive { get; set; } = true; }
-public sealed class MaterialItemDto : MaterialItemRequest { public Guid MaterialItemId { get; set; } public Guid CompanyId { get; set; } public string MaterialSubfamilyName { get; set; } = string.Empty; public string PurchaseUnitName { get; set; } = string.Empty; public string IssueUnitName { get; set; } = string.Empty; public string SupplierName { get; set; } = string.Empty; }
+public class MaterialItemRequest { public Guid MaterialSubfamilyId { get; set; } public Guid? MaterialCharacteristicId { get; set; } public Guid? MaterialSizeId { get; set; } public Guid? PurchaseUnitId { get; set; } public Guid? IssueUnitId { get; set; } public Guid? SupplierId { get; set; } public string Code { get; set; } = string.Empty; public string Name { get; set; } = string.Empty; public string Description { get; set; } = string.Empty; public string LegacyMaterialName { get; set; } = string.Empty; public decimal AuthorizedCost { get; set; } public decimal LastPurchaseCost { get; set; } public decimal StandardCost { get; set; } public string CostStatus { get; set; } = string.Empty; public bool IsServiceItem { get; set; } public string Notes { get; set; } = string.Empty; public bool IsActive { get; set; } = true; }
+public sealed class MaterialItemDto : MaterialItemRequest { public Guid MaterialItemId { get; set; } public Guid CompanyId { get; set; } public string MaterialSubfamilyName { get; set; } = string.Empty; public string MaterialCharacteristicName { get; set; } = string.Empty; public string MaterialSizeName { get; set; } = string.Empty; public string PurchaseUnitName { get; set; } = string.Empty; public string IssueUnitName { get; set; } = string.Empty; public string SupplierName { get; set; } = string.Empty; }
 public class FinishedProductRequest { public Guid? ProductStyleId { get; set; } public Guid? ItemModelId { get; set; } public Guid? ItemBrandId { get; set; } public Guid? ProductLeatherTypeId { get; set; } public Guid? ProductColorId { get; set; } public Guid? ProductToeCapId { get; set; } public Guid? ProductSoleId { get; set; } public Guid? ProductSoleColorId { get; set; } public Guid? ProductFolioPatternId { get; set; } public Guid? ProductSizeRunId { get; set; } public Guid? ProductLineId { get; set; } public Guid? ProductLastId { get; set; } public Guid? MainMaterialItemId { get; set; } public string Code { get; set; } = string.Empty; public string? Name { get; set; } public string BillingName { get; set; } = string.Empty; public bool HasPhoto { get; set; } public bool HasConsumptionDefinition { get; set; } public bool HasMaterialAssignments { get; set; } public bool IsAuthorizedForExplosion { get; set; } public string Notes { get; set; } = string.Empty; public bool IsActive { get; set; } = true; }
-public sealed class FinishedProductDto : FinishedProductRequest { public Guid FinishedProductId { get; set; } public Guid CompanyId { get; set; } public string ProductStyleName { get; set; } = string.Empty; public string ItemModelName { get; set; } = string.Empty; public string ItemBrandName { get; set; } = string.Empty; public string ProductLeatherTypeName { get; set; } = string.Empty; public string ProductColorName { get; set; } = string.Empty; public string ProductToeCapName { get; set; } = string.Empty; public string ProductSoleName { get; set; } = string.Empty; public string ProductSoleColorName { get; set; } = string.Empty; public string ProductFolioPatternName { get; set; } = string.Empty; public string ProductSizeRunName { get; set; } = string.Empty; public string MainMaterialItemName { get; set; } = string.Empty; }
-public class ProductComponentRequest { public Guid? ConsumptionUnitId { get; set; } public string Code { get; set; } = string.Empty; public string Name { get; set; } = string.Empty; public string ProductionPhase { get; set; } = string.Empty; public string WarehouseDeliveryRole { get; set; } = string.Empty; public decimal DefaultConsumption { get; set; } public bool ActivateForAllProducts { get; set; } public bool ShowOnProductionCard { get; set; } public string Notes { get; set; } = string.Empty; public bool IsActive { get; set; } = true; }
-public sealed class ProductComponentDto : ProductComponentRequest { public Guid ProductComponentId { get; set; } public Guid CompanyId { get; set; } public string ConsumptionUnitName { get; set; } = string.Empty; }
+public sealed class FinishedProductDto : FinishedProductRequest { public Guid FinishedProductId { get; set; } public Guid CompanyId { get; set; } public string ProductStyleName { get; set; } = string.Empty; public string ItemModelName { get; set; } = string.Empty; public string ItemBrandName { get; set; } = string.Empty; public string ProductLeatherTypeName { get; set; } = string.Empty; public string ProductColorName { get; set; } = string.Empty; public string ProductToeCapName { get; set; } = string.Empty; public string ProductSoleName { get; set; } = string.Empty; public string ProductSoleColorName { get; set; } = string.Empty; public string ProductFolioPatternName { get; set; } = string.Empty; public string ProductSizeRunName { get; set; } = string.Empty; public string ProductLineName { get; set; } = string.Empty; public string ProductLastName { get; set; } = string.Empty; public string MainMaterialItemName { get; set; } = string.Empty; }
+public sealed class ProductionPhaseOptionDto { public Guid ProductionPhaseId { get; set; } public string Code { get; set; } = string.Empty; public string Name { get; set; } = string.Empty; }
+public class ProductionPhaseRequest { public string Code { get; set; } = string.Empty; public string Name { get; set; } = string.Empty; public string Description { get; set; } = string.Empty; public int Sequence { get; set; } public bool IsActive { get; set; } = true; }
+public sealed class ProductionPhaseDto : ProductionPhaseRequest { public Guid ProductionPhaseId { get; set; } public Guid TenantId { get; set; } }
+public class ProductComponentRequest { public Guid? ConsumptionUnitId { get; set; } public Guid? ProductionPhaseId { get; set; } public string Code { get; set; } = string.Empty; public string Name { get; set; } = string.Empty; public decimal DefaultConsumption { get; set; } public bool ActivateForAllProducts { get; set; } public bool ShowOnProductionCard { get; set; } public string Notes { get; set; } = string.Empty; public bool IsActive { get; set; } = true; }
+public sealed class ProductComponentDto : ProductComponentRequest { public Guid ProductComponentId { get; set; } public Guid CompanyId { get; set; } public string ConsumptionUnitName { get; set; } = string.Empty; public string ProductionPhaseName { get; set; } = string.Empty; }
 public class FinishedProductMaterialRequest { public Guid FinishedProductId { get; set; } public Guid ProductComponentId { get; set; } public Guid MaterialItemId { get; set; } public string SizeCode { get; set; } = string.Empty; public decimal Quantity { get; set; } public bool IsRequired { get; set; } = true; public string Notes { get; set; } = string.Empty; public bool IsActive { get; set; } = true; }
 public sealed class FinishedProductMaterialDto : FinishedProductMaterialRequest { public Guid FinishedProductMaterialId { get; set; } public Guid CompanyId { get; set; } public string FinishedProductName { get; set; } = string.Empty; public string ProductComponentName { get; set; } = string.Empty; public string MaterialItemName { get; set; } = string.Empty; }
 public class ProductConsumptionProfileRequest { public Guid FinishedProductId { get; set; } public Guid ProductComponentId { get; set; } public string SizeCode { get; set; } = string.Empty; public int Pieces { get; set; } public decimal Consumption { get; set; } public string Status { get; set; } = string.Empty; public string Notes { get; set; } = string.Empty; public bool IsActive { get; set; } = true; }

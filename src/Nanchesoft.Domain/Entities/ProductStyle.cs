@@ -13,9 +13,6 @@ public sealed class ProductStyle : BaseEntity
     public Guid? ProductLineId { get; set; }
     public ProductLine? ProductLine { get; set; }
 
-    public Guid? ProductLastId { get; set; }
-    public ProductLast? ProductLast { get; set; }
-
     public string Code { get; set; } = string.Empty;
     public string Name { get; set; } = string.Empty;
     public string CustomerLabel1 { get; set; } = string.Empty;

@@ -75,6 +75,9 @@ public sealed class NanchesoftDbContext : DbContext
     public DbSet<ProcessVoucher> ProcessVouchers => Set<ProcessVoucher>();
 
     // Orange / Silvasoft product catalog operations
+    public DbSet<ProductionPhase> ProductionPhases => Set<ProductionPhase>();
+    public DbSet<MaterialCharacteristic> MaterialCharacteristics => Set<MaterialCharacteristic>();
+    public DbSet<MaterialSize> MaterialSizes => Set<MaterialSize>();
     public DbSet<MaterialFamily> MaterialFamilies => Set<MaterialFamily>();
     public DbSet<MaterialSubfamily> MaterialSubfamilies => Set<MaterialSubfamily>();
     public DbSet<MaterialItem> MaterialItems => Set<MaterialItem>();
@@ -84,6 +87,13 @@ public sealed class NanchesoftDbContext : DbContext
     public DbSet<ProductComponent> ProductComponents => Set<ProductComponent>();
     public DbSet<FinishedProductMaterial> FinishedProductMaterials => Set<FinishedProductMaterial>();
     public DbSet<ProductConsumptionProfile> ProductConsumptionProfiles => Set<ProductConsumptionProfile>();
+    public DbSet<ConsumptionTemplate> ConsumptionTemplates => Set<ConsumptionTemplate>();
+    public DbSet<ConsumptionTemplateDetail> ConsumptionTemplateDetails => Set<ConsumptionTemplateDetail>();
+    public DbSet<ConsumptionTemplateSize> ConsumptionTemplateSizes => Set<ConsumptionTemplateSize>();
+    public DbSet<FinishedProductSupply> FinishedProductSupplies => Set<FinishedProductSupply>();
+    public DbSet<FinishedProductSupplySize> FinishedProductSupplySizes => Set<FinishedProductSupplySize>();
+    public DbSet<MaterialSizeDistribution> MaterialSizeDistributions => Set<MaterialSizeDistribution>();
+    public DbSet<MaterialSizeDistributionDetail> MaterialSizeDistributionDetails => Set<MaterialSizeDistributionDetail>();
 
     public DbSet<ProductTechnicalSheet> ProductTechnicalSheets => Set<ProductTechnicalSheet>();
     public DbSet<ProductTechnicalSheetMaterial> ProductTechnicalSheetMaterials => Set<ProductTechnicalSheetMaterial>();

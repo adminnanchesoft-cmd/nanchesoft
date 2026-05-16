@@ -28,6 +28,5 @@ public sealed class ProductStyleConfiguration : IEntityTypeConfiguration<Product
         builder.HasOne(x => x.Tenant).WithMany().HasForeignKey(x => x.TenantId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne(x => x.Company).WithMany().HasForeignKey(x => x.CompanyId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne(x => x.ProductLine).WithMany().HasForeignKey(x => x.ProductLineId).OnDelete(DeleteBehavior.Restrict);
-        builder.HasOne(x => x.ProductLast).WithMany().HasForeignKey(x => x.ProductLastId).OnDelete(DeleteBehavior.Restrict);
     }
 }

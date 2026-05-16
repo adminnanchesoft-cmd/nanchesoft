@@ -37,6 +37,7 @@ public static class ProductTechnicalCenterEndpoints
             var assignments = await db.FinishedProductMaterials
                 .Where(x => x.FinishedProductId == finishedProductId)
                 .Include(x => x.ProductComponent)
+                    .ThenInclude(x => x!.ProductionPhase)
                 .Include(x => x.MaterialItem)
                     .ThenInclude(x => x!.IssueUnit)
                 .OrderBy(x => x.CreatedAt)
@@ -103,15 +104,15 @@ public static class ProductTechnicalCenterEndpoints
             existing.Processes = assignments
                 .Where(x => x.ProductComponent is not null)
                 .Select(x => x.ProductComponent!)
-                .GroupBy(x => new { x.Code, x.Name, x.ProductionPhase, x.WarehouseDeliveryRole, x.ShowOnProductionCard })
+                .GroupBy(x => new { x.Code, x.Name, PhaseCode = x.ProductionPhase?.Code ?? string.Empty, x.ShowOnProductionCard })
                 .Select((g, index) => new ProductTechnicalSheetProcess
                 {
                     Id = Guid.NewGuid(),
                     ProductTechnicalSheetId = existing.Id,
                     ProcessCode = g.Key.Code,
                     ProcessName = g.Key.Name,
-                    WorkstationCode = g.Key.ProductionPhase,
-                    DeliverToWarehouseCode = g.Key.WarehouseDeliveryRole,
+                    WorkstationCode = g.Key.PhaseCode,
+                    DeliverToWarehouseCode = string.Empty,
                     RequiresVoucherCard = g.Key.ShowOnProductionCard,
                     ShowMaterialsOnVoucher = true,
                     SortOrder = index + 1,
@@ -225,8 +226,12 @@ public static class ProductTechnicalCenterEndpoints
             auth.RequiresConsumption = true;
             auth.RequiresMaterialAssignment = true;
             auth.RequiresCostSheet = true;
+            var hasTemplateForSync = product.ProductStyleId.HasValue && product.ProductSizeRunId.HasValue
+                && await db.Set<ConsumptionTemplate>().AnyAsync(x => x.IsActive && x.IsAuthorized
+                    && x.ProductStyleId == product.ProductStyleId!.Value
+                    && x.ProductSizeRunId == product.ProductSizeRunId!.Value);
             auth.HasPhoto = product.HasPhoto;
-            auth.HasConsumption = product.HasConsumptionDefinition;
+            auth.HasConsumption = product.HasConsumptionDefinition || hasTemplateForSync;
             auth.HasMaterialAssignment = product.HasMaterialAssignments;
             auth.HasCostSheet = cost is not null;
 

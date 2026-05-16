@@ -1,5 +1,570 @@
 @page "/products/finished-products"
+@using System.Net.Http.Json
+@using System.Text.Json
+@inject IHttpClientFactory HttpClientFactory
+@inject IJSRuntime JS
 
 <PageTitle>Productos terminados | Nanchesoft</PageTitle>
 
-<CatalogCrudPage CatalogKey="finished-products" />
+<div class="ns-catalog-page">
+    @if (!string.IsNullOrWhiteSpace(_error))
+    {
+        <div style="margin-bottom:16px;padding:12px 16px;border-radius:12px;background:#fff1f2;color:#991b1b;border:1px solid #fecdd3;">
+            <strong>Error:</strong> @_error
+        </div>
+    }
+
+    <div class="ns-catalog-header">
+        <div>
+            <div class="ns-catalog-eyebrow">Nanchesoft ERP · Módulo de Productos</div>
+            <h1 class="ns-catalog-title">Productos Terminados</h1>
+            <p class="ns-catalog-subtitle">Catálogo de productos terminados con estilo, corrida, línea, horma y marca.</p>
+        </div>
+    </div>
+
+    <div class="ns-kpi-grid">
+        <div class="ns-kpi-card"><div class="ns-kpi-label">Total</div><div class="ns-kpi-value">@_items.Count</div></div>
+        <div class="ns-kpi-card ns-kpi-card-success"><div class="ns-kpi-label">Activos</div><div class="ns-kpi-value">@_items.Count(x => x.IsActive)</div></div>
+        <div class="ns-kpi-card ns-kpi-card-muted"><div class="ns-kpi-label">Inactivos</div><div class="ns-kpi-value">@_items.Count(x => !x.IsActive)</div></div>
+    </div>
+
+    <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin:18px 0 14px 0;">
+        <button class="ns-primary-btn" @onclick="OpenCreateModal">+ Nuevo producto</button>
+        <button class="ns-secondary-btn" @onclick="LoadDataAsync">Recargar</button>
+        <input type="text" @bind="_search" @bind:event="oninput" placeholder="Buscar por código, nombre..." style="padding:8px 14px;border-radius:10px;border:1px solid #cbd5e1;min-width:240px;font-size:14px;" />
+    </div>
+
+    @if (_loading)
+    {
+        <div class="ns-catalog-loading"><div class="ns-loader"></div><span>Cargando...</span></div>
+    }
+    else
+    {
+        <div style="overflow-x:auto;">
+            <table style="width:100%;border-collapse:collapse;font-size:13px;">
+                <thead>
+                    <tr style="background:#f1f5f9;text-align:left;">
+                        <th style="padding:10px 12px;border-bottom:2px solid #e2e8f0;white-space:nowrap;">Código</th>
+                        <th style="padding:10px 12px;border-bottom:2px solid #e2e8f0;">Nombre</th>
+                        <th style="padding:10px 12px;border-bottom:2px solid #e2e8f0;">Estilo</th>
+                        <th style="padding:10px 12px;border-bottom:2px solid #e2e8f0;">Línea</th>
+                        <th style="padding:10px 12px;border-bottom:2px solid #e2e8f0;">Marca</th>
+                        <th style="padding:10px 12px;border-bottom:2px solid #e2e8f0;">Corrida</th>
+                        <th style="padding:10px 12px;border-bottom:2px solid #e2e8f0;">Horma</th>
+                        <th style="padding:10px 12px;border-bottom:2px solid #e2e8f0;width:60px;">Activo</th>
+                        <th style="padding:10px 12px;border-bottom:2px solid #e2e8f0;width:80px;"></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var item in FilteredItems)
+                    {
+                        <tr style="border-bottom:1px solid #f1f5f9;">
+                            <td style="padding:9px 12px;font-weight:600;color:#1e40af;">@item.Code</td>
+                            <td style="padding:9px 12px;">@item.Name</td>
+                            <td style="padding:9px 12px;color:#475569;">@item.ProductStyleName</td>
+                            <td style="padding:9px 12px;color:#475569;">@item.ProductLineName</td>
+                            <td style="padding:9px 12px;color:#475569;">@item.ItemBrandName</td>
+                            <td style="padding:9px 12px;color:#475569;">@item.ProductSizeRunName</td>
+                            <td style="padding:9px 12px;color:#475569;">@item.ProductLastName</td>
+                            <td style="padding:9px 12px;text-align:center;">
+                                @if (item.IsActive) { <span style="color:#16a34a;font-weight:600;">✓</span> } else { <span style="color:#9ca3af;">—</span> }
+                            </td>
+                            <td style="padding:9px 12px;">
+                                <button class="ns-secondary-btn" style="padding:4px 12px;font-size:12px;" @onclick="() => OpenEditModal(item)">Editar</button>
+                            </td>
+                        </tr>
+                    }
+                    @if (!FilteredItems.Any())
+                    {
+                        <tr><td colspan="9" style="padding:24px;text-align:center;color:#94a3b8;">Sin resultados</td></tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
+
+@* ===================== MODAL PRINCIPAL ===================== *@
+@if (_showModal)
+{
+    <div style="position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:1050;display:flex;align-items:center;justify-content:center;padding:16px;" @onclick="CloseModal">
+        <div style="background:#fff;border-radius:18px;padding:28px 32px;max-width:800px;width:100%;max-height:92vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.25);" @onclick:stopPropagation>
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+                <h2 style="margin:0;font-size:20px;color:#0f172a;">@(_editingId.HasValue ? "Editar producto terminado" : "Nuevo producto terminado")</h2>
+                <button @onclick="CloseModal" style="background:none;border:none;font-size:22px;cursor:pointer;color:#64748b;">×</button>
+            </div>
+
+            @if (!string.IsNullOrWhiteSpace(_modalError))
+            {
+                <div style="margin-bottom:12px;padding:10px 14px;border-radius:8px;background:#fff1f2;color:#991b1b;border:1px solid #fecdd3;">@_modalError</div>
+            }
+
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+
+                @* Código *@
+                <div style="grid-column:1/-1;">
+                    <label style="display:block;font-size:12px;font-weight:600;color:#475569;margin-bottom:4px;">CÓDIGO *</label>
+                    <input @bind="_form.Code" style="width:100%;box-sizing:border-box;padding:9px 12px;border-radius:8px;border:1px solid #cbd5e1;font-size:14px;" />
+                </div>
+
+                @* Nombre *@
+                <div style="grid-column:1/-1;">
+                    <label style="display:block;font-size:12px;font-weight:600;color:#475569;margin-bottom:4px;">NOMBRE (deja vacío para auto-generar)</label>
+                    <input @bind="_form.Name" style="width:100%;box-sizing:border-box;padding:9px 12px;border-radius:8px;border:1px solid #cbd5e1;font-size:14px;" />
+                </div>
+
+                @* Estilo *@
+                <div>
+                    <label style="display:block;font-size:12px;font-weight:600;color:#475569;margin-bottom:4px;">ESTILO</label>
+                    <div style="display:flex;gap:6px;">
+                        <select @bind="_form.ProductStyleId" style="flex:1;padding:9px 12px;border-radius:8px;border:1px solid #cbd5e1;font-size:14px;">
+                            <option value="">— ninguno —</option>
+                            @foreach (var o in _styleOptions) { <option value="@o.Id">@o.Label</option> }
+                        </select>
+                        <button @onclick='() => OpenQuickCreate("style")' title="Crear estilo" style="padding:9px 12px;border-radius:8px;border:1px solid #cbd5e1;background:#f8fafc;cursor:pointer;font-size:16px;">+</button>
+                    </div>
+                </div>
+
+                @* Línea *@
+                <div>
+                    <label style="display:block;font-size:12px;font-weight:600;color:#475569;margin-bottom:4px;">LÍNEA</label>
+                    <div style="display:flex;gap:6px;">
+                        <select @bind="_form.ProductLineId" style="flex:1;padding:9px 12px;border-radius:8px;border:1px solid #cbd5e1;font-size:14px;">
+                            <option value="">— ninguno —</option>
+                            @foreach (var o in _lineOptions) { <option value="@o.Id">@o.Label</option> }
+                        </select>
+                        <button @onclick='() => OpenQuickCreate("line")' title="Crear línea" style="padding:9px 12px;border-radius:8px;border:1px solid #cbd5e1;background:#f8fafc;cursor:pointer;font-size:16px;">+</button>
+                    </div>
+                </div>
+
+                @* Marca *@
+                <div>
+                    <label style="display:block;font-size:12px;font-weight:600;color:#475569;margin-bottom:4px;">MARCA</label>
+                    <div style="display:flex;gap:6px;">
+                        <select @bind="_form.ItemBrandId" style="flex:1;padding:9px 12px;border-radius:8px;border:1px solid #cbd5e1;font-size:14px;">
+                            <option value="">— ninguno —</option>
+                            @foreach (var o in _brandOptions) { <option value="@o.Id">@o.Label</option> }
+                        </select>
+                        <button @onclick='() => OpenQuickCreate("brand")' title="Crear marca" style="padding:9px 12px;border-radius:8px;border:1px solid #cbd5e1;background:#f8fafc;cursor:pointer;font-size:16px;">+</button>
+                    </div>
+                </div>
+
+                @* Modelo *@
+                <div>
+                    <label style="display:block;font-size:12px;font-weight:600;color:#475569;margin-bottom:4px;">MODELO</label>
+                    <div style="display:flex;gap:6px;">
+                        <select @bind="_form.ItemModelId" style="flex:1;padding:9px 12px;border-radius:8px;border:1px solid #cbd5e1;font-size:14px;">
+                            <option value="">— ninguno —</option>
+                            @foreach (var o in _modelOptions) { <option value="@o.Id">@o.Label</option> }
+                        </select>
+                        <button @onclick='() => OpenQuickCreate("model")' title="Crear modelo" style="padding:9px 12px;border-radius:8px;border:1px solid #cbd5e1;background:#f8fafc;cursor:pointer;font-size:16px;">+</button>
+                    </div>
+                </div>
+
+                @* Corrida *@
+                <div>
+                    <label style="display:block;font-size:12px;font-weight:600;color:#475569;margin-bottom:4px;">CORRIDA</label>
+                    <select @bind="_form.ProductSizeRunId" style="width:100%;padding:9px 12px;border-radius:8px;border:1px solid #cbd5e1;font-size:14px;">
+                        <option value="">— ninguno —</option>
+                        @foreach (var o in _runOptions) { <option value="@o.Id">@o.Label</option> }
+                    </select>
+                </div>
+
+                @* Horma *@
+                <div>
+                    <label style="display:block;font-size:12px;font-weight:600;color:#475569;margin-bottom:4px;">HORMA</label>
+                    <div style="display:flex;gap:6px;">
+                        <select @bind="_form.ProductLastId" style="flex:1;padding:9px 12px;border-radius:8px;border:1px solid #cbd5e1;font-size:14px;">
+                            <option value="">— ninguno —</option>
+                            @foreach (var o in _lastOptions) { <option value="@o.Id">@o.Label</option> }
+                        </select>
+                        <button @onclick='() => OpenQuickCreate("last")' title="Crear horma" style="padding:9px 12px;border-radius:8px;border:1px solid #cbd5e1;background:#f8fafc;cursor:pointer;font-size:16px;">+</button>
+                    </div>
+                </div>
+
+                @* Nombre de facturación *@
+                <div>
+                    <label style="display:block;font-size:12px;font-weight:600;color:#475569;margin-bottom:4px;">NOMBRE DE FACTURACIÓN</label>
+                    <input @bind="_form.BillingName" style="width:100%;box-sizing:border-box;padding:9px 12px;border-radius:8px;border:1px solid #cbd5e1;font-size:14px;" />
+                </div>
+
+                @* Notas *@
+                <div>
+                    <label style="display:block;font-size:12px;font-weight:600;color:#475569;margin-bottom:4px;">NOTAS</label>
+                    <input @bind="_form.Notes" style="width:100%;box-sizing:border-box;padding:9px 12px;border-radius:8px;border:1px solid #cbd5e1;font-size:14px;" />
+                </div>
+
+                @* Activo *@
+                <div style="grid-column:1/-1;display:flex;align-items:center;gap:10px;">
+                    <input type="checkbox" id="fpActive" @bind="_form.IsActive" style="width:16px;height:16px;" />
+                    <label for="fpActive" style="font-size:14px;font-weight:500;">Activo</label>
+                </div>
+            </div>
+
+            <div style="display:flex;gap:12px;justify-content:flex-end;margin-top:24px;padding-top:16px;border-top:1px solid #f1f5f9;">
+                @if (_editingId.HasValue)
+                {
+                    <button @onclick="DeleteItemAsync" disabled="@_saving" style="padding:10px 20px;border-radius:10px;border:1px solid #fca5a5;background:#fff1f2;color:#dc2626;cursor:pointer;font-weight:600;">Eliminar</button>
+                }
+                <button @onclick="CloseModal" style="padding:10px 20px;border-radius:10px;border:1px solid #cbd5e1;background:#fff;color:#475569;cursor:pointer;">Cancelar</button>
+                <button @onclick="SaveAsync" disabled="@_saving" class="ns-primary-btn">@(_saving ? "Guardando…" : "Guardar")</button>
+            </div>
+        </div>
+    </div>
+}
+
+@* ===================== QUICK-CREATE MODAL ===================== *@
+@if (_showQuickCreate)
+{
+    <div style="position:fixed;inset:0;background:rgba(0,0,0,0.2);z-index:1065;display:flex;align-items:center;justify-content:center;padding:16px;" @onclick="CloseQuickCreate">
+        <div style="background:#fff;border-radius:14px;padding:24px 28px;max-width:420px;width:100%;box-shadow:0 10px 40px rgba(0,0,0,0.2);" @onclick:stopPropagation>
+            <h3 style="margin:0 0 16px 0;font-size:16px;">@_quickCreateTitle</h3>
+            @if (!string.IsNullOrWhiteSpace(_quickCreateError))
+            {
+                <div style="margin-bottom:10px;padding:8px 12px;border-radius:8px;background:#fff1f2;color:#991b1b;font-size:13px;">@_quickCreateError</div>
+            }
+            <div style="margin-bottom:12px;">
+                <label style="display:block;font-size:12px;font-weight:600;color:#475569;margin-bottom:4px;">CÓDIGO *</label>
+                <input @bind="_qcCode" style="width:100%;box-sizing:border-box;padding:8px 12px;border-radius:8px;border:1px solid #cbd5e1;font-size:14px;" />
+            </div>
+            <div style="margin-bottom:16px;">
+                <label style="display:block;font-size:12px;font-weight:600;color:#475569;margin-bottom:4px;">NOMBRE *</label>
+                <input @bind="_qcName" style="width:100%;box-sizing:border-box;padding:8px 12px;border-radius:8px;border:1px solid #cbd5e1;font-size:14px;" />
+            </div>
+            <div style="display:flex;gap:10px;justify-content:flex-end;">
+                <button @onclick="CloseQuickCreate" style="padding:8px 18px;border-radius:8px;border:1px solid #cbd5e1;background:#fff;color:#475569;cursor:pointer;">Cancelar</button>
+                <button @onclick="SaveQuickCreateAsync" disabled="@_qcSaving" class="ns-primary-btn" style="padding:8px 18px;">@(_qcSaving ? "Guardando…" : "Crear")</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    // ── state ─────────────────────────────────────────────────────────────────
+    private List<FpDto> _items = [];
+    private bool _loading;
+    private string? _error;
+    private string _search = string.Empty;
+
+    // ── options ───────────────────────────────────────────────────────────────
+    private List<Opt> _styleOptions = [];
+    private List<Opt> _lineOptions  = [];
+    private List<Opt> _lastOptions  = [];
+    private List<Opt> _brandOptions = [];
+    private List<Opt> _modelOptions = [];
+    private List<Opt> _runOptions   = [];
+
+    // ── main modal ────────────────────────────────────────────────────────────
+    private bool _showModal;
+    private Guid? _editingId;
+    private FpForm _form = new();
+    private string? _modalError;
+    private bool _saving;
+
+    // ── quick-create modal ────────────────────────────────────────────────────
+    private bool _showQuickCreate;
+    private string _qcType = string.Empty;
+    private string _quickCreateTitle = string.Empty;
+    private string _qcCode = string.Empty;
+    private string _qcName = string.Empty;
+    private string? _quickCreateError;
+    private bool _qcSaving;
+
+    private IEnumerable<FpDto> FilteredItems =>
+        string.IsNullOrWhiteSpace(_search)
+            ? _items
+            : _items.Where(x =>
+                x.Code.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
+                (x.Name ?? string.Empty).Contains(_search, StringComparison.OrdinalIgnoreCase) ||
+                x.ProductStyleName.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
+                x.ItemBrandName.Contains(_search, StringComparison.OrdinalIgnoreCase));
+
+    protected override async Task OnInitializedAsync() => await LoadDataAsync();
+
+    private async Task LoadDataAsync()
+    {
+        _loading = true;
+        _error = null;
+        try
+        {
+            var client = HttpClientFactory.CreateClient("Nanchesoft.Api");
+            await Task.WhenAll(LoadListAsync(client), LoadAllOptionsAsync(client));
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _loading = false; }
+    }
+
+    private async Task LoadListAsync(HttpClient client)
+        => _items = await client.GetFromJsonAsync<List<FpDto>>("/api/products/finished-products") ?? [];
+
+    private async Task LoadAllOptionsAsync(HttpClient client)
+    {
+        var t1 = FetchOpts(client, "/api/products/styles/options", "productStyleId");
+        var t2 = FetchOpts(client, "/api/products/lines/options",  "productLineId");
+        var t3 = FetchOpts(client, "/api/products/lasts/options",  "productLastId");
+        var t4 = FetchOpts(client, "/api/products/brands/options", "brandId");
+        var t5 = FetchOpts(client, "/api/products/models/options", "modelId");
+        var t6 = FetchOpts(client, "/api/products/size-runs/options", "productSizeRunId");
+        await Task.WhenAll(t1, t2, t3, t4, t5, t6);
+        _styleOptions = await t1;
+        _lineOptions  = await t2;
+        _lastOptions  = await t3;
+        _brandOptions = await t4;
+        _modelOptions = await t5;
+        _runOptions   = await t6;
+    }
+
+    private static async Task<List<Opt>> FetchOpts(HttpClient client, string url, string idField)
+    {
+        var json = await client.GetStringAsync(url);
+        using var doc = JsonDocument.Parse(json);
+        var list = new List<Opt>();
+        foreach (var el in doc.RootElement.EnumerateArray())
+        {
+            var id = FindStringProp(el, idField);
+            var code = FindStringProp(el, "code") ?? string.Empty;
+            var name = FindStringProp(el, "name") ?? string.Empty;
+            if (!string.IsNullOrEmpty(id))
+                list.Add(new Opt(id, $"{code} · {name}"));
+        }
+        return list;
+    }
+
+    private static string? FindStringProp(JsonElement el, string nameLower)
+    {
+        foreach (var prop in el.EnumerateObject())
+            if (prop.Name.Equals(nameLower, StringComparison.OrdinalIgnoreCase) && prop.Value.ValueKind == JsonValueKind.String)
+                return prop.Value.GetString();
+        return null;
+    }
+
+    // ── main modal ────────────────────────────────────────────────────────────
+    private void OpenCreateModal()
+    {
+        _editingId = null;
+        _form = new FpForm { IsActive = true };
+        _modalError = null;
+        _showModal = true;
+    }
+
+    private void OpenEditModal(FpDto item)
+    {
+        _editingId = item.FinishedProductId;
+        _form = new FpForm
+        {
+            Code = item.Code,
+            Name = item.Name,
+            BillingName = item.BillingName,
+            ProductStyleId   = item.ProductStyleId?.ToString("D"),
+            ProductLineId    = item.ProductLineId?.ToString("D"),
+            ProductLastId    = item.ProductLastId?.ToString("D"),
+            ItemBrandId      = item.ItemBrandId?.ToString("D"),
+            ItemModelId      = item.ItemModelId?.ToString("D"),
+            ProductSizeRunId = item.ProductSizeRunId?.ToString("D"),
+            Notes = item.Notes,
+            IsActive = item.IsActive
+        };
+        _modalError = null;
+        _showModal = true;
+    }
+
+    private void CloseModal() { _showModal = false; _modalError = null; }
+
+    private async Task SaveAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_form.Code)) { _modalError = "El código es obligatorio."; return; }
+        _saving = true;
+        _modalError = null;
+        try
+        {
+            var client = HttpClientFactory.CreateClient("Nanchesoft.Api");
+            var body = new
+            {
+                Code = _form.Code.Trim().ToUpperInvariant(),
+                Name = string.IsNullOrWhiteSpace(_form.Name) ? (string?)null : _form.Name.Trim(),
+                BillingName = _form.BillingName ?? string.Empty,
+                ProductStyleId   = ParseGuid(_form.ProductStyleId),
+                ProductLineId    = ParseGuid(_form.ProductLineId),
+                ProductLastId    = ParseGuid(_form.ProductLastId),
+                ItemBrandId      = ParseGuid(_form.ItemBrandId),
+                ItemModelId      = ParseGuid(_form.ItemModelId),
+                ProductSizeRunId = ParseGuid(_form.ProductSizeRunId),
+                ProductLeatherTypeId  = (Guid?)null,
+                ProductColorId        = (Guid?)null,
+                ProductToeCapId       = (Guid?)null,
+                ProductSoleId         = (Guid?)null,
+                ProductSoleColorId    = (Guid?)null,
+                ProductFolioPatternId = (Guid?)null,
+                MainMaterialItemId    = (Guid?)null,
+                Notes = _form.Notes ?? string.Empty,
+                IsActive = _form.IsActive,
+                HasPhoto = false,
+                HasConsumptionDefinition = false,
+                HasMaterialAssignments = false,
+                IsAuthorizedForExplosion = false
+            };
+
+            HttpResponseMessage resp;
+            if (_editingId.HasValue)
+                resp = await client.PutAsJsonAsync($"/api/products/finished-products/{_editingId}", body);
+            else
+                resp = await client.PostAsJsonAsync("/api/products/finished-products", body);
+
+            if (!resp.IsSuccessStatusCode)
+            {
+                _modalError = await ParseErrorAsync(resp);
+                return;
+            }
+            _showModal = false;
+            await LoadDataAsync();
+        }
+        catch (Exception ex) { _modalError = ex.Message; }
+        finally { _saving = false; }
+    }
+
+    private async Task DeleteItemAsync()
+    {
+        if (!_editingId.HasValue) return;
+        var confirmed = await JS.InvokeAsync<bool>("confirm", "¿Eliminar este producto terminado?");
+        if (!confirmed) return;
+        _saving = true;
+        try
+        {
+            var client = HttpClientFactory.CreateClient("Nanchesoft.Api");
+            var resp = await client.DeleteAsync($"/api/products/finished-products/{_editingId}");
+            if (!resp.IsSuccessStatusCode) { _modalError = await ParseErrorAsync(resp); return; }
+            _showModal = false;
+            await LoadDataAsync();
+        }
+        catch (Exception ex) { _modalError = ex.Message; }
+        finally { _saving = false; }
+    }
+
+    // ── quick-create ──────────────────────────────────────────────────────────
+    private void OpenQuickCreate(string type)
+    {
+        _qcType = type;
+        _quickCreateTitle = type switch
+        {
+            "style" => "Nuevo estilo",
+            "line"  => "Nueva línea",
+            "last"  => "Nueva horma",
+            "brand" => "Nueva marca",
+            "model" => "Nuevo modelo",
+            _       => "Nuevo"
+        };
+        _qcCode = _qcName = string.Empty;
+        _quickCreateError = null;
+        _showQuickCreate = true;
+    }
+
+    private void CloseQuickCreate() { _showQuickCreate = false; _quickCreateError = null; }
+
+    private async Task SaveQuickCreateAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_qcCode) || string.IsNullOrWhiteSpace(_qcName))
+        {
+            _quickCreateError = "Código y nombre son obligatorios.";
+            return;
+        }
+        _qcSaving = true;
+        _quickCreateError = null;
+        try
+        {
+            var client = HttpClientFactory.CreateClient("Nanchesoft.Api");
+            var code = _qcCode.Trim().ToUpperInvariant();
+            var name = _qcName.Trim();
+            var (apiUrl, optUrl, idField, selector) = _qcType switch
+            {
+                "style" => ("/api/products/styles",  "/api/products/styles/options",  "productStyleId",   (Action<string>)(v => _form.ProductStyleId   = v)),
+                "line"  => ("/api/products/lines",   "/api/products/lines/options",   "productLineId",    (Action<string>)(v => _form.ProductLineId    = v)),
+                "last"  => ("/api/products/lasts",   "/api/products/lasts/options",   "productLastId",    (Action<string>)(v => _form.ProductLastId    = v)),
+                "brand" => ("/api/products/brands",  "/api/products/brands/options",  "brandId",          (Action<string>)(v => _form.ItemBrandId      = v)),
+                "model" => ("/api/products/models",  "/api/products/models/options",  "modelId",          (Action<string>)(v => _form.ItemModelId      = v)),
+                _       => throw new InvalidOperationException()
+            };
+
+            var resp = await client.PostAsJsonAsync(apiUrl, new { Code = code, Name = name, IsActive = true });
+            if (!resp.IsSuccessStatusCode) { _quickCreateError = await ParseErrorAsync(resp); return; }
+
+            var resultTxt = await resp.Content.ReadAsStringAsync();
+            var newId = string.Empty;
+            try
+            {
+                using var doc = JsonDocument.Parse(resultTxt);
+                if (doc.RootElement.TryGetProperty("id", out var p) && p.ValueKind == JsonValueKind.String)
+                    newId = p.GetString() ?? string.Empty;
+            }
+            catch { /* ignore parse error */ }
+
+            var fresh = await FetchOpts(client, optUrl, idField);
+            switch (_qcType)
+            {
+                case "style": _styleOptions = fresh; break;
+                case "line":  _lineOptions  = fresh; break;
+                case "last":  _lastOptions  = fresh; break;
+                case "brand": _brandOptions = fresh; break;
+                case "model": _modelOptions = fresh; break;
+            }
+            if (!string.IsNullOrEmpty(newId)) selector(newId);
+            _showQuickCreate = false;
+        }
+        catch (Exception ex) { _quickCreateError = ex.Message; }
+        finally { _qcSaving = false; }
+    }
+
+    private static Guid? ParseGuid(string? value)
+        => Guid.TryParse(value, out var g) ? g : (Guid?)null;
+
+    private static async Task<string> ParseErrorAsync(HttpResponseMessage resp)
+    {
+        var txt = await resp.Content.ReadAsStringAsync();
+        try
+        {
+            using var doc = JsonDocument.Parse(txt);
+            if (doc.RootElement.TryGetProperty("message", out var m)) return m.GetString() ?? txt;
+        }
+        catch { /* ignore */ }
+        return txt;
+    }
+
+    // ── types ─────────────────────────────────────────────────────────────────
+    private sealed record Opt(string Id, string Label);
+
+    private sealed class FpDto
+    {
+        public Guid FinishedProductId { get; set; }
+        public Guid? ProductStyleId { get; set; }
+        public Guid? ItemModelId { get; set; }
+        public Guid? ItemBrandId { get; set; }
+        public Guid? ProductSizeRunId { get; set; }
+        public Guid? ProductLineId { get; set; }
+        public Guid? ProductLastId { get; set; }
+        public string Code { get; set; } = string.Empty;
+        public string? Name { get; set; }
+        public string BillingName { get; set; } = string.Empty;
+        public string ProductStyleName { get; set; } = string.Empty;
+        public string ItemModelName { get; set; } = string.Empty;
+        public string ItemBrandName { get; set; } = string.Empty;
+        public string ProductSizeRunName { get; set; } = string.Empty;
+        public string ProductLineName { get; set; } = string.Empty;
+        public string ProductLastName { get; set; } = string.Empty;
+        public string Notes { get; set; } = string.Empty;
+        public bool IsActive { get; set; }
+    }
+
+    private sealed class FpForm
+    {
+        public string Code { get; set; } = string.Empty;
+        public string? Name { get; set; }
+        public string BillingName { get; set; } = string.Empty;
+        public string? ProductStyleId { get; set; }
+        public string? ProductLineId { get; set; }
+        public string? ProductLastId { get; set; }
+        public string? ItemBrandId { get; set; }
+        public string? ItemModelId { get; set; }
+        public string? ProductSizeRunId { get; set; }
+        public string? Notes { get; set; }
+        public bool IsActive { get; set; } = true;
+    }
+}
