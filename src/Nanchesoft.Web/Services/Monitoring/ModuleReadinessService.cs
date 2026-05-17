@@ -18,6 +18,7 @@ public sealed class ModuleReadinessService
         new("Productos", "Plantillas de consumo", "/products/consumption-templates", "product-consumption-profiles"),
         new("Productos", "Insumos por producto", "/products/finished-product-supplies", "finished-product-supplies"),
         new("Productos", "Distribución de tallas", "/products/material-size-distributions", "material-size-distributions"),
+        new("Productos", "Perfiles vale proceso", "/products/process-vouchers", "process-vouchers"),
         new("Productos", "Tipos de piel", "/products/leather-types", "leather-types"),
         new("Productos", "Suelas", "/products/soles", "soles"),
         new("Productos", "Colores suela", "/products/sole-colors", "sole-colors"),
