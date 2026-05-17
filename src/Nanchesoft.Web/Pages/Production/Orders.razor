@@ -43,6 +43,10 @@
     {
         <div class="alert alert-success alert-dismissible">@_message <button type="button" class="btn-close" @onclick='() => _message = string.Empty'></button></div>
     }
+    @if (!string.IsNullOrWhiteSpace(_warning))
+    {
+        <div class="alert alert-warning alert-dismissible">@_warning <button type="button" class="btn-close" @onclick='() => _warning = string.Empty'></button></div>
+    }
     @if (!string.IsNullOrWhiteSpace(_error))
     {
         <div class="alert alert-danger alert-dismissible">@_error <button type="button" class="btn-close" @onclick='() => _error = string.Empty'></button></div>
@@ -234,6 +238,7 @@
     private bool _loading = true;
     private bool _busy;
     private string _message = string.Empty;
+    private string _warning = string.Empty;
     private string _error = string.Empty;
     private string _statusFilter = string.Empty;
 
@@ -297,7 +302,7 @@
     private async Task DoAction(Guid orderId, string action)
     {
         _busy = true;
-        _message = _error = string.Empty;
+        _message = _warning = _error = string.Empty;
         try
         {
             var client = HttpClientFactory.CreateClient("Nanchesoft.Api");
@@ -305,7 +310,17 @@
             if (resp.IsSuccessStatusCode)
             {
                 var body = await resp.Content.ReadFromJsonAsync<JsonElement>();
-                _message = body.TryGetProperty("message", out var m) ? m.GetString() ?? "OK" : "Acción ejecutada.";
+                var msg = body.TryGetProperty("message", out var m) ? m.GetString() ?? "OK" : "Acción ejecutada.";
+                if (action == "explode"
+                    && body.TryGetProperty("linesWithoutTemplate", out var lwt)
+                    && lwt.GetInt32() > 0)
+                {
+                    _warning = msg;
+                }
+                else
+                {
+                    _message = msg;
+                }
                 await LoadOrdersAsync();
             }
             else

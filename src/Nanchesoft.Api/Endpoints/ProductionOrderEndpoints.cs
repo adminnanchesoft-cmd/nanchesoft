@@ -313,6 +313,7 @@ public static class ProductionOrderEndpoints
             var lineCount = 0;
             var linesWithShortage = 0;
             var linesFull = 0;
+            var linesWithoutTemplate = new List<object>();
 
             foreach (var line in order.Lines.Where(l => l.IsActive))
             {
@@ -324,7 +325,18 @@ public static class ProductionOrderEndpoints
                         && x.ProductSizeRunId == line.ProductSizeRunId
                         && x.IsActive && x.IsAuthorized);
 
-                if (template is null) continue;
+                if (template is null)
+                {
+                    linesWithoutTemplate.Add(new
+                    {
+                        lineNumber = line.LineNumber,
+                        productionOrderLineId = line.Id,
+                        styleId = line.ProductStyleId,
+                        sizeRunId = line.ProductSizeRunId,
+                        warning = "Sin plantilla de consumo activa y autorizada para el estilo/corrida de esta línea."
+                    });
+                    continue;
+                }
 
                 var supplies = await db.FinishedProductSupplies.AsNoTracking()
                     .Include(x => x.ProductComponent)
@@ -395,21 +407,28 @@ public static class ProductionOrderEndpoints
             db.MaterialRequirements.Add(requirement);
 
             order.Status = "exploded";
-            order.ExplosionStatus = linesWithShortage > 0 ? "with_shortages" : "complete";
+            order.ExplosionStatus = linesWithoutTemplate.Count > 0 && lineCount == 0
+                ? "no_templates"
+                : linesWithShortage > 0 ? "with_shortages" : "complete";
             order.UpdatedAt = now;
             order.UpdatedBy = by;
 
             await db.SaveChangesAsync();
 
+            var hasWarnings = linesWithoutTemplate.Count > 0;
             return Results.Ok(new
             {
-                message = "Explosión de materiales calculada.",
+                message = hasWarnings
+                    ? $"Explosión calculada con {linesWithoutTemplate.Count} línea(s) sin plantilla de consumo."
+                    : "Explosión de materiales calculada.",
                 status = order.Status,
                 explosionStatus = order.ExplosionStatus,
                 materialRequirementId = requirement.Id,
                 totalLines = lineCount,
                 linesWithShortage,
-                linesFull
+                linesFull,
+                linesWithoutTemplate = linesWithoutTemplate.Count,
+                warnings = linesWithoutTemplate
             });
         });
 
