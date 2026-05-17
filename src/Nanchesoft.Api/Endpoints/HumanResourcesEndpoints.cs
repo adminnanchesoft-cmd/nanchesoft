@@ -311,6 +311,20 @@ public static class HumanResourcesEndpoints
                 Phone = x.Phone,
                 TaxId = x.TaxId,
                 NationalId = x.NationalId,
+                Curp = x.Curp,
+                Nss = x.Nss,
+                ImssRegId = x.ImssRegId,
+                ContractType = x.ContractType,
+                CotizationBase = x.CotizationBase,
+                SbcFija = x.SbcFija,
+                TaxRegime = x.TaxRegime,
+                EmployeeType = x.EmployeeType,
+                SalaryZone = x.SalaryZone,
+                PayrollPeriodType = x.PayrollPeriodType,
+                PaymentForm = x.PaymentForm,
+                BankCode = x.BankCode,
+                BankAccount = x.BankAccount,
+                Clabe = x.Clabe,
                 HireDate = x.HireDate,
                 BirthDate = x.BirthDate,
                 DailySalary = x.DailySalary,
@@ -375,6 +389,20 @@ public static class HumanResourcesEndpoints
             Phone = NormalizeText(request.Phone),
             TaxId = NormalizeUpper(request.TaxId),
             NationalId = NormalizeUpper(request.NationalId),
+            Curp = NormalizeUpper(request.Curp),
+            Nss = NormalizeUpper(request.Nss),
+            ImssRegId = NormalizeUpper(request.ImssRegId),
+            ContractType = NormalizeStatus(request.ContractType, "indefinite"),
+            CotizationBase = NormalizeStatus(request.CotizationBase, "fixed"),
+            SbcFija = request.SbcFija,
+            TaxRegime = NormalizeStatus(request.TaxRegime, "sueldos_salarios"),
+            EmployeeType = NormalizeStatus(request.EmployeeType, "base"),
+            SalaryZone = string.IsNullOrWhiteSpace(request.SalaryZone) ? "A" : request.SalaryZone.ToUpperInvariant(),
+            PayrollPeriodType = NormalizeStatus(request.PayrollPeriodType, "semanal"),
+            PaymentForm = NormalizeStatus(request.PaymentForm, "tarjeta"),
+            BankCode = NormalizeText(request.BankCode),
+            BankAccount = NormalizeText(request.BankAccount),
+            Clabe = NormalizeText(request.Clabe),
             HireDate = request.HireDate?.Date ?? DateTime.UtcNow.Date,
             BirthDate = request.BirthDate?.Date,
             DailySalary = request.DailySalary,
@@ -425,6 +453,20 @@ public static class HumanResourcesEndpoints
         entity.Phone = NormalizeText(request.Phone, entity.Phone);
         entity.TaxId = NormalizeUpper(request.TaxId, entity.TaxId);
         entity.NationalId = NormalizeUpper(request.NationalId, entity.NationalId);
+        entity.Curp = NormalizeUpper(request.Curp, entity.Curp);
+        entity.Nss = NormalizeUpper(request.Nss, entity.Nss);
+        entity.ImssRegId = NormalizeUpper(request.ImssRegId, entity.ImssRegId);
+        entity.ContractType = NormalizeStatus(request.ContractType, entity.ContractType);
+        entity.CotizationBase = NormalizeStatus(request.CotizationBase, entity.CotizationBase);
+        entity.SbcFija = request.SbcFija > 0 ? request.SbcFija : entity.SbcFija;
+        entity.TaxRegime = NormalizeStatus(request.TaxRegime, entity.TaxRegime);
+        entity.EmployeeType = NormalizeStatus(request.EmployeeType, entity.EmployeeType);
+        entity.SalaryZone = string.IsNullOrWhiteSpace(request.SalaryZone) ? entity.SalaryZone : request.SalaryZone.ToUpperInvariant();
+        entity.PayrollPeriodType = NormalizeStatus(request.PayrollPeriodType, entity.PayrollPeriodType);
+        entity.PaymentForm = NormalizeStatus(request.PaymentForm, entity.PaymentForm);
+        entity.BankCode = NormalizeText(request.BankCode, entity.BankCode);
+        entity.BankAccount = NormalizeText(request.BankAccount, entity.BankAccount);
+        entity.Clabe = NormalizeText(request.Clabe, entity.Clabe);
         entity.HireDate = request.HireDate?.Date ?? entity.HireDate;
         entity.BirthDate = request.BirthDate?.Date;
         entity.DailySalary = request.DailySalary;
@@ -805,8 +847,14 @@ public static class HumanResourcesEndpoints
                 ConceptType = x.ConceptType,
                 CalculationType = x.CalculationType,
                 SatCode = x.SatCode,
+                SatAgrupador = x.SatAgrupador,
                 TaxableType = x.TaxableType,
+                TaxablePercent = x.TaxablePercent,
+                ExemptPercent = x.ExemptPercent,
                 IsRecurring = x.IsRecurring,
+                IsAutomatic = x.IsAutomatic,
+                PrintOnReceipt = x.PrintOnReceipt,
+                SortOrder = x.SortOrder,
                 IsActive = x.IsActive
             })
             .ToListAsync();
@@ -841,8 +889,14 @@ public static class HumanResourcesEndpoints
             ConceptType = NormalizeStatus(request.ConceptType, "earning"),
             CalculationType = NormalizeStatus(request.CalculationType, "manual"),
             SatCode = NormalizeText(request.SatCode),
+            SatAgrupador = NormalizeText(request.SatAgrupador),
             TaxableType = NormalizeStatus(request.TaxableType, "not_applicable"),
+            TaxablePercent = request.TaxablePercent > 0 ? request.TaxablePercent : 100m,
+            ExemptPercent = request.ExemptPercent,
             IsRecurring = request.IsRecurring,
+            IsAutomatic = request.IsAutomatic,
+            PrintOnReceipt = request.PrintOnReceipt,
+            SortOrder = request.SortOrder,
             IsActive = request.IsActive,
             CreatedBy = "web-api"
         };
@@ -867,8 +921,14 @@ public static class HumanResourcesEndpoints
         entity.ConceptType = NormalizeStatus(request.ConceptType, entity.ConceptType);
         entity.CalculationType = NormalizeStatus(request.CalculationType, entity.CalculationType);
         entity.SatCode = NormalizeText(request.SatCode, entity.SatCode);
+        entity.SatAgrupador = NormalizeText(request.SatAgrupador, entity.SatAgrupador);
         entity.TaxableType = NormalizeStatus(request.TaxableType, entity.TaxableType);
+        entity.TaxablePercent = request.TaxablePercent > 0 ? request.TaxablePercent : entity.TaxablePercent;
+        entity.ExemptPercent = request.ExemptPercent;
         entity.IsRecurring = request.IsRecurring;
+        entity.IsAutomatic = request.IsAutomatic;
+        entity.PrintOnReceipt = request.PrintOnReceipt;
+        entity.SortOrder = request.SortOrder;
         entity.IsActive = request.IsActive;
         entity.UpdatedAt = DateTime.UtcNow;
         entity.UpdatedBy = "web-api";
@@ -1187,6 +1247,20 @@ public class EmployeeRequest
     public string? Phone { get; set; }
     public string? TaxId { get; set; }
     public string? NationalId { get; set; }
+    public string? Curp { get; set; }
+    public string? Nss { get; set; }
+    public string? ImssRegId { get; set; }
+    public string? ContractType { get; set; }
+    public string? CotizationBase { get; set; }
+    public decimal SbcFija { get; set; }
+    public string? TaxRegime { get; set; }
+    public string? EmployeeType { get; set; }
+    public string? SalaryZone { get; set; }
+    public string? PayrollPeriodType { get; set; }
+    public string? PaymentForm { get; set; }
+    public string? BankCode { get; set; }
+    public string? BankAccount { get; set; }
+    public string? Clabe { get; set; }
     public DateTime? HireDate { get; set; }
     public DateTime? BirthDate { get; set; }
     public decimal DailySalary { get; set; }
@@ -1284,8 +1358,14 @@ public class PayrollConceptRequest
     public string? ConceptType { get; set; }
     public string? CalculationType { get; set; }
     public string? SatCode { get; set; }
+    public string? SatAgrupador { get; set; }
     public string? TaxableType { get; set; }
+    public decimal TaxablePercent { get; set; } = 100m;
+    public decimal ExemptPercent { get; set; } = 0m;
     public bool IsRecurring { get; set; }
+    public bool IsAutomatic { get; set; } = true;
+    public bool PrintOnReceipt { get; set; } = true;
+    public int SortOrder { get; set; }
     public bool IsActive { get; set; } = true;
 }
 

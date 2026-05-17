@@ -32,7 +32,25 @@ public sealed class Employee : BaseEntity
     public DateTime? BirthDate { get; set; }
     public decimal DailySalary { get; set; }
     public decimal IntegratedDailySalary { get; set; }
+    public decimal SbcFija { get; set; }
     public string Status { get; set; } = "active";
+
+    // Datos IMSS / SAT
+    public string Curp { get; set; } = string.Empty;
+    public string Nss { get; set; } = string.Empty;
+    public string ImssRegId { get; set; } = string.Empty;
+    public string ContractType { get; set; } = "indefinite";
+    public string CotizationBase { get; set; } = "fixed";
+    public string TaxRegime { get; set; } = "sueldos_salarios";
+    public string EmployeeType { get; set; } = "base";
+    public string SalaryZone { get; set; } = "A";
+    public string PayrollPeriodType { get; set; } = "semanal";
+
+    // Datos bancarios
+    public string PaymentForm { get; set; } = "tarjeta";
+    public string BankCode { get; set; } = string.Empty;
+    public string BankAccount { get; set; } = string.Empty;
+    public string Clabe { get; set; } = string.Empty;
 
     public string GetFullName()
     {

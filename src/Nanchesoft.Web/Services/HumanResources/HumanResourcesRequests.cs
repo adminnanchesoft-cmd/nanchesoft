@@ -41,6 +41,22 @@ public sealed class EmployeeRequest
     public decimal DailySalary { get; set; }
     public decimal IntegratedDailySalary { get; set; }
     public string Status { get; set; } = string.Empty;
+    // IMSS / SAT
+    public string Curp { get; set; } = string.Empty;
+    public string Nss { get; set; } = string.Empty;
+    public string ImssRegId { get; set; } = string.Empty;
+    public string ContractType { get; set; } = string.Empty;
+    public string CotizationBase { get; set; } = string.Empty;
+    public decimal SbcFija { get; set; }
+    public string TaxRegime { get; set; } = string.Empty;
+    public string EmployeeType { get; set; } = string.Empty;
+    public string SalaryZone { get; set; } = string.Empty;
+    public string PayrollPeriodType { get; set; } = string.Empty;
+    // Banco
+    public string PaymentForm { get; set; } = string.Empty;
+    public string BankCode { get; set; } = string.Empty;
+    public string BankAccount { get; set; } = string.Empty;
+    public string Clabe { get; set; } = string.Empty;
     public bool IsActive { get; set; } = true;
 }
 
@@ -97,8 +113,14 @@ public sealed class PayrollConceptRequest
     public string ConceptType { get; set; } = string.Empty;
     public string CalculationType { get; set; } = string.Empty;
     public string SatCode { get; set; } = string.Empty;
+    public string SatAgrupador { get; set; } = string.Empty;
     public string TaxableType { get; set; } = string.Empty;
+    public decimal TaxablePercent { get; set; } = 100m;
+    public decimal ExemptPercent { get; set; } = 0m;
     public bool IsRecurring { get; set; }
+    public bool IsAutomatic { get; set; } = true;
+    public bool PrintOnReceipt { get; set; } = true;
+    public int SortOrder { get; set; }
     public bool IsActive { get; set; } = true;
 }
 

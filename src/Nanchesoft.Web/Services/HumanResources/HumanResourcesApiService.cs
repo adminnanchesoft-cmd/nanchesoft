@@ -198,6 +198,22 @@ public sealed class HumanResourcesApiService
                 NumberColumn("DailySalary", "Salario diario", width: 120),
                 NumberColumn("IntegratedDailySalary", "SDI", width: 120),
                 TextColumn("Status", "Estatus", width: 110),
+                // IMSS / SAT
+                TextColumn("Curp", "CURP", width: 180),
+                TextColumn("Nss", "NSS", width: 130),
+                TextColumn("ImssRegId", "Reg. Patronal", width: 150),
+                LookupColumn("ContractType", "Tipo contrato", ContractTypes(), width: 170),
+                LookupColumn("CotizationBase", "Base cotización", CotizationBases(), width: 150),
+                NumberColumn("SbcFija", "SBC Fija", width: 110),
+                LookupColumn("TaxRegime", "Régimen fiscal", TaxRegimes(), width: 190),
+                LookupColumn("EmployeeType", "Tipo empleado", EmployeeTypes(), width: 140),
+                LookupColumn("SalaryZone", "Zona salarial", SalaryZones(), width: 110),
+                LookupColumn("PayrollPeriodType", "Periodo nómina", PeriodTypes(), width: 180),
+                // Banco
+                LookupColumn("PaymentForm", "Forma pago", PaymentForms(), width: 150),
+                TextColumn("BankCode", "Banco", width: 100),
+                TextColumn("BankAccount", "Cuenta", width: 150),
+                TextColumn("Clabe", "CLABE", width: 190),
                 BoolColumn("IsActive", "Activo", width: 90)
             ],
             rows.Select(x => Row(
@@ -220,6 +236,20 @@ public sealed class HumanResourcesApiService
                 ("DailySalary", x.DailySalary),
                 ("IntegratedDailySalary", x.IntegratedDailySalary),
                 ("Status", x.Status),
+                ("Curp", x.Curp),
+                ("Nss", x.Nss),
+                ("ImssRegId", x.ImssRegId),
+                ("ContractType", x.ContractType),
+                ("CotizationBase", x.CotizationBase),
+                ("SbcFija", x.SbcFija),
+                ("TaxRegime", x.TaxRegime),
+                ("EmployeeType", x.EmployeeType),
+                ("SalaryZone", x.SalaryZone),
+                ("PayrollPeriodType", x.PayrollPeriodType),
+                ("PaymentForm", x.PaymentForm),
+                ("BankCode", x.BankCode),
+                ("BankAccount", x.BankAccount),
+                ("Clabe", x.Clabe),
                 ("IsActive", x.IsActive)))
             .ToList());
     }
@@ -320,6 +350,51 @@ public sealed class HumanResourcesApiService
         new() { Id = "mensual",    Name = "Mensual (30/31 días)" },
     ];
 
+    private static List<CatalogLookupItem> ContractTypes() =>
+    [
+        new() { Id = "indefinite",        Name = "Indeterminado" },
+        new() { Id = "determined",        Name = "Determinado" },
+        new() { Id = "construction_temp", Name = "Obra determinada" },
+        new() { Id = "field_temp",        Name = "Temporada" },
+        new() { Id = "trial",             Name = "A prueba" },
+        new() { Id = "training",          Name = "Capacitación" },
+    ];
+
+    private static List<CatalogLookupItem> CotizationBases() =>
+    [
+        new() { Id = "fixed",    Name = "Fija" },
+        new() { Id = "variable", Name = "Variable" },
+        new() { Id = "mixed",    Name = "Mixta" },
+    ];
+
+    private static List<CatalogLookupItem> TaxRegimes() =>
+    [
+        new() { Id = "sueldos_salarios", Name = "Sueldos y Salarios" },
+        new() { Id = "asimilados",       Name = "Asimilados a Salarios" },
+    ];
+
+    private static List<CatalogLookupItem> EmployeeTypes() =>
+    [
+        new() { Id = "base",      Name = "Base" },
+        new() { Id = "confianza", Name = "Confianza" },
+        new() { Id = "eventual",  Name = "Eventual" },
+    ];
+
+    private static List<CatalogLookupItem> SalaryZones() =>
+    [
+        new() { Id = "A", Name = "Zona A" },
+        new() { Id = "B", Name = "Zona B" },
+        new() { Id = "C", Name = "Zona C" },
+    ];
+
+    private static List<CatalogLookupItem> PaymentForms() =>
+    [
+        new() { Id = "tarjeta",       Name = "Tarjeta bancaria" },
+        new() { Id = "transferencia", Name = "Transferencia" },
+        new() { Id = "efectivo",      Name = "Efectivo" },
+        new() { Id = "cheque",        Name = "Cheque" },
+    ];
+
     private static List<CatalogLookupItem> PeriodStatuses() =>
     [
         new() { Id = "draft",     Name = "Borrador" },
@@ -387,9 +462,15 @@ public sealed class HumanResourcesApiService
                 TextColumn("Name", "Concepto", required: true, width: 220),
                 TextColumn("ConceptType", "Tipo", required: true, width: 110),
                 TextColumn("CalculationType", "Cálculo", required: true, width: 120),
-                TextColumn("SatCode", "SAT", width: 90),
-                TextColumn("TaxableType", "Fiscal", width: 120),
+                TextColumn("SatCode", "Código SAT", width: 100),
+                TextColumn("SatAgrupador", "Agrupador SAT", width: 130),
+                TextColumn("TaxableType", "Tipo fiscal", width: 120),
+                NumberColumn("TaxablePercent", "% Gravado", width: 90),
+                NumberColumn("ExemptPercent", "% Exento", width: 90),
                 BoolColumn("IsRecurring", "Recurrente", width: 100),
+                BoolColumn("IsAutomatic", "Auto", width: 80),
+                BoolColumn("PrintOnReceipt", "Imprime", width: 90),
+                NumberColumn("SortOrder", "Orden", width: 80),
                 BoolColumn("IsActive", "Activo", width: 90)
             ],
             rows.Select(x => Row(
@@ -400,8 +481,14 @@ public sealed class HumanResourcesApiService
                 ("ConceptType", x.ConceptType),
                 ("CalculationType", x.CalculationType),
                 ("SatCode", x.SatCode),
+                ("SatAgrupador", x.SatAgrupador),
                 ("TaxableType", x.TaxableType),
+                ("TaxablePercent", x.TaxablePercent),
+                ("ExemptPercent", x.ExemptPercent),
                 ("IsRecurring", x.IsRecurring),
+                ("IsAutomatic", x.IsAutomatic),
+                ("PrintOnReceipt", x.PrintOnReceipt),
+                ("SortOrder", x.SortOrder),
                 ("IsActive", x.IsActive)))
             .ToList());
     }
@@ -699,6 +786,20 @@ public sealed class HumanResourcesApiService
         DailySalary = ReadDecimal(payload, "DailySalary"),
         IntegratedDailySalary = ReadDecimal(payload, "IntegratedDailySalary"),
         Status = ReadString(payload, "Status"),
+        Curp = ReadString(payload, "Curp"),
+        Nss = ReadString(payload, "Nss"),
+        ImssRegId = ReadString(payload, "ImssRegId"),
+        ContractType = ReadString(payload, "ContractType"),
+        CotizationBase = ReadString(payload, "CotizationBase"),
+        SbcFija = ReadDecimal(payload, "SbcFija"),
+        TaxRegime = ReadString(payload, "TaxRegime"),
+        EmployeeType = ReadString(payload, "EmployeeType"),
+        SalaryZone = ReadString(payload, "SalaryZone"),
+        PayrollPeriodType = ReadString(payload, "PayrollPeriodType"),
+        PaymentForm = ReadString(payload, "PaymentForm"),
+        BankCode = ReadString(payload, "BankCode"),
+        BankAccount = ReadString(payload, "BankAccount"),
+        Clabe = ReadString(payload, "Clabe"),
         IsActive = ReadBool(payload, "IsActive", true)
     };
 
@@ -755,8 +856,14 @@ public sealed class HumanResourcesApiService
         ConceptType = ReadString(payload, "ConceptType"),
         CalculationType = ReadString(payload, "CalculationType"),
         SatCode = ReadString(payload, "SatCode"),
+        SatAgrupador = ReadString(payload, "SatAgrupador"),
         TaxableType = ReadString(payload, "TaxableType"),
         IsRecurring = ReadBool(payload, "IsRecurring"),
+        IsAutomatic = ReadBool(payload, "IsAutomatic", true),
+        PrintOnReceipt = ReadBool(payload, "PrintOnReceipt", true),
+        TaxablePercent = ReadDecimal(payload, "TaxablePercent", 100m),
+        ExemptPercent = ReadDecimal(payload, "ExemptPercent", 0m),
+        SortOrder = ReadInt(payload, "SortOrder"),
         IsActive = ReadBool(payload, "IsActive", true)
     };
 
@@ -1073,6 +1180,22 @@ public sealed class EmployeeDto
     public decimal DailySalary { get; set; }
     public decimal IntegratedDailySalary { get; set; }
     public string Status { get; set; } = string.Empty;
+    // IMSS / SAT
+    public string Curp { get; set; } = string.Empty;
+    public string Nss { get; set; } = string.Empty;
+    public string ImssRegId { get; set; } = string.Empty;
+    public string ContractType { get; set; } = string.Empty;
+    public string CotizationBase { get; set; } = string.Empty;
+    public decimal SbcFija { get; set; }
+    public string TaxRegime { get; set; } = string.Empty;
+    public string EmployeeType { get; set; } = string.Empty;
+    public string SalaryZone { get; set; } = string.Empty;
+    public string PayrollPeriodType { get; set; } = string.Empty;
+    // Banco
+    public string PaymentForm { get; set; } = string.Empty;
+    public string BankCode { get; set; } = string.Empty;
+    public string BankAccount { get; set; } = string.Empty;
+    public string Clabe { get; set; } = string.Empty;
     public bool IsActive { get; set; }
 }
 
@@ -1145,8 +1268,14 @@ public sealed class PayrollConceptDto
     public string ConceptType { get; set; } = string.Empty;
     public string CalculationType { get; set; } = string.Empty;
     public string SatCode { get; set; } = string.Empty;
+    public string SatAgrupador { get; set; } = string.Empty;
     public string TaxableType { get; set; } = string.Empty;
+    public decimal TaxablePercent { get; set; }
+    public decimal ExemptPercent { get; set; }
     public bool IsRecurring { get; set; }
+    public bool IsAutomatic { get; set; }
+    public bool PrintOnReceipt { get; set; }
+    public int SortOrder { get; set; }
     public bool IsActive { get; set; }
 }
 

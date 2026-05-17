@@ -22,6 +22,8 @@ public static class PayrollMvpEndpoints
         var runs = app.MapGroup("/api/payroll/runs").WithTags("PayrollRuns");
         runs.MapPost("/{runId:guid}/calculate", CalculatePayrollRunAsync);
 
+        app.MapPost("/api/payroll/seed-default-concepts", SeedDefaultConceptsAsync).WithTags("PayrollConcepts");
+
         return app;
     }
 
@@ -526,15 +528,21 @@ public static class PayrollMvpEndpoints
             return Results.BadRequest(new { message = "No hay empleados activos para calcular." });
 
         var concepts = await db.PayrollConcepts.Where(x => x.CompanyId == run.CompanyId && x.IsActive).ToListAsync();
-        var conceptSal = concepts.FirstOrDefault(x => x.Code == "SAL") ?? concepts.FirstOrDefault(x => x.ConceptType == "perception");
-        var conceptBon = concepts.FirstOrDefault(x => x.Code == "BON") ?? concepts.FirstOrDefault(x => x.ConceptType == "perception" && x.Code != (conceptSal?.Code ?? ""));
-        var conceptIsr = concepts.FirstOrDefault(x => x.Code == "ISR") ?? concepts.FirstOrDefault(x => x.ConceptType == "deduction");
+        var conceptSal   = concepts.FirstOrDefault(x => x.Code == "SAL")
+                        ?? concepts.FirstOrDefault(x => x.SatCode == "P-001" && x.ConceptType == "perception")
+                        ?? concepts.FirstOrDefault(x => x.ConceptType == "perception");
+        var conceptBon   = concepts.FirstOrDefault(x => x.Code == "BON")
+                        ?? concepts.FirstOrDefault(x => x.ConceptType == "perception" && x.Code != (conceptSal?.Code ?? ""));
+        var conceptSubse = concepts.FirstOrDefault(x => x.Code == "SUBSE")
+                        ?? concepts.FirstOrDefault(x => x.SatCode == "P-017");
+        var conceptImss  = concepts.FirstOrDefault(x => x.Code == "IMSS")
+                        ?? concepts.FirstOrDefault(x => x.SatCode == "D-001");
+        var conceptIsr   = concepts.FirstOrDefault(x => x.Code == "ISR")
+                        ?? concepts.FirstOrDefault(x => x.SatCode == "D-002")
+                        ?? concepts.FirstOrDefault(x => x.ConceptType == "deduction");
 
         if (conceptSal is null)
-            return Results.BadRequest(new { message = "No existe concepto de percepción (SAL) configurado." });
-
-        if (conceptIsr is null)
-            return Results.BadRequest(new { message = "No existe concepto de deducción (ISR) configurado." });
+            return Results.BadRequest(new { message = "No existe concepto de percepción (SAL) configurado. Use POST /api/payroll/concepts/seed-defaults para crearlos." });
 
         // Step 1: Delete auto-generated details — safe, no external FK references point to details
         var oldDetails = await db.PayrollRunLineDetails
@@ -679,8 +687,18 @@ public static class PayrollMvpEndpoints
                 }
             }
 
-            decimal grossAmount = baseSalary + extraPerceptions;
-            decimal deductionsAmount = extraDeductions + loanDeductionTotal;
+            // ── ISR 2024 (Art. 96 LISR + Subsidio al Empleo) ──
+            decimal grossTaxable = baseSalary + extraPerceptions;
+            var (netIsrPeriod, subsidioPerception) = CalculateIsrAndSubsidio(grossTaxable, periodDays);
+
+            // ── IMSS cuota obrera ──
+            var sbc = employee.SbcFija > 0
+                ? employee.SbcFija
+                : (employee.IntegratedDailySalary > 0 ? employee.IntegratedDailySalary : employee.DailySalary);
+            var imssAmount = conceptImss is not null ? CalculateImssCuotaObrera(sbc, periodDays) : 0m;
+
+            decimal grossAmount = baseSalary + extraPerceptions + subsidioPerception;
+            decimal deductionsAmount = extraDeductions + imssAmount + netIsrPeriod + loanDeductionTotal;
             decimal netAmount = Math.Max(0m, grossAmount - deductionsAmount);
 
             PayrollRunLine line;
@@ -723,6 +741,7 @@ public static class PayrollMvpEndpoints
             // ── Detalles por concepto ──
             int sortOrder = 10;
 
+            // Percepciones
             if (baseSalary > 0m)
             {
                 db.PayrollRunLineDetails.Add(BuildDetail(run, line, employee, conceptSal, daysPaid, baseSalary, sortOrder));
@@ -735,9 +754,26 @@ public static class PayrollMvpEndpoints
                 sortOrder += 10;
             }
 
-            if (extraDeductions > 0m)
+            if (subsidioPerception > 0m && conceptSubse is not null)
             {
-                db.PayrollRunLineDetails.Add(BuildDetail(run, line, employee, conceptIsr, 1m, extraDeductions, 90, isDeduction: true));
+                db.PayrollRunLineDetails.Add(BuildDetail(run, line, employee, conceptSubse, 1m, subsidioPerception, sortOrder, isDeduction: false));
+                sortOrder += 10;
+            }
+
+            // Deducciones
+            if (extraDeductions > 0m && conceptIsr is not null)
+            {
+                db.PayrollRunLineDetails.Add(BuildDetail(run, line, employee, conceptIsr, 1m, extraDeductions, 85, isDeduction: true));
+            }
+
+            if (imssAmount > 0m && conceptImss is not null)
+            {
+                db.PayrollRunLineDetails.Add(BuildDetail(run, line, employee, conceptImss, periodDays, imssAmount, 90, isDeduction: true));
+            }
+
+            if (netIsrPeriod > 0m && conceptIsr is not null)
+            {
+                db.PayrollRunLineDetails.Add(BuildDetail(run, line, employee, conceptIsr, 1m, netIsrPeriod, 95, isDeduction: true));
             }
 
             if (loanDeductionTotal > 0m && activeLoans is not null)
@@ -745,10 +781,10 @@ public static class PayrollMvpEndpoints
                 foreach (var loan in activeLoans)
                 {
                     var loanConcept = concepts.FirstOrDefault(x => x.Id == loan.PayrollConceptId) ?? conceptIsr;
-                    var installment = Math.Min(loan.InstallmentAmount, loan.BalanceAmount + Math.Min(loan.InstallmentAmount, loan.BalanceAmount));
-                    installment = loanDeductionsToCreate.FirstOrDefault(x => x.EmployeeLoanId == loan.Id)?.Amount ?? 0m;
+                    if (loanConcept is null) continue;
+                    var installment = loanDeductionsToCreate.FirstOrDefault(x => x.EmployeeLoanId == loan.Id)?.Amount ?? 0m;
                     if (installment > 0m)
-                        db.PayrollRunLineDetails.Add(BuildDetail(run, line, employee, loanConcept, 1m, installment, 95, isDeduction: true));
+                        db.PayrollRunLineDetails.Add(BuildDetail(run, line, employee, loanConcept, 1m, installment, 100, isDeduction: true));
                 }
             }
         }
@@ -775,6 +811,137 @@ public static class PayrollMvpEndpoints
             deductionsAmount = run.DeductionsAmount,
             netAmount = run.NetAmount
         });
+    }
+
+    // ──────────────────────────────────────────────────────────────
+    // 6. SEMBRAR CONCEPTOS PREDETERMINADOS
+    // ──────────────────────────────────────────────────────────────
+    private static async Task<IResult> SeedDefaultConceptsAsync(NanchesoftDbContext db)
+    {
+        var company = await db.Companies.OrderBy(x => x.CreatedAt).FirstOrDefaultAsync();
+        if (company is null)
+            return Results.BadRequest(new { message = "No existe empresa configurada." });
+
+        var seed = new[]
+        {
+            new { Code = "SAL",   Name = "Sueldo",               ConceptType = "perception", CalculationType = "days_salary",   SatCode = "P-001", SatAgrupador = "HorasExtra",  TaxableType = "taxable",     TaxablePercent = 100m, ExemptPercent = 0m,   IsRecurring = true,  IsAutomatic = true,  SortOrder = 10 },
+            new { Code = "BON",   Name = "Bonificación",          ConceptType = "perception", CalculationType = "manual",        SatCode = "P-016", SatAgrupador = "OtrosPagos",  TaxableType = "taxable",     TaxablePercent = 100m, ExemptPercent = 0m,   IsRecurring = false, IsAutomatic = false, SortOrder = 20 },
+            new { Code = "HEORD", Name = "Horas Extra Ordinarias",ConceptType = "perception", CalculationType = "hours",         SatCode = "P-019", SatAgrupador = "HorasExtra",  TaxableType = "mixed",       TaxablePercent = 50m,  ExemptPercent = 50m,  IsRecurring = false, IsAutomatic = false, SortOrder = 30 },
+            new { Code = "PV",    Name = "Prima Vacacional",      ConceptType = "perception", CalculationType = "manual",        SatCode = "P-021", SatAgrupador = "Prima",       TaxableType = "mixed",       TaxablePercent = 60m,  ExemptPercent = 40m,  IsRecurring = false, IsAutomatic = false, SortOrder = 40 },
+            new { Code = "AGUI",  Name = "Aguinaldo",             ConceptType = "perception", CalculationType = "manual",        SatCode = "P-002", SatAgrupador = "Prima",       TaxableType = "mixed",       TaxablePercent = 100m, ExemptPercent = 0m,   IsRecurring = false, IsAutomatic = false, SortOrder = 50 },
+            new { Code = "SUBSE", Name = "Subsidio al Empleo",    ConceptType = "perception", CalculationType = "auto_subsidy",  SatCode = "P-017", SatAgrupador = "SubsidioEmpleo", TaxableType = "exempt",  TaxablePercent = 0m,   ExemptPercent = 100m, IsRecurring = true,  IsAutomatic = true,  SortOrder = 60 },
+            new { Code = "IMSS",  Name = "Cuota IMSS Obrera",     ConceptType = "deduction",  CalculationType = "auto_imss",     SatCode = "D-001", SatAgrupador = "SeguridadSocial", TaxableType = "taxable",TaxablePercent = 100m, ExemptPercent = 0m,   IsRecurring = true,  IsAutomatic = true,  SortOrder = 90 },
+            new { Code = "ISR",   Name = "Retención ISR",         ConceptType = "deduction",  CalculationType = "auto_isr",      SatCode = "D-002", SatAgrupador = "ISR",         TaxableType = "taxable",     TaxablePercent = 100m, ExemptPercent = 0m,   IsRecurring = true,  IsAutomatic = true,  SortOrder = 95 },
+            new { Code = "PRESTA",Name = "Préstamo",              ConceptType = "deduction",  CalculationType = "fixed_amount",  SatCode = "D-004", SatAgrupador = "Deduccion",   TaxableType = "not_applicable", TaxablePercent = 0m,ExemptPercent = 0m,   IsRecurring = false, IsAutomatic = false, SortOrder = 100 },
+        };
+
+        int created = 0, skipped = 0;
+        foreach (var s in seed)
+        {
+            if (await db.PayrollConcepts.AnyAsync(x => x.CompanyId == company.Id && x.Code == s.Code))
+            {
+                skipped++;
+                continue;
+            }
+            db.PayrollConcepts.Add(new PayrollConcept
+            {
+                TenantId = company.TenantId,
+                CompanyId = company.Id,
+                Code = s.Code,
+                Name = s.Name,
+                ConceptType = s.ConceptType,
+                CalculationType = s.CalculationType,
+                SatCode = s.SatCode,
+                SatAgrupador = s.SatAgrupador,
+                TaxableType = s.TaxableType,
+                TaxablePercent = s.TaxablePercent,
+                ExemptPercent = s.ExemptPercent,
+                IsRecurring = s.IsRecurring,
+                IsAutomatic = s.IsAutomatic,
+                PrintOnReceipt = true,
+                SortOrder = s.SortOrder,
+                IsActive = true,
+                CreatedBy = "seed"
+            });
+            created++;
+        }
+        await db.SaveChangesAsync();
+        return Results.Ok(new { success = true, created, skipped });
+    }
+
+    // ── ISR 2024 tarifa Art. 96 LISR (importes mensuales) ──
+    private static readonly (decimal LI, decimal LS, decimal CF, decimal Rate)[] IsrTable2024 =
+    [
+        (      0.01m,     746.04m,      0.00m, 0.0192m),
+        (    746.05m,   6_332.05m,     14.32m, 0.0640m),
+        (  6_332.06m,  11_128.01m,    371.83m, 0.1088m),
+        ( 11_128.02m,  12_935.82m,    893.63m, 0.1600m),
+        ( 12_935.83m,  15_487.71m,  1_182.88m, 0.1792m),
+        ( 15_487.72m,  31_236.49m,  1_640.18m, 0.2136m),
+        ( 31_236.50m,  49_233.00m,  5_004.12m, 0.2352m),
+        ( 49_233.01m,  93_993.90m,  9_236.89m, 0.3000m),
+        ( 93_993.91m, 125_325.20m, 22_665.17m, 0.3200m),
+        (125_325.21m, 375_975.61m, 32_691.18m, 0.3400m),
+        (375_975.62m, decimal.MaxValue, 117_912.32m, 0.3500m),
+    ];
+
+    // ── Subsidio al Empleo 2024 (importes mensuales) ──
+    private static readonly (decimal LI, decimal LS, decimal Subsidy)[] SubsidioTable2024 =
+    [
+        (    0.01m, 1_768.96m, 407.02m),
+        (1_768.97m, 2_653.38m, 406.83m),
+        (2_653.39m, 3_472.84m, 406.62m),
+        (3_472.85m, 3_537.87m, 392.77m),
+        (3_537.88m, 4_446.15m, 382.46m),
+        (4_446.16m, 4_717.18m, 354.23m),
+        (4_717.19m, 5_335.42m, 324.87m),
+        (5_335.43m, 6_224.67m, 294.63m),
+        (6_224.68m, 7_113.90m, 253.54m),
+        (7_113.91m, 7_382.33m, 217.61m),
+        (7_382.34m, decimal.MaxValue, 0.00m),
+    ];
+
+    private const decimal UmaDaily2024 = 108.57m;
+
+    private static decimal IsrMonthly(decimal monthlyTaxable)
+    {
+        if (monthlyTaxable <= 0m) return 0m;
+        foreach (var (li, ls, cf, rate) in IsrTable2024)
+            if (monthlyTaxable >= li && monthlyTaxable <= ls)
+                return Math.Round(cf + (monthlyTaxable - li) * rate, 2);
+        return 0m;
+    }
+
+    private static decimal SubsidioMonthly(decimal monthlyTaxable)
+    {
+        if (monthlyTaxable <= 0m) return 0m;
+        foreach (var (li, ls, subsidy) in SubsidioTable2024)
+            if (monthlyTaxable >= li && monthlyTaxable <= ls)
+                return subsidy;
+        return 0m;
+    }
+
+    // Returns (netISR, subsidioPerception) — one of these will be zero.
+    private static (decimal NetIsr, decimal SubsidioPerception) CalculateIsrAndSubsidio(decimal taxable, int periodDays)
+    {
+        if (taxable <= 0m || periodDays <= 0) return (0m, 0m);
+        var factor = periodDays / 30.4m;
+        var monthly = taxable / factor;
+        var isr = IsrMonthly(monthly) * factor;
+        var sub = SubsidioMonthly(monthly) * factor;
+        if (sub >= isr) return (0m, Math.Round(sub - isr, 2));
+        return (Math.Round(isr - sub, 2), 0m);
+    }
+
+    private static decimal CalculateImssCuotaObrera(decimal sbcDaily, int periodDays)
+    {
+        if (sbcDaily <= 0m || periodDays <= 0) return 0m;
+        var excess    = Math.Max(0m, sbcDaily - 3m * UmaDaily2024);
+        var emExcede  = excess   * 0.0040m;   // EM excedente obrera
+        var emDinero  = sbcDaily * 0.0025m;   // EM prestaciones en dinero
+        var iv        = sbcDaily * 0.00625m;  // Invalidez y vida
+        var cv        = sbcDaily * 0.01125m;  // Cesantía en edad avanzada y vejez
+        return Math.Round((emExcede + emDinero + iv + cv) * periodDays, 2);
     }
 
     private static PayrollRunLineDetail BuildDetail(
