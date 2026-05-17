@@ -18,6 +18,13 @@ public sealed class ModuleReadinessService
         new("Productos", "Plantillas de consumo", "/products/consumption-templates", "product-consumption-profiles"),
         new("Productos", "Insumos por producto", "/products/finished-product-supplies", "finished-product-supplies"),
         new("Productos", "Distribución de tallas", "/products/material-size-distributions", "material-size-distributions"),
+        // Producción
+        new("Producción", "Celdas", "/produccion/celdas", "production-cells"),
+        new("Producción", "Vales", "/produccion/vales", "production-vouchers"),
+        new("Producción", "En proceso", "/produccion/en-proceso", "production-in-process"),
+        new("Producción", "Sobrantes", "/produccion/sobrantes", "production-surplus"),
+        new("Producción", "Registros destajo", "/produccion/destajo", "piecework-records"),
+        new("Producción", "Tarifas destajo", "/produccion/tarifas-destajo", "piecework-rates"),
         // Compras
         new("Compras", "Requisiciones", "/purchases/requisitions", "purchase-requisitions"),
         new("Compras", "Órdenes de compra", "/purchases/orders", "purchase-orders"),

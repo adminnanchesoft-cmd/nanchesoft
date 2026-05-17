@@ -11,6 +11,7 @@ using Nanchesoft.Web.Services.Purchases;
 using Nanchesoft.Web.Services.Sales;
 using Nanchesoft.Web.Services.Security;
 using Nanchesoft.Web.Services.ThirdPartiesProducts;
+using Nanchesoft.Web.Services.Production;
 using Nanchesoft.Web.Services.Warehouses;
 
 namespace Nanchesoft.Web.Services.Catalogs;
@@ -136,6 +137,12 @@ public sealed class CatalogCrudDispatcher
             "manufacturing-types",
             "toe-caps",
             "dies",
+            "production-cells",
+            "production-vouchers",
+            "production-in-process",
+            "production-surplus",
+            "piecework-records",
+            "piecework-rates",
     };
 
     private static readonly HashSet<string> ReadOnlyCatalogKeys = new(StringComparer.OrdinalIgnoreCase)
@@ -192,6 +199,8 @@ public sealed class CatalogCrudDispatcher
                 => Resolve<HumanResourcesEnterpriseApiService>().GetCatalogAsync(normalized),
             "unit-conversions" or "size-runs" or "families" or "lasts" or "lines" or "styles" or "embroidery-patterns" or "item-engineering-profiles" or "material-families" or "material-subfamilies" or "material-items" or "material-suppliers" or "material-supplier-cost-history" or "finished-products" or "product-components" or "finished-product-materials" or "product-consumption-profiles" or "colors" or "manufacturing-types" or "toe-caps" or "dies"
                 => Resolve<ProductEngineeringApiService>().GetCatalogAsync(normalized),
+            "production-cells" or "production-vouchers" or "production-in-process" or "production-surplus" or "piecework-records" or "piecework-rates"
+                => Resolve<ProductionApiService>().GetCatalogAsync(normalized),
             _ => _fallback.GetAsync(normalized)
         };
     }
@@ -235,6 +244,8 @@ public sealed class CatalogCrudDispatcher
                 => action == "insert" ? Resolve<HumanResourcesEnterpriseApiService>().InsertAsync(normalized, row) : Resolve<HumanResourcesEnterpriseApiService>().UpdateAsync(normalized, key!, row),
             "unit-conversions" or "size-runs" or "families" or "lasts" or "lines" or "styles" or "embroidery-patterns" or "item-engineering-profiles" or "material-families" or "material-subfamilies" or "material-items" or "material-suppliers" or "material-supplier-cost-history" or "finished-products" or "product-components" or "finished-product-materials" or "product-consumption-profiles" or "colors" or "manufacturing-types" or "toe-caps" or "dies"
                 => action == "insert" ? Resolve<ProductEngineeringApiService>().InsertAsync(normalized, row) : Resolve<ProductEngineeringApiService>().UpdateAsync(normalized, key!, row),
+            "production-cells" or "production-vouchers" or "production-in-process" or "production-surplus" or "piecework-records" or "piecework-rates"
+                => action == "insert" ? Resolve<ProductionApiService>().InsertAsync(normalized, row) : Resolve<ProductionApiService>().UpdateAsync(normalized, key!, row),
             _ => action == "insert" ? _fallback.InsertAsync(normalized, row) : _fallback.UpdateAsync(normalized, key!, row)
         };
     }
@@ -278,6 +289,8 @@ public sealed class CatalogCrudDispatcher
                 => Resolve<HumanResourcesEnterpriseApiService>().DeleteAsync(normalized, key),
             "unit-conversions" or "size-runs" or "families" or "lasts" or "lines" or "styles" or "embroidery-patterns" or "item-engineering-profiles" or "material-families" or "material-subfamilies" or "material-items" or "material-suppliers" or "material-supplier-cost-history" or "finished-products" or "product-components" or "finished-product-materials" or "product-consumption-profiles" or "colors" or "manufacturing-types" or "toe-caps" or "dies"
                 => Resolve<ProductEngineeringApiService>().DeleteAsync(normalized, key),
+            "production-cells" or "production-vouchers" or "production-in-process" or "production-surplus" or "piecework-records" or "piecework-rates"
+                => Resolve<ProductionApiService>().DeleteAsync(normalized, key),
             _ => _fallback.DeleteAsync(normalized, key)
         };
     }
