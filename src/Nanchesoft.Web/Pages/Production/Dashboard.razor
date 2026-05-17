@@ -1,0 +1,219 @@
+@page "/produccion/dashboard"
+@using System.Net.Http.Json
+@using Nanchesoft.Web.Services.Production
+@inject IHttpClientFactory HttpClientFactory
+@inject ProductionApiService ProductionApiService
+
+<PageTitle>Dashboard Producción | Nanchesoft</PageTitle>
+
+@if (_loading)
+{
+    <div class="ns-catalog-loading"><div class="ns-loader"></div><span>Cargando dashboard...</span></div>
+}
+else
+{
+    <div class="ns-catalog-page">
+        <div class="ns-catalog-header">
+            <div>
+                <div class="ns-catalog-eyebrow">Nanchesoft ERP · Producción</div>
+                <h1 class="ns-catalog-title">Dashboard de producción</h1>
+                <p class="ns-catalog-subtitle">KPIs operativos, kanban de órdenes y throughput por fase — semana @(_kpis?.WeekCode ?? "—")</p>
+            </div>
+            <div class="d-flex gap-2 flex-wrap align-items-center">
+                @if (_companies.Count > 1)
+                {
+                    <select class="form-select form-select-sm" style="width:220px;"
+                            @onchange="OnCompanyChanged">
+                        @foreach (var c in _companies)
+                        {
+                            <option value="@c.Key" selected="@(c.Key == _selectedCompanyId.ToString())">@c.Value</option>
+                        }
+                    </select>
+                }
+                <div class="ns-catalog-badge">@(_kpis?.WeekCode ?? "sin datos")</div>
+            </div>
+        </div>
+
+        @if (_kpis is not null)
+        {
+            <div class="ns-kpi-grid">
+                <div class="ns-kpi-card">
+                    <div class="ns-kpi-label">Órdenes totales</div>
+                    <div class="ns-kpi-value">@_kpis.Orders.Total</div>
+                </div>
+                <div class="ns-kpi-card ns-kpi-card-success">
+                    <div class="ns-kpi-label">En proceso</div>
+                    <div class="ns-kpi-value">@_kpis.Orders.InProgress</div>
+                </div>
+                <div class="ns-kpi-card">
+                    <div class="ns-kpi-label">Planificadas</div>
+                    <div class="ns-kpi-value">@_kpis.Orders.Planned</div>
+                </div>
+                <div class="ns-kpi-card ns-kpi-card-muted">
+                    <div class="ns-kpi-label">Completadas</div>
+                    <div class="ns-kpi-value">@_kpis.Orders.Completed</div>
+                </div>
+                <div class="ns-kpi-card ns-kpi-card-success">
+                    <div class="ns-kpi-label">Producido (semana)</div>
+                    <div class="ns-kpi-value">@_kpis.Production.ProducedThisWeek</div>
+                </div>
+                <div class="ns-kpi-card">
+                    <div class="ns-kpi-label">Vales hoy</div>
+                    <div class="ns-kpi-value">@_kpis.Production.VouchersIssuedToday</div>
+                </div>
+                <div class="ns-kpi-card">
+                    <div class="ns-kpi-label">Destajo neto (semana)</div>
+                    <div class="ns-kpi-value">$@_kpis.Production.PieceWorkNetThisWeek.ToString("N2")</div>
+                </div>
+                <div class="ns-kpi-card @(_kpis.Alerts.MaterialShortages > 0 ? "ns-kpi-card-warning" : "")">
+                    <div class="ns-kpi-label">Alertas materiales</div>
+                    <div class="ns-kpi-value">@_kpis.Alerts.MaterialShortages</div>
+                </div>
+            </div>
+
+            @if (_kpis.InProcessByPhase.Count > 0)
+            {
+                <h3 class="ns-section-title">En proceso por fase</h3>
+                <div class="ns-kpi-grid">
+                    @foreach (var p in _kpis.InProcessByPhase)
+                    {
+                        <div class="ns-kpi-card"><div class="ns-kpi-label">@p.PhaseName</div><div class="ns-kpi-value">@p.Units</div></div>
+                    }
+                </div>
+            }
+        }
+
+        @if (_board is not null)
+        {
+            <h3 class="ns-section-title">Kanban de órdenes</h3>
+            <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:12px;overflow-x:auto;">
+                @RenderKanbanCol("Borrador",    "#6b7280", _board.Draft)
+                @RenderKanbanCol("Planificado", "#3b82f6", _board.Planned)
+                @RenderKanbanCol("En proceso",  "#f59e0b", _board.InProgress)
+                @RenderKanbanCol("Completado",  "#10b981", _board.Completed)
+                @RenderKanbanCol("Cancelado",   "#ef4444", _board.Cancelled)
+            </div>
+        }
+
+        @if (_throughput.Count > 0)
+        {
+            <h3 class="ns-section-title">Throughput por fase (semana)</h3>
+            <div style="overflow-x:auto;">
+                <table class="table table-sm">
+                    <thead><tr><th>Fase</th><th style="text-align:right">Producido</th><th style="text-align:right">Rechazado</th><th style="text-align:right">% Rechazo</th></tr></thead>
+                    <tbody>
+                        @foreach (var t in _throughput)
+                        {
+                            var pct = t.TotalProduced > 0 ? (decimal)t.TotalRejected / t.TotalProduced * 100 : 0;
+                            <tr>
+                                <td>@t.PhaseName</td>
+                                <td style="text-align:right">@t.TotalProduced</td>
+                                <td style="text-align:right">@t.TotalRejected</td>
+                                <td style="text-align:right">@pct.ToString("N1")%</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+
+        <div class="d-flex gap-2 flex-wrap mt-4">
+            <a class="btn btn-primary"          href="/produccion/ordenes">Órdenes</a>
+            <a class="btn btn-outline-secondary" href="/produccion/programacion">Programación</a>
+            <a class="btn btn-outline-secondary" href="/produccion/vales">Vales</a>
+            <a class="btn btn-outline-secondary" href="/produccion/destajo">Destajo</a>
+            <a class="btn btn-outline-secondary" href="/produccion/en-proceso">En proceso</a>
+            <a class="btn btn-outline-secondary" href="/produccion/sobrantes">Sobrantes</a>
+            <a class="btn btn-outline-secondary" href="/produccion/celdas">Celdas</a>
+            <a class="btn btn-outline-secondary" href="/produccion/tarifas-destajo">Tarifas destajo</a>
+        </div>
+    </div>
+}
+
+@code {
+    private bool _loading = true;
+    private Guid _selectedCompanyId;
+    private List<KeyValuePair<string, string>> _companies = [];
+    private ProductionKpiDto? _kpis;
+    private OrdersBoardDto? _board;
+    private List<PhaseThroughputDto> _throughput = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadCompaniesAsync();
+        await LoadDataAsync();
+    }
+
+    private async Task OnCompanyChanged(ChangeEventArgs e)
+    {
+        if (Guid.TryParse(e.Value?.ToString(), out var id))
+        {
+            _selectedCompanyId = id;
+            await LoadDataAsync();
+        }
+    }
+
+    private async Task LoadCompaniesAsync()
+    {
+        try
+        {
+            var client = HttpClientFactory.CreateClient("Nanchesoft.Api");
+            var list = await client.GetFromJsonAsync<List<CompanyDto>>("/api/organization/companies") ?? [];
+            _companies = list.Select(x => new KeyValuePair<string, string>(x.CompanyId.ToString(), x.Name)).ToList();
+            if (_companies.Count > 0 && Guid.TryParse(_companies[0].Key, out var first))
+                _selectedCompanyId = first;
+        }
+        catch { }
+    }
+
+    private async Task LoadDataAsync()
+    {
+        if (_selectedCompanyId == Guid.Empty) { _loading = false; return; }
+        _loading = true;
+        try
+        {
+            var t1 = ProductionApiService.GetKpisAsync(_selectedCompanyId);
+            var t2 = ProductionApiService.GetOrdersBoardAsync(_selectedCompanyId);
+            var t3 = ProductionApiService.GetPhaseThroughputAsync(_selectedCompanyId, "week");
+            await Task.WhenAll(t1, t2, t3);
+            _kpis      = t1.Result;
+            _board     = t2.Result;
+            _throughput = t3.Result;
+        }
+        catch { }
+        finally { _loading = false; }
+    }
+
+    private RenderFragment RenderKanbanCol(string title, string color, List<OrderBoardCardDto> cards) => __builder =>
+    {
+        __builder.OpenElement(0, "div");
+        __builder.AddAttribute(1, "style", "background:#f9fafb;border-radius:12px;padding:12px;min-width:160px;");
+        __builder.OpenElement(2, "div");
+        __builder.AddAttribute(3, "style", $"font-weight:700;font-size:.8rem;color:{color};text-transform:uppercase;margin-bottom:8px;");
+        __builder.AddContent(4, $"{title} ({cards.Count})");
+        __builder.CloseElement();
+        foreach (var card in cards.Take(8))
+        {
+            __builder.OpenElement(5, "div");
+            __builder.AddAttribute(6, "style", $"background:#fff;border-radius:8px;padding:8px;margin-bottom:6px;border-left:3px solid {color};font-size:.8rem;{(card.IsOverdue ? "border-color:#ef4444;" : "")}");
+            __builder.OpenElement(7, "strong");
+            __builder.AddContent(8, card.Folio);
+            __builder.CloseElement();
+            __builder.OpenElement(9, "div");
+            __builder.AddAttribute(10, "style", "color:#6b7280;");
+            __builder.AddContent(11, $"{card.WeekCode} · {card.TotalPairs} pares");
+            __builder.CloseElement();
+            __builder.CloseElement();
+        }
+        if (cards.Count > 8)
+        {
+            __builder.OpenElement(12, "div");
+            __builder.AddAttribute(13, "style", "font-size:.75rem;color:#9ca3af;text-align:center;margin-top:4px;");
+            __builder.AddContent(14, $"+{cards.Count - 8} más…");
+            __builder.CloseElement();
+        }
+        __builder.CloseElement();
+    };
+
+    private sealed record CompanyDto(Guid CompanyId, string Name);
+}

@@ -39,6 +39,7 @@
 @inject ServiceBillingApiService ServiceBillingApiService
 @inject TenantApiService TenantApiService
 @inject PlanApiService PlanApiService
+@inject Nanchesoft.Web.Services.Production.ProductionApiService ProductionApiService
 
 <div class="ns-catalog-page">
     @if (!string.IsNullOrWhiteSpace(_clientError))
@@ -237,6 +238,7 @@
                 "time-clock" or "attendance-daily-summaries" or "payroll-recurring-movements" or "prepayroll-adjustments" or "prepayroll-cutoffs" or "employee-loans" or "employee-loan-deductions" => await PayrollOperationsApiService.DeleteAsync(CatalogKey, key),
                 "hr-shifts" or "hr-work-schedules" or "hr-time-clock-devices" or "hr-leave-types" or "hr-vacation-requests" => await HumanResourcesEnterpriseApiService.DeleteAsync(CatalogKey, key),
                 "colors" or "leather-types" or "soles" or "manufacturing-types" or "toe-caps" or "sole-colors" or "dies" or "quality-control-dies" or "folio-patterns" or "unit-conversions" or "size-runs" or "families" or "lasts" or "lines" or "styles" or "embroidery-patterns" or "item-engineering-profiles" or "material-characteristics" or "material-sizes" or "material-families" or "material-subfamilies" or "material-items" or "material-suppliers" or "material-supplier-cost-history" or "finished-products" or "product-components" or "finished-product-materials" or "product-consumption-profiles" or "production-phases" => await ProductEngineeringApiService.DeleteAsync(CatalogKey, key),
+                "production-orders" or "piecework-rates" => await ProductionApiService.DeleteAsync(CatalogKey, key),
                 _ => await _catalogService.DeleteAsync(CatalogKey, key)
             };
             RebuildExportArtifacts();
@@ -300,6 +302,7 @@
             "time-clock" or "attendance-daily-summaries" or "payroll-recurring-movements" or "prepayroll-adjustments" or "prepayroll-cutoffs" or "employee-loans" or "employee-loan-deductions" => action == "insert" ? await PayrollOperationsApiService.InsertAsync(CatalogKey, row) : await PayrollOperationsApiService.UpdateAsync(CatalogKey, key!, row),
             "hr-shifts" or "hr-work-schedules" or "hr-time-clock-devices" or "hr-leave-types" or "hr-vacation-requests" => action == "insert" ? await HumanResourcesEnterpriseApiService.InsertAsync(CatalogKey, row) : await HumanResourcesEnterpriseApiService.UpdateAsync(CatalogKey, key!, row),
             "colors" or "leather-types" or "soles" or "manufacturing-types" or "toe-caps" or "sole-colors" or "dies" or "quality-control-dies" or "folio-patterns" or "unit-conversions" or "size-runs" or "families" or "lasts" or "lines" or "styles" or "embroidery-patterns" or "item-engineering-profiles" or "material-characteristics" or "material-sizes" or "material-families" or "material-subfamilies" or "material-items" or "material-suppliers" or "material-supplier-cost-history" or "finished-products" or "product-components" or "finished-product-materials" or "product-consumption-profiles" or "production-phases" => action == "insert" ? await ProductEngineeringApiService.InsertAsync(CatalogKey, row) : await ProductEngineeringApiService.UpdateAsync(CatalogKey, key!, row),
+            "production-orders" or "production-vouchers" or "piecework-records" or "piecework-rates" or "production-cells" or "production-surplus" => action == "insert" ? await ProductionApiService.InsertAsync(CatalogKey, row) : await ProductionApiService.UpdateAsync(CatalogKey, key!, row),
             _ => action == "insert" ? await _catalogService.InsertAsync(CatalogKey, row) : await _catalogService.UpdateAsync(CatalogKey, key!, row)
         };
     }
@@ -328,6 +331,7 @@
             "time-clock" or "attendance-daily-summaries" or "payroll-recurring-movements" or "prepayroll-adjustments" or "prepayroll-cutoffs" or "employee-loans" or "employee-loan-deductions" => PayrollOperationsApiService.GetCatalogAsync(CatalogKey),
             "hr-shifts" or "hr-work-schedules" or "hr-time-clock-devices" or "hr-leave-types" or "hr-vacation-requests" => HumanResourcesEnterpriseApiService.GetCatalogAsync(CatalogKey),
             "colors" or "leather-types" or "soles" or "manufacturing-types" or "toe-caps" or "sole-colors" or "dies" or "quality-control-dies" or "folio-patterns" or "unit-conversions" or "size-runs" or "families" or "lasts" or "lines" or "styles" or "embroidery-patterns" or "item-engineering-profiles" or "material-characteristics" or "material-sizes" or "material-families" or "material-subfamilies" or "material-items" or "material-suppliers" or "material-supplier-cost-history" or "finished-products" or "product-components" or "finished-product-materials" or "product-consumption-profiles" or "production-phases" => ProductEngineeringApiService.GetCatalogAsync(CatalogKey),
+            "production-orders" or "production-schedules" or "production-vouchers" or "piecework-records" or "piecework-rates" or "production-cells" or "production-in-process" or "production-surplus" => ProductionApiService.GetCatalogAsync(CatalogKey),
             _ => _catalogService.GetAsync(CatalogKey)
         };
     }

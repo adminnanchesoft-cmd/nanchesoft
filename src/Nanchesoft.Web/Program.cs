@@ -24,6 +24,7 @@ using Nanchesoft.Web.Services.Sales;
 using Nanchesoft.Web.Services.Security;
 using Nanchesoft.Web.Services.ThirdPartiesProducts;
 using Nanchesoft.Web.Services.Treasury;
+using Nanchesoft.Web.Services.Production;
 using Nanchesoft.Web.Services.Warehouses;
 using Nanchesoft.Web.State;
 
@@ -85,6 +86,7 @@ builder.Services.AddScoped<PayrollOperationsApiService>();
 builder.Services.AddScoped<PayrollMvpApiService>();
 builder.Services.AddScoped<AccountsPayableApiService>();
 builder.Services.AddScoped<ServiceBillingApiService>();
+builder.Services.AddScoped<ProductionApiService>();
 
 var app = builder.Build();
 

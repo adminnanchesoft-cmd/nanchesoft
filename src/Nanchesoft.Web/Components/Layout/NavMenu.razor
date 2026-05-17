@@ -1,6 +1,6 @@
-﻿<div class="top-row ps-3 navbar navbar-dark">
+<div class="top-row ps-3 navbar navbar-dark">
     <div class="container-fluid">
-        <a class="navbar-brand" href="">Nanchesoft.Web</a>
+        <a class="navbar-brand" href="">Nanchesoft ERP</a>
     </div>
 </div>
 
@@ -8,23 +8,269 @@
 
 <div class="nav-scrollable" onclick="document.querySelector('.navbar-toggler').click()">
     <nav class="nav flex-column">
+
         <div class="nav-item px-3">
             <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
-                <span class="bi bi-house-door-fill-nav-menu" aria-hidden="true"></span> Home
+                <span class="bi bi-house-door-fill-nav-menu" aria-hidden="true"></span> Inicio
             </NavLink>
         </div>
 
+        <!-- Producción -->
+        <div class="nav-group-header px-3 mt-2">PRODUCCIÓN</div>
         <div class="nav-item px-3">
-            <NavLink class="nav-link" href="counter">
-                <span class="bi bi-plus-square-fill-nav-menu" aria-hidden="true"></span> Counter
+            <NavLink class="nav-link" href="produccion/dashboard">
+                <span class="bi bi-speedometer2" aria-hidden="true"></span> Dashboard
+            </NavLink>
+        </div>
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="produccion/ordenes">
+                <span class="bi bi-clipboard2-check" aria-hidden="true"></span> Órdenes
+            </NavLink>
+        </div>
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="produccion/programacion">
+                <span class="bi bi-calendar3-week" aria-hidden="true"></span> Programación
+            </NavLink>
+        </div>
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="produccion/vales">
+                <span class="bi bi-receipt" aria-hidden="true"></span> Vales
+            </NavLink>
+        </div>
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="produccion/destajo">
+                <span class="bi bi-person-check" aria-hidden="true"></span> Destajo
+            </NavLink>
+        </div>
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="produccion/en-proceso">
+                <span class="bi bi-activity" aria-hidden="true"></span> En proceso
+            </NavLink>
+        </div>
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="produccion/sobrantes">
+                <span class="bi bi-archive" aria-hidden="true"></span> Sobrantes
+            </NavLink>
+        </div>
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="produccion/celdas">
+                <span class="bi bi-grid-3x3-gap" aria-hidden="true"></span> Celdas
+            </NavLink>
+        </div>
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="produccion/tarifas-destajo">
+                <span class="bi bi-cash-stack" aria-hidden="true"></span> Tarifas destajo
             </NavLink>
         </div>
 
+        <!-- Ventas -->
+        <div class="nav-group-header px-3 mt-2">VENTAS</div>
         <div class="nav-item px-3">
-            <NavLink class="nav-link" href="weather">
-                <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Weather
+            <NavLink class="nav-link" href="sales/dashboard">
+                <span class="bi bi-graph-up-arrow" aria-hidden="true"></span> Dashboard
             </NavLink>
         </div>
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="sales/quotes">
+                <span class="bi bi-file-earmark-text" aria-hidden="true"></span> Cotizaciones
+            </NavLink>
+        </div>
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="sales/orders">
+                <span class="bi bi-bag-check" aria-hidden="true"></span> Pedidos
+            </NavLink>
+        </div>
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="sales/shipments">
+                <span class="bi bi-truck" aria-hidden="true"></span> Embarques
+            </NavLink>
+        </div>
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="sales/invoices">
+                <span class="bi bi-receipt-cutoff" aria-hidden="true"></span> Facturas
+            </NavLink>
+        </div>
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="sales/returns">
+                <span class="bi bi-arrow-return-left" aria-hidden="true"></span> Devoluciones
+            </NavLink>
+        </div>
+
+        <!-- Compras -->
+        <div class="nav-group-header px-3 mt-2">COMPRAS</div>
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="purchases/dashboard">
+                <span class="bi bi-cart3" aria-hidden="true"></span> Dashboard
+            </NavLink>
+        </div>
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="purchases/requisitions">
+                <span class="bi bi-file-earmark-plus" aria-hidden="true"></span> Requisiciones
+            </NavLink>
+        </div>
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="purchases/orders">
+                <span class="bi bi-bag" aria-hidden="true"></span> Órdenes de compra
+            </NavLink>
+        </div>
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="purchases/receipts">
+                <span class="bi bi-box-seam" aria-hidden="true"></span> Recepciones
+            </NavLink>
+        </div>
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="purchases/invoices">
+                <span class="bi bi-receipt-cutoff" aria-hidden="true"></span> Facturas proveedor
+            </NavLink>
+        </div>
+
+        <!-- Inventario -->
+        <div class="nav-group-header px-3 mt-2">INVENTARIO</div>
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="inventory/dashboard">
+                <span class="bi bi-box2" aria-hidden="true"></span> Dashboard
+            </NavLink>
+        </div>
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="inventory/stock-balances">
+                <span class="bi bi-clipboard-data" aria-hidden="true"></span> Existencias
+            </NavLink>
+        </div>
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="inventory/entries">
+                <span class="bi bi-box-arrow-in-down" aria-hidden="true"></span> Entradas
+            </NavLink>
+        </div>
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="inventory/exits">
+                <span class="bi bi-box-arrow-up" aria-hidden="true"></span> Salidas
+            </NavLink>
+        </div>
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="inventory/transfers">
+                <span class="bi bi-arrow-left-right" aria-hidden="true"></span> Traspasos
+            </NavLink>
+        </div>
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="inventory/kardex">
+                <span class="bi bi-journal-text" aria-hidden="true"></span> Kárdex
+            </NavLink>
+        </div>
+
+        <!-- Nómina -->
+        <div class="nav-group-header px-3 mt-2">NÓMINA</div>
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="payroll/periods">
+                <span class="bi bi-calendar-range" aria-hidden="true"></span> Periodos
+            </NavLink>
+        </div>
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="payroll/runs">
+                <span class="bi bi-calculator" aria-hidden="true"></span> Procesamientos
+            </NavLink>
+        </div>
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="payroll/receipts">
+                <span class="bi bi-file-earmark-person" aria-hidden="true"></span> Recibos
+            </NavLink>
+        </div>
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="payroll/concepts">
+                <span class="bi bi-list-columns" aria-hidden="true"></span> Conceptos
+            </NavLink>
+        </div>
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="payroll/loans">
+                <span class="bi bi-cash-coin" aria-hidden="true"></span> Préstamos
+            </NavLink>
+        </div>
+
+        <!-- RH -->
+        <div class="nav-group-header px-3 mt-2">RECURSOS HUMANOS</div>
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="human-resources/employees">
+                <span class="bi bi-people" aria-hidden="true"></span> Empleados
+            </NavLink>
+        </div>
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="human-resources/departments">
+                <span class="bi bi-diagram-3" aria-hidden="true"></span> Departamentos
+            </NavLink>
+        </div>
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="human-resources/time-clock">
+                <span class="bi bi-clock-history" aria-hidden="true"></span> Checador
+            </NavLink>
+        </div>
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="human-resources/vacation-requests">
+                <span class="bi bi-umbrella" aria-hidden="true"></span> Vacaciones
+            </NavLink>
+        </div>
+
+        <!-- Finanzas -->
+        <div class="nav-group-header px-3 mt-2">FINANZAS</div>
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="treasury/dashboard">
+                <span class="bi bi-bank" aria-hidden="true"></span> Tesorería
+            </NavLink>
+        </div>
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="accounting/dashboard">
+                <span class="bi bi-journal-bookmark" aria-hidden="true"></span> Contabilidad
+            </NavLink>
+        </div>
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="finance/executive-dashboard">
+                <span class="bi bi-bar-chart-line" aria-hidden="true"></span> Finanzas gerencial
+            </NavLink>
+        </div>
+
+        <!-- Productos -->
+        <div class="nav-group-header px-3 mt-2">PRODUCTOS</div>
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="products/styles">
+                <span class="bi bi-palette" aria-hidden="true"></span> Estilos
+            </NavLink>
+        </div>
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="products/finished-products">
+                <span class="bi bi-boot" aria-hidden="true"></span> Producto terminado
+            </NavLink>
+        </div>
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="products/material-items">
+                <span class="bi bi-layers" aria-hidden="true"></span> Materiales
+            </NavLink>
+        </div>
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="products/consumption-templates">
+                <span class="bi bi-file-ruled" aria-hidden="true"></span> Plantillas consumo
+            </NavLink>
+        </div>
+
+        <!-- Organización -->
+        <div class="nav-group-header px-3 mt-2">ORGANIZACIÓN</div>
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="organization/companies">
+                <span class="bi bi-building" aria-hidden="true"></span> Empresas
+            </NavLink>
+        </div>
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="organization/branches">
+                <span class="bi bi-geo-alt" aria-hidden="true"></span> Sucursales
+            </NavLink>
+        </div>
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="security/users">
+                <span class="bi bi-person-lock" aria-hidden="true"></span> Usuarios
+            </NavLink>
+        </div>
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="monitoring/health">
+                <span class="bi bi-heart-pulse" aria-hidden="true"></span> Monitoreo
+            </NavLink>
+        </div>
+
     </nav>
 </div>
-
