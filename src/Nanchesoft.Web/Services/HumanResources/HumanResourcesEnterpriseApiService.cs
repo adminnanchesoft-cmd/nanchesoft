@@ -125,7 +125,7 @@ public sealed class HumanResourcesEnterpriseApiService
             "WorkShiftId",
             [
                 TextColumn("WorkShiftId", "Shift ID", allowEditing: false, width: 220),
-                LookupColumn("CompanyId", "Empresa", companies, required: true, width: 220),
+                SmartLookupColumn("CompanyId", "Empresa", companies, required: true, width: 220),
                 TextColumn("Code", "Código", required: true, width: 120),
                 TextColumn("Name", "Turno", required: true, width: 220),
                 TextColumn("StartTime", "Entrada", required: true, width: 100),
@@ -165,7 +165,7 @@ public sealed class HumanResourcesEnterpriseApiService
             "WorkScheduleId",
             [
                 TextColumn("WorkScheduleId", "Schedule ID", allowEditing: false, width: 220),
-                LookupColumn("CompanyId", "Empresa", companies, required: true, width: 220),
+                SmartLookupColumn("CompanyId", "Empresa", companies, required: true, width: 220),
                 LookupColumn("WorkShiftId", "Turno base", shifts, width: 220),
                 TextColumn("Code", "Código", required: true, width: 120),
                 TextColumn("Name", "Horario", required: true, width: 220),
@@ -215,8 +215,8 @@ public sealed class HumanResourcesEnterpriseApiService
             "TimeClockDeviceId",
             [
                 TextColumn("TimeClockDeviceId", "Device ID", allowEditing: false, width: 220),
-                LookupColumn("CompanyId", "Empresa", companies, required: true, width: 220),
-                LookupColumn("BranchId", "Sucursal", branches, width: 220),
+                SmartLookupColumn("CompanyId", "Empresa", companies, required: true, width: 220),
+                SmartLookupColumn("BranchId", "Sucursal", branches, width: 220),
                 TextColumn("Code", "Código", required: true, width: 120),
                 TextColumn("Name", "Dispositivo", required: true, width: 220),
                 TextColumn("Brand", "Marca", width: 120),
@@ -263,7 +263,7 @@ public sealed class HumanResourcesEnterpriseApiService
             "LeaveTypeId",
             [
                 TextColumn("LeaveTypeId", "Leave Type ID", allowEditing: false, width: 220),
-                LookupColumn("CompanyId", "Empresa", companies, required: true, width: 220),
+                SmartLookupColumn("CompanyId", "Empresa", companies, required: true, width: 220),
                 LookupColumn("PayrollConceptId", "Concepto nómina", payrollConcepts, width: 220),
                 TextColumn("Code", "Código", required: true, width: 120),
                 TextColumn("Name", "Tipo ausencia", required: true, width: 220),
@@ -305,8 +305,8 @@ public sealed class HumanResourcesEnterpriseApiService
             "VacationRequestId",
             [
                 TextColumn("VacationRequestId", "Vacation Request ID", allowEditing: false, width: 220),
-                LookupColumn("CompanyId", "Empresa", companies, required: true, width: 220),
-                LookupColumn("BranchId", "Sucursal", branches, width: 180),
+                SmartLookupColumn("CompanyId", "Empresa", companies, required: true, width: 220),
+                SmartLookupColumn("BranchId", "Sucursal", branches, width: 180),
                 LookupColumn("EmployeeId", "Colaborador", employees, required: true, width: 220),
                 LookupColumn("LeaveTypeId", "Tipo ausencia", leaveTypes, width: 220),
                 TextColumn("Folio", "Folio", width: 140),
@@ -359,8 +359,8 @@ private async Task<CatalogViewDefinition> GetEmployeeDocumentsAsync()
         "EmployeeDocumentRecordId",
         [
             TextColumn("EmployeeDocumentRecordId", "Document ID", allowEditing: false, width: 220),
-            LookupColumn("CompanyId", "Empresa", companies, required: true, width: 220),
-            LookupColumn("BranchId", "Sucursal", branches, width: 180),
+            SmartLookupColumn("CompanyId", "Empresa", companies, required: true, width: 220),
+            SmartLookupColumn("BranchId", "Sucursal", branches, width: 180),
             LookupColumn("EmployeeId", "Colaborador", employees, required: true, width: 220),
             TextColumn("DocumentCode", "Código", required: true, width: 120),
             TextColumn("DocumentName", "Documento", required: true, width: 220),
@@ -418,8 +418,8 @@ private async Task<CatalogViewDefinition> GetEmployeeMovementsAsync()
         "EmployeeLaborMovementId",
         [
             TextColumn("EmployeeLaborMovementId", "Movement ID", allowEditing: false, width: 220),
-            LookupColumn("CompanyId", "Empresa", companies, required: true, width: 220),
-            LookupColumn("BranchId", "Sucursal", branches, width: 180),
+            SmartLookupColumn("CompanyId", "Empresa", companies, required: true, width: 220),
+            SmartLookupColumn("BranchId", "Sucursal", branches, width: 180),
             LookupColumn("EmployeeId", "Colaborador", employees, required: true, width: 220),
             LookupColumn("DepartmentId", "Departamento", departments, width: 180),
             LookupColumn("PositionId", "Puesto", positions, width: 180),
@@ -475,8 +475,8 @@ private async Task<CatalogViewDefinition> GetEmployeeCertificationsAsync()
         "EmployeeCertificationRecordId",
         [
             TextColumn("EmployeeCertificationRecordId", "Certification ID", allowEditing: false, width: 220),
-            LookupColumn("CompanyId", "Empresa", companies, required: true, width: 220),
-            LookupColumn("BranchId", "Sucursal", branches, width: 180),
+            SmartLookupColumn("CompanyId", "Empresa", companies, required: true, width: 220),
+            SmartLookupColumn("BranchId", "Sucursal", branches, width: 180),
             LookupColumn("EmployeeId", "Colaborador", employees, required: true, width: 220),
             TextColumn("CertificationCode", "Código", required: true, width: 120),
             TextColumn("CertificationName", "Certificación", required: true, width: 220),
@@ -527,8 +527,8 @@ private async Task<CatalogViewDefinition> GetRecruitmentVacanciesAsync()
         "RecruitmentVacancyId",
         [
             TextColumn("RecruitmentVacancyId", "Vacancy ID", allowEditing: false, width: 220),
-            LookupColumn("CompanyId", "Empresa", companies, required: true, width: 220),
-            LookupColumn("BranchId", "Sucursal", branches, width: 220),
+            SmartLookupColumn("CompanyId", "Empresa", companies, required: true, width: 220),
+            SmartLookupColumn("BranchId", "Sucursal", branches, width: 220),
             LookupColumn("DepartmentId", "Departamento", departments, width: 220),
             LookupColumn("PositionId", "Puesto", positions, width: 220),
             TextColumn("VacancyCode", "Código", required: true, width: 130),
@@ -583,8 +583,8 @@ private async Task<CatalogViewDefinition> GetCandidateApplicationsAsync()
         "CandidateApplicationId",
         [
             TextColumn("CandidateApplicationId", "Candidate App ID", allowEditing: false, width: 220),
-            LookupColumn("CompanyId", "Empresa", companies, required: true, width: 220),
-            LookupColumn("BranchId", "Sucursal", branches, width: 220),
+            SmartLookupColumn("CompanyId", "Empresa", companies, required: true, width: 220),
+            SmartLookupColumn("BranchId", "Sucursal", branches, width: 220),
             LookupColumn("RecruitmentVacancyId", "Vacante", vacancies, required: true, width: 240),
             LookupColumn("HiredEmployeeId", "Empleado contratado", employees, width: 240),
             TextColumn("CandidateCode", "Código", required: true, width: 130),
@@ -641,8 +641,8 @@ private async Task<CatalogViewDefinition> GetOnboardingChecklistsAsync()
         "OnboardingChecklistRecordId",
         [
             TextColumn("OnboardingChecklistRecordId", "Onboarding ID", allowEditing: false, width: 220),
-            LookupColumn("CompanyId", "Empresa", companies, required: true, width: 220),
-            LookupColumn("BranchId", "Sucursal", branches, width: 220),
+            SmartLookupColumn("CompanyId", "Empresa", companies, required: true, width: 220),
+            SmartLookupColumn("BranchId", "Sucursal", branches, width: 220),
             LookupColumn("EmployeeId", "Colaborador", employees, required: true, width: 240),
             LookupColumn("CandidateApplicationId", "Candidato", candidates, width: 240),
             TextColumn("ChecklistCode", "Código", required: true, width: 130),
@@ -697,8 +697,8 @@ private async Task<CatalogViewDefinition> GetPerformanceReviewsAsync()
         "EmployeePerformanceReviewId",
         [
             TextColumn("EmployeePerformanceReviewId", "Review ID", allowEditing: false, width: 220),
-            LookupColumn("CompanyId", "Empresa", companies, required: true, width: 220),
-            LookupColumn("BranchId", "Sucursal", branches, width: 220),
+            SmartLookupColumn("CompanyId", "Empresa", companies, required: true, width: 220),
+            SmartLookupColumn("BranchId", "Sucursal", branches, width: 220),
             LookupColumn("EmployeeId", "Colaborador", employees, required: true, width: 260),
             LookupColumn("DepartmentId", "Departamento", departments, width: 220),
             LookupColumn("PositionId", "Puesto", positions, width: 220),
@@ -756,8 +756,8 @@ private async Task<CatalogViewDefinition> GetCompetencyAssessmentsAsync()
         "EmployeeCompetencyAssessmentId",
         [
             TextColumn("EmployeeCompetencyAssessmentId", "Assessment ID", allowEditing: false, width: 220),
-            LookupColumn("CompanyId", "Empresa", companies, required: true, width: 220),
-            LookupColumn("BranchId", "Sucursal", branches, width: 220),
+            SmartLookupColumn("CompanyId", "Empresa", companies, required: true, width: 220),
+            SmartLookupColumn("BranchId", "Sucursal", branches, width: 220),
             LookupColumn("EmployeeId", "Colaborador", employees, required: true, width: 260),
             LookupColumn("DepartmentId", "Departamento", departments, width: 220),
             LookupColumn("PositionId", "Puesto", positions, width: 220),
@@ -812,8 +812,8 @@ private async Task<CatalogViewDefinition> GetSuccessionPlansAsync()
         "SuccessionPlanRecordId",
         [
             TextColumn("SuccessionPlanRecordId", "Plan ID", allowEditing: false, width: 220),
-            LookupColumn("CompanyId", "Empresa", companies, required: true, width: 220),
-            LookupColumn("BranchId", "Sucursal", branches, width: 220),
+            SmartLookupColumn("CompanyId", "Empresa", companies, required: true, width: 220),
+            SmartLookupColumn("BranchId", "Sucursal", branches, width: 220),
             LookupColumn("PositionId", "Puesto objetivo", positions, required: true, width: 220),
             LookupColumn("IncumbentEmployeeId", "Titular actual", employees, width: 260),
             LookupColumn("SuccessorEmployeeId", "Sucesor", employees, required: true, width: 260),
@@ -1181,6 +1181,11 @@ private static OnboardingChecklistRecordRequest MapOnboardingChecklistRequest(Js
             UseLookup = true,
             LookupItems = lookupItems
         };
+
+    private static CatalogColumnDefinition SmartLookupColumn(string field, string caption, List<CatalogLookupItem> lookupItems, bool required = false, int width = 180)
+        => lookupItems.Count <= 1
+            ? new() { DataField = field, Caption = caption, DataType = "string", Visible = false, AllowEditing = false, Width = width, UseLookup = true, LookupItems = lookupItems }
+            : LookupColumn(field, caption, lookupItems, required, width);
 
 
 private static EmployeePerformanceReviewRequest MapPerformanceReviewRequest(JsonElement payload) => new()

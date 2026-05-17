@@ -947,7 +947,7 @@ public static class HumanResourcesEndpoints
             BranchId = branchId,
             PayrollPeriodId = request.PayrollPeriodId.Value,
             Folio = folio,
-            RunDate = request.RunDate?.Date ?? DateTime.UtcNow.Date,
+            RunDate = DateTime.SpecifyKind(request.RunDate?.Date ?? DateTime.UtcNow.Date, DateTimeKind.Utc),
             Status = NormalizeStatus(request.Status, "draft"),
             EmployeeCount = request.EmployeeCount,
             GrossAmount = request.GrossAmount,

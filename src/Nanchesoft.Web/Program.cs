@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Components.Web;
+using Microsoft.AspNetCore.HttpOverrides;
 using Nanchesoft.Web;
 using Nanchesoft.Web.Services;
 using Nanchesoft.Web.Services.Accounting;
@@ -81,10 +82,16 @@ builder.Services.AddScoped<FinanceApiService>();
 builder.Services.AddScoped<HumanResourcesApiService>();
 builder.Services.AddScoped<HumanResourcesEnterpriseApiService>();
 builder.Services.AddScoped<PayrollOperationsApiService>();
+builder.Services.AddScoped<PayrollMvpApiService>();
 builder.Services.AddScoped<AccountsPayableApiService>();
 builder.Services.AddScoped<ServiceBillingApiService>();
 
 var app = builder.Build();
+
+app.UseForwardedHeaders(new ForwardedHeadersOptions
+{
+    ForwardedHeaders = ForwardedHeaders.XForwardedProto
+});
 
 if (!app.Environment.IsDevelopment())
 {

@@ -112,7 +112,7 @@ public sealed class HumanResourcesApiService
             "DepartmentId",
             [
                 TextColumn("DepartmentId", "Department ID", allowEditing: false, width: 220),
-                LookupColumn("CompanyId", "Empresa", companies, required: true, width: 220),
+                SmartLookupColumn("CompanyId", "Empresa", companies, required: true, width: 220),
                 TextColumn("Code", "Código", required: true, width: 120),
                 TextColumn("Name", "Departamento", required: true, width: 220),
                 TextColumn("Description", "Descripción", width: 280),
@@ -142,7 +142,7 @@ public sealed class HumanResourcesApiService
             "PositionId",
             [
                 TextColumn("PositionId", "Position ID", allowEditing: false, width: 220),
-                LookupColumn("CompanyId", "Empresa", companies, required: true, width: 220),
+                SmartLookupColumn("CompanyId", "Empresa", companies, required: true, width: 220),
                 LookupColumn("DepartmentId", "Departamento", departments, width: 220),
                 TextColumn("Code", "Código", required: true, width: 110),
                 TextColumn("Name", "Puesto", required: true, width: 220),
@@ -180,8 +180,8 @@ public sealed class HumanResourcesApiService
             "EmployeeId",
             [
                 TextColumn("EmployeeId", "Employee ID", allowEditing: false, width: 220),
-                LookupColumn("CompanyId", "Empresa", companies, required: true, width: 220),
-                LookupColumn("BranchId", "Sucursal", branches, width: 180),
+                SmartLookupColumn("CompanyId", "Empresa", companies, required: true, width: 220),
+                SmartLookupColumn("BranchId", "Sucursal", branches, width: 180),
                 LookupColumn("DepartmentId", "Departamento", departments, width: 220),
                 LookupColumn("PositionId", "Puesto", positions, width: 220),
                 TextColumn("Code", "Código", required: true, width: 110),
@@ -239,7 +239,7 @@ public sealed class HumanResourcesApiService
             "EmployeeIncidentId",
             [
                 TextColumn("EmployeeIncidentId", "Incident ID", allowEditing: false, width: 220),
-                LookupColumn("CompanyId", "Empresa", companies, required: true, width: 220),
+                SmartLookupColumn("CompanyId", "Empresa", companies, required: true, width: 220),
                 LookupColumn("EmployeeId", "Colaborador", employees, required: true, width: 240),
                 LookupColumn("PayrollPeriodId", "Periodo nómina", periods, width: 220),
                 DateColumn("IncidentDate", "Fecha", required: true, width: 120),
@@ -280,8 +280,8 @@ public sealed class HumanResourcesApiService
             "EmployeeContractId",
             [
                 TextColumn("EmployeeContractId", "Contract ID", allowEditing: false, width: 220),
-                LookupColumn("CompanyId", "Empresa", companies, required: true, width: 220),
-                LookupColumn("BranchId", "Sucursal", branches, width: 180),
+                SmartLookupColumn("CompanyId", "Empresa", companies, required: true, width: 220),
+                SmartLookupColumn("BranchId", "Sucursal", branches, width: 180),
                 LookupColumn("EmployeeId", "Colaborador", employees, required: true, width: 240),
                 TextColumn("ContractNumber", "Contrato", required: true, width: 140),
                 TextColumn("ContractType", "Tipo", required: true, width: 120),
@@ -312,27 +312,45 @@ public sealed class HumanResourcesApiService
             .ToList());
     }
 
+    private static List<CatalogLookupItem> PeriodTypes() =>
+    [
+        new() { Id = "semanal",    Name = "Semanal (7 días)" },
+        new() { Id = "decenal",    Name = "Decenal (10 días)" },
+        new() { Id = "quincenal",  Name = "Quincenal (15 días)" },
+        new() { Id = "mensual",    Name = "Mensual (30/31 días)" },
+    ];
+
+    private static List<CatalogLookupItem> PeriodStatuses() =>
+    [
+        new() { Id = "draft",     Name = "Borrador" },
+        new() { Id = "open",      Name = "Abierto" },
+        new() { Id = "calculated",Name = "Calculado" },
+        new() { Id = "closed",    Name = "Cerrado" },
+    ];
+
     private async Task<CatalogViewDefinition> GetPayrollPeriodsAsync()
     {
         var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
         var rows = await client.GetFromJsonAsync<List<PayrollPeriodDto>>("/api/payroll/periods") ?? [];
         var companies = await GetCompanyLookupsAsync();
+        var periodTypes = PeriodTypes();
+        var periodStatuses = PeriodStatuses();
 
         return BuildView(
             "payroll-periods",
             "Periodos de nómina",
-            "Ventanas operativas para cálculo, incidencias y pago.",
+            "Ventanas operativas para cálculo, incidencias y pago — semanal, quincenal o mensual.",
             "PayrollPeriodId",
             [
-                TextColumn("PayrollPeriodId", "PayrollPeriod ID", allowEditing: false, width: 220),
-                LookupColumn("CompanyId", "Empresa", companies, required: true, width: 220),
-                TextColumn("Code", "Código", required: true, width: 140),
-                TextColumn("Name", "Periodo", required: true, width: 220),
-                TextColumn("PeriodType", "Tipo", required: true, width: 120),
-                DateColumn("StartDate", "Inicio", required: true, width: 120),
-                DateColumn("EndDate", "Fin", required: true, width: 120),
-                DateColumn("PaymentDate", "Pago", required: true, width: 120),
-                TextColumn("Status", "Estatus", width: 110),
+                TextColumn("PayrollPeriodId", "ID", allowEditing: false, width: 200),
+                SmartLookupColumn("CompanyId", "Empresa", companies, required: true, width: 220),
+                TextColumn("Code", "Código", required: true, width: 130),
+                TextColumn("Name", "Nombre del periodo", required: true, width: 240),
+                LookupColumn("PeriodType", "Tipo de periodo", periodTypes, required: true, width: 180),
+                DateColumn("StartDate", "Fecha inicio", required: true, width: 130),
+                DateColumn("EndDate", "Fecha fin", required: true, width: 130),
+                DateColumn("PaymentDate", "Fecha pago", required: true, width: 130),
+                LookupColumn("Status", "Estatus", periodStatuses, width: 130),
                 BoolColumn("IsClosed", "Cerrado", width: 90),
                 BoolColumn("IsActive", "Activo", width: 90)
             ],
@@ -364,7 +382,7 @@ public sealed class HumanResourcesApiService
             "PayrollConceptId",
             [
                 TextColumn("PayrollConceptId", "PayrollConcept ID", allowEditing: false, width: 220),
-                LookupColumn("CompanyId", "Empresa", companies, required: true, width: 220),
+                SmartLookupColumn("CompanyId", "Empresa", companies, required: true, width: 220),
                 TextColumn("Code", "Código", required: true, width: 110),
                 TextColumn("Name", "Concepto", required: true, width: 220),
                 TextColumn("ConceptType", "Tipo", required: true, width: 110),
@@ -403,8 +421,8 @@ public sealed class HumanResourcesApiService
             "PayrollRunId",
             [
                 TextColumn("PayrollRunId", "PayrollRun ID", allowEditing: false, width: 220),
-                LookupColumn("CompanyId", "Empresa", companies, required: true, width: 220),
-                LookupColumn("BranchId", "Sucursal", branches, width: 180),
+                SmartLookupColumn("CompanyId", "Empresa", companies, required: true, width: 220),
+                SmartLookupColumn("BranchId", "Sucursal", branches, width: 180),
                 LookupColumn("PayrollPeriodId", "Periodo nómina", periods, required: true, width: 220),
                 TextColumn("Folio", "Folio", required: true, width: 120),
                 DateColumn("RunDate", "Fecha", required: true, width: 120),
@@ -450,7 +468,7 @@ public sealed class HumanResourcesApiService
             "PayrollRunLineId",
             [
                 TextColumn("PayrollRunLineId", "PayrollRunLine ID", allowEditing: false, width: 220),
-                LookupColumn("CompanyId", "Empresa", companies, required: true, width: 220),
+                SmartLookupColumn("CompanyId", "Empresa", companies, required: true, width: 220),
                 LookupColumn("PayrollRunId", "Proceso nómina", runs, required: true, width: 220),
                 LookupColumn("EmployeeId", "Colaborador", employees, required: true, width: 240),
                 LookupColumn("DepartmentId", "Departamento", departments, width: 220),
@@ -497,7 +515,7 @@ public sealed class HumanResourcesApiService
             "PayrollRunLineDetailId",
             [
                 TextColumn("PayrollRunLineDetailId", "Detail ID", allowEditing: false, width: 220),
-                LookupColumn("CompanyId", "Empresa", companies, required: true, width: 220),
+                SmartLookupColumn("CompanyId", "Empresa", companies, required: true, width: 220),
                 LookupColumn("PayrollRunId", "Proceso nómina", runs, required: true, width: 220),
                 LookupColumn("PayrollRunLineId", "Recibo/colaborador", runLines, required: true, width: 240),
                 LookupColumn("EmployeeId", "Colaborador", employees, required: true, width: 220),
@@ -851,6 +869,11 @@ public sealed class HumanResourcesApiService
             UseLookup = true,
             LookupItems = lookupItems
         };
+
+    private static CatalogColumnDefinition SmartLookupColumn(string field, string caption, List<CatalogLookupItem> lookupItems, bool required = false, int width = 180)
+        => lookupItems.Count <= 1
+            ? new() { DataField = field, Caption = caption, DataType = "string", Visible = false, AllowEditing = false, Width = width, UseLookup = true, LookupItems = lookupItems }
+            : LookupColumn(field, caption, lookupItems, required, width);
 
     private static string ReadString(JsonElement payload, string name, string fallback = "")
     {

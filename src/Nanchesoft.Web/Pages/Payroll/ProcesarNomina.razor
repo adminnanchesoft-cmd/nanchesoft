@@ -1,0 +1,511 @@
+@page "/payroll/procesar"
+@inject Nanchesoft.Web.Services.HumanResources.PayrollMvpApiService PayrollMvpApiService
+@inject NavigationManager NavigationManager
+
+<PageTitle>Procesar nómina | Nanchesoft</PageTitle>
+
+<div class="container-fluid py-3" style="max-width:900px;">
+    <div class="mb-4">
+        <h1 class="mb-1">Procesar nómina</h1>
+        <p class="text-secondary mb-0">Sigue los pasos para generar la corrida semanal de nómina.</p>
+    </div>
+
+    @* ── Stepper ── *@
+    <div class="d-flex align-items-center mb-4 gap-2 flex-wrap">
+        @for (int i = 1; i <= TotalSteps; i++)
+        {
+            var step = i;
+            var isActive = _step == step;
+            var isDone = _step > step;
+            <div class="d-flex align-items-center @(step < TotalSteps ? "flex-grow-1" : "")">
+                <div class="rounded-circle d-flex align-items-center justify-content-center fw-bold"
+                     style="width:32px;height:32px;flex-shrink:0;font-size:13px;
+                            background:@(isDone ? "#198754" : isActive ? "#0d6efd" : "#e9ecef");
+                            color:@(isDone || isActive ? "white" : "#6c757d")">
+                    @if (isDone) { <span>✓</span> } else { <span>@step</span> }
+                </div>
+                <span class="ms-2 me-2 text-nowrap" style="font-size:13px;font-weight:@(isActive ? "600" : "400");color:@(isActive ? "#0d6efd" : isDone ? "#198754" : "#6c757d")">
+                    @StepLabel(step)
+                </span>
+                @if (step < TotalSteps)
+                {
+                    <div class="flex-grow-1 border-top" style="border-color:#dee2e6 !important;margin:0 4px;"></div>
+                }
+            </div>
+        }
+    </div>
+
+    @* ── Mensaje de error/éxito global ── *@
+    @if (!string.IsNullOrWhiteSpace(_errorMessage))
+    {
+        <div class="alert alert-danger d-flex align-items-start gap-2 mb-3" role="alert">
+            <strong>Error:</strong> @_errorMessage
+            <button type="button" class="btn-close ms-auto" @onclick="() => _errorMessage = null"></button>
+        </div>
+    }
+    @if (!string.IsNullOrWhiteSpace(_successMessage))
+    {
+        <div class="alert alert-success mb-3" role="alert">@_successMessage</div>
+    }
+
+    @* ══════════════════════════════════════════════════════════ *@
+    @* PASO 1: Seleccionar periodo *@
+    @* ══════════════════════════════════════════════════════════ *@
+    @if (_step == 1)
+    {
+        <div class="card shadow-sm">
+            <div class="card-header fw-semibold">Paso 1 — Seleccionar periodo de nómina</div>
+            <div class="card-body">
+                @if (_periods.Count == 0)
+                {
+                    <p class="text-secondary">Cargando periodos…</p>
+                }
+                else
+                {
+                    <div class="mb-3" style="max-width:480px;">
+                        <label class="form-label fw-semibold">Periodo</label>
+                        <select class="form-select" @bind="_selectedPeriodId">
+                            <option value="">— Selecciona un periodo —</option>
+                            @foreach (var p in _periods)
+                            {
+                                <option value="@p.PayrollPeriodId">@p.Name — @p.StartDate.ToString("dd/MM/yyyy") al @p.EndDate.ToString("dd/MM/yyyy") [@p.Status]</option>
+                            }
+                        </select>
+                    </div>
+                    @if (_selectedPeriodId != Guid.Empty)
+                    {
+                        var sel = _periods.FirstOrDefault(x => x.PayrollPeriodId == _selectedPeriodId);
+                        @if (sel is not null)
+                        {
+                            <div class="table-responsive mb-3" style="max-width:480px;">
+                                <table class="table table-sm table-borderless mb-0">
+                                    <tbody>
+                                        <tr><td class="text-secondary" style="width:160px;">Tipo</td><td><strong>@sel.PeriodType</strong></td></tr>
+                                        <tr><td class="text-secondary">Inicio</td><td><strong>@sel.StartDate.ToString("dd/MM/yyyy")</strong></td></tr>
+                                        <tr><td class="text-secondary">Fin</td><td><strong>@sel.EndDate.ToString("dd/MM/yyyy")</strong></td></tr>
+                                        <tr><td class="text-secondary">Pago</td><td><strong>@sel.PaymentDate.ToString("dd/MM/yyyy")</strong></td></tr>
+                                        <tr><td class="text-secondary">Días del periodo</td><td><strong>@((sel.EndDate - sel.StartDate).Days + 1)</strong></td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
+                    }
+                }
+            </div>
+            <div class="card-footer d-flex justify-content-end gap-2">
+                <button class="btn btn-primary" @onclick="GoToStep2" disabled="@(_selectedPeriodId == Guid.Empty || _busy)">
+                    Siguiente →
+                </button>
+            </div>
+        </div>
+    }
+
+    @* ══════════════════════════════════════════════════════════ *@
+    @* PASO 2: Importar checadas *@
+    @* ══════════════════════════════════════════════════════════ *@
+    @if (_step == 2)
+    {
+        <div class="card shadow-sm">
+            <div class="card-header fw-semibold">Paso 2 — Importar checadas / reloj checador</div>
+            <div class="card-body">
+                <p class="text-secondary mb-3">
+                    Sube un archivo Excel (.xlsx) con las checadas del periodo.<br />
+                    <strong>Formato A (recomendado):</strong> columnas <code>NoEmpleado | Fecha | HoraEntrada | HoraSalida</code><br />
+                    <strong>Formato B:</strong> columnas <code>NoEmpleado | FechaHora | Tipo</code> (Tipo = entry / exit)
+                </p>
+                <div class="mb-3" style="max-width:400px;">
+                    <label class="form-label fw-semibold">Archivo Excel de checadas</label>
+                    <InputFile OnChange="OnPunchFileSelected" accept=".xlsx" class="form-control" />
+                </div>
+                @if (_punchImportResult is not null)
+                {
+                    <div class="alert @(_punchImportResult.Errors.Count > 0 ? "alert-warning" : "alert-success") mt-2">
+                        <strong>Resultado:</strong> @_punchImportResult.Created registros creados, @_punchImportResult.Skipped omitidos.
+                        @if (_punchImportResult.Errors.Count > 0)
+                        {
+                            <ul class="mt-1 mb-0">
+                                @foreach (var e in _punchImportResult.Errors.Take(5))
+                                {
+                                    <li>@e</li>
+                                }
+                                @if (_punchImportResult.Errors.Count > 5)
+                                {
+                                    <li>... y @(_punchImportResult.Errors.Count - 5) errores más.</li>
+                                }
+                            </ul>
+                        }
+                    </div>
+                }
+                <p class="text-secondary mt-3 mb-0" style="font-size:13px;">
+                    <em>También puedes saltarte este paso si ya capturaste las checadas manualmente en Reloj checador.</em>
+                </p>
+            </div>
+            <div class="card-footer d-flex justify-content-between gap-2">
+                <button class="btn btn-outline-secondary" @onclick="() => GoToStep(1)">← Anterior</button>
+                <div class="d-flex gap-2">
+                    @if (_punchFile is not null && _punchImportResult is null)
+                    {
+                        <button class="btn btn-outline-primary" @onclick="ImportPunchesAsync" disabled="@_busy">
+                            @(_busy ? "Importando…" : "Importar ahora")
+                        </button>
+                    }
+                    <button class="btn btn-primary" @onclick="() => GoToStep(3)" disabled="@_busy">
+                        @(_punchImportResult is not null ? "Siguiente →" : "Omitir / Siguiente →")
+                    </button>
+                </div>
+            </div>
+        </div>
+    }
+
+    @* ══════════════════════════════════════════════════════════ *@
+    @* PASO 3: Generar resumen diario *@
+    @* ══════════════════════════════════════════════════════════ *@
+    @if (_step == 3)
+    {
+        <div class="card shadow-sm">
+            <div class="card-header fw-semibold">Paso 3 — Generar resumen diario de asistencia</div>
+            <div class="card-body">
+                <p class="text-secondary mb-3">
+                    El sistema procesará las checadas del periodo y calculará:<br />
+                    horas trabajadas, retardos, horas extra y faltas por empleado.
+                </p>
+                @if (_summaryResult is null)
+                {
+                    <button class="btn btn-outline-primary" @onclick="GenerateSummariesAsync" disabled="@_busy">
+                        @(_busy ? "Generando resumen…" : "Generar resumen de asistencia")
+                    </button>
+                }
+                @if (_summaryResult is not null)
+                {
+                    <div class="alert alert-success mt-2">
+                        <strong>✓ Resumen generado.</strong> @_summaryResult.Employees empleados × @_summaryResult.Days días = @_summaryResult.Created registros.
+                    </div>
+                }
+            </div>
+            <div class="card-footer d-flex justify-content-between gap-2">
+                <button class="btn btn-outline-secondary" @onclick="() => GoToStep(2)">← Anterior</button>
+                <button class="btn btn-primary" @onclick="() => GoToStep(4)" disabled="@(_busy || _summaryResult is null)">
+                    Siguiente →
+                </button>
+            </div>
+        </div>
+    }
+
+    @* ══════════════════════════════════════════════════════════ *@
+    @* PASO 4: Generar incidencias *@
+    @* ══════════════════════════════════════════════════════════ *@
+    @if (_step == 4)
+    {
+        <div class="card shadow-sm">
+            <div class="card-header fw-semibold">Paso 4 — Generar incidencias automáticas</div>
+            <div class="card-body">
+                <p class="text-secondary mb-3">
+                    A partir del resumen de asistencia se generarán incidencias de tipo:<br />
+                    <strong>falta</strong> (ausencias), <strong>retardo</strong> (llegadas tarde > 15 min) y <strong>hora_extra</strong> (tiempo adicional).
+                </p>
+                @if (_incidentResult is null)
+                {
+                    <button class="btn btn-outline-primary" @onclick="GenerateIncidentsAsync" disabled="@_busy">
+                        @(_busy ? "Generando incidencias…" : "Generar incidencias")
+                    </button>
+                }
+                @if (_incidentResult is not null)
+                {
+                    <div class="alert alert-success mt-2">
+                        <strong>✓ Incidencias generadas.</strong> @_incidentResult.Created incidencias para @_incidentResult.Employees empleados.
+                    </div>
+                }
+            </div>
+            <div class="card-footer d-flex justify-content-between gap-2">
+                <button class="btn btn-outline-secondary" @onclick="() => GoToStep(3)">← Anterior</button>
+                <button class="btn btn-primary" @onclick="() => GoToStep(5)" disabled="@(_busy || _incidentResult is null)">
+                    Siguiente →
+                </button>
+            </div>
+        </div>
+    }
+
+    @* ══════════════════════════════════════════════════════════ *@
+    @* PASO 5: Calcular nómina *@
+    @* ══════════════════════════════════════════════════════════ *@
+    @if (_step == 5)
+    {
+        <div class="card shadow-sm">
+            <div class="card-header fw-semibold">Paso 5 — Calcular corrida de nómina</div>
+            <div class="card-body">
+                @if (_run is null)
+                {
+                    <div class="mb-3" style="max-width:400px;">
+                        <label class="form-label fw-semibold">Folio de la corrida</label>
+                        <input type="text" class="form-control" @bind="_runFolio" placeholder="Ej. NOM-2026-001" />
+                        <div class="form-text">Identificador único para esta corrida de nómina.</div>
+                    </div>
+                    <button class="btn btn-outline-primary" @onclick="CreateAndCalculateAsync" disabled="@(_busy || string.IsNullOrWhiteSpace(_runFolio))">
+                        @(_busy ? "Calculando…" : "Crear corrida y calcular")
+                    </button>
+                }
+                @if (_calculateResult is not null && _run is not null)
+                {
+                    <div class="alert alert-success mb-3">
+                        <strong>✓ Nómina calculada.</strong>
+                    </div>
+                    <div class="table-responsive" style="max-width:400px;">
+                        <table class="table table-sm table-borderless mb-0">
+                            <tbody>
+                                <tr><td class="text-secondary">Folio</td><td><strong>@_run.Folio</strong></td></tr>
+                                <tr><td class="text-secondary">Empleados</td><td><strong>@_calculateResult.Employees</strong></td></tr>
+                                <tr><td class="text-secondary">Total bruto</td><td><strong>@_calculateResult.GrossAmount.ToString("C2")</strong></td></tr>
+                                <tr><td class="text-secondary">Deducciones</td><td><strong>@_calculateResult.DeductionsAmount.ToString("C2")</strong></td></tr>
+                                <tr><td class="text-secondary" style="border-top:2px solid #dee2e6;">Neto a pagar</td><td style="border-top:2px solid #dee2e6;"><strong class="text-success fs-5">@_calculateResult.NetAmount.ToString("C2")</strong></td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </div>
+            <div class="card-footer d-flex justify-content-between gap-2">
+                <button class="btn btn-outline-secondary" @onclick="() => GoToStep(4)">← Anterior</button>
+                @if (_run is not null && _calculateResult is not null)
+                {
+                    <button class="btn btn-primary" @onclick="() => GoToStep(6)">Ver recibos →</button>
+                }
+            </div>
+        </div>
+    }
+
+    @* ══════════════════════════════════════════════════════════ *@
+    @* PASO 6: Imprimir recibos *@
+    @* ══════════════════════════════════════════════════════════ *@
+    @if (_step == 6)
+    {
+        <div class="card shadow-sm">
+            <div class="card-header fw-semibold">Paso 6 — Imprimir recibos</div>
+            <div class="card-body">
+                <p class="text-secondary mb-3">La nómina está lista. Accede a los recibos individuales o imprime el resumen general.</p>
+                @if (_run is not null)
+                {
+                    <div class="d-flex flex-wrap gap-2">
+                        <a class="btn btn-outline-primary" target="_blank" href="/payroll/print/run/@_run.PayrollRunId">
+                            🖨️ Imprimir resumen nómina
+                        </a>
+                        <a class="btn btn-outline-secondary" href="/payroll/receipts/@_run.PayrollRunId">
+                            📄 Ver recibos individuales
+                        </a>
+                        <a class="btn btn-outline-dark" href="/payroll/runs">
+                            📋 Volver a corridas
+                        </a>
+                    </div>
+                    <div class="mt-3 p-3 bg-light rounded" style="font-size:13px;">
+                        <strong>Folio:</strong> @_run.Folio &nbsp;|&nbsp;
+                        <strong>Empleados:</strong> @_run.EmployeeCount &nbsp;|&nbsp;
+                        <strong>Neto:</strong> @_run.NetAmount.ToString("C2")
+                    </div>
+                }
+            </div>
+            <div class="card-footer d-flex justify-content-between gap-2">
+                <button class="btn btn-outline-secondary" @onclick="() => GoToStep(5)">← Anterior</button>
+                <button class="btn btn-success" @onclick="ResetWizard">Nueva corrida</button>
+            </div>
+        </div>
+    }
+</div>
+
+@* ── Import empleados (acceso rápido desde cualquier paso) ── *@
+@if (_step is 1 or 2)
+{
+    <div class="container-fluid mt-3" style="max-width:900px;">
+        <details class="border rounded p-3">
+            <summary class="fw-semibold" style="cursor:pointer;">📥 Importar empleados desde Excel (opcional)</summary>
+            <div class="mt-3">
+                <p class="text-secondary mb-2" style="font-size:13px;">
+                    Columnas: <code>NoEmpleado | Nombre | ApellidoPaterno | ApellidoMaterno | RFC | CURP | Email | Telefono | FechaIngreso | SalarioDiario | SalarioDiarioIntegrado | DepartamentoCodigo | PuestoCodigo</code>
+                </p>
+                <div class="d-flex gap-2 align-items-end flex-wrap">
+                    <div>
+                        <label class="form-label fw-semibold mb-1" style="font-size:13px;">Archivo Excel</label>
+                        <InputFile OnChange="OnEmployeeFileSelected" accept=".xlsx" class="form-control form-control-sm" style="width:300px;" />
+                    </div>
+                    <button class="btn btn-sm btn-outline-primary" @onclick="ImportEmployeesAsync" disabled="@(_employeeFile is null || _busy)">
+                        @(_busy ? "Importando…" : "Importar empleados")
+                    </button>
+                </div>
+                @if (_employeeImportResult is not null)
+                {
+                    <div class="alert @(_employeeImportResult.Errors.Count > 0 ? "alert-warning" : "alert-success") mt-2 mb-0">
+                        <strong>Resultado:</strong> @_employeeImportResult.Created creados, @_employeeImportResult.Updated actualizados, @_employeeImportResult.Skipped omitidos.
+                        @if (_employeeImportResult.Errors.Count > 0)
+                        {
+                            <ul class="mt-1 mb-0">
+                                @foreach (var e in _employeeImportResult.Errors.Take(5))
+                                {
+                                    <li>@e</li>
+                                }
+                            </ul>
+                        }
+                    </div>
+                }
+            </div>
+        </details>
+    </div>
+}
+
+@code {
+    private const int TotalSteps = 6;
+    private int _step = 1;
+    private bool _busy;
+    private string? _errorMessage;
+    private string? _successMessage;
+
+    // Paso 1
+    private List<Nanchesoft.Web.Services.HumanResources.PayrollPeriodSimple> _periods = [];
+    private Guid _selectedPeriodId;
+
+    // Paso 2
+    private Microsoft.AspNetCore.Components.Forms.IBrowserFile? _punchFile;
+    private Nanchesoft.Web.Services.HumanResources.PayrollMvpImportResult? _punchImportResult;
+
+    // Paso 3
+    private Nanchesoft.Web.Services.HumanResources.PayrollMvpOperationResult? _summaryResult;
+
+    // Paso 4
+    private Nanchesoft.Web.Services.HumanResources.PayrollMvpOperationResult? _incidentResult;
+
+    // Paso 5
+    private string _runFolio = string.Empty;
+    private Nanchesoft.Web.Services.HumanResources.PayrollRunSimple? _run;
+    private Nanchesoft.Web.Services.HumanResources.PayrollMvpCalculateResult? _calculateResult;
+
+    // Importar empleados
+    private Microsoft.AspNetCore.Components.Forms.IBrowserFile? _employeeFile;
+    private Nanchesoft.Web.Services.HumanResources.PayrollMvpImportResult? _employeeImportResult;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _periods = await PayrollMvpApiService.GetPeriodsAsync();
+    }
+
+    private string StepLabel(int step) => step switch
+    {
+        1 => "Periodo",
+        2 => "Checadas",
+        3 => "Resumen",
+        4 => "Incidencias",
+        5 => "Calcular",
+        6 => "Recibos",
+        _ => step.ToString()
+    };
+
+    private void GoToStep(int step)
+    {
+        _errorMessage = null;
+        _successMessage = null;
+        _step = step;
+    }
+
+    private void GoToStep2()
+    {
+        if (_selectedPeriodId == Guid.Empty) return;
+        var sel = _periods.FirstOrDefault(x => x.PayrollPeriodId == _selectedPeriodId);
+        _runFolio = sel is not null
+            ? $"NOM-{sel.StartDate:yyyyMMdd}"
+            : $"NOM-{DateTime.UtcNow:yyyyMMdd}";
+        GoToStep(2);
+    }
+
+    private void OnPunchFileSelected(Microsoft.AspNetCore.Components.Forms.InputFileChangeEventArgs e)
+    {
+        _punchFile = e.File;
+        _punchImportResult = null;
+    }
+
+    private void OnEmployeeFileSelected(Microsoft.AspNetCore.Components.Forms.InputFileChangeEventArgs e)
+    {
+        _employeeFile = e.File;
+        _employeeImportResult = null;
+    }
+
+    private async Task ImportPunchesAsync()
+    {
+        if (_punchFile is null) return;
+        await RunAsync(async () =>
+        {
+            using var stream = _punchFile.OpenReadStream(maxAllowedSize: 10 * 1024 * 1024);
+            _punchImportResult = await PayrollMvpApiService.ImportPunchesFromExcelAsync(stream, _punchFile.Name);
+        });
+    }
+
+    private async Task ImportEmployeesAsync()
+    {
+        if (_employeeFile is null) return;
+        await RunAsync(async () =>
+        {
+            using var stream = _employeeFile.OpenReadStream(maxAllowedSize: 10 * 1024 * 1024);
+            _employeeImportResult = await PayrollMvpApiService.ImportEmployeesFromExcelAsync(stream, _employeeFile.Name);
+        });
+    }
+
+    private async Task GenerateSummariesAsync()
+    {
+        await RunAsync(async () =>
+        {
+            _summaryResult = await PayrollMvpApiService.GenerateAttendanceSummariesAsync(_selectedPeriodId);
+        });
+    }
+
+    private async Task GenerateIncidentsAsync()
+    {
+        await RunAsync(async () =>
+        {
+            _incidentResult = await PayrollMvpApiService.GenerateIncidentsAsync(_selectedPeriodId);
+        });
+    }
+
+    private async Task CreateAndCalculateAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_runFolio)) return;
+        await RunAsync(async () =>
+        {
+            _run = await PayrollMvpApiService.CreateRunAsync(_selectedPeriodId, _runFolio.Trim().ToUpperInvariant());
+            if (_run is null) throw new InvalidOperationException("No se pudo crear la corrida.");
+            _calculateResult = await PayrollMvpApiService.CalculatePayrollRunAsync(_run.PayrollRunId);
+            // Reload to get updated totals
+            var runs = await PayrollMvpApiService.GetRunsAsync();
+            _run = runs.FirstOrDefault(x => x.PayrollRunId == _run.PayrollRunId) ?? _run;
+        });
+    }
+
+    private async Task RunAsync(Func<Task> action)
+    {
+        _busy = true;
+        _errorMessage = null;
+        _successMessage = null;
+        try
+        {
+            await action();
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private void ResetWizard()
+    {
+        _step = 1;
+        _selectedPeriodId = Guid.Empty;
+        _punchFile = null;
+        _punchImportResult = null;
+        _summaryResult = null;
+        _incidentResult = null;
+        _runFolio = string.Empty;
+        _run = null;
+        _calculateResult = null;
+        _employeeFile = null;
+        _employeeImportResult = null;
+        _errorMessage = null;
+        _successMessage = null;
+    }
+}

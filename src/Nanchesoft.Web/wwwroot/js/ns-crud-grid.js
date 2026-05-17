@@ -194,12 +194,14 @@ window.nsCrudGrid = (() => {
             sorting: { mode: "multiple" },
             filterRow: { visible: true, applyFilter: "auto" },
             headerFilter: { visible: true },
+            filterPanel: { visible: true },
             searchPanel: {
                 visible: true,
-                width: 300,
-                placeholder: "Buscar..."
+                width: 280,
+                placeholder: "Buscar en todos los campos..."
             },
-            groupPanel: { visible: false },
+            groupPanel: { visible: true, emptyPanelText: "Arrastra una columna aquí para agrupar" },
+            grouping: { autoExpandAll: true },
             selection: { mode: "single" },
 
             paging: { pageSize: 12 },

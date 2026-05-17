@@ -69,7 +69,28 @@
       "Bash(journalctl -u nanchesoft-api.service -n 50 --no-pager)",
       "Bash(journalctl -u nanchesoft-api.service -n 20 --no-pager)",
       "Bash(journalctl -u nanchesoft-api.service --since \"1 minute ago\" --no-pager)",
-      "Bash(journalctl -u nanchesoft-api.service -n 10 --no-pager)"
+      "Bash(journalctl -u nanchesoft-api.service -n 10 --no-pager)",
+      "Bash(grep -E \"\\\\.sql$\")",
+      "Bash(grep -v \"^$\")",
+      "Bash(pkill -f \"Nanchesoft.Api\")",
+      "Bash(pkill -f \"Nanchesoft.Web\")",
+      "Bash(awk '{print $2}')",
+      "Read(//opt/nanchesoft/publish/**)",
+      "Read(//opt/nanchesoft/publish/api/**)",
+      "Bash(kill 210682 236536)",
+      "Bash(nohup dotnet /opt/nanchesoft/publish/api/Nanchesoft.Api.dll --urls \"http://localhost:5001\")",
+      "Bash(echo \"API PID $!\")",
+      "Bash(nohup dotnet /opt/nanchesoft/publish/web/Nanchesoft.Web.dll --urls \"http://localhost:5000\")",
+      "Bash(echo \"Web PID $!\")",
+      "Bash(DOTNET_ENVIRONMENT=Production dotnet /opt/nanchesoft/publish/api/Nanchesoft.Api.dll --urls \"http://localhost:5001\")",
+      "Bash(dotnet Nanchesoft.Api.dll --urls \"http://localhost:5001\")",
+      "Bash(echo \"PID: $!\")",
+      "Bash(fuser -k 5001/tcp)",
+      "Bash(fuser -k 5000/tcp)",
+      "Bash(kill 239214 239330)",
+      "Bash(ps -p 239260 -o cmd --no-headers)",
+      "Bash(ps -p 239063 -o cmd --no-headers)",
+      "Bash(kill 241657)"
     ]
   }
 }
