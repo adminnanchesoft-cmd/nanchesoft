@@ -704,6 +704,41 @@ public static class ProductionOrderEndpoints
                 .ToListAsync();
             return Results.Ok(list);
         }).WithTags("ProductionOrders");
+
+        // ─── Material requirement for an order ───────────────────────────────
+        app.MapGet("/api/production/orders/{id:guid}/material-requirement", async (Guid id, NanchesoftDbContext db) =>
+        {
+            var req = await db.MaterialRequirements.AsNoTracking()
+                .Include(x => x.Lines)
+                .Where(x => x.ProductionOrderId == id && x.Status != "cancelled")
+                .OrderByDescending(x => x.CalculatedAt)
+                .FirstOrDefaultAsync();
+
+            if (req is null) return Results.NotFound(new { message = "No hay explosión registrada para esta orden." });
+
+            return Results.Ok(new
+            {
+                materialRequirementId = req.Id,
+                status = req.Status,
+                calculatedAt = req.CalculatedAt,
+                totalLines = req.TotalLines,
+                linesWithShortage = req.LinesWithShortage,
+                linesFulyCovered = req.LinesFulyCovered,
+                lines = req.Lines.OrderBy(l => l.ComponentCode).Select(l => new
+                {
+                    l.ComponentCode,
+                    l.ComponentName,
+                    l.MaterialName,
+                    l.QuantityRequired,
+                    l.QuantityOnHand,
+                    l.QuantityToReserve,
+                    l.QuantityShortage,
+                    l.UnitCost,
+                    l.TotalCost,
+                    l.CoverageStatus
+                }).ToList()
+            });
+        }).WithTags("ProductionOrders");
     }
 
     private static async Task<string> GenerateProductionFolioAsync(

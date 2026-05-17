@@ -165,6 +165,8 @@ public sealed class NanchesoftDbContext : DbContext
     public DbSet<ProductionInProcess> ProductionInProcess => Set<ProductionInProcess>();
     public DbSet<SurplusRecord> SurplusRecords => Set<SurplusRecord>();
     public DbSet<PhaseRestriction> PhaseRestrictions => Set<PhaseRestriction>();
+    public DbSet<QualityControlRecord> QualityControlRecords => Set<QualityControlRecord>();
+    public DbSet<QualityDefect> QualityDefects => Set<QualityDefect>();
 
     public DbSet<PurchaseRequisition> PurchaseRequisitions => Set<PurchaseRequisition>();
     public DbSet<PurchaseRequisitionLine> PurchaseRequisitionLines => Set<PurchaseRequisitionLine>();

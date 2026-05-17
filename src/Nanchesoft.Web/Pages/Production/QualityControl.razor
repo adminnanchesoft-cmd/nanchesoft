@@ -1,0 +1,704 @@
+@page "/produccion/control-calidad"
+@using System.Net.Http.Json
+@using System.Text.Json
+@inject IHttpClientFactory HttpClientFactory
+
+<PageTitle>Control de calidad | Nanchesoft</PageTitle>
+
+<div class="container-fluid py-3">
+    <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-3">
+        <div>
+            <div class="text-uppercase small text-secondary fw-semibold">Producción · Calidad</div>
+            <h2 class="mb-1">Control de calidad</h2>
+            <div class="text-secondary">Inspecciona lotes de producción, registra defectos y emite aprobación o rechazo.</div>
+        </div>
+        <div class="d-flex gap-2 flex-wrap">
+            @if (_companies.Count > 1)
+            {
+                <select class="form-select form-select-sm" style="width:200px;" @onchange="OnCompanyChanged">
+                    @foreach (var c in _companies)
+                    {
+                        <option value="@c.Id" selected="@(c.Id == _selectedCompanyId)">@c.Name</option>
+                    }
+                </select>
+            }
+            <select class="form-select form-select-sm" style="width:100px;" @bind="_yearFilter" @bind:after="LoadRecordsAsync">
+                @for (int y = DateTime.UtcNow.Year + 1; y >= DateTime.UtcNow.Year - 2; y--)
+                {
+                    <option value="@y">@y</option>
+                }
+            </select>
+            <select class="form-select form-select-sm" style="width:140px;" @bind="_statusFilter" @bind:after="LoadRecordsAsync">
+                <option value="">Todos los estados</option>
+                <option value="pending">Pendiente</option>
+                <option value="on_hold">En espera</option>
+                <option value="approved">Aprobado</option>
+                <option value="rejected">Rechazado</option>
+            </select>
+            <button class="btn btn-outline-secondary btn-sm" @onclick="LoadRecordsAsync">Actualizar</button>
+            <button class="btn btn-primary btn-sm" @onclick="OpenNewModal">+ Nueva inspección</button>
+            <a class="btn btn-outline-secondary btn-sm" href="/produccion/ordenes">Órdenes</a>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(_message))
+    {
+        <div class="alert alert-success alert-dismissible">@_message <button type="button" class="btn-close" @onclick='() => _message = string.Empty'></button></div>
+    }
+    @if (!string.IsNullOrWhiteSpace(_error))
+    {
+        <div class="alert alert-danger alert-dismissible">@_error <button type="button" class="btn-close" @onclick='() => _error = string.Empty'></button></div>
+    }
+
+    <!-- Dashboard KPIs -->
+    @if (_dashboard is not null)
+    {
+        <div class="row g-3 mb-3">
+            <div class="col-6 col-md-2">
+                <div class="card border-0 bg-light text-center p-2">
+                    <div class="small text-secondary">Total</div>
+                    <div class="fw-bold fs-5">@_dashboard.Total</div>
+                </div>
+            </div>
+            <div class="col-6 col-md-2">
+                <div class="card border-0 text-center p-2" style="background:#e8f5e9">
+                    <div class="small text-secondary">Aprobados</div>
+                    <div class="fw-bold fs-5 text-success">@_dashboard.Approved</div>
+                </div>
+            </div>
+            <div class="col-6 col-md-2">
+                <div class="card border-0 text-center p-2" style="background:#ffebee">
+                    <div class="small text-secondary">Rechazados</div>
+                    <div class="fw-bold fs-5 text-danger">@_dashboard.Rejected</div>
+                </div>
+            </div>
+            <div class="col-6 col-md-2">
+                <div class="card border-0 text-center p-2" style="background:#fff3e0">
+                    <div class="small text-secondary">Pendientes</div>
+                    <div class="fw-bold fs-5" style="color:#e65100">@(_dashboard.Pending + _dashboard.OnHold)</div>
+                </div>
+            </div>
+            <div class="col-6 col-md-2">
+                <div class="card border-0 bg-light text-center p-2">
+                    <div class="small text-secondary">U. inspeccionadas</div>
+                    <div class="fw-bold fs-5">@_dashboard.TotalUnitsInspected.ToString("N0")</div>
+                </div>
+            </div>
+            <div class="col-6 col-md-2">
+                <div class="card border-0 text-center p-2" style="background:#e3f2fd">
+                    <div class="small text-secondary">Tasa aprobación</div>
+                    <div class="fw-bold fs-5" style="color:#1565c0">@_dashboard.ApprovalRate.ToString("N1")%</div>
+                </div>
+            </div>
+        </div>
+    }
+
+    @if (_loading)
+    {
+        <div class="alert alert-info">Cargando registros...</div>
+    }
+    else if (_records.Count == 0)
+    {
+        <div class="card shadow-sm"><div class="card-body text-center text-secondary py-5">Sin registros de control de calidad para los filtros seleccionados.</div></div>
+    }
+    else
+    {
+        <div class="card shadow-sm">
+            <div class="table-responsive">
+                <table class="table table-sm table-striped align-middle mb-0">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>Folio</th>
+                            <th>Fecha</th>
+                            <th>Inspector</th>
+                            <th>Estado</th>
+                            <th class="text-end">Inspeccionadas</th>
+                            <th class="text-end">Aprobadas</th>
+                            <th class="text-end">Rechazadas</th>
+                            <th class="text-center">Defectos</th>
+                            <th style="width:280px;">Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var r in _records)
+                        {
+                            <tr>
+                                <td class="fw-semibold">@r.Folio</td>
+                                <td class="small text-secondary">@r.InspectionDate.ToString("dd/MM/yyyy")</td>
+                                <td>@r.InspectorName</td>
+                                <td><span class="badge" style="background:@StatusColor(r.Status)">@StatusLabel(r.Status)</span></td>
+                                <td class="text-end">@r.TotalUnitsInspected</td>
+                                <td class="text-end text-success fw-semibold">@r.TotalUnitsApproved</td>
+                                <td class="text-end text-danger fw-semibold">@r.TotalUnitsRejected</td>
+                                <td class="text-center">
+                                    @if (r.DefectCount > 0)
+                                    {
+                                        <span class="badge bg-warning text-dark">@r.DefectCount</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-secondary">—</span>
+                                    }
+                                </td>
+                                <td>
+                                    <div class="d-flex gap-1 flex-wrap">
+                                        <button class="btn btn-sm btn-outline-secondary" @onclick="() => OpenDetailModal(r.Id)">Ver</button>
+                                        @if (r.Status == "pending")
+                                        {
+                                            <button class="btn btn-sm btn-outline-success" disabled="@_busy" @onclick="() => Approve(r.Id)">Aprobar</button>
+                                            <button class="btn btn-sm btn-outline-danger" disabled="@_busy" @onclick="() => Reject(r.Id)">Rechazar</button>
+                                            <button class="btn btn-sm btn-outline-warning" disabled="@_busy" @onclick="() => Hold(r.Id)">En espera</button>
+                                        }
+                                        @if (r.Status == "on_hold")
+                                        {
+                                            <button class="btn btn-sm btn-outline-success" disabled="@_busy" @onclick="() => Approve(r.Id)">Aprobar</button>
+                                            <button class="btn btn-sm btn-outline-danger" disabled="@_busy" @onclick="() => Reject(r.Id)">Rechazar</button>
+                                        }
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+</div>
+
+<!-- Modal: nueva inspección -->
+@if (_showNewModal)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background:rgba(0,0,0,0.5)">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Nueva inspección de calidad</h5>
+                    <button type="button" class="btn-close" @onclick="CloseNewModal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Orden de producción (ID)</label>
+                        <input class="form-control" @bind="_newOrderId" placeholder="GUID de la orden" />
+                        <div class="form-text">Ingresa el ID de la orden de producción a inspeccionar.</div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Fecha de inspección</label>
+                        <input type="date" class="form-control" @bind="_newDate" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Inspector</label>
+                        <input class="form-control" @bind="_newInspector" placeholder="Nombre del inspector" />
+                    </div>
+                    <div class="row g-2 mb-3">
+                        <div class="col-4">
+                            <label class="form-label fw-semibold">Inspeccionadas</label>
+                            <input type="number" class="form-control" @bind="_newInspected" min="0" />
+                        </div>
+                        <div class="col-4">
+                            <label class="form-label fw-semibold">Aprobadas</label>
+                            <input type="number" class="form-control" @bind="_newApproved" min="0" />
+                        </div>
+                        <div class="col-4">
+                            <label class="form-label fw-semibold">Rechazadas</label>
+                            <input type="number" class="form-control" @bind="_newRejected" min="0" />
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Notas</label>
+                        <textarea class="form-control" rows="2" @bind="_newNotes"></textarea>
+                    </div>
+                    @if (!string.IsNullOrWhiteSpace(_modalError))
+                    {
+                        <div class="alert alert-danger py-2">@_modalError</div>
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" @onclick="CloseNewModal">Cancelar</button>
+                    <button class="btn btn-primary" disabled="@_busy" @onclick="CreateRecordAsync">Crear inspección</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Modal: detalle del registro -->
+@if (_showDetailModal && _detail is not null)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background:rgba(0,0,0,0.5)">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Inspección @_detail.Folio — <span class="badge" style="background:@StatusColor(_detail.Status)">@StatusLabel(_detail.Status)</span></h5>
+                    <button type="button" class="btn-close" @onclick="CloseDetailModal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row g-2 mb-3 text-center">
+                        <div class="col-4">
+                            <div class="small text-secondary">Inspeccionadas</div>
+                            <div class="fw-bold fs-5">@_detail.TotalUnitsInspected</div>
+                        </div>
+                        <div class="col-4">
+                            <div class="small text-secondary">Aprobadas</div>
+                            <div class="fw-bold fs-5 text-success">@_detail.TotalUnitsApproved</div>
+                        </div>
+                        <div class="col-4">
+                            <div class="small text-secondary">Rechazadas</div>
+                            <div class="fw-bold fs-5 text-danger">@_detail.TotalUnitsRejected</div>
+                        </div>
+                    </div>
+                    @if (!string.IsNullOrWhiteSpace(_detail.Notes))
+                    {
+                        <div class="alert alert-light py-2 small">@_detail.Notes</div>
+                    }
+
+                    <!-- Add defect -->
+                    @if (_detail.Status == "pending" || _detail.Status == "on_hold")
+                    {
+                        <div class="card mb-3">
+                            <div class="card-header fw-semibold py-2">Agregar defecto</div>
+                            <div class="card-body">
+                                <div class="row g-2">
+                                    <div class="col-md-3">
+                                        <label class="form-label small">Código</label>
+                                        <input class="form-control form-control-sm" @bind="_defCode" placeholder="ej. DEF-001" />
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label small">Descripción</label>
+                                        <input class="form-control form-control-sm" @bind="_defDesc" placeholder="Descripción del defecto" />
+                                    </div>
+                                    <div class="col-md-2">
+                                        <label class="form-label small">Severidad</label>
+                                        <select class="form-select form-select-sm" @bind="_defSeverity">
+                                            <option value="low">Bajo</option>
+                                            <option value="medium">Medio</option>
+                                            <option value="high">Alto</option>
+                                            <option value="critical">Crítico</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-1">
+                                        <label class="form-label small">Cant.</label>
+                                        <input type="number" class="form-control form-control-sm" @bind="_defQty" min="1" />
+                                    </div>
+                                    <div class="col-md-2 d-flex align-items-end">
+                                        <button class="btn btn-danger btn-sm w-100" disabled="@_busy" @onclick="AddDefectAsync">Agregar</button>
+                                    </div>
+                                </div>
+                                @if (!string.IsNullOrWhiteSpace(_defectError))
+                                {
+                                    <div class="alert alert-danger py-1 mt-2">@_defectError</div>
+                                }
+                            </div>
+                        </div>
+                    }
+
+                    <!-- Defects table -->
+                    @if (_detail.Defects.Count == 0)
+                    {
+                        <div class="text-secondary text-center py-3">Sin defectos registrados.</div>
+                    }
+                    else
+                    {
+                        <div class="table-responsive">
+                            <table class="table table-sm table-striped align-middle mb-0">
+                                <thead class="table-dark">
+                                    <tr>
+                                        <th>Código</th>
+                                        <th>Descripción</th>
+                                        <th>Severidad</th>
+                                        <th class="text-end">Cant.</th>
+                                        <th>Resolución</th>
+                                        <th>Estado</th>
+                                        @if (_detail.Status == "pending" || _detail.Status == "on_hold")
+                                        {
+                                            <th></th>
+                                        }
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var d in _detail.Defects)
+                                    {
+                                        <tr>
+                                            <td class="fw-semibold">@d.DefectCode</td>
+                                            <td>@d.DefectDescription</td>
+                                            <td><span class="badge" style="background:@SeverityColor(d.Severity)">@SeverityLabel(d.Severity)</span></td>
+                                            <td class="text-end">@d.QuantityAffected</td>
+                                            <td class="small text-secondary">@d.ResolutionNotes</td>
+                                            <td>
+                                                @if (d.IsResolved)
+                                                {
+                                                    <span class="badge bg-success">Resuelto</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="badge bg-danger">Pendiente</span>
+                                                }
+                                            </td>
+                                            @if ((_detail.Status == "pending" || _detail.Status == "on_hold") && !d.IsResolved)
+                                            {
+                                                <td>
+                                                    <button class="btn btn-sm btn-outline-success" disabled="@_busy"
+                                                            @onclick="() => ResolveDefectAsync(_detail.Id, d.Id)">
+                                                        Resolver
+                                                    </button>
+                                                </td>
+                                            }
+                                            else if (_detail.Status == "pending" || _detail.Status == "on_hold")
+                                            {
+                                                <td></td>
+                                            }
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" @onclick="CloseDetailModal">Cerrar</button>
+                    @if (_detail.Status == "pending" || _detail.Status == "on_hold")
+                    {
+                        <button class="btn btn-success" disabled="@_busy" @onclick="ApproveDetail">Aprobar</button>
+                        <button class="btn btn-danger" disabled="@_busy" @onclick="RejectDetail">Rechazar</button>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private HttpClient? _http;
+
+    private List<CompanyRow> _companies = new();
+    private Guid _selectedCompanyId;
+    private int _yearFilter = DateTime.UtcNow.Year;
+    private string _statusFilter = string.Empty;
+
+    private List<QcRecordRow> _records = new();
+    private QcDashboard? _dashboard;
+    private QcDetailResult? _detail;
+
+    private bool _loading;
+    private bool _busy;
+    private string _message = string.Empty;
+    private string _error = string.Empty;
+
+    // New record modal
+    private bool _showNewModal;
+    private string _newOrderId = string.Empty;
+    private DateOnly _newDate = DateOnly.FromDateTime(DateTime.Today);
+    private string _newInspector = string.Empty;
+    private int _newInspected;
+    private int _newApproved;
+    private int _newRejected;
+    private string _newNotes = string.Empty;
+    private string _modalError = string.Empty;
+
+    // Detail modal
+    private bool _showDetailModal;
+    private string _defCode = string.Empty;
+    private string _defDesc = string.Empty;
+    private string _defSeverity = "low";
+    private int _defQty = 1;
+    private string _defectError = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _http = HttpClientFactory.CreateClient("Nanchesoft.Api");
+        await LoadCompaniesAsync();
+    }
+
+    private async Task LoadCompaniesAsync()
+    {
+        try
+        {
+            var result = await _http!.GetFromJsonAsync<List<CompanyRow>>("/api/organization/companies");
+            _companies = result ?? new();
+            if (_companies.Count > 0) _selectedCompanyId = _companies[0].Id;
+            await Task.WhenAll(LoadRecordsAsync(), LoadDashboardAsync());
+        }
+        catch { _error = "Error al cargar empresas."; }
+    }
+
+    private async Task LoadRecordsAsync()
+    {
+        _loading = true;
+        _records = new();
+        try
+        {
+            var url = $"/api/production/quality-control?companyId={_selectedCompanyId}&year={_yearFilter}";
+            if (!string.IsNullOrWhiteSpace(_statusFilter)) url += $"&status={_statusFilter}";
+            var result = await _http!.GetFromJsonAsync<List<QcRecordRow>>(url);
+            _records = result ?? new();
+        }
+        catch { _error = "Error al cargar registros."; }
+        _loading = false;
+    }
+
+    private async Task LoadDashboardAsync()
+    {
+        try
+        {
+            _dashboard = await _http!.GetFromJsonAsync<QcDashboard>(
+                $"/api/production/quality-control/dashboard?companyId={_selectedCompanyId}&year={_yearFilter}");
+        }
+        catch { }
+    }
+
+    private async Task OnCompanyChanged(ChangeEventArgs e)
+    {
+        if (Guid.TryParse(e.Value?.ToString(), out var id)) _selectedCompanyId = id;
+        await Task.WhenAll(LoadRecordsAsync(), LoadDashboardAsync());
+    }
+
+    private void OpenNewModal()
+    {
+        _newOrderId = string.Empty;
+        _newDate = DateOnly.FromDateTime(DateTime.Today);
+        _newInspector = string.Empty;
+        _newInspected = _newApproved = _newRejected = 0;
+        _newNotes = string.Empty;
+        _modalError = string.Empty;
+        _showNewModal = true;
+    }
+
+    private void CloseNewModal() => _showNewModal = false;
+
+    private async Task CreateRecordAsync()
+    {
+        _modalError = string.Empty;
+        if (!Guid.TryParse(_newOrderId, out var orderId)) { _modalError = "ID de orden inválido."; return; }
+        if (string.IsNullOrWhiteSpace(_newInspector)) { _modalError = "El inspector es obligatorio."; return; }
+
+        _busy = true;
+        try
+        {
+            var payload = new
+            {
+                companyId = _selectedCompanyId,
+                productionOrderId = orderId,
+                inspectionDate = _newDate,
+                inspectorName = _newInspector,
+                totalUnitsInspected = _newInspected,
+                totalUnitsApproved = _newApproved,
+                totalUnitsRejected = _newRejected,
+                notes = _newNotes,
+                userId = "web"
+            };
+            var resp = await _http!.PostAsJsonAsync("/api/production/quality-control", payload);
+            if (resp.IsSuccessStatusCode)
+            {
+                _showNewModal = false;
+                _message = "Inspección creada correctamente.";
+                await Task.WhenAll(LoadRecordsAsync(), LoadDashboardAsync());
+            }
+            else
+            {
+                var body = await resp.Content.ReadFromJsonAsync<ErrorBody>();
+                _modalError = body?.Message ?? "Error al crear la inspección.";
+            }
+        }
+        catch { _modalError = "Error de conexión."; }
+        _busy = false;
+    }
+
+    private async Task OpenDetailModal(Guid id)
+    {
+        _defCode = _defDesc = _defectError = string.Empty;
+        _defSeverity = "low";
+        _defQty = 1;
+        try
+        {
+            _detail = await _http!.GetFromJsonAsync<QcDetailResult>($"/api/production/quality-control/{id}");
+            _showDetailModal = true;
+        }
+        catch { _error = "Error al cargar detalle."; }
+    }
+
+    private void CloseDetailModal() { _showDetailModal = false; _detail = null; }
+
+    private Task Approve(Guid id) => DoAction(id, "approve");
+    private Task Reject(Guid id) => DoAction(id, "reject");
+    private Task Hold(Guid id) => DoAction(id, "hold");
+    private Task ApproveDetail() => _detail is not null ? DoActionAndReload(_detail.Id, "approve") : Task.CompletedTask;
+    private Task RejectDetail() => _detail is not null ? DoActionAndReload(_detail.Id, "reject") : Task.CompletedTask;
+
+    private async Task DoAction(Guid id, string action)
+    {
+        _busy = true;
+        try
+        {
+            var resp = await _http!.PostAsJsonAsync($"/api/production/quality-control/{id}/{action}", new { userId = "web" });
+            if (resp.IsSuccessStatusCode)
+            {
+                _message = action switch
+                {
+                    "approve" => "Registro aprobado.",
+                    "reject"  => "Registro rechazado.",
+                    "hold"    => "Registro en espera.",
+                    _         => "Acción realizada."
+                };
+                await Task.WhenAll(LoadRecordsAsync(), LoadDashboardAsync());
+            }
+            else
+            {
+                var body = await resp.Content.ReadFromJsonAsync<ErrorBody>();
+                _error = body?.Message ?? "Error al ejecutar acción.";
+            }
+        }
+        catch { _error = "Error de conexión."; }
+        _busy = false;
+    }
+
+    private async Task DoActionAndReload(Guid id, string action)
+    {
+        await DoAction(id, action);
+        if (_showDetailModal)
+            _detail = await _http!.GetFromJsonAsync<QcDetailResult>($"/api/production/quality-control/{id}");
+    }
+
+    private async Task AddDefectAsync()
+    {
+        _defectError = string.Empty;
+        if (string.IsNullOrWhiteSpace(_defCode)) { _defectError = "Ingresa el código de defecto."; return; }
+        if (_detail is null) return;
+
+        _busy = true;
+        try
+        {
+            var payload = new
+            {
+                defectCode = _defCode,
+                defectDescription = _defDesc,
+                severity = _defSeverity,
+                quantityAffected = _defQty,
+                userId = "web"
+            };
+            var resp = await _http!.PostAsJsonAsync($"/api/production/quality-control/{_detail.Id}/defects", payload);
+            if (resp.IsSuccessStatusCode)
+            {
+                _defCode = _defDesc = string.Empty;
+                _defQty = 1;
+                _detail = await _http!.GetFromJsonAsync<QcDetailResult>($"/api/production/quality-control/{_detail.Id}");
+                await LoadRecordsAsync();
+            }
+            else
+            {
+                var body = await resp.Content.ReadFromJsonAsync<ErrorBody>();
+                _defectError = body?.Message ?? "Error al agregar defecto.";
+            }
+        }
+        catch { _defectError = "Error de conexión."; }
+        _busy = false;
+    }
+
+    private async Task ResolveDefectAsync(Guid recordId, Guid defectId)
+    {
+        _busy = true;
+        try
+        {
+            var resp = await _http!.PostAsJsonAsync(
+                $"/api/production/quality-control/{recordId}/defects/{defectId}/resolve",
+                new { notes = "Resuelto desde UI.", userId = "web" });
+            if (resp.IsSuccessStatusCode)
+                _detail = await _http!.GetFromJsonAsync<QcDetailResult>($"/api/production/quality-control/{recordId}");
+            else { _error = "Error al resolver defecto."; }
+        }
+        catch { _error = "Error de conexión."; }
+        _busy = false;
+    }
+
+    private static string StatusColor(string status) => status switch
+    {
+        "approved" => "#388e3c",
+        "rejected" => "#c62828",
+        "on_hold"  => "#f57c00",
+        "pending"  => "#1976d2",
+        _          => "#757575"
+    };
+
+    private static string StatusLabel(string status) => status switch
+    {
+        "approved" => "Aprobado",
+        "rejected" => "Rechazado",
+        "on_hold"  => "En espera",
+        "pending"  => "Pendiente",
+        _          => status
+    };
+
+    private static string SeverityColor(string sev) => sev switch
+    {
+        "critical" => "#c62828",
+        "high"     => "#e65100",
+        "medium"   => "#f57c00",
+        _          => "#757575"
+    };
+
+    private static string SeverityLabel(string sev) => sev switch
+    {
+        "critical" => "Crítico",
+        "high"     => "Alto",
+        "medium"   => "Medio",
+        "low"      => "Bajo",
+        _          => sev
+    };
+
+    // ── Records ──────────────────────────────────────────────────────────────
+
+    private sealed record CompanyRow(Guid Id, string Name);
+    private sealed record ErrorBody(string Message);
+
+    private sealed class QcRecordRow
+    {
+        public Guid Id { get; set; }
+        public string Folio { get; set; } = string.Empty;
+        public Guid CompanyId { get; set; }
+        public Guid ProductionOrderId { get; set; }
+        public DateOnly InspectionDate { get; set; }
+        public string InspectorName { get; set; } = string.Empty;
+        public string Status { get; set; } = string.Empty;
+        public string Result { get; set; } = string.Empty;
+        public int TotalUnitsInspected { get; set; }
+        public int TotalUnitsApproved { get; set; }
+        public int TotalUnitsRejected { get; set; }
+        public int DefectCount { get; set; }
+        public string Notes { get; set; } = string.Empty;
+    }
+
+    private sealed class QcDetailResult
+    {
+        public Guid Id { get; set; }
+        public string Folio { get; set; } = string.Empty;
+        public string Status { get; set; } = string.Empty;
+        public int TotalUnitsInspected { get; set; }
+        public int TotalUnitsApproved { get; set; }
+        public int TotalUnitsRejected { get; set; }
+        public string Notes { get; set; } = string.Empty;
+        public List<DefectRow> Defects { get; set; } = new();
+    }
+
+    private sealed class DefectRow
+    {
+        public Guid Id { get; set; }
+        public string DefectCode { get; set; } = string.Empty;
+        public string DefectDescription { get; set; } = string.Empty;
+        public string Severity { get; set; } = string.Empty;
+        public int QuantityAffected { get; set; }
+        public string ResolutionNotes { get; set; } = string.Empty;
+        public bool IsResolved { get; set; }
+    }
+
+    private sealed class QcDashboard
+    {
+        public int Year { get; set; }
+        public int Total { get; set; }
+        public int Approved { get; set; }
+        public int Rejected { get; set; }
+        public int Pending { get; set; }
+        public int OnHold { get; set; }
+        public int TotalUnitsInspected { get; set; }
+        public int TotalUnitsApproved { get; set; }
+        public int TotalUnitsRejected { get; set; }
+        public double ApprovalRate { get; set; }
+    }
+}

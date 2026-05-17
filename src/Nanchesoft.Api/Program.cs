@@ -230,6 +230,7 @@ app.MapProductionScheduleEndpoints();
 app.MapProductionVoucherEndpoints();
 app.MapProductionPieceWorkEndpoints();
 app.MapProductionDashboardEndpoints();
+app.MapQualityControlEndpoints();
 app.MapServiceBillingEndpoints();
 app.MapTenantEndpoints();
 app.MapPlanEndpoints();
