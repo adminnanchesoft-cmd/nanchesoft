@@ -1,0 +1,259 @@
+@page "/produccion/reportes"
+@using System.Net.Http.Json
+@using Nanchesoft.Web.Services.Reports
+@inject ReportsApiService ReportsApiService
+@inject IHttpClientFactory HttpClientFactory
+
+<PageTitle>Reportes de Producción | Nanchesoft</PageTitle>
+
+@if (_loading)
+{
+    <div class="ns-catalog-loading"><div class="ns-loader"></div><span>Cargando reportes...</span></div>
+}
+else
+{
+    <div class="ns-catalog-page">
+        <div class="ns-catalog-header">
+            <div>
+                <div class="ns-catalog-eyebrow">Nanchesoft ERP · Producción</div>
+                <h1 class="ns-catalog-title">Reportes de producción</h1>
+                <p class="ns-catalog-subtitle">Concentrado semanal, destajo por operario, eficiencia por fase y en proceso.</p>
+            </div>
+            <div class="d-flex gap-2 flex-wrap align-items-center">
+                @if (_companies.Count > 1)
+                {
+                    <select class="form-select form-select-sm" style="width:220px;" @onchange="OnCompanyChanged">
+                        @foreach (var c in _companies)
+                        {
+                            <option value="@c.Key" selected="@(c.Key == _selectedCompanyId.ToString())">@c.Value</option>
+                        }
+                    </select>
+                }
+                <a class="btn btn-outline-secondary" href="/produccion/dashboard">Dashboard</a>
+            </div>
+        </div>
+
+        <!-- Concentrado semanal -->
+        <h3 class="ns-section-title">Concentrado semanal de órdenes</h3>
+        @if (_weekly.Count == 0)
+        {
+            <p style="color:#6b7280;font-size:.9rem;">Sin órdenes registradas.</p>
+        }
+        else
+        {
+            <div style="overflow-x:auto;">
+                <table class="table table-sm table-striped">
+                    <thead>
+                        <tr>
+                            <th>Folio</th><th>Semana</th><th>Estatus</th>
+                            <th style="text-align:right">Planeado</th>
+                            <th style="text-align:right">Producido</th>
+                            <th style="text-align:right">% Avance</th>
+                            <th>Entrega</th><th>Cierre</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var r in _weekly)
+                        {
+                            var pct = r.TotalUnitsPlanned > 0
+                                ? (decimal)r.TotalUnitsProduced / r.TotalUnitsPlanned * 100 : 0;
+                            <tr>
+                                <td><strong>@r.Folio</strong></td>
+                                <td>@r.WeekCode</td>
+                                <td><span class="badge" style="background:@StatusColor(r.Status);color:#fff;padding:2px 8px;border-radius:12px;font-size:.75rem;">@r.Status</span></td>
+                                <td style="text-align:right">@r.TotalUnitsPlanned</td>
+                                <td style="text-align:right">@r.TotalUnitsProduced</td>
+                                <td style="text-align:right">@pct.ToString("N1")%</td>
+                                <td>@r.DeliveryDate</td>
+                                <td>@r.ClosedAt</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+
+        <!-- Eficiencia por fase -->
+        <h3 class="ns-section-title">Eficiencia por fase</h3>
+        @if (_phases.Count == 0)
+        {
+            <p style="color:#6b7280;font-size:.9rem;">Sin datos de fases.</p>
+        }
+        else
+        {
+            <div class="ns-kpi-grid">
+                @foreach (var p in _phases)
+                {
+                    <div class="ns-kpi-card @(p.RejectRate > 5 ? "ns-kpi-card-warning" : "")">
+                        <div class="ns-kpi-label">@p.PhaseName</div>
+                        <div class="ns-kpi-value">@p.TotalProduced</div>
+                        <div style="font-size:.75rem;color:#6b7280;">@p.RejectRate.ToString("N1")% rechazo</div>
+                    </div>
+                }
+            </div>
+            <div style="overflow-x:auto;margin-top:12px;">
+                <table class="table table-sm table-striped">
+                    <thead><tr><th>Fase</th><th style="text-align:right">Órdenes</th><th style="text-align:right">Producido</th><th style="text-align:right">Rechazado</th><th style="text-align:right">% Rechazo</th></tr></thead>
+                    <tbody>
+                        @foreach (var p in _phases)
+                        {
+                            <tr>
+                                <td>@p.PhaseName</td>
+                                <td style="text-align:right">@p.TotalOrders</td>
+                                <td style="text-align:right">@p.TotalProduced</td>
+                                <td style="text-align:right">@p.TotalRejected</td>
+                                <td style="text-align:right;color:@(p.RejectRate > 5 ? "#dc2626" : "inherit")">@p.RejectRate.ToString("N1")%</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+
+        <!-- Destajo por operario -->
+        <h3 class="ns-section-title">Destajo por operario</h3>
+        @if (_piecework.Count == 0)
+        {
+            <p style="color:#6b7280;font-size:.9rem;">Sin registros de destajo.</p>
+        }
+        else
+        {
+            <div style="overflow-x:auto;">
+                <table class="table table-sm table-striped">
+                    <thead>
+                        <tr>
+                            <th>Operario</th>
+                            <th style="text-align:right">Registros</th>
+                            <th style="text-align:right">Producido</th>
+                            <th style="text-align:right">Rechazado</th>
+                            <th style="text-align:right">Bruto</th>
+                            <th style="text-align:right">Deducción</th>
+                            <th style="text-align:right">Neto</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var p in _piecework)
+                        {
+                            <tr>
+                                <td>@p.EmployeeName</td>
+                                <td style="text-align:right">@p.TotalRecords</td>
+                                <td style="text-align:right">@p.TotalProduced</td>
+                                <td style="text-align:right">@p.TotalRejected</td>
+                                <td style="text-align:right">$@p.GrossAmount.ToString("N2")</td>
+                                <td style="text-align:right;color:#dc2626;">-$@p.Deductions.ToString("N2")</td>
+                                <td style="text-align:right;font-weight:700;">$@p.NetAmount.ToString("N2")</td>
+                            </tr>
+                        }
+                        <tr style="font-weight:700;border-top:2px solid #e5e7eb;">
+                            <td>Total</td>
+                            <td style="text-align:right">@_piecework.Sum(x => x.TotalRecords)</td>
+                            <td style="text-align:right">@_piecework.Sum(x => x.TotalProduced)</td>
+                            <td style="text-align:right">@_piecework.Sum(x => x.TotalRejected)</td>
+                            <td style="text-align:right">$@_piecework.Sum(x => x.GrossAmount).ToString("N2")</td>
+                            <td style="text-align:right">-$@_piecework.Sum(x => x.Deductions).ToString("N2")</td>
+                            <td style="text-align:right">$@_piecework.Sum(x => x.NetAmount).ToString("N2")</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        }
+
+        <!-- En proceso -->
+        <h3 class="ns-section-title">En proceso ahora</h3>
+        @if (_inProcess.Count == 0)
+        {
+            <p style="color:#6b7280;font-size:.9rem;">Sin unidades en proceso.</p>
+        }
+        else
+        {
+            <div style="overflow-x:auto;">
+                <table class="table table-sm table-striped">
+                    <thead><tr><th>Orden</th><th>Fase</th><th>Celda</th><th style="text-align:right">Unidades</th><th>Fecha</th></tr></thead>
+                    <tbody>
+                        @foreach (var r in _inProcess)
+                        {
+                            <tr>
+                                <td>@r.OrderFolio</td>
+                                <td>@r.PhaseName</td>
+                                <td>@r.CellName</td>
+                                <td style="text-align:right">@r.UnitsCurrent</td>
+                                <td>@r.RecordDate</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+}
+
+@code {
+    private bool _loading = true;
+    private Guid _selectedCompanyId;
+    private List<KeyValuePair<string, string>> _companies = [];
+    private List<ProductionWeeklySummaryDto> _weekly = [];
+    private List<PhaseEfficiencyDto> _phases = [];
+    private List<PieceWorkByEmployeeDto> _piecework = [];
+    private List<InProcessSnapshotDto> _inProcess = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadCompaniesAsync();
+        await LoadDataAsync();
+    }
+
+    private async Task OnCompanyChanged(ChangeEventArgs e)
+    {
+        if (Guid.TryParse(e.Value?.ToString(), out var id))
+        {
+            _selectedCompanyId = id;
+            await LoadDataAsync();
+        }
+    }
+
+    private async Task LoadCompaniesAsync()
+    {
+        try
+        {
+            var client = HttpClientFactory.CreateClient("Nanchesoft.Api");
+            var list = await client.GetFromJsonAsync<List<CompanyRow>>("/api/organization/companies") ?? [];
+            _companies = list.Select(x => new KeyValuePair<string, string>(x.CompanyId.ToString(), x.Name)).ToList();
+            if (_companies.Count > 0 && Guid.TryParse(_companies[0].Key, out var first))
+                _selectedCompanyId = first;
+        }
+        catch { }
+    }
+
+    private async Task LoadDataAsync()
+    {
+        if (_selectedCompanyId == Guid.Empty) { _loading = false; return; }
+        _loading = true;
+        try
+        {
+            var t1 = ReportsApiService.GetProductionWeeklySummaryAsync(_selectedCompanyId);
+            var t2 = ReportsApiService.GetPhaseEfficiencyAsync(_selectedCompanyId);
+            var t3 = ReportsApiService.GetPieceWorkByEmployeeAsync(_selectedCompanyId);
+            var t4 = ReportsApiService.GetInProcessSnapshotAsync(_selectedCompanyId);
+            await Task.WhenAll(t1, t2, t3, t4);
+            _weekly    = t1.Result;
+            _phases    = t2.Result;
+            _piecework = t3.Result;
+            _inProcess = t4.Result;
+        }
+        catch { }
+        finally { _loading = false; }
+    }
+
+    private static string StatusColor(string status) => status switch
+    {
+        "draft"       => "#6b7280",
+        "planned"     => "#3b82f6",
+        "in_progress" => "#f59e0b",
+        "completed"   => "#10b981",
+        "closed"      => "#059669",
+        "cancelled"   => "#ef4444",
+        _             => "#6b7280"
+    };
+
+    private sealed record CompanyRow(Guid CompanyId, string Name);
+}

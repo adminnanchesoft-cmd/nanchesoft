@@ -263,6 +263,104 @@ public static class ReportsEndpoints
                 : Results.Text(csv, "text/csv", Encoding.UTF8);
         });
 
+        // ── Reportes de Producción ─────────────────────────────────────────────
+
+        group.MapGet("/production/weekly-summary", async (Guid companyId, NanchesoftDbContext db) =>
+        {
+            var orders = await db.ProductionOrders
+                .AsNoTracking()
+                .Where(x => x.IsActive && x.CompanyId == companyId)
+                .OrderByDescending(x => x.WeekCode)
+                .Take(20)
+                .Select(x => new ProductionWeeklySummaryDto(
+                    x.Id,
+                    x.Folio,
+                    x.WeekCode,
+                    x.Status,
+                    x.Lines.Count,
+                    x.Lines.Sum(l => l.TotalUnitsPlanned),
+                    x.Lines.Sum(l => l.TotalUnitsProduced),
+                    x.TotalUnitsProduced,
+                    x.DeliveryDate,
+                    x.ClosedAt))
+                .ToListAsync();
+            return Results.Ok(orders);
+        });
+
+        group.MapGet("/production/piecework-by-employee", async (Guid companyId, NanchesoftDbContext db) =>
+        {
+            var records = await db.PieceWorkRecords
+                .AsNoTracking()
+                .Where(x => x.IsActive && x.CompanyId == companyId)
+                .GroupBy(x => new { x.EmployeeId, x.Employee!.FirstName, x.Employee.LastName })
+                .Select(g => new PieceWorkByEmployeeDto(
+                    g.Key.EmployeeId,
+                    g.Key.FirstName + " " + g.Key.LastName,
+                    g.Count(),
+                    g.Sum(r => r.UnitsProduced),
+                    g.Sum(r => r.UnitsRejected),
+                    g.Sum(r => r.GrossAmount),
+                    g.Sum(r => r.QualityDeduction),
+                    g.Sum(r => r.NetAmount)))
+                .OrderByDescending(x => x.NetAmount)
+                .ToListAsync();
+            return Results.Ok(records);
+        });
+
+        group.MapGet("/production/phase-efficiency", async (Guid companyId, NanchesoftDbContext db) =>
+        {
+            var progress = await db.ProductionPhaseProgress
+                .AsNoTracking()
+                .Where(x => x.IsActive && x.ProductionOrderLine!.ProductionOrder!.CompanyId == companyId)
+                .GroupBy(x => new { x.ProductionPhase!.Code, x.ProductionPhase.Name })
+                .Select(g => new PhaseEfficiencyDto(
+                    g.Key.Code,
+                    g.Key.Name,
+                    g.Select(r => r.ProductionOrderLineId).Distinct().Count(),
+                    g.Sum(r => r.UnitsCompleted),
+                    g.Sum(r => r.UnitsRejected),
+                    g.Sum(r => r.UnitsCompleted) > 0
+                        ? Math.Round((decimal)g.Sum(r => r.UnitsRejected) / g.Sum(r => r.UnitsCompleted) * 100, 2)
+                        : 0m))
+                .OrderBy(x => x.PhaseCode)
+                .ToListAsync();
+            return Results.Ok(progress);
+        });
+
+        group.MapGet("/production/in-process-snapshot", async (Guid companyId, NanchesoftDbContext db) =>
+        {
+            var snapshot = await db.ProductionInProcess
+                .AsNoTracking()
+                .Where(x => x.IsActive && x.CompanyId == companyId && x.UnitsCurrent > 0)
+                .OrderByDescending(x => x.EntryDate)
+                .Select(x => new InProcessSnapshotDto(
+                    x.ProductionOrder != null ? x.ProductionOrder.Folio : string.Empty,
+                    x.ProductionPhase != null ? x.ProductionPhase.Code : string.Empty,
+                    x.ProductionPhase != null ? x.ProductionPhase.Name : string.Empty,
+                    x.ProductionCell != null ? x.ProductionCell.Name : string.Empty,
+                    x.UnitsCurrent,
+                    x.EntryDate))
+                .ToListAsync();
+            return Results.Ok(snapshot);
+        });
+
+        group.MapGet("/production/surplus-summary", async (Guid companyId, NanchesoftDbContext db) =>
+        {
+            var surplus = await db.SurplusRecords
+                .AsNoTracking()
+                .Where(x => x.IsActive && x.CompanyId == companyId)
+                .Select(x => new SurplusSummaryDto(
+                    x.Id,
+                    x.ProductionOrder != null ? x.ProductionOrder.Folio : string.Empty,
+                    x.UnitsSurplus,
+                    x.Disposition,
+                    x.Notes,
+                    x.CreatedAt))
+                .OrderByDescending(x => x.CreatedAt)
+                .ToListAsync();
+            return Results.Ok(surplus);
+        });
+
         return app;
     }
 
@@ -412,3 +510,25 @@ public sealed class ExecutiveTopRowDto
     public string Secondary { get; set; } = string.Empty;
     public decimal Amount { get; set; }
 }
+
+public sealed record ProductionWeeklySummaryDto(
+    Guid ProductionOrderId, string Folio, string WeekCode, string Status,
+    int TotalLines, int TotalUnitsPlanned, int TotalUnitsProduced, int TotalUnitsShipped,
+    DateOnly DeliveryDate, DateTime? ClosedAt);
+
+public sealed record PieceWorkByEmployeeDto(
+    Guid? EmployeeId, string EmployeeName, int TotalRecords,
+    int TotalProduced, int TotalRejected,
+    decimal GrossAmount, decimal Deductions, decimal NetAmount);
+
+public sealed record PhaseEfficiencyDto(
+    string PhaseCode, string PhaseName, int TotalOrders,
+    int TotalProduced, int TotalRejected, decimal RejectRate);
+
+public sealed record InProcessSnapshotDto(
+    string OrderFolio, string PhaseCode, string PhaseName,
+    string CellName, int UnitsCurrent, DateOnly RecordDate);
+
+public sealed record SurplusSummaryDto(
+    Guid SurplusRecordId, string OrderFolio, int Quantity,
+    string Disposition, string Notes, DateTime CreatedAt);

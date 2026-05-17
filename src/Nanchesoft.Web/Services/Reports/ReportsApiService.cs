@@ -52,7 +52,68 @@ public sealed class ReportsApiService
         var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
         return new Uri(client.BaseAddress!, $"/api/reports/export/{reportKey}").ToString();
     }
+
+    // ── Producción ────────────────────────────────────────────────────────────
+
+    public async Task<List<ProductionWeeklySummaryDto>> GetProductionWeeklySummaryAsync(Guid companyId)
+    {
+        var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
+        return await client.GetFromJsonAsync<List<ProductionWeeklySummaryDto>>(
+            $"/api/reports/production/weekly-summary?companyId={companyId}") ?? [];
+    }
+
+    public async Task<List<PieceWorkByEmployeeDto>> GetPieceWorkByEmployeeAsync(Guid companyId)
+    {
+        var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
+        return await client.GetFromJsonAsync<List<PieceWorkByEmployeeDto>>(
+            $"/api/reports/production/piecework-by-employee?companyId={companyId}") ?? [];
+    }
+
+    public async Task<List<PhaseEfficiencyDto>> GetPhaseEfficiencyAsync(Guid companyId)
+    {
+        var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
+        return await client.GetFromJsonAsync<List<PhaseEfficiencyDto>>(
+            $"/api/reports/production/phase-efficiency?companyId={companyId}") ?? [];
+    }
+
+    public async Task<List<InProcessSnapshotDto>> GetInProcessSnapshotAsync(Guid companyId)
+    {
+        var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
+        return await client.GetFromJsonAsync<List<InProcessSnapshotDto>>(
+            $"/api/reports/production/in-process-snapshot?companyId={companyId}") ?? [];
+    }
+
+    public async Task<List<SurplusSummaryDto>> GetSurplusSummaryAsync(Guid companyId)
+    {
+        var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
+        return await client.GetFromJsonAsync<List<SurplusSummaryDto>>(
+            $"/api/reports/production/surplus-summary?companyId={companyId}") ?? [];
+    }
 }
+
+// ── DTOs de Producción ────────────────────────────────────────────────────────
+
+public sealed record ProductionWeeklySummaryDto(
+    Guid ProductionOrderId, string Folio, string WeekCode, string Status,
+    int TotalLines, int TotalUnitsPlanned, int TotalUnitsProduced, int TotalUnitsShipped,
+    string DeliveryDate, string? ClosedAt);
+
+public sealed record PieceWorkByEmployeeDto(
+    Guid? EmployeeId, string EmployeeName, int TotalRecords,
+    int TotalProduced, int TotalRejected,
+    decimal GrossAmount, decimal Deductions, decimal NetAmount);
+
+public sealed record PhaseEfficiencyDto(
+    string PhaseCode, string PhaseName, int TotalOrders,
+    int TotalProduced, int TotalRejected, decimal RejectRate);
+
+public sealed record InProcessSnapshotDto(
+    string OrderFolio, string PhaseCode, string PhaseName,
+    string CellName, int UnitsCurrent, string RecordDate);
+
+public sealed record SurplusSummaryDto(
+    Guid SurplusRecordId, string OrderFolio, int Quantity,
+    string Disposition, string Notes, string CreatedAt);
 
 public class ReportsPurchaseRowDto
 {

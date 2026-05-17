@@ -1,0 +1,184 @@
+@page "/produccion/control-center"
+
+<PageTitle>Producción Premium | Nanchesoft</PageTitle>
+
+<div class="ns-inv-premium-page">
+    <section class="ns-inv-hero" style="background:linear-gradient(135deg,#0f172a 0%,#1e3a5f 50%,#0f172a 100%);">
+        <div class="ns-inv-hero__overlay"></div>
+        <div class="ns-inv-hero__content">
+            <div class="ns-inv-topbar">
+                <div class="ns-inv-brand">
+                    <div class="ns-inv-brand__logo">NS</div>
+                    <div>
+                        <div class="ns-inv-brand__title">Nanchesoft ERP</div>
+                        <div class="ns-inv-brand__subtitle">Producción</div>
+                    </div>
+                </div>
+                <nav class="ns-inv-tabs">
+                    <a href="/">Inicio</a>
+                    <a href="/purchases/control-center">Compras</a>
+                    <a href="/inventory/control-center">Inventario</a>
+                    <a href="/sales/invoices">Ventas</a>
+                    <a class="is-active" href="/produccion/control-center">Producción</a>
+                    <a href="/payroll/periods">Nómina</a>
+                    <a href="/finance/executive-dashboard">Finanzas</a>
+                </nav>
+                <div class="ns-inv-user">
+                    <div class="ns-inv-user__avatar">P</div>
+                    <div>
+                        <div class="ns-inv-user__name">Producción</div>
+                        <div class="ns-inv-user__role">Centro de control</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="ns-inv-main-grid">
+                <div class="ns-inv-main-left">
+                    <div class="ns-inv-headline">
+                        <h1>Programación de producción</h1>
+                        <p>Órdenes, vales, destajo y KPIs operativos en tiempo real.</p>
+                    </div>
+
+                    <div class="ns-inv-kpis">
+                        <div class="ns-inv-kpi-card">
+                            <div class="ns-inv-kpi-card__value">OP</div>
+                            <div class="ns-inv-kpi-card__label">Órdenes</div>
+                        </div>
+                        <div class="ns-inv-kpi-card">
+                            <div class="ns-inv-kpi-card__value">VS</div>
+                            <div class="ns-inv-kpi-card__label">Vales</div>
+                        </div>
+                        <div class="ns-inv-kpi-card">
+                            <div class="ns-inv-kpi-card__value">DT</div>
+                            <div class="ns-inv-kpi-card__label">Destajo</div>
+                        </div>
+                        <div class="ns-inv-kpi-card">
+                            <div class="ns-inv-kpi-card__value">EP</div>
+                            <div class="ns-inv-kpi-card__label">En proceso</div>
+                        </div>
+                        <div class="ns-inv-kpi-card">
+                            <div class="ns-inv-kpi-card__value">SB</div>
+                            <div class="ns-inv-kpi-card__label">Sobrantes</div>
+                        </div>
+                    </div>
+
+                    <div class="ns-inv-breadcrumb">Inicio <span>›</span> Producción</div>
+
+                    <div class="ns-inv-card-grid">
+                        <a class="ns-inv-process-card" href="/produccion/dashboard">
+                            <div class="ns-inv-process-card__image" style="background:linear-gradient(135deg,#1d4ed8,#3b82f6);"></div>
+                            <div class="ns-inv-process-card__title">Dashboard</div>
+                            <div class="ns-inv-process-card__text">KPIs en tiempo real, kanban de órdenes y throughput por fase.</div>
+                            <div class="ns-inv-process-card__go">→</div>
+                        </a>
+
+                        <a class="ns-inv-process-card" href="/produccion/ordenes">
+                            <div class="ns-inv-process-card__image" style="background:linear-gradient(135deg,#0369a1,#0ea5e9);"></div>
+                            <div class="ns-inv-process-card__title">Órdenes de producción</div>
+                            <div class="ns-inv-process-card__text">Ciclo completo: borrador → planificado → explotado → en proceso → cerrado.</div>
+                            <div class="ns-inv-process-card__go">→</div>
+                        </a>
+
+                        <a class="ns-inv-process-card" href="/produccion/programacion">
+                            <div class="ns-inv-process-card__image" style="background:linear-gradient(135deg,#1e40af,#6366f1);"></div>
+                            <div class="ns-inv-process-card__title">Programación semanal</div>
+                            <div class="ns-inv-process-card__text">Tablero de carga por semana ISO 8601 y celda de producción.</div>
+                            <div class="ns-inv-process-card__go">→</div>
+                        </a>
+
+                        <a class="ns-inv-process-card" href="/produccion/vales">
+                            <div class="ns-inv-process-card__image" style="background:linear-gradient(135deg,#0f766e,#14b8a6);"></div>
+                            <div class="ns-inv-process-card__title">Vales de producción</div>
+                            <div class="ns-inv-process-card__text">Emisión, impresión PDF A5, registro de producido y rechazado.</div>
+                            <div class="ns-inv-process-card__go">→</div>
+                        </a>
+
+                        <a class="ns-inv-process-card" href="/produccion/destajo">
+                            <div class="ns-inv-process-card__image" style="background:linear-gradient(135deg,#92400e,#f59e0b);"></div>
+                            <div class="ns-inv-process-card__title">Destajo</div>
+                            <div class="ns-inv-process-card__text">Captura, aprobación y procesamiento a nómina de trabajo a destajo.</div>
+                            <div class="ns-inv-process-card__go">→</div>
+                        </a>
+
+                        <a class="ns-inv-process-card" href="/produccion/tarifas-destajo">
+                            <div class="ns-inv-process-card__image" style="background:linear-gradient(135deg,#78350f,#d97706);"></div>
+                            <div class="ns-inv-process-card__title">Tarifas de destajo</div>
+                            <div class="ns-inv-process-card__text">Precio unitario vigente por fase y periodo.</div>
+                            <div class="ns-inv-process-card__go">→</div>
+                        </a>
+
+                        <a class="ns-inv-process-card" href="/produccion/en-proceso">
+                            <div class="ns-inv-process-card__image" style="background:linear-gradient(135deg,#166534,#22c55e);"></div>
+                            <div class="ns-inv-process-card__title">En proceso</div>
+                            <div class="ns-inv-process-card__text">Instantánea de unidades en proceso por orden, fase y celda.</div>
+                            <div class="ns-inv-process-card__go">→</div>
+                        </a>
+
+                        <a class="ns-inv-process-card" href="/produccion/sobrantes">
+                            <div class="ns-inv-process-card__image" style="background:linear-gradient(135deg,#7f1d1d,#ef4444);"></div>
+                            <div class="ns-inv-process-card__title">Sobrantes</div>
+                            <div class="ns-inv-process-card__text">Registro y disposición de pares sobrantes o merma de producción.</div>
+                            <div class="ns-inv-process-card__go">→</div>
+                        </a>
+
+                        <a class="ns-inv-process-card" href="/produccion/celdas">
+                            <div class="ns-inv-process-card__image" style="background:linear-gradient(135deg,#312e81,#8b5cf6);"></div>
+                            <div class="ns-inv-process-card__title">Celdas de producción</div>
+                            <div class="ns-inv-process-card__text">Unidades productivas por fase con capacidad diaria.</div>
+                            <div class="ns-inv-process-card__go">→</div>
+                        </a>
+
+                        <a class="ns-inv-process-card" href="/produccion/reportes">
+                            <div class="ns-inv-process-card__image" style="background:linear-gradient(135deg,#1e3a8a,#2563eb);"></div>
+                            <div class="ns-inv-process-card__title">Reportes</div>
+                            <div class="ns-inv-process-card__text">Concentrado semanal, eficiencia por fase y destajo por operario.</div>
+                            <div class="ns-inv-process-card__go">→</div>
+                        </a>
+                    </div>
+                </div>
+
+                <div class="ns-inv-main-right">
+                    <div class="ns-inv-sidebar-card">
+                        <h3>Flujo de una orden</h3>
+                        <div class="ns-inv-timeline">
+                            <div class="ns-inv-timeline-item">
+                                <div class="ns-inv-timeline-dot" style="background:#6b7280;"></div>
+                                <div><strong>Borrador</strong><br/><small>Se crea la OP con líneas de producto</small></div>
+                            </div>
+                            <div class="ns-inv-timeline-item">
+                                <div class="ns-inv-timeline-dot" style="background:#3b82f6;"></div>
+                                <div><strong>Planificado</strong><br/><small>Aprobada, lista para explotar</small></div>
+                            </div>
+                            <div class="ns-inv-timeline-item">
+                                <div class="ns-inv-timeline-dot" style="background:#6366f1;"></div>
+                                <div><strong>Explotado</strong><br/><small>Materiales calculados y verificados</small></div>
+                            </div>
+                            <div class="ns-inv-timeline-item">
+                                <div class="ns-inv-timeline-dot" style="background:#8b5cf6;"></div>
+                                <div><strong>Reservado</strong><br/><small>Materiales reservados en almacén</small></div>
+                            </div>
+                            <div class="ns-inv-timeline-item">
+                                <div class="ns-inv-timeline-dot" style="background:#f59e0b;"></div>
+                                <div><strong>En proceso</strong><br/><small>Vales emitidos, producción activa</small></div>
+                            </div>
+                            <div class="ns-inv-timeline-item">
+                                <div class="ns-inv-timeline-dot" style="background:#10b981;"></div>
+                                <div><strong>Completado / Cerrado</strong><br/><small>Producción finalizada</small></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="ns-inv-sidebar-card" style="margin-top:16px;">
+                        <h3>Acciones rápidas</h3>
+                        <div style="display:flex;flex-direction:column;gap:8px;margin-top:8px;">
+                            <a href="/produccion/ordenes" class="btn btn-sm btn-outline-light w-100">+ Nueva orden de producción</a>
+                            <a href="/produccion/vales" class="btn btn-sm btn-outline-light w-100">+ Emitir vale de producción</a>
+                            <a href="/produccion/destajo" class="btn btn-sm btn-outline-light w-100">+ Registrar destajo</a>
+                            <a href="/produccion/dashboard" class="btn btn-sm btn-primary w-100">Ver dashboard completo</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+</div>
