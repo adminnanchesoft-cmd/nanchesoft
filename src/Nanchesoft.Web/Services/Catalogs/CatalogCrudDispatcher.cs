@@ -12,6 +12,7 @@ using Nanchesoft.Web.Services.Sales;
 using Nanchesoft.Web.Services.Security;
 using Nanchesoft.Web.Services.ThirdPartiesProducts;
 using Nanchesoft.Web.Services.Production;
+using Nanchesoft.Web.Services.Treasury;
 using Nanchesoft.Web.Services.Warehouses;
 
 namespace Nanchesoft.Web.Services.Catalogs;
@@ -143,6 +144,25 @@ public sealed class CatalogCrudDispatcher
             "production-surplus",
             "piecework-records",
             "piecework-rates",
+            // Treasury
+            "cash-accounts",
+            "bank-accounts-own",
+            "treasury-incomes",
+            "treasury-expenses",
+            "treasury-receipts",
+            "treasury-payments",
+            "treasury-reconciliations",
+            // Product engineering extras
+            "leather-types",
+            "soles",
+            "sole-colors",
+            "quality-control-dies",
+            "folio-patterns",
+            "production-phases",
+            "material-characteristics",
+            "material-sizes",
+            // Plans
+            "plans",
     };
 
     private static readonly HashSet<string> ReadOnlyCatalogKeys = new(StringComparer.OrdinalIgnoreCase)
@@ -197,10 +217,13 @@ public sealed class CatalogCrudDispatcher
                 => Resolve<PayrollOperationsApiService>().GetCatalogAsync(normalized),
             "hr-shifts" or "hr-work-schedules" or "hr-time-clock-devices" or "hr-leave-types" or "hr-vacation-requests" or "hr-employee-documents" or "hr-employee-movements" or "hr-employee-certifications" or "hr-recruitment-vacancies" or "hr-candidate-applications" or "hr-onboarding-checklists" or "hr-performance-reviews" or "hr-competency-assessments" or "hr-succession-plans"
                 => Resolve<HumanResourcesEnterpriseApiService>().GetCatalogAsync(normalized),
-            "unit-conversions" or "size-runs" or "families" or "lasts" or "lines" or "styles" or "embroidery-patterns" or "item-engineering-profiles" or "material-families" or "material-subfamilies" or "material-items" or "material-suppliers" or "material-supplier-cost-history" or "finished-products" or "product-components" or "finished-product-materials" or "product-consumption-profiles" or "colors" or "manufacturing-types" or "toe-caps" or "dies"
+            "unit-conversions" or "size-runs" or "families" or "lasts" or "lines" or "styles" or "embroidery-patterns" or "item-engineering-profiles" or "material-families" or "material-subfamilies" or "material-items" or "material-suppliers" or "material-supplier-cost-history" or "finished-products" or "product-components" or "finished-product-materials" or "product-consumption-profiles" or "colors" or "manufacturing-types" or "toe-caps" or "dies" or "leather-types" or "soles" or "sole-colors" or "quality-control-dies" or "folio-patterns" or "production-phases" or "material-characteristics" or "material-sizes"
                 => Resolve<ProductEngineeringApiService>().GetCatalogAsync(normalized),
             "production-cells" or "production-vouchers" or "production-in-process" or "production-surplus" or "piecework-records" or "piecework-rates"
                 => Resolve<ProductionApiService>().GetCatalogAsync(normalized),
+            "cash-accounts" or "bank-accounts-own" or "treasury-incomes" or "treasury-expenses" or "treasury-receipts" or "treasury-payments" or "treasury-reconciliations"
+                => Resolve<TreasuryApiService>().GetCatalogAsync(normalized),
+            "plans" => Resolve<PlanApiService>().GetCatalogAsync(),
             _ => _fallback.GetAsync(normalized)
         };
     }
@@ -242,10 +265,13 @@ public sealed class CatalogCrudDispatcher
                 => action == "insert" ? Resolve<PayrollOperationsApiService>().InsertAsync(normalized, row) : Resolve<PayrollOperationsApiService>().UpdateAsync(normalized, key!, row),
             "hr-shifts" or "hr-work-schedules" or "hr-time-clock-devices" or "hr-leave-types" or "hr-vacation-requests" or "hr-employee-documents" or "hr-employee-movements" or "hr-employee-certifications" or "hr-recruitment-vacancies" or "hr-candidate-applications" or "hr-onboarding-checklists" or "hr-performance-reviews" or "hr-competency-assessments" or "hr-succession-plans"
                 => action == "insert" ? Resolve<HumanResourcesEnterpriseApiService>().InsertAsync(normalized, row) : Resolve<HumanResourcesEnterpriseApiService>().UpdateAsync(normalized, key!, row),
-            "unit-conversions" or "size-runs" or "families" or "lasts" or "lines" or "styles" or "embroidery-patterns" or "item-engineering-profiles" or "material-families" or "material-subfamilies" or "material-items" or "material-suppliers" or "material-supplier-cost-history" or "finished-products" or "product-components" or "finished-product-materials" or "product-consumption-profiles" or "colors" or "manufacturing-types" or "toe-caps" or "dies"
+            "unit-conversions" or "size-runs" or "families" or "lasts" or "lines" or "styles" or "embroidery-patterns" or "item-engineering-profiles" or "material-families" or "material-subfamilies" or "material-items" or "material-suppliers" or "material-supplier-cost-history" or "finished-products" or "product-components" or "finished-product-materials" or "product-consumption-profiles" or "colors" or "manufacturing-types" or "toe-caps" or "dies" or "leather-types" or "soles" or "sole-colors" or "quality-control-dies" or "folio-patterns" or "production-phases" or "material-characteristics" or "material-sizes"
                 => action == "insert" ? Resolve<ProductEngineeringApiService>().InsertAsync(normalized, row) : Resolve<ProductEngineeringApiService>().UpdateAsync(normalized, key!, row),
             "production-cells" or "production-vouchers" or "production-in-process" or "production-surplus" or "piecework-records" or "piecework-rates"
                 => action == "insert" ? Resolve<ProductionApiService>().InsertAsync(normalized, row) : Resolve<ProductionApiService>().UpdateAsync(normalized, key!, row),
+            "cash-accounts" or "bank-accounts-own" or "treasury-incomes" or "treasury-expenses" or "treasury-receipts" or "treasury-payments" or "treasury-reconciliations"
+                => action == "insert" ? Resolve<TreasuryApiService>().InsertAsync(normalized, row) : Resolve<TreasuryApiService>().UpdateAsync(normalized, key!, row),
+            "plans" => action == "insert" ? Resolve<PlanApiService>().InsertAsync(row) : Resolve<PlanApiService>().UpdateAsync(key!, row),
             _ => action == "insert" ? _fallback.InsertAsync(normalized, row) : _fallback.UpdateAsync(normalized, key!, row)
         };
     }
@@ -287,10 +313,13 @@ public sealed class CatalogCrudDispatcher
                 => Resolve<PayrollOperationsApiService>().DeleteAsync(normalized, key),
             "hr-shifts" or "hr-work-schedules" or "hr-time-clock-devices" or "hr-leave-types" or "hr-vacation-requests" or "hr-employee-documents" or "hr-employee-movements" or "hr-employee-certifications" or "hr-recruitment-vacancies" or "hr-candidate-applications" or "hr-onboarding-checklists" or "hr-performance-reviews" or "hr-competency-assessments" or "hr-succession-plans"
                 => Resolve<HumanResourcesEnterpriseApiService>().DeleteAsync(normalized, key),
-            "unit-conversions" or "size-runs" or "families" or "lasts" or "lines" or "styles" or "embroidery-patterns" or "item-engineering-profiles" or "material-families" or "material-subfamilies" or "material-items" or "material-suppliers" or "material-supplier-cost-history" or "finished-products" or "product-components" or "finished-product-materials" or "product-consumption-profiles" or "colors" or "manufacturing-types" or "toe-caps" or "dies"
+            "unit-conversions" or "size-runs" or "families" or "lasts" or "lines" or "styles" or "embroidery-patterns" or "item-engineering-profiles" or "material-families" or "material-subfamilies" or "material-items" or "material-suppliers" or "material-supplier-cost-history" or "finished-products" or "product-components" or "finished-product-materials" or "product-consumption-profiles" or "colors" or "manufacturing-types" or "toe-caps" or "dies" or "leather-types" or "soles" or "sole-colors" or "quality-control-dies" or "folio-patterns" or "production-phases" or "material-characteristics" or "material-sizes"
                 => Resolve<ProductEngineeringApiService>().DeleteAsync(normalized, key),
             "production-cells" or "production-vouchers" or "production-in-process" or "production-surplus" or "piecework-records" or "piecework-rates"
                 => Resolve<ProductionApiService>().DeleteAsync(normalized, key),
+            "cash-accounts" or "bank-accounts-own" or "treasury-incomes" or "treasury-expenses" or "treasury-receipts" or "treasury-payments" or "treasury-reconciliations"
+                => Resolve<TreasuryApiService>().DeleteAsync(normalized, key),
+            "plans" => Resolve<PlanApiService>().DeleteAsync(key),
             _ => _fallback.DeleteAsync(normalized, key)
         };
     }

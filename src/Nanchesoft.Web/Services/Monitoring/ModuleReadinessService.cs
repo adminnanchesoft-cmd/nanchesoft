@@ -18,6 +18,14 @@ public sealed class ModuleReadinessService
         new("Productos", "Plantillas de consumo", "/products/consumption-templates", "product-consumption-profiles"),
         new("Productos", "Insumos por producto", "/products/finished-product-supplies", "finished-product-supplies"),
         new("Productos", "Distribución de tallas", "/products/material-size-distributions", "material-size-distributions"),
+        new("Productos", "Tipos de piel", "/products/leather-types", "leather-types"),
+        new("Productos", "Suelas", "/products/soles", "soles"),
+        new("Productos", "Colores suela", "/products/sole-colors", "sole-colors"),
+        new("Productos", "Troqueles CC", "/products/quality-control-dies", "quality-control-dies"),
+        new("Productos", "Foliados", "/products/folio-patterns", "folio-patterns"),
+        new("Productos", "Fases producción", "/products/production-phases", "production-phases"),
+        new("Productos", "Características material", "/products/material-characteristics", "material-characteristics"),
+        new("Productos", "Tallas material", "/products/material-sizes", "material-sizes"),
         // Producción
         new("Producción", "Celdas", "/produccion/celdas", "production-cells"),
         new("Producción", "Vales", "/produccion/vales", "production-vouchers"),
@@ -54,6 +62,8 @@ public sealed class ModuleReadinessService
         new("Recursos Humanos", "Incidencias", "/human-resources/incidents", "hr-incidents"),
         new("Recursos Humanos", "Documentos empleado", "/human-resources/employee-documents", "hr-employee-documents"),
         new("Recursos Humanos", "Movimientos empleado", "/human-resources/employee-movements", "hr-employee-movements"),
+        // Planes
+        new("Planes", "Planes de suscripción", "/core/plans", "plans"),
         // Tesorería
         new("Tesorería", "Cuentas de caja", "/treasury/cash-accounts", "cash-accounts"),
         new("Tesorería", "Cuentas bancarias", "/treasury/bank-accounts", "bank-accounts-own"),
