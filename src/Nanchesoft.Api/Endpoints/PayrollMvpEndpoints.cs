@@ -21,6 +21,7 @@ public static class PayrollMvpEndpoints
 
         var runs = app.MapGroup("/api/payroll/runs").WithTags("PayrollRuns");
         runs.MapPost("/{runId:guid}/calculate", CalculatePayrollRunAsync);
+        runs.MapGet("/{runId:guid}/receipts/{lineId:guid}", GetPayrollReceiptHtmlAsync);
 
         app.MapPost("/api/payroll/seed-default-concepts", SeedDefaultConceptsAsync).WithTags("PayrollConcepts");
 
@@ -533,13 +534,16 @@ public static class PayrollMvpEndpoints
                         ?? concepts.FirstOrDefault(x => x.ConceptType == "perception");
         var conceptBon   = concepts.FirstOrDefault(x => x.Code == "BON")
                         ?? concepts.FirstOrDefault(x => x.ConceptType == "perception" && x.Code != (conceptSal?.Code ?? ""));
-        var conceptSubse = concepts.FirstOrDefault(x => x.Code == "SUBSE")
-                        ?? concepts.FirstOrDefault(x => x.SatCode == "P-017");
-        var conceptImss  = concepts.FirstOrDefault(x => x.Code == "IMSS")
-                        ?? concepts.FirstOrDefault(x => x.SatCode == "D-001");
-        var conceptIsr   = concepts.FirstOrDefault(x => x.Code == "ISR")
-                        ?? concepts.FirstOrDefault(x => x.SatCode == "D-002")
-                        ?? concepts.FirstOrDefault(x => x.ConceptType == "deduction");
+        var conceptSubse  = concepts.FirstOrDefault(x => x.Code == "SUBSE")
+                         ?? concepts.FirstOrDefault(x => x.SatCode == "P-017");
+        var conceptImss   = concepts.FirstOrDefault(x => x.Code == "IMSS")
+                         ?? concepts.FirstOrDefault(x => x.SatCode == "D-001");
+        var conceptIsr    = concepts.FirstOrDefault(x => x.Code == "ISR")
+                         ?? concepts.FirstOrDefault(x => x.SatCode == "D-002")
+                         ?? concepts.FirstOrDefault(x => x.ConceptType == "deduction");
+        var conceptDescto = concepts.FirstOrDefault(x => x.Code == "DESCTO")
+                         ?? concepts.FirstOrDefault(x => x.Code == "PRES")
+                         ?? conceptIsr;
 
         if (conceptSal is null)
             return Results.BadRequest(new { message = "No existe concepto de percepción (SAL) configurado. Use POST /api/payroll/concepts/seed-defaults para crearlos." });
@@ -608,6 +612,13 @@ public static class PayrollMvpEndpoints
         var loanDeductionsToCreate = new List<EmployeeLoanDeduction>();
         var createdLines = 0;
 
+        // Pre-load installments already applied outside this run to avoid unique key conflicts
+        var paidInstallmentKeys = await db.EmployeeLoanDeductions
+            .Where(x => x.CompanyId == run.CompanyId && x.PayrollRunId != runId)
+            .Select(x => x.EmployeeLoanId.ToString() + ":" + x.InstallmentNumber.ToString())
+            .ToListAsync();
+        var paidInstallmentSet = paidInstallmentKeys.ToHashSet();
+
         foreach (var employee in employees)
         {
             summaryByEmployee.TryGetValue(employee.Id, out var summary);
@@ -658,6 +669,14 @@ public static class PayrollMvpEndpoints
                     var installment = Math.Min(loan.InstallmentAmount, loan.BalanceAmount);
                     if (installment <= 0m) continue;
 
+                    var nextInstallmentNo = loan.InstallmentsPaid + 1;
+                    // Skip if this installment was already applied in another run (avoids unique key violation)
+                    if (paidInstallmentSet.Contains(loan.Id.ToString() + ":" + nextInstallmentNo.ToString()))
+                    {
+                        // Advance counter without creating a deduction (cross-run consistency)
+                        continue;
+                    }
+
                     loanDeductionTotal += installment;
                     loanDeductionsToCreate.Add(new EmployeeLoanDeduction
                     {
@@ -668,7 +687,7 @@ public static class PayrollMvpEndpoints
                         PayrollPeriodId = run.PayrollPeriodId,
                         PayrollRunId = runId,
                         DeductionDate = run.RunDate,
-                        InstallmentNumber = loan.InstallmentsPaid + 1,
+                        InstallmentNumber = nextInstallmentNo,
                         Amount = installment,
                         PrincipalApplied = installment,
                         InterestApplied = 0m,
@@ -761,9 +780,9 @@ public static class PayrollMvpEndpoints
             }
 
             // Deducciones
-            if (extraDeductions > 0m && conceptIsr is not null)
+            if (extraDeductions > 0m && conceptDescto is not null)
             {
-                db.PayrollRunLineDetails.Add(BuildDetail(run, line, employee, conceptIsr, 1m, extraDeductions, 85, isDeduction: true));
+                db.PayrollRunLineDetails.Add(BuildDetail(run, line, employee, conceptDescto, 1m, extraDeductions, 85, isDeduction: true));
             }
 
             if (imssAmount > 0m && conceptImss is not null)
@@ -814,7 +833,103 @@ public static class PayrollMvpEndpoints
     }
 
     // ──────────────────────────────────────────────────────────────
-    // 6. SEMBRAR CONCEPTOS PREDETERMINADOS
+    // 6. RECIBO DE NÓMINA HTML
+    // GET /api/payroll/runs/{runId}/receipts/{lineId}
+    // ──────────────────────────────────────────────────────────────
+    private static async Task<IResult> GetPayrollReceiptHtmlAsync(Guid runId, Guid lineId, NanchesoftDbContext db)
+    {
+        var line = await db.PayrollRunLines
+            .Include(x => x.Employee)
+            .Include(x => x.Department)
+            .Include(x => x.Position)
+            .FirstOrDefaultAsync(x => x.Id == lineId && x.PayrollRunId == runId);
+
+        if (line is null)
+            return Results.NotFound(new { message = "No se encontró el recibo." });
+
+        var run = await db.PayrollRuns.Include(x => x.PayrollPeriod).Include(x => x.Company).FirstOrDefaultAsync(x => x.Id == runId);
+        if (run is null)
+            return Results.NotFound(new { message = "No se encontró la corrida." });
+
+        var details = await db.PayrollRunLineDetails
+            .Where(x => x.PayrollRunLineId == lineId && x.IsActive)
+            .OrderBy(x => x.SortOrder).ThenBy(x => x.ConceptCode)
+            .ToListAsync();
+
+        var emp = line.Employee!;
+        var period = run.PayrollPeriod!;
+        var company = run.Company!;
+        var perceptions = details.Where(x => x.ConceptType == "perception").ToList();
+        var deductions = details.Where(x => x.ConceptType == "deduction").ToList();
+        var totalPerceptions = perceptions.Sum(x => x.Amount);
+        var totalDeductions = deductions.Sum(x => x.Amount);
+
+        static string Row(PayrollRunLineDetail d)
+            => $"<tr><td>{d.ConceptCode} – {d.ConceptName}</td><td class=\"amount\">${d.Amount:N2}</td></tr>";
+
+        var percRows = string.Join("\n", perceptions.Select(Row));
+        var dedRows  = string.Join("\n", deductions.Select(Row));
+
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine("<!DOCTYPE html><html lang=\"es\"><head><meta charset=\"UTF-8\">");
+        sb.AppendLine("<title>Recibo de Nómina</title><style>");
+        sb.AppendLine("body{font-family:Arial,sans-serif;font-size:12px;color:#333;margin:0;padding:20px}");
+        sb.AppendLine(".hdr{background:#1e3a5f;color:#fff;padding:12px 16px;border-radius:6px 6px 0 0}");
+        sb.AppendLine(".hdr h1{margin:0;font-size:16px}.hdr p{margin:2px 0;font-size:11px;opacity:.85}");
+        sb.AppendLine(".sec{border:1px solid #ddd}");
+        sb.AppendLine(".eg{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;padding:12px 16px;background:#f8f9fa}");
+        sb.AppendLine(".ef label{display:block;font-size:10px;color:#666;text-transform:uppercase;letter-spacing:.5px}");
+        sb.AppendLine(".ef span{font-weight:600}");
+        sb.AppendLine(".cv{display:grid;grid-template-columns:1fr 1fr}");
+        sb.AppendLine(".ct{background:#e8ecf0;font-weight:700;padding:6px 12px;font-size:11px;text-transform:uppercase;border-bottom:1px solid #ddd}");
+        sb.AppendLine(".ct.d{background:#fdecea}");
+        sb.AppendLine("table.it{width:100%;border-collapse:collapse}");
+        sb.AppendLine("table.it td{padding:5px 12px;border-bottom:1px solid #eee}");
+        sb.AppendLine("table.it td.am{text-align:right;font-variant-numeric:tabular-nums}");
+        sb.AppendLine(".tr td{font-weight:700;padding:6px 12px;background:#f0f0f0}");
+        sb.AppendLine(".tr.d td{background:#fdf0ee}");
+        sb.AppendLine(".nb{background:#1e3a5f;color:#fff;padding:10px 16px;display:flex;justify-content:space-between;align-items:center}");
+        sb.AppendLine(".nb .lb{font-size:11px;opacity:.85}.nb .am{font-size:22px;font-weight:700}");
+        sb.AppendLine(".ft{padding:8px 16px;font-size:10px;color:#888;text-align:center;border-top:1px solid #eee}");
+        sb.AppendLine("@media print{body{padding:0}}</style></head><body><div class=\"sec\">");
+
+        sb.AppendLine($"<div class=\"hdr\"><h1>{company.Name}</h1>");
+        sb.AppendLine($"<p>Periodo: {period.Name} &nbsp;|&nbsp; {period.StartDate:dd/MM/yyyy} &ndash; {period.EndDate:dd/MM/yyyy} &nbsp;|&nbsp; Pago: {period.PaymentDate:dd/MM/yyyy} &nbsp;|&nbsp; Folio: {run.Folio}</p></div>");
+
+        sb.AppendLine("<div class=\"eg\">");
+        sb.AppendLine($"<div class=\"ef\"><label>Empleado</label><span>{emp.GetFullName()}</span></div>");
+        sb.AppendLine($"<div class=\"ef\"><label>No. Empleado</label><span>{emp.EmployeeNumber}</span></div>");
+        sb.AppendLine($"<div class=\"ef\"><label>RFC</label><span>{emp.TaxId}</span></div>");
+        sb.AppendLine($"<div class=\"ef\"><label>CURP</label><span>{emp.Curp}</span></div>");
+        sb.AppendLine($"<div class=\"ef\"><label>NSS</label><span>{emp.Nss}</span></div>");
+        sb.AppendLine($"<div class=\"ef\"><label>Departamento</label><span>{line.Department?.Name ?? "—"}</span></div>");
+        sb.AppendLine($"<div class=\"ef\"><label>Puesto</label><span>{line.Position?.Name ?? "—"}</span></div>");
+        sb.AppendLine($"<div class=\"ef\"><label>Salario diario</label><span>${emp.DailySalary:N2}</span></div>");
+        sb.AppendLine($"<div class=\"ef\"><label>Días pagados</label><span>{line.DaysPaid:N2}</span></div>");
+        sb.AppendLine("</div>");
+
+        sb.AppendLine("<div class=\"cv\">");
+        sb.AppendLine($"<div><div class=\"ct\">Percepciones</div><table class=\"it\">{percRows}");
+        sb.AppendLine($"<tr class=\"tr\"><td>Total Percepciones</td><td class=\"am\">${totalPerceptions:N2}</td></tr></table></div>");
+        sb.AppendLine($"<div><div class=\"ct d\">Deducciones</div><table class=\"it\">{dedRows}");
+        sb.AppendLine($"<tr class=\"tr d\"><td>Total Deducciones</td><td class=\"am\">${totalDeductions:N2}</td></tr></table></div>");
+        sb.AppendLine("</div>");
+
+        sb.AppendLine("<div class=\"nb\">");
+        sb.AppendLine($"<div><div class=\"lb\">Percepciones</div><div>${totalPerceptions:N2}</div></div>");
+        sb.AppendLine($"<div><div class=\"lb\">Deducciones</div><div>${totalDeductions:N2}</div></div>");
+        sb.AppendLine($"<div><div class=\"lb\">NETO A PAGAR</div><div class=\"am\">${line.NetAmount:N2}</div></div>");
+        sb.AppendLine("</div>");
+        sb.AppendLine($"<div class=\"ft\">Recibo generado el {DateTime.Now:dd/MM/yyyy HH:mm} &nbsp;|&nbsp; Documento informativo, no es CFDI.</div>");
+        sb.AppendLine("</div></body></html>");
+
+        var html = sb.ToString();
+
+        return Results.Content(html, "text/html; charset=utf-8");
+    }
+
+    // ──────────────────────────────────────────────────────────────
+    // 7. SEMBRAR CONCEPTOS PREDETERMINADOS
     // ──────────────────────────────────────────────────────────────
     private static async Task<IResult> SeedDefaultConceptsAsync(NanchesoftDbContext db)
     {
@@ -833,6 +948,7 @@ public static class PayrollMvpEndpoints
             new { Code = "IMSS",  Name = "Cuota IMSS Obrera",     ConceptType = "deduction",  CalculationType = "auto_imss",     SatCode = "D-001", SatAgrupador = "SeguridadSocial", TaxableType = "taxable",TaxablePercent = 100m, ExemptPercent = 0m,   IsRecurring = true,  IsAutomatic = true,  SortOrder = 90 },
             new { Code = "ISR",   Name = "Retención ISR",         ConceptType = "deduction",  CalculationType = "auto_isr",      SatCode = "D-002", SatAgrupador = "ISR",         TaxableType = "taxable",     TaxablePercent = 100m, ExemptPercent = 0m,   IsRecurring = true,  IsAutomatic = true,  SortOrder = 95 },
             new { Code = "PRESTA",Name = "Préstamo",              ConceptType = "deduction",  CalculationType = "fixed_amount",  SatCode = "D-004", SatAgrupador = "Deduccion",   TaxableType = "not_applicable", TaxablePercent = 0m,ExemptPercent = 0m,   IsRecurring = false, IsAutomatic = false, SortOrder = 100 },
+            new { Code = "DESCTO",Name = "Descuento por ausencias",ConceptType = "deduction",  CalculationType = "auto_absent",   SatCode = "D-011", SatAgrupador = "Deduccion",   TaxableType = "not_applicable", TaxablePercent = 0m,ExemptPercent = 0m,   IsRecurring = false, IsAutomatic = true,  SortOrder = 88 },
         };
 
         int created = 0, skipped = 0;
