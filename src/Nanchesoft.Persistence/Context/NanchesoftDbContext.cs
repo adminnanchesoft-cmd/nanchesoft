@@ -148,6 +148,24 @@ public sealed class NanchesoftDbContext : DbContext
     public DbSet<PayrollEmployerObligation> PayrollEmployerObligations => Set<PayrollEmployerObligation>();
     public DbSet<PayrollFiscalReconciliation> PayrollFiscalReconciliations => Set<PayrollFiscalReconciliation>();
 
+    // Production module
+    public DbSet<ProductionCell> ProductionCells => Set<ProductionCell>();
+    public DbSet<ProductionCellEmployee> ProductionCellEmployees => Set<ProductionCellEmployee>();
+    public DbSet<ProductionOrder> ProductionOrders => Set<ProductionOrder>();
+    public DbSet<ProductionOrderLine> ProductionOrderLines => Set<ProductionOrderLine>();
+    public DbSet<ProductionSchedule> ProductionSchedules => Set<ProductionSchedule>();
+    public DbSet<ProductionScheduleLine> ProductionScheduleLines => Set<ProductionScheduleLine>();
+    public DbSet<ProductionPhaseProgress> ProductionPhaseProgress => Set<ProductionPhaseProgress>();
+    public DbSet<ProductionVoucher> ProductionVouchers => Set<ProductionVoucher>();
+    public DbSet<ProductionVoucherDetail> ProductionVoucherDetails => Set<ProductionVoucherDetail>();
+    public DbSet<PieceWorkRate> PieceWorkRates => Set<PieceWorkRate>();
+    public DbSet<PieceWorkRecord> PieceWorkRecords => Set<PieceWorkRecord>();
+    public DbSet<MaterialRequirement> MaterialRequirements => Set<MaterialRequirement>();
+    public DbSet<MaterialRequirementLine> MaterialRequirementLines => Set<MaterialRequirementLine>();
+    public DbSet<ProductionInProcess> ProductionInProcess => Set<ProductionInProcess>();
+    public DbSet<SurplusRecord> SurplusRecords => Set<SurplusRecord>();
+    public DbSet<PhaseRestriction> PhaseRestrictions => Set<PhaseRestriction>();
+
     public DbSet<PurchaseRequisition> PurchaseRequisitions => Set<PurchaseRequisition>();
     public DbSet<PurchaseRequisitionLine> PurchaseRequisitionLines => Set<PurchaseRequisitionLine>();
     public DbSet<PurchaseOrder> PurchaseOrders => Set<PurchaseOrder>();

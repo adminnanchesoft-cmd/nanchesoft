@@ -19,6 +19,7 @@ public static class NanchesoftSchemaCatalog
     public const string PurchaseSchema = "purchase";
     public const string SalesSchema = "sales";
     public const string SubscriptionSchema = "subscription";
+    public const string ProductionSchema = "production";
 
     public static IReadOnlyList<string> AllSchemas { get; } = new[]
     {
@@ -33,6 +34,7 @@ public static class NanchesoftSchemaCatalog
         OrgSchema,
         PayrollSchema,
         ProductSchema,
+        ProductionSchema,
         PurchaseSchema,
         SalesSchema,
         SubscriptionSchema,
@@ -98,6 +100,24 @@ public static class NanchesoftSchemaCatalog
         modelBuilder.Entity<EmbroideryPattern>().ToTable("embroidery_patterns", ProductSchema);
         modelBuilder.Entity<ItemEngineeringProfile>().ToTable("item_engineering_profiles", ProductSchema);
         modelBuilder.Entity<ProductionPhase>().ToTable("production_phases", ProductSchema);
+
+        // Production module — operational tables
+        modelBuilder.Entity<ProductionCell>().ToTable("production_cells", ProductionSchema);
+        modelBuilder.Entity<ProductionCellEmployee>().ToTable("production_cell_employees", ProductionSchema);
+        modelBuilder.Entity<ProductionOrder>().ToTable("production_orders", ProductionSchema);
+        modelBuilder.Entity<ProductionOrderLine>().ToTable("production_order_lines", ProductionSchema);
+        modelBuilder.Entity<ProductionSchedule>().ToTable("production_schedules", ProductionSchema);
+        modelBuilder.Entity<ProductionScheduleLine>().ToTable("production_schedule_lines", ProductionSchema);
+        modelBuilder.Entity<ProductionPhaseProgress>().ToTable("production_phase_progress", ProductionSchema);
+        modelBuilder.Entity<ProductionVoucher>().ToTable("production_vouchers", ProductionSchema);
+        modelBuilder.Entity<ProductionVoucherDetail>().ToTable("production_voucher_details", ProductionSchema);
+        modelBuilder.Entity<PieceWorkRate>().ToTable("piece_work_rates", ProductionSchema);
+        modelBuilder.Entity<PieceWorkRecord>().ToTable("piece_work_records", ProductionSchema);
+        modelBuilder.Entity<MaterialRequirement>().ToTable("material_requirements", ProductionSchema);
+        modelBuilder.Entity<MaterialRequirementLine>().ToTable("material_requirement_lines", ProductionSchema);
+        modelBuilder.Entity<ProductionInProcess>().ToTable("production_in_process", ProductionSchema);
+        modelBuilder.Entity<SurplusRecord>().ToTable("surplus_records", ProductionSchema);
+        modelBuilder.Entity<PhaseRestriction>().ToTable("phase_restrictions", ProductionSchema);
         modelBuilder.Entity<MaterialCharacteristic>().ToTable("material_characteristics", ProductSchema);
         modelBuilder.Entity<MaterialSize>().ToTable("material_sizes", ProductSchema);
         modelBuilder.Entity<MaterialFamily>().ToTable("material_families", ProductSchema);

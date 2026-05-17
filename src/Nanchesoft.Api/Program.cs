@@ -85,6 +85,7 @@ using (var scope = app.Services.CreateScope())
     await PayrollFiscalSeeder.SeedAsync(dbContext);
     await ProductTechnicalCostingSeeder.SeedAsync(dbContext);
     await ProfessionalServicesSeeder.SeedAsync(dbContext);
+    await ProductionSeeder.SeedAsync(dbContext);
 }
 
 app.MapPost("/api/auth/login", async (AuthLoginRequest request, NanchesoftDbContext db) =>
@@ -224,6 +225,11 @@ app.MapProductTechnicalCostingEndpoints();
 app.MapProductTechnicalCenterEndpoints();
 app.MapConsumptionTemplateEndpoints();
 app.MapMaterialExplosionEndpoints();
+app.MapProductionOrderEndpoints();
+app.MapProductionScheduleEndpoints();
+app.MapProductionVoucherEndpoints();
+app.MapProductionPieceWorkEndpoints();
+app.MapProductionDashboardEndpoints();
 app.MapServiceBillingEndpoints();
 app.MapTenantEndpoints();
 app.MapPlanEndpoints();
