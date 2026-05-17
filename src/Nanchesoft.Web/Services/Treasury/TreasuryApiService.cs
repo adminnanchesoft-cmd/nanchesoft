@@ -53,6 +53,33 @@ public sealed class TreasuryApiService
             _ => throw new InvalidOperationException($"No se encontró el catálogo '{catalogKey}'.")
         };
 
+    public async Task<CatalogViewDefinition> InsertAsync(string catalogKey, System.Text.Json.JsonElement payload)
+    {
+        var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
+        var response = await client.PostAsJsonAsync(GetBaseEndpoint(catalogKey), System.Text.Json.JsonSerializer.Deserialize<object>(payload.GetRawText()));
+        if (!response.IsSuccessStatusCode)
+            throw new InvalidOperationException(await response.Content.ReadAsStringAsync());
+        return await GetCatalogAsync(catalogKey);
+    }
+
+    public async Task<CatalogViewDefinition> UpdateAsync(string catalogKey, string key, System.Text.Json.JsonElement payload)
+    {
+        var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
+        var response = await client.PutAsJsonAsync($"{GetBaseEndpoint(catalogKey)}/{key}", System.Text.Json.JsonSerializer.Deserialize<object>(payload.GetRawText()));
+        if (!response.IsSuccessStatusCode)
+            throw new InvalidOperationException(await response.Content.ReadAsStringAsync());
+        return await GetCatalogAsync(catalogKey);
+    }
+
+    public async Task<CatalogViewDefinition> DeleteAsync(string catalogKey, string key)
+    {
+        var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
+        var response = await client.DeleteAsync($"{GetBaseEndpoint(catalogKey)}/{key}");
+        if (!response.IsSuccessStatusCode)
+            throw new InvalidOperationException(await response.Content.ReadAsStringAsync());
+        return await GetCatalogAsync(catalogKey);
+    }
+
     public async Task<TreasuryDashboardSummaryDto> GetDashboardSummaryAsync()
     {
         var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
