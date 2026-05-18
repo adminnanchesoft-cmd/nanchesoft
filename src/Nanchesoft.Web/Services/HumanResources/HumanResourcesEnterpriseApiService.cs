@@ -181,11 +181,42 @@ public sealed class HumanResourcesEnterpriseApiService
                 BoolColumn("Friday", "Vie", width: 60),
                 BoolColumn("Saturday", "Sáb", width: 60),
                 BoolColumn("Sunday", "Dom", width: 60),
-                TextColumn("EntryTime", "Entrada", width: 90),
-                NumberColumn("ToleranceMinutes", "Tolerancia (min)", width: 130),
-                TextColumn("LunchStartTime", "Salida comida", width: 110),
-                TextColumn("LunchEndTime", "Regreso comida", width: 120),
-                TextColumn("ExitTime", "Salida", width: 90),
+                // Per-day fields — visible en popup, ocultos en la tabla grid
+                TextColumn("MonEntryTime", "Lun - Entrada", width: 100, showInGrid: false),
+                NumberColumn("MonToleranceMinutes", "Lun - Tolerancia (min)", width: 130, showInGrid: false),
+                TextColumn("MonLunchStartTime", "Lun - Sale a comer", width: 120, showInGrid: false),
+                TextColumn("MonLunchEndTime", "Lun - Regresa comida", width: 130, showInGrid: false),
+                TextColumn("MonExitTime", "Lun - Salida", width: 100, showInGrid: false),
+                TextColumn("TueEntryTime", "Mar - Entrada", width: 100, showInGrid: false),
+                NumberColumn("TueToleranceMinutes", "Mar - Tolerancia (min)", width: 130, showInGrid: false),
+                TextColumn("TueLunchStartTime", "Mar - Sale a comer", width: 120, showInGrid: false),
+                TextColumn("TueLunchEndTime", "Mar - Regresa comida", width: 130, showInGrid: false),
+                TextColumn("TueExitTime", "Mar - Salida", width: 100, showInGrid: false),
+                TextColumn("WedEntryTime", "Mié - Entrada", width: 100, showInGrid: false),
+                NumberColumn("WedToleranceMinutes", "Mié - Tolerancia (min)", width: 130, showInGrid: false),
+                TextColumn("WedLunchStartTime", "Mié - Sale a comer", width: 120, showInGrid: false),
+                TextColumn("WedLunchEndTime", "Mié - Regresa comida", width: 130, showInGrid: false),
+                TextColumn("WedExitTime", "Mié - Salida", width: 100, showInGrid: false),
+                TextColumn("ThuEntryTime", "Jue - Entrada", width: 100, showInGrid: false),
+                NumberColumn("ThuToleranceMinutes", "Jue - Tolerancia (min)", width: 130, showInGrid: false),
+                TextColumn("ThuLunchStartTime", "Jue - Sale a comer", width: 120, showInGrid: false),
+                TextColumn("ThuLunchEndTime", "Jue - Regresa comida", width: 130, showInGrid: false),
+                TextColumn("ThuExitTime", "Jue - Salida", width: 100, showInGrid: false),
+                TextColumn("FriEntryTime", "Vie - Entrada", width: 100, showInGrid: false),
+                NumberColumn("FriToleranceMinutes", "Vie - Tolerancia (min)", width: 130, showInGrid: false),
+                TextColumn("FriLunchStartTime", "Vie - Sale a comer", width: 120, showInGrid: false),
+                TextColumn("FriLunchEndTime", "Vie - Regresa comida", width: 130, showInGrid: false),
+                TextColumn("FriExitTime", "Vie - Salida", width: 100, showInGrid: false),
+                TextColumn("SatEntryTime", "Sáb - Entrada", width: 100, showInGrid: false),
+                NumberColumn("SatToleranceMinutes", "Sáb - Tolerancia (min)", width: 130, showInGrid: false),
+                TextColumn("SatLunchStartTime", "Sáb - Sale a comer", width: 120, showInGrid: false),
+                TextColumn("SatLunchEndTime", "Sáb - Regresa comida", width: 130, showInGrid: false),
+                TextColumn("SatExitTime", "Sáb - Salida", width: 100, showInGrid: false),
+                TextColumn("SunEntryTime", "Dom - Entrada", width: 100, showInGrid: false),
+                NumberColumn("SunToleranceMinutes", "Dom - Tolerancia (min)", width: 130, showInGrid: false),
+                TextColumn("SunLunchStartTime", "Dom - Sale a comer", width: 120, showInGrid: false),
+                TextColumn("SunLunchEndTime", "Dom - Regresa comida", width: 130, showInGrid: false),
+                TextColumn("SunExitTime", "Dom - Salida", width: 100, showInGrid: false),
                 NumberColumn("WeeklyHours", "Horas sem", width: 110),
                 BoolColumn("IsFlexible", "Flexible", width: 90),
                 TextColumn("Notes", "Notas", width: 260),
@@ -204,11 +235,41 @@ public sealed class HumanResourcesEnterpriseApiService
                 ("Friday", x.Friday),
                 ("Saturday", x.Saturday),
                 ("Sunday", x.Sunday),
-                ("EntryTime", x.EntryTime),
-                ("ToleranceMinutes", x.ToleranceMinutes),
-                ("LunchStartTime", x.LunchStartTime),
-                ("LunchEndTime", x.LunchEndTime),
-                ("ExitTime", x.ExitTime),
+                ("MonEntryTime", x.MonEntryTime),
+                ("MonToleranceMinutes", x.MonToleranceMinutes),
+                ("MonLunchStartTime", x.MonLunchStartTime),
+                ("MonLunchEndTime", x.MonLunchEndTime),
+                ("MonExitTime", x.MonExitTime),
+                ("TueEntryTime", x.TueEntryTime),
+                ("TueToleranceMinutes", x.TueToleranceMinutes),
+                ("TueLunchStartTime", x.TueLunchStartTime),
+                ("TueLunchEndTime", x.TueLunchEndTime),
+                ("TueExitTime", x.TueExitTime),
+                ("WedEntryTime", x.WedEntryTime),
+                ("WedToleranceMinutes", x.WedToleranceMinutes),
+                ("WedLunchStartTime", x.WedLunchStartTime),
+                ("WedLunchEndTime", x.WedLunchEndTime),
+                ("WedExitTime", x.WedExitTime),
+                ("ThuEntryTime", x.ThuEntryTime),
+                ("ThuToleranceMinutes", x.ThuToleranceMinutes),
+                ("ThuLunchStartTime", x.ThuLunchStartTime),
+                ("ThuLunchEndTime", x.ThuLunchEndTime),
+                ("ThuExitTime", x.ThuExitTime),
+                ("FriEntryTime", x.FriEntryTime),
+                ("FriToleranceMinutes", x.FriToleranceMinutes),
+                ("FriLunchStartTime", x.FriLunchStartTime),
+                ("FriLunchEndTime", x.FriLunchEndTime),
+                ("FriExitTime", x.FriExitTime),
+                ("SatEntryTime", x.SatEntryTime),
+                ("SatToleranceMinutes", x.SatToleranceMinutes),
+                ("SatLunchStartTime", x.SatLunchStartTime),
+                ("SatLunchEndTime", x.SatLunchEndTime),
+                ("SatExitTime", x.SatExitTime),
+                ("SunEntryTime", x.SunEntryTime),
+                ("SunToleranceMinutes", x.SunToleranceMinutes),
+                ("SunLunchStartTime", x.SunLunchStartTime),
+                ("SunLunchEndTime", x.SunLunchEndTime),
+                ("SunExitTime", x.SunExitTime),
                 ("WeeklyHours", x.WeeklyHours),
                 ("IsFlexible", x.IsFlexible),
                 ("Notes", x.Notes),
@@ -966,11 +1027,41 @@ private async Task<CatalogViewDefinition> GetSuccessionPlansAsync()
         Friday = ReadBool(payload, "Friday"),
         Saturday = ReadBool(payload, "Saturday"),
         Sunday = ReadBool(payload, "Sunday"),
-        EntryTime = ReadString(payload, "EntryTime"),
-        ToleranceMinutes = ReadInt(payload, "ToleranceMinutes"),
-        LunchStartTime = ReadString(payload, "LunchStartTime"),
-        LunchEndTime = ReadString(payload, "LunchEndTime"),
-        ExitTime = ReadString(payload, "ExitTime"),
+        MonEntryTime = ReadString(payload, "MonEntryTime"),
+        MonToleranceMinutes = ReadInt(payload, "MonToleranceMinutes"),
+        MonLunchStartTime = ReadString(payload, "MonLunchStartTime"),
+        MonLunchEndTime = ReadString(payload, "MonLunchEndTime"),
+        MonExitTime = ReadString(payload, "MonExitTime"),
+        TueEntryTime = ReadString(payload, "TueEntryTime"),
+        TueToleranceMinutes = ReadInt(payload, "TueToleranceMinutes"),
+        TueLunchStartTime = ReadString(payload, "TueLunchStartTime"),
+        TueLunchEndTime = ReadString(payload, "TueLunchEndTime"),
+        TueExitTime = ReadString(payload, "TueExitTime"),
+        WedEntryTime = ReadString(payload, "WedEntryTime"),
+        WedToleranceMinutes = ReadInt(payload, "WedToleranceMinutes"),
+        WedLunchStartTime = ReadString(payload, "WedLunchStartTime"),
+        WedLunchEndTime = ReadString(payload, "WedLunchEndTime"),
+        WedExitTime = ReadString(payload, "WedExitTime"),
+        ThuEntryTime = ReadString(payload, "ThuEntryTime"),
+        ThuToleranceMinutes = ReadInt(payload, "ThuToleranceMinutes"),
+        ThuLunchStartTime = ReadString(payload, "ThuLunchStartTime"),
+        ThuLunchEndTime = ReadString(payload, "ThuLunchEndTime"),
+        ThuExitTime = ReadString(payload, "ThuExitTime"),
+        FriEntryTime = ReadString(payload, "FriEntryTime"),
+        FriToleranceMinutes = ReadInt(payload, "FriToleranceMinutes"),
+        FriLunchStartTime = ReadString(payload, "FriLunchStartTime"),
+        FriLunchEndTime = ReadString(payload, "FriLunchEndTime"),
+        FriExitTime = ReadString(payload, "FriExitTime"),
+        SatEntryTime = ReadString(payload, "SatEntryTime"),
+        SatToleranceMinutes = ReadInt(payload, "SatToleranceMinutes"),
+        SatLunchStartTime = ReadString(payload, "SatLunchStartTime"),
+        SatLunchEndTime = ReadString(payload, "SatLunchEndTime"),
+        SatExitTime = ReadString(payload, "SatExitTime"),
+        SunEntryTime = ReadString(payload, "SunEntryTime"),
+        SunToleranceMinutes = ReadInt(payload, "SunToleranceMinutes"),
+        SunLunchStartTime = ReadString(payload, "SunLunchStartTime"),
+        SunLunchEndTime = ReadString(payload, "SunLunchEndTime"),
+        SunExitTime = ReadString(payload, "SunExitTime"),
         WeeklyHours = ReadDecimal(payload, "WeeklyHours"),
         IsFlexible = ReadBool(payload, "IsFlexible"),
         Notes = ReadString(payload, "Notes"),
@@ -1182,11 +1273,11 @@ private static OnboardingChecklistRecordRequest MapOnboardingChecklistRequest(Js
         return row;
     }
 
-    private static CatalogColumnDefinition TextColumn(string field, string caption, bool required = false, bool allowEditing = true, int width = 160, bool visible = true)
-        => new() { DataField = field, Caption = caption, DataType = "string", Required = required, AllowEditing = allowEditing, Visible = visible, Width = width };
+    private static CatalogColumnDefinition TextColumn(string field, string caption, bool required = false, bool allowEditing = true, int width = 160, bool visible = true, bool showInGrid = true)
+        => new() { DataField = field, Caption = caption, DataType = "string", Required = required, AllowEditing = allowEditing, Visible = visible, ShowInGrid = showInGrid, Width = width };
 
-    private static CatalogColumnDefinition NumberColumn(string field, string caption, bool required = false, int width = 120)
-        => new() { DataField = field, Caption = caption, DataType = "number", Required = required, Width = width };
+    private static CatalogColumnDefinition NumberColumn(string field, string caption, bool required = false, int width = 120, bool showInGrid = true)
+        => new() { DataField = field, Caption = caption, DataType = "number", Required = required, Width = width, ShowInGrid = showInGrid };
 
     private static CatalogColumnDefinition BoolColumn(string field, string caption, int width = 90)
         => new() { DataField = field, Caption = caption, DataType = "boolean", Width = width };
@@ -1487,11 +1578,41 @@ public sealed class WorkScheduleDto
     public bool Friday { get; set; }
     public bool Saturday { get; set; }
     public bool Sunday { get; set; }
-    public string EntryTime { get; set; } = string.Empty;
-    public int ToleranceMinutes { get; set; }
-    public string LunchStartTime { get; set; } = string.Empty;
-    public string LunchEndTime { get; set; } = string.Empty;
-    public string ExitTime { get; set; } = string.Empty;
+    public string MonEntryTime { get; set; } = string.Empty;
+    public int MonToleranceMinutes { get; set; }
+    public string MonLunchStartTime { get; set; } = string.Empty;
+    public string MonLunchEndTime { get; set; } = string.Empty;
+    public string MonExitTime { get; set; } = string.Empty;
+    public string TueEntryTime { get; set; } = string.Empty;
+    public int TueToleranceMinutes { get; set; }
+    public string TueLunchStartTime { get; set; } = string.Empty;
+    public string TueLunchEndTime { get; set; } = string.Empty;
+    public string TueExitTime { get; set; } = string.Empty;
+    public string WedEntryTime { get; set; } = string.Empty;
+    public int WedToleranceMinutes { get; set; }
+    public string WedLunchStartTime { get; set; } = string.Empty;
+    public string WedLunchEndTime { get; set; } = string.Empty;
+    public string WedExitTime { get; set; } = string.Empty;
+    public string ThuEntryTime { get; set; } = string.Empty;
+    public int ThuToleranceMinutes { get; set; }
+    public string ThuLunchStartTime { get; set; } = string.Empty;
+    public string ThuLunchEndTime { get; set; } = string.Empty;
+    public string ThuExitTime { get; set; } = string.Empty;
+    public string FriEntryTime { get; set; } = string.Empty;
+    public int FriToleranceMinutes { get; set; }
+    public string FriLunchStartTime { get; set; } = string.Empty;
+    public string FriLunchEndTime { get; set; } = string.Empty;
+    public string FriExitTime { get; set; } = string.Empty;
+    public string SatEntryTime { get; set; } = string.Empty;
+    public int SatToleranceMinutes { get; set; }
+    public string SatLunchStartTime { get; set; } = string.Empty;
+    public string SatLunchEndTime { get; set; } = string.Empty;
+    public string SatExitTime { get; set; } = string.Empty;
+    public string SunEntryTime { get; set; } = string.Empty;
+    public int SunToleranceMinutes { get; set; }
+    public string SunLunchStartTime { get; set; } = string.Empty;
+    public string SunLunchEndTime { get; set; } = string.Empty;
+    public string SunExitTime { get; set; } = string.Empty;
     public decimal WeeklyHours { get; set; }
     public bool IsFlexible { get; set; }
     public string Notes { get; set; } = string.Empty;
@@ -1586,11 +1707,41 @@ public sealed class WorkScheduleRequest
     public bool Friday { get; set; }
     public bool Saturday { get; set; }
     public bool Sunday { get; set; }
-    public string? EntryTime { get; set; }
-    public int ToleranceMinutes { get; set; }
-    public string? LunchStartTime { get; set; }
-    public string? LunchEndTime { get; set; }
-    public string? ExitTime { get; set; }
+    public string? MonEntryTime { get; set; }
+    public int MonToleranceMinutes { get; set; }
+    public string? MonLunchStartTime { get; set; }
+    public string? MonLunchEndTime { get; set; }
+    public string? MonExitTime { get; set; }
+    public string? TueEntryTime { get; set; }
+    public int TueToleranceMinutes { get; set; }
+    public string? TueLunchStartTime { get; set; }
+    public string? TueLunchEndTime { get; set; }
+    public string? TueExitTime { get; set; }
+    public string? WedEntryTime { get; set; }
+    public int WedToleranceMinutes { get; set; }
+    public string? WedLunchStartTime { get; set; }
+    public string? WedLunchEndTime { get; set; }
+    public string? WedExitTime { get; set; }
+    public string? ThuEntryTime { get; set; }
+    public int ThuToleranceMinutes { get; set; }
+    public string? ThuLunchStartTime { get; set; }
+    public string? ThuLunchEndTime { get; set; }
+    public string? ThuExitTime { get; set; }
+    public string? FriEntryTime { get; set; }
+    public int FriToleranceMinutes { get; set; }
+    public string? FriLunchStartTime { get; set; }
+    public string? FriLunchEndTime { get; set; }
+    public string? FriExitTime { get; set; }
+    public string? SatEntryTime { get; set; }
+    public int SatToleranceMinutes { get; set; }
+    public string? SatLunchStartTime { get; set; }
+    public string? SatLunchEndTime { get; set; }
+    public string? SatExitTime { get; set; }
+    public string? SunEntryTime { get; set; }
+    public int SunToleranceMinutes { get; set; }
+    public string? SunLunchStartTime { get; set; }
+    public string? SunLunchEndTime { get; set; }
+    public string? SunExitTime { get; set; }
     public decimal WeeklyHours { get; set; }
     public bool IsFlexible { get; set; }
     public string? Notes { get; set; }

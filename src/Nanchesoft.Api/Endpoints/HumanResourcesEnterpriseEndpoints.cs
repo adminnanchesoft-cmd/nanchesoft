@@ -201,11 +201,41 @@ public static class HumanResourcesEnterpriseEndpoints
                 Friday = x.Friday,
                 Saturday = x.Saturday,
                 Sunday = x.Sunday,
-                EntryTime = x.EntryTime,
-                ToleranceMinutes = x.ToleranceMinutes,
-                LunchStartTime = x.LunchStartTime,
-                LunchEndTime = x.LunchEndTime,
-                ExitTime = x.ExitTime,
+                MonEntryTime = x.MonEntryTime,
+                MonToleranceMinutes = x.MonToleranceMinutes,
+                MonLunchStartTime = x.MonLunchStartTime,
+                MonLunchEndTime = x.MonLunchEndTime,
+                MonExitTime = x.MonExitTime,
+                TueEntryTime = x.TueEntryTime,
+                TueToleranceMinutes = x.TueToleranceMinutes,
+                TueLunchStartTime = x.TueLunchStartTime,
+                TueLunchEndTime = x.TueLunchEndTime,
+                TueExitTime = x.TueExitTime,
+                WedEntryTime = x.WedEntryTime,
+                WedToleranceMinutes = x.WedToleranceMinutes,
+                WedLunchStartTime = x.WedLunchStartTime,
+                WedLunchEndTime = x.WedLunchEndTime,
+                WedExitTime = x.WedExitTime,
+                ThuEntryTime = x.ThuEntryTime,
+                ThuToleranceMinutes = x.ThuToleranceMinutes,
+                ThuLunchStartTime = x.ThuLunchStartTime,
+                ThuLunchEndTime = x.ThuLunchEndTime,
+                ThuExitTime = x.ThuExitTime,
+                FriEntryTime = x.FriEntryTime,
+                FriToleranceMinutes = x.FriToleranceMinutes,
+                FriLunchStartTime = x.FriLunchStartTime,
+                FriLunchEndTime = x.FriLunchEndTime,
+                FriExitTime = x.FriExitTime,
+                SatEntryTime = x.SatEntryTime,
+                SatToleranceMinutes = x.SatToleranceMinutes,
+                SatLunchStartTime = x.SatLunchStartTime,
+                SatLunchEndTime = x.SatLunchEndTime,
+                SatExitTime = x.SatExitTime,
+                SunEntryTime = x.SunEntryTime,
+                SunToleranceMinutes = x.SunToleranceMinutes,
+                SunLunchStartTime = x.SunLunchStartTime,
+                SunLunchEndTime = x.SunLunchEndTime,
+                SunExitTime = x.SunExitTime,
                 WeeklyHours = x.WeeklyHours,
                 IsFlexible = x.IsFlexible,
                 Notes = x.Notes,
@@ -246,11 +276,41 @@ public static class HumanResourcesEnterpriseEndpoints
             Friday = request.Friday,
             Saturday = request.Saturday,
             Sunday = request.Sunday,
-            EntryTime = NormalizeText(request.EntryTime),
-            ToleranceMinutes = request.ToleranceMinutes,
-            LunchStartTime = NormalizeText(request.LunchStartTime),
-            LunchEndTime = NormalizeText(request.LunchEndTime),
-            ExitTime = NormalizeText(request.ExitTime),
+            MonEntryTime = NormalizeText(request.MonEntryTime),
+            MonToleranceMinutes = request.MonToleranceMinutes,
+            MonLunchStartTime = NormalizeText(request.MonLunchStartTime),
+            MonLunchEndTime = NormalizeText(request.MonLunchEndTime),
+            MonExitTime = NormalizeText(request.MonExitTime),
+            TueEntryTime = NormalizeText(request.TueEntryTime),
+            TueToleranceMinutes = request.TueToleranceMinutes,
+            TueLunchStartTime = NormalizeText(request.TueLunchStartTime),
+            TueLunchEndTime = NormalizeText(request.TueLunchEndTime),
+            TueExitTime = NormalizeText(request.TueExitTime),
+            WedEntryTime = NormalizeText(request.WedEntryTime),
+            WedToleranceMinutes = request.WedToleranceMinutes,
+            WedLunchStartTime = NormalizeText(request.WedLunchStartTime),
+            WedLunchEndTime = NormalizeText(request.WedLunchEndTime),
+            WedExitTime = NormalizeText(request.WedExitTime),
+            ThuEntryTime = NormalizeText(request.ThuEntryTime),
+            ThuToleranceMinutes = request.ThuToleranceMinutes,
+            ThuLunchStartTime = NormalizeText(request.ThuLunchStartTime),
+            ThuLunchEndTime = NormalizeText(request.ThuLunchEndTime),
+            ThuExitTime = NormalizeText(request.ThuExitTime),
+            FriEntryTime = NormalizeText(request.FriEntryTime),
+            FriToleranceMinutes = request.FriToleranceMinutes,
+            FriLunchStartTime = NormalizeText(request.FriLunchStartTime),
+            FriLunchEndTime = NormalizeText(request.FriLunchEndTime),
+            FriExitTime = NormalizeText(request.FriExitTime),
+            SatEntryTime = NormalizeText(request.SatEntryTime),
+            SatToleranceMinutes = request.SatToleranceMinutes,
+            SatLunchStartTime = NormalizeText(request.SatLunchStartTime),
+            SatLunchEndTime = NormalizeText(request.SatLunchEndTime),
+            SatExitTime = NormalizeText(request.SatExitTime),
+            SunEntryTime = NormalizeText(request.SunEntryTime),
+            SunToleranceMinutes = request.SunToleranceMinutes,
+            SunLunchStartTime = NormalizeText(request.SunLunchStartTime),
+            SunLunchEndTime = NormalizeText(request.SunLunchEndTime),
+            SunExitTime = NormalizeText(request.SunExitTime),
             WeeklyHours = request.WeeklyHours,
             IsFlexible = request.IsFlexible,
             Notes = NormalizeText(request.Notes),
@@ -283,11 +343,41 @@ public static class HumanResourcesEnterpriseEndpoints
         entity.Friday = request.Friday;
         entity.Saturday = request.Saturday;
         entity.Sunday = request.Sunday;
-        entity.EntryTime = NormalizeText(request.EntryTime, entity.EntryTime);
-        entity.ToleranceMinutes = request.ToleranceMinutes;
-        entity.LunchStartTime = NormalizeText(request.LunchStartTime, entity.LunchStartTime);
-        entity.LunchEndTime = NormalizeText(request.LunchEndTime, entity.LunchEndTime);
-        entity.ExitTime = NormalizeText(request.ExitTime, entity.ExitTime);
+        entity.MonEntryTime = NormalizeText(request.MonEntryTime, entity.MonEntryTime);
+        entity.MonToleranceMinutes = request.MonToleranceMinutes;
+        entity.MonLunchStartTime = NormalizeText(request.MonLunchStartTime, entity.MonLunchStartTime);
+        entity.MonLunchEndTime = NormalizeText(request.MonLunchEndTime, entity.MonLunchEndTime);
+        entity.MonExitTime = NormalizeText(request.MonExitTime, entity.MonExitTime);
+        entity.TueEntryTime = NormalizeText(request.TueEntryTime, entity.TueEntryTime);
+        entity.TueToleranceMinutes = request.TueToleranceMinutes;
+        entity.TueLunchStartTime = NormalizeText(request.TueLunchStartTime, entity.TueLunchStartTime);
+        entity.TueLunchEndTime = NormalizeText(request.TueLunchEndTime, entity.TueLunchEndTime);
+        entity.TueExitTime = NormalizeText(request.TueExitTime, entity.TueExitTime);
+        entity.WedEntryTime = NormalizeText(request.WedEntryTime, entity.WedEntryTime);
+        entity.WedToleranceMinutes = request.WedToleranceMinutes;
+        entity.WedLunchStartTime = NormalizeText(request.WedLunchStartTime, entity.WedLunchStartTime);
+        entity.WedLunchEndTime = NormalizeText(request.WedLunchEndTime, entity.WedLunchEndTime);
+        entity.WedExitTime = NormalizeText(request.WedExitTime, entity.WedExitTime);
+        entity.ThuEntryTime = NormalizeText(request.ThuEntryTime, entity.ThuEntryTime);
+        entity.ThuToleranceMinutes = request.ThuToleranceMinutes;
+        entity.ThuLunchStartTime = NormalizeText(request.ThuLunchStartTime, entity.ThuLunchStartTime);
+        entity.ThuLunchEndTime = NormalizeText(request.ThuLunchEndTime, entity.ThuLunchEndTime);
+        entity.ThuExitTime = NormalizeText(request.ThuExitTime, entity.ThuExitTime);
+        entity.FriEntryTime = NormalizeText(request.FriEntryTime, entity.FriEntryTime);
+        entity.FriToleranceMinutes = request.FriToleranceMinutes;
+        entity.FriLunchStartTime = NormalizeText(request.FriLunchStartTime, entity.FriLunchStartTime);
+        entity.FriLunchEndTime = NormalizeText(request.FriLunchEndTime, entity.FriLunchEndTime);
+        entity.FriExitTime = NormalizeText(request.FriExitTime, entity.FriExitTime);
+        entity.SatEntryTime = NormalizeText(request.SatEntryTime, entity.SatEntryTime);
+        entity.SatToleranceMinutes = request.SatToleranceMinutes;
+        entity.SatLunchStartTime = NormalizeText(request.SatLunchStartTime, entity.SatLunchStartTime);
+        entity.SatLunchEndTime = NormalizeText(request.SatLunchEndTime, entity.SatLunchEndTime);
+        entity.SatExitTime = NormalizeText(request.SatExitTime, entity.SatExitTime);
+        entity.SunEntryTime = NormalizeText(request.SunEntryTime, entity.SunEntryTime);
+        entity.SunToleranceMinutes = request.SunToleranceMinutes;
+        entity.SunLunchStartTime = NormalizeText(request.SunLunchStartTime, entity.SunLunchStartTime);
+        entity.SunLunchEndTime = NormalizeText(request.SunLunchEndTime, entity.SunLunchEndTime);
+        entity.SunExitTime = NormalizeText(request.SunExitTime, entity.SunExitTime);
         entity.WeeklyHours = request.WeeklyHours;
         entity.IsFlexible = request.IsFlexible;
         entity.Notes = NormalizeText(request.Notes, entity.Notes);
@@ -712,11 +802,41 @@ public sealed class WorkScheduleRequest
     public bool Friday { get; set; }
     public bool Saturday { get; set; }
     public bool Sunday { get; set; }
-    public string? EntryTime { get; set; }
-    public int ToleranceMinutes { get; set; }
-    public string? LunchStartTime { get; set; }
-    public string? LunchEndTime { get; set; }
-    public string? ExitTime { get; set; }
+    public string? MonEntryTime { get; set; }
+    public int MonToleranceMinutes { get; set; }
+    public string? MonLunchStartTime { get; set; }
+    public string? MonLunchEndTime { get; set; }
+    public string? MonExitTime { get; set; }
+    public string? TueEntryTime { get; set; }
+    public int TueToleranceMinutes { get; set; }
+    public string? TueLunchStartTime { get; set; }
+    public string? TueLunchEndTime { get; set; }
+    public string? TueExitTime { get; set; }
+    public string? WedEntryTime { get; set; }
+    public int WedToleranceMinutes { get; set; }
+    public string? WedLunchStartTime { get; set; }
+    public string? WedLunchEndTime { get; set; }
+    public string? WedExitTime { get; set; }
+    public string? ThuEntryTime { get; set; }
+    public int ThuToleranceMinutes { get; set; }
+    public string? ThuLunchStartTime { get; set; }
+    public string? ThuLunchEndTime { get; set; }
+    public string? ThuExitTime { get; set; }
+    public string? FriEntryTime { get; set; }
+    public int FriToleranceMinutes { get; set; }
+    public string? FriLunchStartTime { get; set; }
+    public string? FriLunchEndTime { get; set; }
+    public string? FriExitTime { get; set; }
+    public string? SatEntryTime { get; set; }
+    public int SatToleranceMinutes { get; set; }
+    public string? SatLunchStartTime { get; set; }
+    public string? SatLunchEndTime { get; set; }
+    public string? SatExitTime { get; set; }
+    public string? SunEntryTime { get; set; }
+    public int SunToleranceMinutes { get; set; }
+    public string? SunLunchStartTime { get; set; }
+    public string? SunLunchEndTime { get; set; }
+    public string? SunExitTime { get; set; }
     public decimal WeeklyHours { get; set; }
     public bool IsFlexible { get; set; }
     public string? Notes { get; set; }
@@ -740,11 +860,41 @@ public sealed class WorkScheduleDto
     public bool Friday { get; set; }
     public bool Saturday { get; set; }
     public bool Sunday { get; set; }
-    public string EntryTime { get; set; } = string.Empty;
-    public int ToleranceMinutes { get; set; }
-    public string LunchStartTime { get; set; } = string.Empty;
-    public string LunchEndTime { get; set; } = string.Empty;
-    public string ExitTime { get; set; } = string.Empty;
+    public string MonEntryTime { get; set; } = string.Empty;
+    public int MonToleranceMinutes { get; set; }
+    public string MonLunchStartTime { get; set; } = string.Empty;
+    public string MonLunchEndTime { get; set; } = string.Empty;
+    public string MonExitTime { get; set; } = string.Empty;
+    public string TueEntryTime { get; set; } = string.Empty;
+    public int TueToleranceMinutes { get; set; }
+    public string TueLunchStartTime { get; set; } = string.Empty;
+    public string TueLunchEndTime { get; set; } = string.Empty;
+    public string TueExitTime { get; set; } = string.Empty;
+    public string WedEntryTime { get; set; } = string.Empty;
+    public int WedToleranceMinutes { get; set; }
+    public string WedLunchStartTime { get; set; } = string.Empty;
+    public string WedLunchEndTime { get; set; } = string.Empty;
+    public string WedExitTime { get; set; } = string.Empty;
+    public string ThuEntryTime { get; set; } = string.Empty;
+    public int ThuToleranceMinutes { get; set; }
+    public string ThuLunchStartTime { get; set; } = string.Empty;
+    public string ThuLunchEndTime { get; set; } = string.Empty;
+    public string ThuExitTime { get; set; } = string.Empty;
+    public string FriEntryTime { get; set; } = string.Empty;
+    public int FriToleranceMinutes { get; set; }
+    public string FriLunchStartTime { get; set; } = string.Empty;
+    public string FriLunchEndTime { get; set; } = string.Empty;
+    public string FriExitTime { get; set; } = string.Empty;
+    public string SatEntryTime { get; set; } = string.Empty;
+    public int SatToleranceMinutes { get; set; }
+    public string SatLunchStartTime { get; set; } = string.Empty;
+    public string SatLunchEndTime { get; set; } = string.Empty;
+    public string SatExitTime { get; set; } = string.Empty;
+    public string SunEntryTime { get; set; } = string.Empty;
+    public int SunToleranceMinutes { get; set; }
+    public string SunLunchStartTime { get; set; } = string.Empty;
+    public string SunLunchEndTime { get; set; } = string.Empty;
+    public string SunExitTime { get; set; } = string.Empty;
     public decimal WeeklyHours { get; set; }
     public bool IsFlexible { get; set; }
     public string Notes { get; set; } = string.Empty;

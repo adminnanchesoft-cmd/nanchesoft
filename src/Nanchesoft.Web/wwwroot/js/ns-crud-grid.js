@@ -284,7 +284,8 @@ window.nsCrudGrid = (() => {
 
         const editableColumns = columns.filter(x =>
             getColumnValue(x, "visible", "Visible", true) !== false &&
-            getColumnValue(x, "allowEditing", "AllowEditing", true)
+            getColumnValue(x, "allowEditing", "AllowEditing", true) &&
+            getColumnValue(x, "dataField", "DataField", "") !== keyExpr
         );
 
         return {
@@ -469,7 +470,7 @@ window.nsCrudGrid = (() => {
         const editUrl = getEditUrl(definition);
         const keyExpr = getKeyExpr(definition);
         const mapped = columns
-            .filter(x => getColumnValue(x, "visible", "Visible", true) !== false && getColumnValue(x, "dataField", "DataField", "") !== keyExpr)
+            .filter(x => getColumnValue(x, "showInGrid", "ShowInGrid", true) !== false && getColumnValue(x, "dataField", "DataField", "") !== keyExpr)
             .map(col => {
                 const dataType = getColumnValue(col, "dataType", "DataType", "string");
                 const useLookup = getColumnValue(col, "useLookup", "UseLookup", false);

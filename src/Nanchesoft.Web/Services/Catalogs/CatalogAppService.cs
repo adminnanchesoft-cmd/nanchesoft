@@ -746,12 +746,14 @@ public sealed class CatalogColumnDefinition
     public bool AllowFiltering { get; set; } = true;
     public bool AllowSorting { get; set; } = true;
     public bool Visible { get; set; } = true;
+    public bool ShowInGrid { get; set; } = true;
     public int Width { get; set; } = 160;
     public bool UseLookup { get; set; }
     public string? LookupCatalogKey { get; set; }
     public string? LookupValueField { get; set; }
     public string? LookupDisplayField { get; set; }
     public List<CatalogLookupItem> LookupItems { get; set; } = [];
+    public string? QuickCreateKey { get; set; }
 }
 
 public sealed class CatalogLookupItem
