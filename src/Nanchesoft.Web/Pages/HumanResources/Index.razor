@@ -1,334 +1,435 @@
 @page "/human-resources"
-@using Microsoft.AspNetCore.Components
 
 <PageTitle>Recursos Humanos | Nanchesoft</PageTitle>
 
-<div class="ns-page-header">
-    <div class="ns-breadcrumb mb-2">
-        <span class="text-dark fw-semibold">Recursos Humanos</span>
-    </div>
-    <div class="d-flex align-items-center gap-3 mb-3">
-        <div style="width:46px;height:46px;background:#F5F3FF;border-radius:10px;display:flex;align-items:center;justify-content:center;">
-            <span class="bi bi-people-fill fs-4" style="color:#7c3aed;"></span>
+<div class="rh-index">
+
+    <div class="rh-hero">
+        <div class="rh-hero__text">
+            <div class="rh-hero__eyebrow">Módulo</div>
+            <h1 class="rh-hero__title">Recursos Humanos</h1>
+            <p class="rh-hero__sub">Selecciona el área a la que deseas acceder</p>
         </div>
-        <div>
-            <h4 class="mb-0 fw-bold" style="font-size:20px;">Recursos Humanos</h4>
-            <small class="text-muted" style="font-size:12px;">Selecciona el módulo al que deseas acceder</small>
+        <div class="rh-hero__art" aria-hidden="true">
+            <svg viewBox="0 0 220 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <!-- Persona central -->
+                <circle cx="110" cy="38" r="18" fill="#7c3aed" opacity=".15"/>
+                <circle cx="110" cy="34" r="11" fill="#7c3aed" opacity=".6"/>
+                <path d="M88 82 C88 65 132 65 132 82" stroke="#7c3aed" stroke-width="3" stroke-linecap="round" fill="none" opacity=".6"/>
+                <!-- Persona izquierda -->
+                <circle cx="62" cy="42" r="9" fill="#a78bfa" opacity=".5"/>
+                <path d="M45 78 C45 65 79 65 79 78" stroke="#a78bfa" stroke-width="2.5" stroke-linecap="round" fill="none" opacity=".5"/>
+                <!-- Persona derecha -->
+                <circle cx="158" cy="42" r="9" fill="#a78bfa" opacity=".5"/>
+                <path d="M141 78 C141 65 175 65 175 78" stroke="#a78bfa" stroke-width="2.5" stroke-linecap="round" fill="none" opacity=".5"/>
+                <!-- Líneas org -->
+                <line x1="110" y1="82" x2="110" y2="92" stroke="#7c3aed" stroke-width="2" opacity=".3"/>
+                <line x1="62" y1="78" x2="62" y2="92" stroke="#a78bfa" stroke-width="1.5" opacity=".3"/>
+                <line x1="158" y1="78" x2="158" y2="92" stroke="#a78bfa" stroke-width="1.5" opacity=".3"/>
+                <line x1="62" y1="92" x2="158" y2="92" stroke="#7c3aed" stroke-width="1.5" opacity=".25"/>
+                <!-- Detalles: insignia -->
+                <rect x="104" y="98" width="12" height="16" rx="2" fill="#7c3aed" opacity=".2"/>
+                <rect x="107" y="100" width="6" height="2" rx="1" fill="#7c3aed" opacity=".4"/>
+                <rect x="106" y="104" width="8" height="1.5" rx=".75" fill="#7c3aed" opacity=".35"/>
+                <rect x="106" y="107" width="5" height="1.5" rx=".75" fill="#7c3aed" opacity=".3"/>
+                <!-- Calendario pequeño -->
+                <rect x="26" y="26" width="22" height="20" rx="3" fill="#ddd6fe" stroke="#7c3aed" stroke-width="1.5" opacity=".6"/>
+                <line x1="26" y1="31" x2="48" y2="31" stroke="#7c3aed" stroke-width="1.2" opacity=".5"/>
+                <rect x="30" y="34" width="3" height="3" rx=".5" fill="#7c3aed" opacity=".4"/>
+                <rect x="35" y="34" width="3" height="3" rx=".5" fill="#7c3aed" opacity=".4"/>
+                <rect x="40" y="34" width="3" height="3" rx=".5" fill="#7c3aed" opacity=".4"/>
+                <rect x="30" y="39" width="3" height="3" rx=".5" fill="#7c3aed" opacity=".3"/>
+                <rect x="35" y="39" width="3" height="3" rx=".5" fill="#7c3aed" opacity=".3"/>
+                <!-- Reloj pequeño -->
+                <circle cx="188" cy="32" r="11" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.5" opacity=".6"/>
+                <line x1="188" y1="32" x2="188" y2="26" stroke="#7c3aed" stroke-width="1.5" stroke-linecap="round" opacity=".6"/>
+                <line x1="188" y1="32" x2="193" y2="35" stroke="#7c3aed" stroke-width="1.5" stroke-linecap="round" opacity=".6"/>
+                <circle cx="188" cy="32" r="1.5" fill="#7c3aed" opacity=".7"/>
+            </svg>
         </div>
     </div>
-</div>
 
-<div class="row g-3">
+    <!-- ── SECCIÓN: ORGANIZACIÓN ── -->
+    <div class="rh-section-label">Organización del personal</div>
+    <div class="rh-grid rh-grid--5">
 
-    <div class="col-12">
-        <div class="fw-semibold text-muted text-uppercase" style="font-size:11px;letter-spacing:.08em;">Organización</div>
-    </div>
-
-    <div class="col-md-4 col-lg-3">
-        <a href="/human-resources/employees" class="ns-module-card text-decoration-none">
-            <div class="ns-module-card__icon" style="background:#EFF6FF;">
-                <span class="bi bi-people fs-4 text-primary"></span>
+        <a href="/human-resources/employees" class="rh-card rh-card--purple">
+            <div class="rh-card__art">
+                <svg viewBox="0 0 80 60" fill="none"><circle cx="40" cy="18" r="10" fill="currentColor" opacity=".25"/><circle cx="40" cy="16" r="7" fill="currentColor" opacity=".55"/><path d="M22 46 C22 33 58 33 58 46" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" fill="none" opacity=".55"/><circle cx="18" cy="22" r="6" fill="currentColor" opacity=".2"/><path d="M6 44 C6 35 30 35 30 44" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none" opacity=".2"/><circle cx="62" cy="22" r="6" fill="currentColor" opacity=".2"/><path d="M50 44 C50 35 74 35 74 44" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none" opacity=".2"/></svg>
             </div>
-            <div class="ns-module-card__body">
-                <div class="ns-module-card__title">Colaboradores</div>
-                <div class="ns-module-card__sub">Expediente del personal activo e inactivo</div>
+            <div class="rh-card__title">Colaboradores</div>
+            <div class="rh-card__sub">Expediente del personal</div>
+        </a>
+
+        <a href="/human-resources/departments" class="rh-card rh-card--green">
+            <div class="rh-card__art">
+                <svg viewBox="0 0 80 60" fill="none"><rect x="32" y="6" width="16" height="11" rx="2.5" fill="currentColor" opacity=".5"/><rect x="8" y="34" width="16" height="11" rx="2.5" fill="currentColor" opacity=".4"/><rect x="32" y="34" width="16" height="11" rx="2.5" fill="currentColor" opacity=".4"/><rect x="56" y="34" width="16" height="11" rx="2.5" fill="currentColor" opacity=".4"/><line x1="40" y1="17" x2="40" y2="28" stroke="currentColor" stroke-width="2" opacity=".4"/><line x1="16" y1="28" x2="64" y2="28" stroke="currentColor" stroke-width="2" opacity=".35"/><line x1="16" y1="28" x2="16" y2="34" stroke="currentColor" stroke-width="2" opacity=".35"/><line x1="40" y1="28" x2="40" y2="34" stroke="currentColor" stroke-width="2" opacity=".35"/><line x1="64" y1="28" x2="64" y2="34" stroke="currentColor" stroke-width="2" opacity=".35"/></svg>
             </div>
+            <div class="rh-card__title">Departamentos</div>
+            <div class="rh-card__sub">Estructura organizacional</div>
+        </a>
+
+        <a href="/human-resources/positions" class="rh-card rh-card--orange">
+            <div class="rh-card__art">
+                <svg viewBox="0 0 80 60" fill="none"><rect x="22" y="10" width="36" height="44" rx="4" fill="currentColor" opacity=".2"/><rect x="26" y="14" width="28" height="36" rx="2" fill="currentColor" opacity=".15"/><circle cx="40" cy="26" r="7" fill="currentColor" opacity=".45"/><rect x="28" y="36" width="24" height="2.5" rx="1.25" fill="currentColor" opacity=".4"/><rect x="28" y="41" width="16" height="2.5" rx="1.25" fill="currentColor" opacity=".3"/><rect x="34" y="6" width="12" height="5" rx="2" fill="currentColor" opacity=".5"/></svg>
+            </div>
+            <div class="rh-card__title">Puestos</div>
+            <div class="rh-card__sub">Grupos y salarios base</div>
+        </a>
+
+        <a href="/human-resources/work-schedules" class="rh-card rh-card--purple">
+            <div class="rh-card__art">
+                <svg viewBox="0 0 80 60" fill="none"><rect x="10" y="12" width="60" height="42" rx="4" fill="currentColor" opacity=".18"/><line x1="10" y1="22" x2="70" y2="22" stroke="currentColor" stroke-width="2" opacity=".4"/><line x1="21" y1="9" x2="21" y2="16" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" opacity=".5"/><line x1="59" y1="9" x2="59" y2="16" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" opacity=".5"/><rect x="16" y="27" width="9" height="7" rx="1.5" fill="currentColor" opacity=".35"/><rect x="29" y="27" width="9" height="7" rx="1.5" fill="currentColor" opacity=".45"/><rect x="42" y="27" width="9" height="7" rx="1.5" fill="currentColor" opacity=".45"/><rect x="55" y="27" width="9" height="7" rx="1.5" fill="currentColor" opacity=".35"/><rect x="16" y="38" width="9" height="7" rx="1.5" fill="currentColor" opacity=".45"/><rect x="29" y="38" width="9" height="7" rx="1.5" fill="currentColor" opacity=".45"/><rect x="42" y="38" width="9" height="7" rx="1.5" fill="currentColor" opacity=".35"/></svg>
+            </div>
+            <div class="rh-card__title">Horarios laborales</div>
+            <div class="rh-card__sub">Jornadas y días activos</div>
+        </a>
+
+        <a href="/human-resources/shifts" class="rh-card rh-card--blue">
+            <div class="rh-card__art">
+                <svg viewBox="0 0 80 60" fill="none"><circle cx="40" cy="30" r="22" fill="currentColor" opacity=".15"/><circle cx="40" cy="30" r="18" stroke="currentColor" stroke-width="2" opacity=".4" fill="none"/><line x1="40" y1="30" x2="40" y2="15" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" opacity=".6"/><line x1="40" y1="30" x2="51" y2="37" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" opacity=".6"/><circle cx="40" cy="30" r="2.5" fill="currentColor" opacity=".7"/><circle cx="40" cy="13" r="1.5" fill="currentColor" opacity=".4"/><circle cx="40" cy="47" r="1.5" fill="currentColor" opacity=".4"/><circle cx="23" cy="30" r="1.5" fill="currentColor" opacity=".4"/><circle cx="57" cy="30" r="1.5" fill="currentColor" opacity=".4"/></svg>
+            </div>
+            <div class="rh-card__title">Turnos</div>
+            <div class="rh-card__sub">Horarios de entrada y salida</div>
         </a>
     </div>
 
-    <div class="col-md-4 col-lg-3">
-        <a href="/human-resources/departments" class="ns-module-card text-decoration-none">
-            <div class="ns-module-card__icon" style="background:#F0FDF4;">
-                <span class="bi bi-diagram-3 fs-4" style="color:#15803D;"></span>
+    <!-- ── SECCIÓN: ASISTENCIA ── -->
+    <div class="rh-section-label">Asistencia y permisos</div>
+    <div class="rh-grid rh-grid--5">
+
+        <a href="/human-resources/time-clock" class="rh-card rh-card--red">
+            <div class="rh-card__art">
+                <svg viewBox="0 0 80 60" fill="none"><ellipse cx="40" cy="42" rx="22" ry="6" fill="currentColor" opacity=".12"/><rect x="28" y="8" width="24" height="32" rx="4" fill="currentColor" opacity=".2"/><rect x="32" y="12" width="16" height="24" rx="2" fill="currentColor" opacity=".2"/><circle cx="40" cy="24" r="7" fill="currentColor" opacity=".4"/><line x1="40" y1="24" x2="40" y2="18" stroke="white" stroke-width="1.5" stroke-linecap="round"/><line x1="40" y1="24" x2="44" y2="27" stroke="white" stroke-width="1.5" stroke-linecap="round"/><rect x="36" y="36" width="8" height="3" rx="1.5" fill="currentColor" opacity=".4"/><path d="M28 40 L52 40 L54 48 L26 48 Z" fill="currentColor" opacity=".18"/></svg>
             </div>
-            <div class="ns-module-card__body">
-                <div class="ns-module-card__title">Departamentos</div>
-                <div class="ns-module-card__sub">Estructura organizacional por empresa</div>
+            <div class="rh-card__title">Checador</div>
+            <div class="rh-card__sub">Registro de asistencia</div>
+        </a>
+
+        <a href="/human-resources/attendance-daily-summaries" class="rh-card rh-card--teal">
+            <div class="rh-card__art">
+                <svg viewBox="0 0 80 60" fill="none"><rect x="10" y="12" width="60" height="42" rx="4" fill="currentColor" opacity=".18"/><line x1="10" y1="22" x2="70" y2="22" stroke="currentColor" stroke-width="2" opacity=".4"/><line x1="21" y1="9" x2="21" y2="16" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" opacity=".5"/><line x1="59" y1="9" x2="59" y2="16" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" opacity=".5"/><path d="M22 38 L32 46 L56 26" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" opacity=".6" fill="none"/></svg>
             </div>
+            <div class="rh-card__title">Asistencia diaria</div>
+            <div class="rh-card__sub">Resúmenes por día</div>
+        </a>
+
+        <a href="/human-resources/vacation-requests" class="rh-card rh-card--orange">
+            <div class="rh-card__art">
+                <svg viewBox="0 0 80 60" fill="none"><path d="M10 44 Q40 8 70 44" stroke="currentColor" stroke-width="3" fill="currentColor" opacity=".2"/><path d="M10 44 Q40 8 70 44 Z" fill="currentColor" opacity=".15"/><line x1="40" y1="44" x2="40" y2="54" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" opacity=".5"/><line x1="28" y1="54" x2="52" y2="54" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity=".4"/><circle cx="40" cy="20" r="4" fill="currentColor" opacity=".5"/><path d="M36 20 Q40 14 44 20" stroke="currentColor" stroke-width="1.5" fill="none" opacity=".4"/></svg>
+            </div>
+            <div class="rh-card__title">Vacaciones</div>
+            <div class="rh-card__sub">Solicitudes y aprobaciones</div>
+        </a>
+
+        <a href="/human-resources/leave-types" class="rh-card rh-card--slate">
+            <div class="rh-card__art">
+                <svg viewBox="0 0 80 60" fill="none"><rect x="16" y="8" width="48" height="48" rx="5" fill="currentColor" opacity=".15"/><rect x="22" y="14" width="36" height="3" rx="1.5" fill="currentColor" opacity=".4"/><rect x="22" y="21" width="28" height="3" rx="1.5" fill="currentColor" opacity=".4"/><rect x="22" y="28" width="32" height="3" rx="1.5" fill="currentColor" opacity=".35"/><rect x="22" y="35" width="20" height="3" rx="1.5" fill="currentColor" opacity=".3"/><circle cx="16" cy="15.5" r="2.5" fill="currentColor" opacity=".5"/><circle cx="16" cy="22.5" r="2.5" fill="currentColor" opacity=".5"/><circle cx="16" cy="29.5" r="2.5" fill="currentColor" opacity=".45"/><circle cx="16" cy="36.5" r="2.5" fill="currentColor" opacity=".4"/></svg>
+            </div>
+            <div class="rh-card__title">Tipos de ausencia</div>
+            <div class="rh-card__sub">Permisos e incapacidades</div>
+        </a>
+
+        <a href="/human-resources/incidents" class="rh-card rh-card--red">
+            <div class="rh-card__art">
+                <svg viewBox="0 0 80 60" fill="none"><path d="M40 8 L68 52 H12 Z" fill="currentColor" opacity=".18"/><path d="M40 8 L68 52 H12 Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round" fill="none" opacity=".4"/><line x1="40" y1="24" x2="40" y2="38" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" opacity=".6"/><circle cx="40" cy="44" r="2" fill="currentColor" opacity=".6"/></svg>
+            </div>
+            <div class="rh-card__title">Incidencias</div>
+            <div class="rh-card__sub">Faltas, retardos y ajustes</div>
         </a>
     </div>
 
-    <div class="col-md-4 col-lg-3">
-        <a href="/human-resources/positions" class="ns-module-card text-decoration-none">
-            <div class="ns-module-card__icon" style="background:#FFF7ED;">
-                <span class="bi bi-person-badge fs-4" style="color:#C2410C;"></span>
+    <!-- ── SECCIÓN: NÓMINA ── -->
+    <div class="rh-section-label">Catálogos de nómina</div>
+    <div class="rh-grid rh-grid--3">
+
+        <a href="/payroll/period-types" class="rh-card rh-card--teal rh-card--wide">
+            <div class="rh-card__art">
+                <svg viewBox="0 0 80 60" fill="none"><rect x="8" y="10" width="64" height="44" rx="5" fill="currentColor" opacity=".15"/><line x1="8" y1="22" x2="72" y2="22" stroke="currentColor" stroke-width="2" opacity=".35"/><rect x="16" y="29" width="14" height="3" rx="1.5" fill="currentColor" opacity=".5"/><rect x="34" y="29" width="22" height="3" rx="1.5" fill="currentColor" opacity=".4"/><rect x="16" y="36" width="14" height="3" rx="1.5" fill="currentColor" opacity=".5"/><rect x="34" y="36" width="16" height="3" rx="1.5" fill="currentColor" opacity=".4"/><rect x="16" y="43" width="14" height="3" rx="1.5" fill="currentColor" opacity=".5"/><rect x="34" y="43" width="20" height="3" rx="1.5" fill="currentColor" opacity=".4"/><rect x="13" y="12" width="4" height="6" rx="1" fill="currentColor" opacity=".45"/><rect x="21" y="12" width="4" height="6" rx="1" fill="currentColor" opacity=".45"/></svg>
             </div>
-            <div class="ns-module-card__body">
-                <div class="ns-module-card__title">Puestos</div>
-                <div class="ns-module-card__sub">Puestos y grupos de nómina</div>
+            <div class="rh-card__title">Tipos de nómina</div>
+            <div class="rh-card__sub">Frecuencias: semanal, quincenal, mensual...</div>
+        </a>
+
+        <a href="/payroll/periods" class="rh-card rh-card--teal rh-card--wide">
+            <div class="rh-card__art">
+                <svg viewBox="0 0 80 60" fill="none"><rect x="8" y="10" width="64" height="44" rx="5" fill="currentColor" opacity=".15"/><line x1="8" y1="22" x2="72" y2="22" stroke="currentColor" stroke-width="2" opacity=".35"/><line x1="28" y1="8" x2="28" y2="16" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" opacity=".5"/><line x1="52" y1="8" x2="52" y2="16" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" opacity=".5"/><rect x="14" y="28" width="10" height="10" rx="2" fill="currentColor" opacity=".35"/><rect x="28" y="28" width="10" height="10" rx="2" fill="currentColor" opacity=".4"/><rect x="42" y="28" width="10" height="10" rx="2" fill="currentColor" opacity=".35"/><rect x="56" y="28" width="10" height="10" rx="2" fill="currentColor" opacity=".3"/><rect x="14" y="41" width="10" height="7" rx="2" fill="currentColor" opacity=".3"/><rect x="28" y="41" width="10" height="7" rx="2" fill="currentColor" opacity=".35"/></svg>
             </div>
+            <div class="rh-card__title">Periodos de nómina</div>
+            <div class="rh-card__sub">Ventanas operativas de cálculo y pago</div>
+        </a>
+
+        <a href="/payroll/concepts" class="rh-card rh-card--teal rh-card--wide">
+            <div class="rh-card__art">
+                <svg viewBox="0 0 80 60" fill="none"><circle cx="20" cy="20" r="10" fill="currentColor" opacity=".25"/><text x="14" y="24" font-size="10" fill="currentColor" opacity=".7" font-family="sans-serif">$</text><circle cx="40" cy="20" r="10" fill="currentColor" opacity=".2"/><text x="34" y="24" font-size="10" fill="currentColor" opacity=".6" font-family="sans-serif">$</text><circle cx="60" cy="20" r="10" fill="currentColor" opacity=".15"/><text x="54" y="24" font-size="10" fill="currentColor" opacity=".5" font-family="sans-serif">$</text><rect x="10" y="36" width="24" height="3" rx="1.5" fill="currentColor" opacity=".45"/><rect x="10" y="42" width="18" height="3" rx="1.5" fill="currentColor" opacity=".35"/><rect x="44" y="36" width="24" height="3" rx="1.5" fill="currentColor" opacity=".4"/><rect x="44" y="42" width="18" height="3" rx="1.5" fill="currentColor" opacity=".3"/></svg>
+            </div>
+            <div class="rh-card__title">Conceptos de nómina</div>
+            <div class="rh-card__sub">Percepciones, deducciones y obligaciones</div>
         </a>
     </div>
 
-    <div class="col-md-4 col-lg-3">
-        <a href="/human-resources/work-schedules" class="ns-module-card text-decoration-none">
-            <div class="ns-module-card__icon" style="background:#F5F3FF;">
-                <span class="bi bi-calendar-week fs-4" style="color:#7c3aed;"></span>
+    <!-- ── SECCIÓN: TALENTO ── -->
+    <div class="rh-section-label">Talento y desarrollo</div>
+    <div class="rh-grid rh-grid--4">
+
+        <a href="/human-resources/recruitment-vacancies" class="rh-card rh-card--blue">
+            <div class="rh-card__art">
+                <svg viewBox="0 0 80 60" fill="none"><circle cx="32" cy="26" r="12" stroke="currentColor" stroke-width="2.5" fill="currentColor" opacity=".15" /><line x1="41" y1="35" x2="54" y2="48" stroke="currentColor" stroke-width="3" stroke-linecap="round" opacity=".5"/><circle cx="32" cy="26" r="7" fill="currentColor" opacity=".3"/></svg>
             </div>
-            <div class="ns-module-card__body">
-                <div class="ns-module-card__title">Horarios laborales</div>
-                <div class="ns-module-card__sub">Jornadas semanales con turnos y días activos</div>
+            <div class="rh-card__title">Vacantes</div>
+            <div class="rh-card__sub">Reclutamiento y selección</div>
+        </a>
+
+        <a href="/human-resources/performance-reviews" class="rh-card rh-card--purple">
+            <div class="rh-card__art">
+                <svg viewBox="0 0 80 60" fill="none"><path d="M40 8 L44 24 H60 L47 34 L51 50 L40 40 L29 50 L33 34 L20 24 H36 Z" fill="currentColor" opacity=".3"/><path d="M40 8 L44 24 H60 L47 34 L51 50 L40 40 L29 50 L33 34 L20 24 H36 Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" fill="none" opacity=".4"/></svg>
             </div>
+            <div class="rh-card__title">Evaluaciones</div>
+            <div class="rh-card__sub">Revisiones de desempeño</div>
+        </a>
+
+        <a href="/human-resources/employee-movements" class="rh-card rh-card--orange">
+            <div class="rh-card__art">
+                <svg viewBox="0 0 80 60" fill="none"><circle cx="20" cy="30" r="10" fill="currentColor" opacity=".25"/><circle cx="60" cy="30" r="10" fill="currentColor" opacity=".25"/><line x1="32" y1="26" x2="48" y2="26" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity=".5"/><path d="M44 22 L48 26 L44 30" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none" opacity=".6"/><line x1="48" y1="34" x2="32" y2="34" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity=".4"/><path d="M36 30 L32 34 L36 38" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none" opacity=".5"/></svg>
+            </div>
+            <div class="rh-card__title">Movimientos</div>
+            <div class="rh-card__sub">Altas, bajas y cambios</div>
+        </a>
+
+        <a href="/human-resources/employee-documents" class="rh-card rh-card--slate">
+            <div class="rh-card__art">
+                <svg viewBox="0 0 80 60" fill="none"><rect x="18" y="6" width="36" height="48" rx="4" fill="currentColor" opacity=".18"/><path d="M42 6 L54 18 H42 Z" fill="currentColor" opacity=".3"/><line x1="42" y1="6" x2="42" y2="18" stroke="currentColor" stroke-width="1.5" opacity=".3"/><line x1="42" y1="18" x2="54" y2="18" stroke="currentColor" stroke-width="1.5" opacity=".3"/><rect x="24" y="24" width="24" height="2.5" rx="1.25" fill="currentColor" opacity=".45"/><rect x="24" y="30" width="20" height="2.5" rx="1.25" fill="currentColor" opacity=".4"/><rect x="24" y="36" width="16" height="2.5" rx="1.25" fill="currentColor" opacity=".35"/><rect x="24" y="42" width="10" height="2.5" rx="1.25" fill="currentColor" opacity=".3"/></svg>
+            </div>
+            <div class="rh-card__title">Documentos</div>
+            <div class="rh-card__sub">Contratos y expedientes</div>
         </a>
     </div>
 
-    <div class="col-md-4 col-lg-3">
-        <a href="/human-resources/shifts" class="ns-module-card text-decoration-none">
-            <div class="ns-module-card__icon" style="background:#F0F9FF;">
-                <span class="bi bi-clock fs-4" style="color:#0369a1;"></span>
+    <!-- ── SECCIÓN: CONFIGURACIÓN ── -->
+    <div class="rh-section-label">Configuración</div>
+    <div class="rh-grid rh-grid--4">
+
+        <a href="/human-resources/banks" class="rh-card rh-card--blue">
+            <div class="rh-card__art">
+                <svg viewBox="0 0 80 60" fill="none"><path d="M10 26 L40 8 L70 26 Z" fill="currentColor" opacity=".3"/><rect x="16" y="26" width="8" height="20" fill="currentColor" opacity=".3"/><rect x="28" y="26" width="8" height="20" fill="currentColor" opacity=".3"/><rect x="44" y="26" width="8" height="20" fill="currentColor" opacity=".3"/><rect x="56" y="26" width="8" height="20" fill="currentColor" opacity=".3"/><rect x="10" y="46" width="60" height="5" rx="2" fill="currentColor" opacity=".4"/><rect x="10" y="22" width="60" height="4" rx="2" fill="currentColor" opacity=".25"/></svg>
             </div>
-            <div class="ns-module-card__body">
-                <div class="ns-module-card__title">Turnos</div>
-                <div class="ns-module-card__sub">Turnos con horario de entrada y salida</div>
-            </div>
+            <div class="rh-card__title">Bancos RH</div>
+            <div class="rh-card__sub">Bancos configurados para nómina</div>
         </a>
-    </div>
 
-    <div class="col-12 mt-2">
-        <div class="fw-semibold text-muted text-uppercase" style="font-size:11px;letter-spacing:.08em;">Asistencia y Permisos</div>
-    </div>
-
-    <div class="col-md-4 col-lg-3">
-        <a href="/human-resources/time-clock" class="ns-module-card text-decoration-none">
-            <div class="ns-module-card__icon" style="background:#FFF1F2;">
-                <span class="bi bi-clock-history fs-4" style="color:#BE123C;"></span>
+        <a href="/human-resources/termination-reasons" class="rh-card rh-card--red">
+            <div class="rh-card__art">
+                <svg viewBox="0 0 80 60" fill="none"><circle cx="34" cy="22" r="11" fill="currentColor" opacity=".25"/><circle cx="34" cy="20" r="7" fill="currentColor" opacity=".45"/><path d="M16 50 C16 38 52 38 52 50" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" fill="none" opacity=".45"/><line x1="54" y1="30" x2="66" y2="42" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" opacity=".5"/><line x1="66" y1="30" x2="54" y2="42" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" opacity=".5"/></svg>
             </div>
-            <div class="ns-module-card__body">
-                <div class="ns-module-card__title">Checador</div>
-                <div class="ns-module-card__sub">Registro de asistencia y puntualidad</div>
-            </div>
+            <div class="rh-card__title">Motivos de baja</div>
+            <div class="rh-card__sub">Causas de terminación</div>
         </a>
-    </div>
 
-    <div class="col-md-4 col-lg-3">
-        <a href="/human-resources/attendance-daily-summaries" class="ns-module-card text-decoration-none">
-            <div class="ns-module-card__icon" style="background:#ECFDF5;">
-                <span class="bi bi-calendar-check fs-4" style="color:#059669;"></span>
+        <a href="/human-resources/employer-registrations" class="rh-card rh-card--green">
+            <div class="rh-card__art">
+                <svg viewBox="0 0 80 60" fill="none"><rect x="12" y="20" width="56" height="36" rx="4" fill="currentColor" opacity=".18"/><rect x="24" y="8" width="32" height="16" rx="3" fill="currentColor" opacity=".22"/><rect x="30" y="30" width="20" height="16" rx="2" fill="currentColor" opacity=".3"/><rect x="16" y="28" width="10" height="10" rx="2" fill="currentColor" opacity=".35"/><rect x="54" y="28" width="10" height="10" rx="2" fill="currentColor" opacity=".35"/><circle cx="40" cy="22" r="4" fill="currentColor" opacity=".5"/><rect x="37" y="30" width="6" height="2" rx="1" fill="currentColor" opacity=".5"/></svg>
             </div>
-            <div class="ns-module-card__body">
-                <div class="ns-module-card__title">Asistencia diaria</div>
-                <div class="ns-module-card__sub">Resúmenes de asistencia por día</div>
-            </div>
+            <div class="rh-card__title">Registros patronales</div>
+            <div class="rh-card__sub">IMSS e instituciones</div>
         </a>
-    </div>
 
-    <div class="col-md-4 col-lg-3">
-        <a href="/human-resources/vacation-requests" class="ns-module-card text-decoration-none">
-            <div class="ns-module-card__icon" style="background:#FFF7ED;">
-                <span class="bi bi-umbrella fs-4" style="color:#D97706;"></span>
+        <a href="/human-resources/time-clock-devices" class="rh-card rh-card--slate">
+            <div class="rh-card__art">
+                <svg viewBox="0 0 80 60" fill="none"><rect x="22" y="6" width="36" height="48" rx="6" fill="currentColor" opacity=".2"/><rect x="28" y="12" width="24" height="18" rx="2" fill="currentColor" opacity=".3"/><circle cx="40" cy="38" r="5" fill="currentColor" opacity=".4"/><circle cx="40" cy="38" r="2" fill="currentColor" opacity=".5"/><rect x="34" y="48" width="12" height="3" rx="1.5" fill="currentColor" opacity=".35"/></svg>
             </div>
-            <div class="ns-module-card__body">
-                <div class="ns-module-card__title">Solicitudes de vacaciones</div>
-                <div class="ns-module-card__sub">Gestión de vacaciones y ausencias</div>
-            </div>
-        </a>
-    </div>
-
-    <div class="col-md-4 col-lg-3">
-        <a href="/human-resources/leave-types" class="ns-module-card text-decoration-none">
-            <div class="ns-module-card__icon" style="background:#F8FAFC;">
-                <span class="bi bi-journal-text fs-4 text-secondary"></span>
-            </div>
-            <div class="ns-module-card__body">
-                <div class="ns-module-card__title">Tipos de ausencia</div>
-                <div class="ns-module-card__sub">Categorías de permiso e incapacidad</div>
-            </div>
-        </a>
-    </div>
-
-    <div class="col-md-4 col-lg-3">
-        <a href="/human-resources/incidents" class="ns-module-card text-decoration-none">
-            <div class="ns-module-card__icon" style="background:#FEF2F2;">
-                <span class="bi bi-exclamation-triangle fs-4" style="color:#DC2626;"></span>
-            </div>
-            <div class="ns-module-card__body">
-                <div class="ns-module-card__title">Incidencias</div>
-                <div class="ns-module-card__sub">Faltas, retardos y incidentes de nómina</div>
-            </div>
-        </a>
-    </div>
-
-    <div class="col-12 mt-2">
-        <div class="fw-semibold text-muted text-uppercase" style="font-size:11px;letter-spacing:.08em;">Catálogos de Nómina</div>
-    </div>
-
-    <div class="col-md-4 col-lg-3">
-        <a href="/payroll/periods" class="ns-module-card text-decoration-none">
-            <div class="ns-module-card__icon" style="background:#F0FDFA;">
-                <span class="bi bi-calendar-range fs-4" style="color:#0d9488;"></span>
-            </div>
-            <div class="ns-module-card__body">
-                <div class="ns-module-card__title">Periodos de nómina</div>
-                <div class="ns-module-card__sub">Ventanas operativas de cálculo y pago</div>
-            </div>
-        </a>
-    </div>
-
-    <div class="col-md-4 col-lg-3">
-        <a href="/payroll/period-types" class="ns-module-card text-decoration-none">
-            <div class="ns-module-card__icon" style="background:#F0FDFA;">
-                <span class="bi bi-list-ul fs-4" style="color:#0d9488;"></span>
-            </div>
-            <div class="ns-module-card__body">
-                <div class="ns-module-card__title">Tipos de nómina</div>
-                <div class="ns-module-card__sub">Frecuencias de pago: semanal, quincenal...</div>
-            </div>
-        </a>
-    </div>
-
-    <div class="col-md-4 col-lg-3">
-        <a href="/payroll/concepts" class="ns-module-card text-decoration-none">
-            <div class="ns-module-card__icon" style="background:#F0FDFA;">
-                <span class="bi bi-tags fs-4" style="color:#0d9488;"></span>
-            </div>
-            <div class="ns-module-card__body">
-                <div class="ns-module-card__title">Conceptos de nómina</div>
-                <div class="ns-module-card__sub">Percepciones, deducciones y obligaciones</div>
-            </div>
-        </a>
-    </div>
-
-    <div class="col-12 mt-2">
-        <div class="fw-semibold text-muted text-uppercase" style="font-size:11px;letter-spacing:.08em;">Talento y Operación</div>
-    </div>
-
-    <div class="col-md-4 col-lg-3">
-        <a href="/human-resources/recruitment-vacancies" class="ns-module-card text-decoration-none">
-            <div class="ns-module-card__icon" style="background:#EFF6FF;">
-                <span class="bi bi-search fs-4 text-primary"></span>
-            </div>
-            <div class="ns-module-card__body">
-                <div class="ns-module-card__title">Vacantes</div>
-                <div class="ns-module-card__sub">Reclutamiento y selección de personal</div>
-            </div>
-        </a>
-    </div>
-
-    <div class="col-md-4 col-lg-3">
-        <a href="/human-resources/performance-reviews" class="ns-module-card text-decoration-none">
-            <div class="ns-module-card__icon" style="background:#F5F3FF;">
-                <span class="bi bi-star fs-4" style="color:#7c3aed;"></span>
-            </div>
-            <div class="ns-module-card__body">
-                <div class="ns-module-card__title">Evaluaciones de desempeño</div>
-                <div class="ns-module-card__sub">Revisiones periódicas de rendimiento</div>
-            </div>
-        </a>
-    </div>
-
-    <div class="col-md-4 col-lg-3">
-        <a href="/human-resources/employee-movements" class="ns-module-card text-decoration-none">
-            <div class="ns-module-card__icon" style="background:#FFF7ED;">
-                <span class="bi bi-arrow-left-right fs-4" style="color:#C2410C;"></span>
-            </div>
-            <div class="ns-module-card__body">
-                <div class="ns-module-card__title">Movimientos de personal</div>
-                <div class="ns-module-card__sub">Altas, bajas y cambios de puesto</div>
-            </div>
-        </a>
-    </div>
-
-    <div class="col-md-4 col-lg-3">
-        <a href="/human-resources/employee-documents" class="ns-module-card text-decoration-none">
-            <div class="ns-module-card__icon" style="background:#F8FAFC;">
-                <span class="bi bi-file-earmark-text fs-4 text-secondary"></span>
-            </div>
-            <div class="ns-module-card__body">
-                <div class="ns-module-card__title">Documentos del empleado</div>
-                <div class="ns-module-card__sub">Contratos, IDs y certificados del expediente</div>
-            </div>
-        </a>
-    </div>
-
-    <div class="col-12 mt-2">
-        <div class="fw-semibold text-muted text-uppercase" style="font-size:11px;letter-spacing:.08em;">Configuración</div>
-    </div>
-
-    <div class="col-md-4 col-lg-3">
-        <a href="/human-resources/banks" class="ns-module-card text-decoration-none">
-            <div class="ns-module-card__icon" style="background:#EFF6FF;">
-                <span class="bi bi-bank fs-4 text-primary"></span>
-            </div>
-            <div class="ns-module-card__body">
-                <div class="ns-module-card__title">Bancos RH</div>
-                <div class="ns-module-card__sub">Bancos configurados para nómina</div>
-            </div>
-        </a>
-    </div>
-
-    <div class="col-md-4 col-lg-3">
-        <a href="/human-resources/termination-reasons" class="ns-module-card text-decoration-none">
-            <div class="ns-module-card__icon" style="background:#FEF2F2;">
-                <span class="bi bi-person-dash fs-4" style="color:#DC2626;"></span>
-            </div>
-            <div class="ns-module-card__body">
-                <div class="ns-module-card__title">Motivos de baja</div>
-                <div class="ns-module-card__sub">Causas de terminación de contrato</div>
-            </div>
-        </a>
-    </div>
-
-    <div class="col-md-4 col-lg-3">
-        <a href="/human-resources/employer-registrations" class="ns-module-card text-decoration-none">
-            <div class="ns-module-card__icon" style="background:#F0FDF4;">
-                <span class="bi bi-building-check fs-4" style="color:#15803D;"></span>
-            </div>
-            <div class="ns-module-card__body">
-                <div class="ns-module-card__title">Registros patronales</div>
-                <div class="ns-module-card__sub">Registros IMSS e instituciones patronales</div>
-            </div>
-        </a>
-    </div>
-
-    <div class="col-md-4 col-lg-3">
-        <a href="/human-resources/time-clock-devices" class="ns-module-card text-decoration-none">
-            <div class="ns-module-card__icon" style="background:#F8FAFC;">
-                <span class="bi bi-hdd-network fs-4 text-secondary"></span>
-            </div>
-            <div class="ns-module-card__body">
-                <div class="ns-module-card__title">Dispositivos reloj</div>
-                <div class="ns-module-card__sub">Relojes biométricos y endpoints de integración</div>
-            </div>
+            <div class="rh-card__title">Dispositivos reloj</div>
+            <div class="rh-card__sub">Relojes biométricos</div>
         </a>
     </div>
 
 </div>
 
 <style>
-    .ns-module-card {
+    .rh-index {
+        padding: 0 0 40px;
+        max-width: 1200px;
+    }
+
+    /* HERO */
+    .rh-hero {
         display: flex;
         align-items: center;
-        gap: 14px;
-        padding: 16px;
-        border: 1px solid #e5e7eb;
-        border-radius: 10px;
-        background: #fff;
-        transition: box-shadow .15s, border-color .15s;
-        color: inherit;
+        justify-content: space-between;
+        background: linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%);
+        border: 1px solid #ddd6fe;
+        border-radius: 16px;
+        padding: 28px 32px;
+        margin-bottom: 32px;
+        overflow: hidden;
+        position: relative;
     }
-    .ns-module-card:hover {
-        box-shadow: 0 4px 16px rgba(0,0,0,.08);
-        border-color: #c7d2fe;
+    .rh-hero__eyebrow {
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: .08em;
+        color: #7c3aed;
+        margin-bottom: 6px;
+    }
+    .rh-hero__title {
+        font-size: 26px;
+        font-weight: 700;
+        color: #3b0764;
+        margin: 0 0 6px;
+    }
+    .rh-hero__sub {
+        font-size: 14px;
+        color: #6d28d9;
+        margin: 0;
+        opacity: .8;
+    }
+    .rh-hero__art {
+        width: 220px;
+        flex-shrink: 0;
+        opacity: .85;
+    }
+    .rh-hero__art svg { width: 100%; height: auto; }
+
+    /* SECTION LABEL */
+    .rh-section-label {
+        font-size: 11px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: .1em;
+        color: #6b7280;
+        margin: 28px 0 12px;
+        padding-left: 2px;
+        border-left: 3px solid #e5e7eb;
+        padding-left: 10px;
+    }
+
+    /* GRID */
+    .rh-grid {
+        display: grid;
+        gap: 12px;
+    }
+    .rh-grid--5 { grid-template-columns: repeat(5, 1fr); }
+    .rh-grid--4 { grid-template-columns: repeat(4, 1fr); }
+    .rh-grid--3 { grid-template-columns: repeat(3, 1fr); }
+
+    /* CARD */
+    .rh-card {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 10px;
+        padding: 18px 14px 16px;
+        border-radius: 12px;
+        border: 1px solid transparent;
+        text-decoration: none;
+        color: inherit;
+        transition: transform .15s, box-shadow .15s, border-color .15s;
+        cursor: pointer;
+        text-align: center;
+    }
+    .rh-card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 8px 24px rgba(0,0,0,.1);
         text-decoration: none;
         color: inherit;
     }
-    .ns-module-card__icon {
-        flex-shrink: 0;
-        width: 44px;
-        height: 44px;
-        border-radius: 8px;
+
+    .rh-card__art {
+        width: 72px;
+        height: 52px;
         display: flex;
         align-items: center;
         justify-content: center;
+        border-radius: 10px;
+        padding: 6px;
     }
-    .ns-module-card__title {
-        font-weight: 600;
-        font-size: 14px;
-        color: #111827;
+    .rh-card__art svg { width: 100%; height: 100%; }
+
+    .rh-card__title {
+        font-weight: 700;
+        font-size: 13px;
+        line-height: 1.3;
     }
-    .ns-module-card__sub {
-        font-size: 12px;
-        color: #6b7280;
-        margin-top: 2px;
+    .rh-card__sub {
+        font-size: 11px;
+        opacity: .7;
+        line-height: 1.4;
+    }
+
+    /* COLOR VARIANTS */
+    .rh-card--purple {
+        background: #faf5ff;
+        border-color: #e9d5ff;
+        color: #581c87;
+    }
+    .rh-card--purple .rh-card__art { background: #f3e8ff; }
+    .rh-card--purple svg { color: #7c3aed; }
+    .rh-card--purple:hover { border-color: #c084fc; background: #f5f3ff; }
+
+    .rh-card--green {
+        background: #f0fdf4;
+        border-color: #bbf7d0;
+        color: #14532d;
+    }
+    .rh-card--green .rh-card__art { background: #dcfce7; }
+    .rh-card--green svg { color: #16a34a; }
+    .rh-card--green:hover { border-color: #4ade80; background: #dcfce7; }
+
+    .rh-card--orange {
+        background: #fff7ed;
+        border-color: #fed7aa;
+        color: #7c2d12;
+    }
+    .rh-card--orange .rh-card__art { background: #ffedd5; }
+    .rh-card--orange svg { color: #ea580c; }
+    .rh-card--orange:hover { border-color: #fb923c; background: #ffedd5; }
+
+    .rh-card--blue {
+        background: #eff6ff;
+        border-color: #bfdbfe;
+        color: #1e3a8a;
+    }
+    .rh-card--blue .rh-card__art { background: #dbeafe; }
+    .rh-card--blue svg { color: #2563eb; }
+    .rh-card--blue:hover { border-color: #60a5fa; background: #dbeafe; }
+
+    .rh-card--teal {
+        background: #f0fdfa;
+        border-color: #99f6e4;
+        color: #134e4a;
+    }
+    .rh-card--teal .rh-card__art { background: #ccfbf1; }
+    .rh-card--teal svg { color: #0d9488; }
+    .rh-card--teal:hover { border-color: #2dd4bf; background: #ccfbf1; }
+
+    .rh-card--red {
+        background: #fff1f2;
+        border-color: #fecdd3;
+        color: #7f1d1d;
+    }
+    .rh-card--red .rh-card__art { background: #ffe4e6; }
+    .rh-card--red svg { color: #dc2626; }
+    .rh-card--red:hover { border-color: #f87171; background: #ffe4e6; }
+
+    .rh-card--slate {
+        background: #f8fafc;
+        border-color: #e2e8f0;
+        color: #1e293b;
+    }
+    .rh-card--slate .rh-card__art { background: #f1f5f9; }
+    .rh-card--slate svg { color: #475569; }
+    .rh-card--slate:hover { border-color: #94a3b8; background: #f1f5f9; }
+
+    /* Responsive */
+    @@media (max-width: 1024px) {
+        .rh-grid--5 { grid-template-columns: repeat(3, 1fr); }
+        .rh-grid--4 { grid-template-columns: repeat(2, 1fr); }
+        .rh-grid--3 { grid-template-columns: repeat(2, 1fr); }
+    }
+    @@media (max-width: 640px) {
+        .rh-grid--5, .rh-grid--4, .rh-grid--3 { grid-template-columns: repeat(2, 1fr); }
+        .rh-hero__art { display: none; }
+        .rh-hero { padding: 20px; }
+        .rh-hero__title { font-size: 20px; }
     }
 </style>
