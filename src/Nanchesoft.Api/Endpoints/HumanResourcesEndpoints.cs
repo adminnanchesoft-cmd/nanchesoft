@@ -1,3 +1,4 @@
+using ClosedXML.Excel;
 using Microsoft.EntityFrameworkCore;
 using Nanchesoft.Domain.Entities;
 using Nanchesoft.Persistence.Context;
@@ -10,18 +11,75 @@ public static class HumanResourcesEndpoints
     {
         var departments = app.MapGroup("/api/hr/departments").WithTags("HrDepartments");
         departments.MapGet("/", GetDepartmentsAsync);
+        departments.MapGet("/{id:guid}", async (Guid id, NanchesoftDbContext db) =>
+        {
+            var entity = await db.Departments.AsNoTracking().Include(x => x.Company).FirstOrDefaultAsync(x => x.Id == id);
+            if (entity is null) return Results.NotFound(new { message = "No se encontró el departamento." });
+            return Results.Ok(new DepartmentDto { DepartmentId = entity.Id, TenantId = entity.TenantId, CompanyId = entity.CompanyId, CompanyName = entity.Company != null ? entity.Company.Name : string.Empty, Code = entity.Code, Name = entity.Name, Description = entity.Description, IsActive = entity.IsActive });
+        });
         departments.MapPost("/", CreateDepartmentAsync);
         departments.MapPut("/{id:guid}", UpdateDepartmentAsync);
         departments.MapDelete("/{id:guid}", DeleteDepartmentAsync);
 
         var positions = app.MapGroup("/api/hr/positions").WithTags("HrPositions");
         positions.MapGet("/", GetPositionsAsync);
+        positions.MapGet("/{id:guid}", async (Guid id, NanchesoftDbContext db) =>
+        {
+            var entity = await db.Positions.AsNoTracking().Include(x => x.Company).Include(x => x.Department).FirstOrDefaultAsync(x => x.Id == id);
+            if (entity is null) return Results.NotFound(new { message = "No se encontró el puesto." });
+            return Results.Ok(new PositionDto { PositionId = entity.Id, TenantId = entity.TenantId, CompanyId = entity.CompanyId, CompanyName = entity.Company != null ? entity.Company.Name : string.Empty, DepartmentId = entity.DepartmentId, DepartmentName = entity.Department != null ? entity.Department.Name : string.Empty, Code = entity.Code, Name = entity.Name, Description = entity.Description, PayrollGroup = entity.PayrollGroup, BaseSalary = entity.BaseSalary, IsActive = entity.IsActive });
+        });
         positions.MapPost("/", CreatePositionAsync);
         positions.MapPut("/{id:guid}", UpdatePositionAsync);
         positions.MapDelete("/{id:guid}", DeletePositionAsync);
 
         var employees = app.MapGroup("/api/hr/employees").WithTags("HrEmployees");
         employees.MapGet("/", GetEmployeesAsync);
+        employees.MapGet("/{id:guid}", async (Guid id, NanchesoftDbContext db) =>
+        {
+            var entity = await db.Employees.AsNoTracking()
+                .Include(x => x.Company).Include(x => x.Branch).Include(x => x.Department)
+                .Include(x => x.Position).Include(x => x.WorkSchedule)
+                .FirstOrDefaultAsync(x => x.Id == id);
+            if (entity is null) return Results.NotFound(new { message = "No se encontró el colaborador." });
+            return Results.Ok(new EmployeeDto
+            {
+                EmployeeId = entity.Id, TenantId = entity.TenantId, CompanyId = entity.CompanyId,
+                CompanyName = entity.Company?.Name ?? string.Empty, BranchId = entity.BranchId,
+                BranchName = entity.Branch?.Name ?? string.Empty, DepartmentId = entity.DepartmentId,
+                DepartmentName = entity.Department?.Name ?? string.Empty, PositionId = entity.PositionId,
+                PositionName = entity.Position?.Name ?? string.Empty, WorkScheduleId = entity.WorkScheduleId,
+                WorkScheduleName = entity.WorkSchedule?.Name ?? string.Empty,
+                Code = entity.Code, EmployeeNumber = entity.EmployeeNumber,
+                ClockKey = entity.ClockKey, NoiKey = entity.NoiKey,
+                FirstName = entity.FirstName, LastName = entity.LastName,
+                SecondLastName = entity.SecondLastName, MiddleName = entity.MiddleName,
+                FullName = entity.GetFullName(), Email = entity.Email, Phone = entity.Phone,
+                EmergencyPhone = entity.EmergencyPhone, TaxId = entity.TaxId, NationalId = entity.NationalId,
+                Curp = entity.Curp, Nss = entity.Nss, ImssRegId = entity.ImssRegId,
+                Gender = entity.Gender, BloodType = entity.BloodType, MaritalStatus = entity.MaritalStatus,
+                PlaceOfBirth = entity.PlaceOfBirth, Nationality = entity.Nationality,
+                FatherName = entity.FatherName, MotherName = entity.MotherName,
+                AddressStreet = entity.AddressStreet, AddressColony = entity.AddressColony,
+                AddressCity = entity.AddressCity, AddressState = entity.AddressState,
+                AddressZipCode = entity.AddressZipCode, ContractType = entity.ContractType,
+                CotizationBase = entity.CotizationBase, SbcFija = entity.SbcFija,
+                TaxRegime = entity.TaxRegime, EmployeeType = entity.EmployeeType,
+                SalaryZone = entity.SalaryZone, PayrollPeriodType = entity.PayrollPeriodType,
+                PaymentForm = entity.PaymentForm, BankCode = entity.BankCode,
+                BankAccount = entity.BankAccount, Clabe = entity.Clabe, BankBranch = entity.BankBranch,
+                HireDate = entity.HireDate, BirthDate = entity.BirthDate,
+                TerminationDate = entity.TerminationDate, TerminationReason = entity.TerminationReason,
+                ReentryDate = entity.ReentryDate, IsImssRegistered = entity.IsImssRegistered,
+                ImssRegistrationDate = entity.ImssRegistrationDate, ImssTerminationDate = entity.ImssTerminationDate,
+                Umf = entity.Umf, Afore = entity.Afore, Fonacot = entity.Fonacot, Infonavit = entity.Infonavit,
+                ImmediateSupervisor = entity.ImmediateSupervisor, Category = entity.Category,
+                Notes = entity.Notes, PrintReceipt = entity.PrintReceipt,
+                DailySalary = entity.DailySalary, IntegratedDailySalary = entity.IntegratedDailySalary,
+                Status = entity.Status, IsActive = entity.IsActive
+            });
+        });
+        employees.MapGet("/report/excel", ExportEmployeesExcelAsync);
         employees.MapPost("/", CreateEmployeeAsync);
         employees.MapPut("/{id:guid}", UpdateEmployeeAsync);
         employees.MapDelete("/{id:guid}", DeleteEmployeeAsync);
@@ -40,6 +98,12 @@ public static class HumanResourcesEndpoints
 
         var periods = app.MapGroup("/api/payroll/periods").WithTags("PayrollPeriods");
         periods.MapGet("/", GetPayrollPeriodsAsync);
+        periods.MapGet("/{id:guid}", async (Guid id, NanchesoftDbContext db) =>
+        {
+            var entity = await db.PayrollPeriods.AsNoTracking().Include(x => x.Company).FirstOrDefaultAsync(x => x.Id == id);
+            if (entity is null) return Results.NotFound(new { message = "No se encontró el periodo." });
+            return Results.Ok(new PayrollPeriodDto { PayrollPeriodId = entity.Id, TenantId = entity.TenantId, CompanyId = entity.CompanyId, CompanyName = entity.Company != null ? entity.Company.Name : string.Empty, Code = entity.Code, Name = entity.Name, PeriodType = entity.PeriodType, StartDate = entity.StartDate, EndDate = entity.EndDate, PaymentDate = entity.PaymentDate, Status = entity.Status, IsClosed = entity.IsClosed, IsActive = entity.IsActive });
+        });
         periods.MapPost("/", CreatePayrollPeriodAsync);
         periods.MapPut("/{id:guid}", UpdatePayrollPeriodAsync);
         periods.MapDelete("/{id:guid}", DeletePayrollPeriodAsync);
@@ -52,6 +116,12 @@ public static class HumanResourcesEndpoints
 
         var runs = app.MapGroup("/api/payroll/runs").WithTags("PayrollRuns");
         runs.MapGet("/", GetPayrollRunsAsync);
+        runs.MapGet("/{id:guid}", async (Guid id, NanchesoftDbContext db) =>
+        {
+            var entity = await db.PayrollRuns.AsNoTracking().Include(x => x.Company).Include(x => x.Branch).Include(x => x.PayrollPeriod).FirstOrDefaultAsync(x => x.Id == id);
+            if (entity is null) return Results.NotFound(new { message = "No se encontró el proceso de nómina." });
+            return Results.Ok(new PayrollRunDto { PayrollRunId = entity.Id, TenantId = entity.TenantId, CompanyId = entity.CompanyId, CompanyName = entity.Company != null ? entity.Company.Name : string.Empty, BranchId = entity.BranchId, BranchName = entity.Branch != null ? entity.Branch.Name : string.Empty, PayrollPeriodId = entity.PayrollPeriodId, PayrollPeriodName = entity.PayrollPeriod != null ? entity.PayrollPeriod.Name : string.Empty, Folio = entity.Folio, RunDate = entity.RunDate, Status = entity.Status, EmployeeCount = entity.EmployeeCount, GrossAmount = entity.GrossAmount, DeductionsAmount = entity.DeductionsAmount, NetAmount = entity.NetAmount, Notes = entity.Notes, IsActive = entity.IsActive });
+        });
         runs.MapPost("/", CreatePayrollRunAsync);
         runs.MapPut("/{id:guid}", UpdatePayrollRunAsync);
         runs.MapDelete("/{id:guid}", DeletePayrollRunAsync);
@@ -288,6 +358,7 @@ public static class HumanResourcesEndpoints
             .Include(x => x.Branch)
             .Include(x => x.Department)
             .Include(x => x.Position)
+            .Include(x => x.WorkSchedule)
             .OrderBy(x => x.EmployeeNumber)
             .Select(x => new EmployeeDto
             {
@@ -301,19 +372,37 @@ public static class HumanResourcesEndpoints
                 DepartmentName = x.Department != null ? x.Department.Name : string.Empty,
                 PositionId = x.PositionId,
                 PositionName = x.Position != null ? x.Position.Name : string.Empty,
+                WorkScheduleId = x.WorkScheduleId,
+                WorkScheduleName = x.WorkSchedule != null ? x.WorkSchedule.Name : string.Empty,
                 Code = x.Code,
                 EmployeeNumber = x.EmployeeNumber,
+                ClockKey = x.ClockKey,
+                NoiKey = x.NoiKey,
                 FirstName = x.FirstName,
                 LastName = x.LastName,
+                SecondLastName = x.SecondLastName,
                 MiddleName = x.MiddleName,
                 FullName = x.GetFullName(),
                 Email = x.Email,
                 Phone = x.Phone,
+                EmergencyPhone = x.EmergencyPhone,
                 TaxId = x.TaxId,
                 NationalId = x.NationalId,
                 Curp = x.Curp,
                 Nss = x.Nss,
                 ImssRegId = x.ImssRegId,
+                Gender = x.Gender,
+                BloodType = x.BloodType,
+                MaritalStatus = x.MaritalStatus,
+                PlaceOfBirth = x.PlaceOfBirth,
+                Nationality = x.Nationality,
+                FatherName = x.FatherName,
+                MotherName = x.MotherName,
+                AddressStreet = x.AddressStreet,
+                AddressColony = x.AddressColony,
+                AddressCity = x.AddressCity,
+                AddressState = x.AddressState,
+                AddressZipCode = x.AddressZipCode,
                 ContractType = x.ContractType,
                 CotizationBase = x.CotizationBase,
                 SbcFija = x.SbcFija,
@@ -325,8 +414,23 @@ public static class HumanResourcesEndpoints
                 BankCode = x.BankCode,
                 BankAccount = x.BankAccount,
                 Clabe = x.Clabe,
+                BankBranch = x.BankBranch,
                 HireDate = x.HireDate,
                 BirthDate = x.BirthDate,
+                TerminationDate = x.TerminationDate,
+                TerminationReason = x.TerminationReason,
+                ReentryDate = x.ReentryDate,
+                IsImssRegistered = x.IsImssRegistered,
+                ImssRegistrationDate = x.ImssRegistrationDate,
+                ImssTerminationDate = x.ImssTerminationDate,
+                Umf = x.Umf,
+                Afore = x.Afore,
+                Fonacot = x.Fonacot,
+                Infonavit = x.Infonavit,
+                ImmediateSupervisor = x.ImmediateSupervisor,
+                Category = x.Category,
+                Notes = x.Notes,
+                PrintReceipt = x.PrintReceipt,
                 DailySalary = x.DailySalary,
                 IntegratedDailySalary = x.IntegratedDailySalary,
                 Status = x.Status,
@@ -380,18 +484,35 @@ public static class HumanResourcesEndpoints
             BranchId = branchId,
             DepartmentId = request.DepartmentId,
             PositionId = request.PositionId,
+            WorkScheduleId = request.WorkScheduleId,
             Code = code,
             EmployeeNumber = employeeNumber,
+            ClockKey = request.ClockKey,
+            NoiKey = request.NoiKey,
             FirstName = NormalizeText(request.FirstName),
             LastName = NormalizeText(request.LastName),
+            SecondLastName = NormalizeText(request.SecondLastName),
             MiddleName = NormalizeText(request.MiddleName),
             Email = NormalizeText(request.Email),
             Phone = NormalizeText(request.Phone),
+            EmergencyPhone = request.EmergencyPhone,
             TaxId = NormalizeUpper(request.TaxId),
             NationalId = NormalizeUpper(request.NationalId),
             Curp = NormalizeUpper(request.Curp),
             Nss = NormalizeUpper(request.Nss),
             ImssRegId = NormalizeUpper(request.ImssRegId),
+            Gender = request.Gender,
+            BloodType = request.BloodType,
+            MaritalStatus = request.MaritalStatus,
+            PlaceOfBirth = request.PlaceOfBirth,
+            Nationality = request.Nationality,
+            FatherName = request.FatherName,
+            MotherName = request.MotherName,
+            AddressStreet = request.AddressStreet,
+            AddressColony = request.AddressColony,
+            AddressCity = request.AddressCity,
+            AddressState = request.AddressState,
+            AddressZipCode = request.AddressZipCode,
             ContractType = NormalizeStatus(request.ContractType, "indefinite"),
             CotizationBase = NormalizeStatus(request.CotizationBase, "fixed"),
             SbcFija = request.SbcFija,
@@ -403,8 +524,23 @@ public static class HumanResourcesEndpoints
             BankCode = NormalizeText(request.BankCode),
             BankAccount = NormalizeText(request.BankAccount),
             Clabe = NormalizeText(request.Clabe),
+            BankBranch = request.BankBranch,
             HireDate = request.HireDate?.Date ?? DateTime.UtcNow.Date,
             BirthDate = request.BirthDate?.Date,
+            TerminationDate = request.TerminationDate?.Date,
+            TerminationReason = request.TerminationReason,
+            ReentryDate = request.ReentryDate?.Date,
+            IsImssRegistered = request.IsImssRegistered,
+            ImssRegistrationDate = request.ImssRegistrationDate?.Date,
+            ImssTerminationDate = request.ImssTerminationDate?.Date,
+            Umf = request.Umf,
+            Afore = request.Afore,
+            Fonacot = request.Fonacot,
+            Infonavit = request.Infonavit,
+            ImmediateSupervisor = request.ImmediateSupervisor,
+            Category = request.Category,
+            Notes = request.Notes,
+            PrintReceipt = request.PrintReceipt,
             DailySalary = request.DailySalary,
             IntegratedDailySalary = request.IntegratedDailySalary,
             Status = NormalizeStatus(request.Status, "active"),
@@ -444,18 +580,35 @@ public static class HumanResourcesEndpoints
         entity.BranchId = request.BranchId;
         entity.DepartmentId = request.DepartmentId;
         entity.PositionId = request.PositionId;
+        entity.WorkScheduleId = request.WorkScheduleId;
         entity.Code = code;
         entity.EmployeeNumber = employeeNumber;
+        entity.ClockKey = request.ClockKey;
+        entity.NoiKey = request.NoiKey;
         entity.FirstName = NormalizeText(request.FirstName, entity.FirstName);
         entity.LastName = NormalizeText(request.LastName, entity.LastName);
+        entity.SecondLastName = NormalizeText(request.SecondLastName, entity.SecondLastName);
         entity.MiddleName = NormalizeText(request.MiddleName, entity.MiddleName);
         entity.Email = NormalizeText(request.Email, entity.Email);
         entity.Phone = NormalizeText(request.Phone, entity.Phone);
+        entity.EmergencyPhone = request.EmergencyPhone;
         entity.TaxId = NormalizeUpper(request.TaxId, entity.TaxId);
         entity.NationalId = NormalizeUpper(request.NationalId, entity.NationalId);
         entity.Curp = NormalizeUpper(request.Curp, entity.Curp);
         entity.Nss = NormalizeUpper(request.Nss, entity.Nss);
         entity.ImssRegId = NormalizeUpper(request.ImssRegId, entity.ImssRegId);
+        entity.Gender = request.Gender;
+        entity.BloodType = request.BloodType;
+        entity.MaritalStatus = request.MaritalStatus;
+        entity.PlaceOfBirth = request.PlaceOfBirth;
+        entity.Nationality = request.Nationality;
+        entity.FatherName = request.FatherName;
+        entity.MotherName = request.MotherName;
+        entity.AddressStreet = request.AddressStreet;
+        entity.AddressColony = request.AddressColony;
+        entity.AddressCity = request.AddressCity;
+        entity.AddressState = request.AddressState;
+        entity.AddressZipCode = request.AddressZipCode;
         entity.ContractType = NormalizeStatus(request.ContractType, entity.ContractType);
         entity.CotizationBase = NormalizeStatus(request.CotizationBase, entity.CotizationBase);
         entity.SbcFija = request.SbcFija > 0 ? request.SbcFija : entity.SbcFija;
@@ -467,8 +620,23 @@ public static class HumanResourcesEndpoints
         entity.BankCode = NormalizeText(request.BankCode, entity.BankCode);
         entity.BankAccount = NormalizeText(request.BankAccount, entity.BankAccount);
         entity.Clabe = NormalizeText(request.Clabe, entity.Clabe);
+        entity.BankBranch = request.BankBranch;
         entity.HireDate = request.HireDate?.Date ?? entity.HireDate;
         entity.BirthDate = request.BirthDate?.Date;
+        entity.TerminationDate = request.TerminationDate?.Date;
+        entity.TerminationReason = request.TerminationReason;
+        entity.ReentryDate = request.ReentryDate?.Date;
+        entity.IsImssRegistered = request.IsImssRegistered;
+        entity.ImssRegistrationDate = request.ImssRegistrationDate?.Date;
+        entity.ImssTerminationDate = request.ImssTerminationDate?.Date;
+        entity.Umf = request.Umf;
+        entity.Afore = request.Afore;
+        entity.Fonacot = request.Fonacot;
+        entity.Infonavit = request.Infonavit;
+        entity.ImmediateSupervisor = request.ImmediateSupervisor;
+        entity.Category = request.Category;
+        entity.Notes = request.Notes;
+        entity.PrintReceipt = request.PrintReceipt;
         entity.DailySalary = request.DailySalary;
         entity.IntegratedDailySalary = request.IntegratedDailySalary;
         entity.Status = NormalizeStatus(request.Status, entity.Status);
@@ -496,6 +664,88 @@ public static class HumanResourcesEndpoints
         db.Employees.Remove(entity);
         await db.SaveChangesAsync();
         return Results.Ok(new { success = true });
+    }
+
+    private static async Task<IResult> ExportEmployeesExcelAsync(NanchesoftDbContext db)
+    {
+        var rows = await db.Employees.AsNoTracking()
+            .Include(x => x.Company).Include(x => x.Branch)
+            .Include(x => x.Department).Include(x => x.Position).Include(x => x.WorkSchedule)
+            .OrderBy(x => x.LastName).ThenBy(x => x.FirstName)
+            .ToListAsync();
+
+        using var wb = new XLWorkbook();
+        var ws = wb.AddWorksheet("Colaboradores");
+
+        string[] headers =
+        [
+            "Código", "No. Empleado", "Apellido Pat.", "Apellido Mat.", "Nombre(s)",
+            "Nombre completo", "RFC", "CURP", "NSS", "Género", "F. Nacimiento",
+            "Estado civil", "Teléfono", "Tel. emergencia", "Email",
+            "Empresa", "Sucursal", "Departamento", "Puesto", "Horario",
+            "F. Ingreso", "F. Baja", "Tipo contrato", "Período nómina", "Forma pago",
+            "Salario diario", "SBC", "Zona", "Banco", "CLABE",
+            "IMSS reg.", "Afore", "Fonacot", "Infonavit", "Estatus"
+        ];
+
+        for (int c = 0; c < headers.Length; c++)
+        {
+            var cell = ws.Cell(1, c + 1);
+            cell.Value = headers[c];
+            cell.Style.Font.Bold = true;
+            cell.Style.Fill.BackgroundColor = XLColor.FromHtml("#1565C0");
+            cell.Style.Font.FontColor = XLColor.White;
+        }
+
+        int row = 2;
+        foreach (var e in rows)
+        {
+            ws.Cell(row, 1).Value = e.Code;
+            ws.Cell(row, 2).Value = e.EmployeeNumber;
+            ws.Cell(row, 3).Value = e.LastName;
+            ws.Cell(row, 4).Value = e.SecondLastName ?? "";
+            ws.Cell(row, 5).Value = e.FirstName + (string.IsNullOrWhiteSpace(e.MiddleName) ? "" : " " + e.MiddleName);
+            ws.Cell(row, 6).Value = e.GetFullName();
+            ws.Cell(row, 7).Value = e.TaxId;
+            ws.Cell(row, 8).Value = e.Curp;
+            ws.Cell(row, 9).Value = e.Nss;
+            ws.Cell(row, 10).Value = e.Gender ?? "";
+            ws.Cell(row, 11).Value = e.BirthDate.HasValue ? e.BirthDate.Value.ToString("yyyy-MM-dd") : "";
+            ws.Cell(row, 12).Value = e.MaritalStatus ?? "";
+            ws.Cell(row, 13).Value = e.Phone;
+            ws.Cell(row, 14).Value = e.EmergencyPhone ?? "";
+            ws.Cell(row, 15).Value = e.Email;
+            ws.Cell(row, 16).Value = e.Company?.Name ?? "";
+            ws.Cell(row, 17).Value = e.Branch?.Name ?? "";
+            ws.Cell(row, 18).Value = e.Department?.Name ?? "";
+            ws.Cell(row, 19).Value = e.Position?.Name ?? "";
+            ws.Cell(row, 20).Value = e.WorkSchedule?.Name ?? "";
+            ws.Cell(row, 21).Value = e.HireDate.ToString("yyyy-MM-dd");
+            ws.Cell(row, 22).Value = e.TerminationDate.HasValue ? e.TerminationDate.Value.ToString("yyyy-MM-dd") : "";
+            ws.Cell(row, 23).Value = e.ContractType;
+            ws.Cell(row, 24).Value = e.PayrollPeriodType;
+            ws.Cell(row, 25).Value = e.PaymentForm;
+            ws.Cell(row, 26).Value = e.DailySalary;
+            ws.Cell(row, 27).Value = e.IntegratedDailySalary;
+            ws.Cell(row, 28).Value = e.SalaryZone;
+            ws.Cell(row, 29).Value = e.BankCode;
+            ws.Cell(row, 30).Value = e.Clabe;
+            ws.Cell(row, 31).Value = e.IsImssRegistered ? "Sí" : "No";
+            ws.Cell(row, 32).Value = e.Afore ?? "";
+            ws.Cell(row, 33).Value = e.Fonacot ?? "";
+            ws.Cell(row, 34).Value = e.Infonavit ?? "";
+            ws.Cell(row, 35).Value = e.Status;
+            row++;
+        }
+
+        ws.Columns().AdjustToContents();
+
+        using var ms = new MemoryStream();
+        wb.SaveAs(ms);
+        ms.Position = 0;
+        var bytes = ms.ToArray();
+        var fileName = $"colaboradores_{DateTime.Now:yyyyMMdd}.xlsx";
+        return Results.File(bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", fileName);
     }
 
     private static async Task<IResult> GetEmployeeContractsAsync(NanchesoftDbContext db)
@@ -1238,18 +1488,35 @@ public class EmployeeRequest
     public Guid? BranchId { get; set; }
     public Guid? DepartmentId { get; set; }
     public Guid? PositionId { get; set; }
+    public Guid? WorkScheduleId { get; set; }
     public string? Code { get; set; }
     public string? EmployeeNumber { get; set; }
+    public string? ClockKey { get; set; }
+    public string? NoiKey { get; set; }
     public string? FirstName { get; set; }
     public string? LastName { get; set; }
+    public string? SecondLastName { get; set; }
     public string? MiddleName { get; set; }
     public string? Email { get; set; }
     public string? Phone { get; set; }
+    public string? EmergencyPhone { get; set; }
     public string? TaxId { get; set; }
     public string? NationalId { get; set; }
     public string? Curp { get; set; }
     public string? Nss { get; set; }
     public string? ImssRegId { get; set; }
+    public string? Gender { get; set; }
+    public string? BloodType { get; set; }
+    public string? MaritalStatus { get; set; }
+    public string? PlaceOfBirth { get; set; }
+    public string? Nationality { get; set; }
+    public string? FatherName { get; set; }
+    public string? MotherName { get; set; }
+    public string? AddressStreet { get; set; }
+    public string? AddressColony { get; set; }
+    public string? AddressCity { get; set; }
+    public string? AddressState { get; set; }
+    public string? AddressZipCode { get; set; }
     public string? ContractType { get; set; }
     public string? CotizationBase { get; set; }
     public decimal SbcFija { get; set; }
@@ -1261,8 +1528,23 @@ public class EmployeeRequest
     public string? BankCode { get; set; }
     public string? BankAccount { get; set; }
     public string? Clabe { get; set; }
+    public string? BankBranch { get; set; }
     public DateTime? HireDate { get; set; }
     public DateTime? BirthDate { get; set; }
+    public DateTime? TerminationDate { get; set; }
+    public string? TerminationReason { get; set; }
+    public DateTime? ReentryDate { get; set; }
+    public bool IsImssRegistered { get; set; }
+    public DateTime? ImssRegistrationDate { get; set; }
+    public DateTime? ImssTerminationDate { get; set; }
+    public string? Umf { get; set; }
+    public string? Afore { get; set; }
+    public string? Fonacot { get; set; }
+    public string? Infonavit { get; set; }
+    public string? ImmediateSupervisor { get; set; }
+    public string? Category { get; set; }
+    public string? Notes { get; set; }
+    public bool PrintReceipt { get; set; } = true;
     public decimal DailySalary { get; set; }
     public decimal IntegratedDailySalary { get; set; }
     public string? Status { get; set; }
@@ -1276,6 +1558,7 @@ public sealed class EmployeeDto : EmployeeRequest
     public string BranchName { get; set; } = string.Empty;
     public string DepartmentName { get; set; } = string.Empty;
     public string PositionName { get; set; } = string.Empty;
+    public string WorkScheduleName { get; set; } = string.Empty;
     public string FullName { get; set; } = string.Empty;
 }
 

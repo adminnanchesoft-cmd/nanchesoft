@@ -105,6 +105,9 @@ public sealed class NanchesoftDbContext : DbContext
     public DbSet<Department> Departments => Set<Department>();
     public DbSet<Position> Positions => Set<Position>();
     public DbSet<Employee> Employees => Set<Employee>();
+    public DbSet<HrBank> HrBanks => Set<HrBank>();
+    public DbSet<HrTerminationReason> HrTerminationReasons => Set<HrTerminationReason>();
+    public DbSet<HrEmployerRegistration> HrEmployerRegistrations => Set<HrEmployerRegistration>();
     public DbSet<EmployeeContract> EmployeeContracts => Set<EmployeeContract>();
     public DbSet<EmployeeIncident> EmployeeIncidents => Set<EmployeeIncident>();
     public DbSet<PayrollPeriod> PayrollPeriods => Set<PayrollPeriod>();

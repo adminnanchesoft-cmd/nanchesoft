@@ -1,0 +1,375 @@
+@page "/human-resources/importar-empleados"
+@using System.Net.Http.Headers
+@inject IHttpClientFactory HttpClientFactory
+@inject NavigationManager Nav
+
+<PageTitle>Importar Empleados | Nanchesoft</PageTitle>
+
+<div class="p-4" style="max-width:1400px;margin:0 auto;">
+
+    <div class="d-flex align-items-center gap-3 mb-4">
+        <button class="btn btn-link p-0" @onclick='() => Nav.NavigateTo("/human-resources/employees")'>
+            <span class="bi bi-arrow-left fs-5"></span>
+        </button>
+        <div>
+            <h4 class="mb-0 fw-bold">Importar Colaboradores desde Excel</h4>
+            <small class="text-muted">Carga masiva con validación previa y vista previa de resultados.</small>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrEmpty(_globalError))
+    {
+        <div class="alert alert-danger alert-dismissible">
+            <button type="button" class="btn-close" @onclick='() => _globalError = string.Empty'></button>
+            @_globalError
+        </div>
+    }
+
+    @if (!string.IsNullOrEmpty(_successMessage))
+    {
+        <div class="alert alert-success alert-dismissible">
+            <button type="button" class="btn-close" @onclick='() => _successMessage = string.Empty'></button>
+            @_successMessage
+        </div>
+    }
+
+    <!-- Paso 1: Cargar archivo -->
+    <div class="card shadow-sm mb-4">
+        <div class="card-header bg-primary text-white d-flex align-items-center gap-2">
+            <span class="bi bi-file-earmark-excel fs-5"></span>
+            <strong>Paso 1 — Seleccionar archivo Excel</strong>
+        </div>
+        <div class="card-body">
+            <div class="row align-items-center g-3">
+                <div class="col-12 col-md-6">
+                    <label class="form-label fw-semibold">Archivo .xlsx</label>
+                    <InputFile OnChange="OnFileSelected" accept=".xlsx" class="form-control" disabled="@_loading" />
+                    <div class="form-text">Columnas requeridas: NoEmpleado, Nombre, ApellidoPaterno, FechaIngreso.</div>
+                </div>
+                <div class="col-12 col-md-auto d-flex gap-2 align-items-end mt-3 mt-md-0" style="padding-top:1.6rem;">
+                    <button class="btn btn-outline-secondary" @onclick="DownloadTemplate" disabled="@_loading">
+                        <span class="bi bi-download me-1"></span> Descargar plantilla
+                    </button>
+                    <button class="btn btn-primary" @onclick="PreviewImport" disabled="@(_selectedFile == null || _loading)">
+                        @if (_loading && _phase == "preview")
+                        {
+                            <span class="spinner-border spinner-border-sm me-1"></span>
+                        }
+                        <span class="bi bi-search me-1"></span> Validar y previsualizar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Paso 2: Resumen de validación -->
+    @if (_preview != null)
+    {
+        <div class="card shadow-sm mb-4">
+            <div class="card-header bg-white d-flex align-items-center justify-content-between">
+                <div class="d-flex align-items-center gap-2">
+                    <span class="bi bi-clipboard-check text-primary fs-5"></span>
+                    <strong>Paso 2 — Resumen de validación</strong>
+                </div>
+                <div class="d-flex gap-2 flex-wrap">
+                    <span class="badge bg-success fs-6">@_preview.NewCount nuevos</span>
+                    <span class="badge bg-warning text-dark fs-6">@_preview.UpdateCount actualizaciones</span>
+                    <span class="badge bg-danger fs-6">@_preview.ErrorCount errores</span>
+                    <span class="badge bg-secondary fs-6">@_preview.SkipCount omitidos</span>
+                </div>
+            </div>
+            <div class="card-body p-0">
+                <!-- Filtros de la tabla -->
+                <div class="d-flex gap-2 p-3 border-bottom flex-wrap">
+                    <button class="btn btn-sm @(_filter == "all" ? "btn-primary" : "btn-outline-secondary")"
+                            @onclick='() => _filter = "all"'>
+                        Todos (@_preview.Total)
+                    </button>
+                    <button class="btn btn-sm @(_filter == "new" ? "btn-success" : "btn-outline-success")"
+                            @onclick='() => _filter = "new"'>
+                        Nuevos (@_preview.NewCount)
+                    </button>
+                    <button class="btn btn-sm @(_filter == "update" ? "btn-warning" : "btn-outline-warning")"
+                            @onclick='() => _filter = "update"'>
+                        Actualizaciones (@_preview.UpdateCount)
+                    </button>
+                    <button class="btn btn-sm @(_filter == "error" ? "btn-danger" : "btn-outline-danger")"
+                            @onclick='() => _filter = "error"'>
+                        Errores (@_preview.ErrorCount)
+                    </button>
+                    @if (_preview.SkipCount > 0)
+                    {
+                        <button class="btn btn-sm @(_filter == "skip" ? "btn-secondary" : "btn-outline-secondary")"
+                                @onclick='() => _filter = "skip"'>
+                            Omitidos (@_preview.SkipCount)
+                        </button>
+                    }
+                </div>
+
+                <div style="overflow-x:auto;max-height:420px;overflow-y:auto;">
+                    <table class="table table-sm table-hover mb-0">
+                        <thead class="table-light sticky-top">
+                            <tr>
+                                <th style="width:60px;">Fila</th>
+                                <th style="width:100px;">No. Emp.</th>
+                                <th>Nombre completo</th>
+                                <th>RFC</th>
+                                <th style="width:100px;">Ingreso</th>
+                                <th style="width:100px;">Salario</th>
+                                <th>Departamento</th>
+                                <th>Puesto</th>
+                                <th style="width:120px;">Estado</th>
+                                <th>Detalle</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var row in FilteredRows)
+                            {
+                                <tr class="@RowClass(row.Status)">
+                                    <td class="text-muted small">@row.RowNumber</td>
+                                    <td class="fw-semibold">@row.EmployeeNumber</td>
+                                    <td>@row.FullName</td>
+                                    <td class="text-muted small">@row.TaxId</td>
+                                    <td class="small">@(row.HireDate.HasValue ? row.HireDate.Value.ToString("dd/MM/yyyy") : "-")</td>
+                                    <td class="small text-end">@(row.DailySalary > 0 ? row.DailySalary.ToString("N2") : "-")</td>
+                                    <td class="small">@(string.IsNullOrEmpty(row.DepartmentName) ? row.DepartmentCode : row.DepartmentName)</td>
+                                    <td class="small">@(string.IsNullOrEmpty(row.PositionName) ? row.PositionCode : row.PositionName)</td>
+                                    <td>
+                                        @if (row.Status == "new")
+                                        {
+                                            <span class="badge bg-success">Nuevo</span>
+                                        }
+                                        else if (row.Status == "update")
+                                        {
+                                            <span class="badge bg-warning text-dark">Actualizar</span>
+                                        }
+                                        else if (row.Status == "error")
+                                        {
+                                            <span class="badge bg-danger">Error</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge bg-secondary">Omitido</span>
+                                        }
+                                    </td>
+                                    <td class="small @(row.Status == "error" ? "text-danger" : "text-muted")">
+                                        @row.Message
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Paso 3: Confirmar importación -->
+            @if (_preview.NewCount + _preview.UpdateCount > 0)
+            {
+                <div class="card-footer d-flex align-items-center justify-content-between flex-wrap gap-2">
+                    <div class="text-muted small">
+                        Se importarán <strong>@(_preview.NewCount + _preview.UpdateCount)</strong> registros
+                        (@_preview.NewCount nuevos + @_preview.UpdateCount actualizaciones).
+                        Los @_preview.ErrorCount con error serán omitidos.
+                    </div>
+                    <button class="btn btn-success" @onclick="ExecuteImport" disabled="@(_loading)">
+                        @if (_loading && _phase == "import")
+                        {
+                            <span class="spinner-border spinner-border-sm me-1"></span>
+                        }
+                        <span class="bi bi-cloud-upload me-1"></span>
+                        Confirmar importación
+                    </button>
+                </div>
+            }
+            else if (_preview.Total > 0 && _preview.NewCount + _preview.UpdateCount == 0)
+            {
+                <div class="card-footer text-center text-danger">
+                    No hay filas válidas para importar. Corrige los errores en tu archivo y vuelve a cargar.
+                </div>
+            }
+        </div>
+    }
+
+</div>
+
+@code {
+    private IBrowserFile? _selectedFile;
+    private PreviewResult? _preview;
+    private string _filter = "all";
+    private bool _loading;
+    private string _phase = string.Empty;
+    private string _globalError = string.Empty;
+    private string _successMessage = string.Empty;
+
+    private IEnumerable<PreviewRow> FilteredRows => _preview?.Rows == null
+        ? []
+        : _filter == "all"
+            ? _preview.Rows
+            : _preview.Rows.Where(r => r.Status == _filter);
+
+    private static string RowClass(string status) => status switch
+    {
+        "error" => "table-danger",
+        "update" => "table-warning",
+        "new" => "table-success",
+        _ => "table-secondary"
+    };
+
+    private void OnFileSelected(InputFileChangeEventArgs e)
+    {
+        _selectedFile = e.File;
+        _preview = null;
+        _globalError = string.Empty;
+        _successMessage = string.Empty;
+        _filter = "all";
+    }
+
+    private async Task DownloadTemplate()
+    {
+        try
+        {
+            var client = HttpClientFactory.CreateClient("Nanchesoft.Api");
+            var response = await client.GetAsync("/api/hr/employees/import/template");
+            if (!response.IsSuccessStatusCode) { _globalError = "No se pudo descargar la plantilla."; return; }
+            // The browser cannot download directly from Blazor Server; navigate to API URL
+            var apiBase = client.BaseAddress?.ToString().TrimEnd('/') ?? string.Empty;
+            Nav.NavigateTo($"{apiBase}/api/hr/employees/import/template", forceLoad: true);
+        }
+        catch (Exception ex)
+        {
+            _globalError = $"Error al descargar plantilla: {ex.Message}";
+        }
+    }
+
+    private async Task PreviewImport()
+    {
+        if (_selectedFile is null) return;
+        _loading = true;
+        _phase = "preview";
+        _globalError = string.Empty;
+        _preview = null;
+
+        try
+        {
+            using var ms = new System.IO.MemoryStream();
+            await using var stream = _selectedFile.OpenReadStream(maxAllowedSize: 10 * 1024 * 1024);
+            await stream.CopyToAsync(ms);
+            ms.Position = 0;
+
+            using var content = new MultipartFormDataContent();
+            var fileContent = new ByteArrayContent(ms.ToArray());
+            fileContent.Headers.ContentType = new MediaTypeHeaderValue("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+            content.Add(fileContent, "file", _selectedFile.Name);
+
+            var client = HttpClientFactory.CreateClient("Nanchesoft.Api");
+            var response = await client.PostAsync("/api/hr/employees/import/preview", content);
+            if (!response.IsSuccessStatusCode)
+            {
+                _globalError = $"Error del servidor: {response.StatusCode}";
+                return;
+            }
+
+            _preview = await response.Content.ReadFromJsonAsync<PreviewResult>();
+            _filter = "all";
+        }
+        catch (Exception ex)
+        {
+            _globalError = $"Error al procesar archivo: {ex.Message}";
+        }
+        finally
+        {
+            _loading = false;
+            _phase = string.Empty;
+        }
+    }
+
+    private async Task ExecuteImport()
+    {
+        if (_selectedFile is null) return;
+        _loading = true;
+        _phase = "import";
+        _globalError = string.Empty;
+        _successMessage = string.Empty;
+
+        try
+        {
+            using var ms = new System.IO.MemoryStream();
+            await using var stream = _selectedFile.OpenReadStream(maxAllowedSize: 10 * 1024 * 1024);
+            await stream.CopyToAsync(ms);
+            ms.Position = 0;
+
+            using var content = new MultipartFormDataContent();
+            var fileContent = new ByteArrayContent(ms.ToArray());
+            fileContent.Headers.ContentType = new MediaTypeHeaderValue("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+            content.Add(fileContent, "file", _selectedFile.Name);
+
+            var client = HttpClientFactory.CreateClient("Nanchesoft.Api");
+            var response = await client.PostAsync("/api/hr/employees/import", content);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                _globalError = $"Error al importar: {response.StatusCode}";
+                return;
+            }
+
+            var result = await response.Content.ReadFromJsonAsync<ImportResult>();
+            if (result != null)
+            {
+                _successMessage = $"Importación completada: {result.Created} nuevos, {result.Updated} actualizados, {result.Skipped} omitidos.";
+                if (result.Errors?.Count > 0)
+                    _successMessage += $" {result.Errors.Count} error(es).";
+                _preview = null;
+                _selectedFile = null;
+            }
+        }
+        catch (Exception ex)
+        {
+            _globalError = $"Error al importar: {ex.Message}";
+        }
+        finally
+        {
+            _loading = false;
+            _phase = string.Empty;
+        }
+    }
+
+    private sealed class PreviewResult
+    {
+        public int Total { get; set; }
+        [System.Text.Json.Serialization.JsonPropertyName("newCount")]
+        public int NewCount { get; set; }
+        public int UpdateCount { get; set; }
+        public int ErrorCount { get; set; }
+        public int SkipCount { get; set; }
+        public List<PreviewRow> Rows { get; set; } = [];
+    }
+
+    private sealed class PreviewRow
+    {
+        public int RowNumber { get; set; }
+        public string EmployeeNumber { get; set; } = string.Empty;
+        public string FullName { get; set; } = string.Empty;
+        public string TaxId { get; set; } = string.Empty;
+        public string Curp { get; set; } = string.Empty;
+        public string Nss { get; set; } = string.Empty;
+        public string Email { get; set; } = string.Empty;
+        public string Phone { get; set; } = string.Empty;
+        public DateTime? HireDate { get; set; }
+        public decimal DailySalary { get; set; }
+        public string DepartmentCode { get; set; } = string.Empty;
+        public string DepartmentName { get; set; } = string.Empty;
+        public string PositionCode { get; set; } = string.Empty;
+        public string PositionName { get; set; } = string.Empty;
+        public string Status { get; set; } = string.Empty;
+        public string Message { get; set; } = string.Empty;
+    }
+
+    private sealed class ImportResult
+    {
+        public bool Success { get; set; }
+        public int Created { get; set; }
+        public int Updated { get; set; }
+        public int Skipped { get; set; }
+        public List<string>? Errors { get; set; }
+    }
+}

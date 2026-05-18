@@ -1,0 +1,862 @@
+@page "/human-resources/empleado"
+@page "/human-resources/empleado/{EmployeeId:guid}"
+@using System.Net.Http.Json
+@inject IHttpClientFactory HttpClientFactory
+@inject NavigationManager Nav
+
+<PageTitle>@(_isNew ? "Nuevo colaborador" : "Editar colaborador") | Nanchesoft</PageTitle>
+
+<div style="max-width:1100px;margin:0 auto;padding:16px;">
+
+    <!-- Header -->
+    <div class="d-flex align-items-center gap-3 mb-3">
+        <button class="btn btn-link p-0" @onclick='() => Nav.NavigateTo("/human-resources/employees")'>
+            <span class="bi bi-arrow-left fs-5"></span>
+        </button>
+        <div class="flex-grow-1">
+            <h4 class="mb-0 fw-bold">@(_isNew ? "Nuevo colaborador" : _form.FullName())</h4>
+            <small class="text-muted">@(_isNew ? "Ingresa los datos del nuevo colaborador" : $"No. {_form.EmployeeNumber} · {_form.Code}")</small>
+        </div>
+        <div class="d-flex gap-2">
+            <button class="btn btn-outline-secondary" @onclick='() => Nav.NavigateTo("/human-resources/employees")'>Cancelar</button>
+            <button class="btn btn-primary" @onclick="SaveAsync" disabled="@_saving">
+                @if (_saving) { <span class="spinner-border spinner-border-sm me-1"></span> }
+                Guardar
+            </button>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrEmpty(_error))
+    {
+        <div class="alert alert-danger alert-dismissible mb-3">
+            <button type="button" class="btn-close" @onclick='() => _error = string.Empty'></button>
+            @_error
+        </div>
+    }
+    @if (!string.IsNullOrEmpty(_success))
+    {
+        <div class="alert alert-success alert-dismissible mb-3">
+            <button type="button" class="btn-close" @onclick='() => _success = string.Empty'></button>
+            @_success
+        </div>
+    }
+
+    @if (_loading)
+    {
+        <div class="text-center py-5"><div class="spinner-border"></div><p class="mt-2 text-muted">Cargando…</p></div>
+    }
+    else
+    {
+        <!-- Pestañas -->
+        <ul class="nav nav-tabs mb-3">
+            @foreach (var (tab, idx) in _tabs.Select((t, i) => (t, i)))
+            {
+                <li class="nav-item">
+                    <button class="nav-link @(_activeTab == idx ? "active" : "")" @onclick="() => _activeTab = idx">@tab</button>
+                </li>
+            }
+        </ul>
+
+        <!-- ─── PESTAÑA 0: GENERAL ─── -->
+        @if (_activeTab == 0)
+        {
+            <div class="row g-3">
+                <div class="col-12 col-md-6">
+                    <label class="form-label fw-semibold">Empresa <span class="text-danger">*</span></label>
+                    <select class="form-select" @bind="_form.CompanyId" @bind:after="OnCompanyChanged">
+                        <option value="">— Selecciona —</option>
+                        @foreach (var c in _companies)
+                        {
+                            <option value="@c.CompanyId">@c.Name</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-12 col-md-6">
+                    <label class="form-label fw-semibold">Sucursal</label>
+                    <select class="form-select" @bind="_form.BranchId">
+                        <option value="">— Ninguna —</option>
+                        @foreach (var b in _branches)
+                        {
+                            <option value="@b.BranchId">@b.Name</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-12 col-md-5">
+                    <label class="form-label fw-semibold">Departamento</label>
+                    <div class="input-group">
+                        <select class="form-select" @bind="_form.DepartmentId">
+                            <option value="">— Ninguno —</option>
+                            @foreach (var d in _departments)
+                            {
+                                <option value="@d.DepartmentId">@d.Name</option>
+                            }
+                        </select>
+                        <button class="btn btn-outline-secondary" title="Crear departamento" @onclick="() => OpenDeptModal()">+</button>
+                    </div>
+                </div>
+                <div class="col-12 col-md-5">
+                    <label class="form-label fw-semibold">Puesto</label>
+                    <div class="input-group">
+                        <select class="form-select" @bind="_form.PositionId">
+                            <option value="">— Ninguno —</option>
+                            @foreach (var p in _positions)
+                            {
+                                <option value="@p.PositionId">@p.Name</option>
+                            }
+                        </select>
+                        <button class="btn btn-outline-secondary" title="Crear puesto" @onclick="() => OpenPosModal()">+</button>
+                    </div>
+                </div>
+                <div class="col-12 col-md-4">
+                    <label class="form-label fw-semibold">Horario</label>
+                    <div class="input-group">
+                        <select class="form-select" @bind="_form.WorkScheduleId">
+                            <option value="">— Ninguno —</option>
+                            @foreach (var w in _schedules)
+                            {
+                                <option value="@w.WorkScheduleId">@w.Name</option>
+                            }
+                        </select>
+                        <button class="btn btn-outline-secondary" title="Crear horario" @onclick="() => OpenSchedModal()">+</button>
+                    </div>
+                </div>
+                <div class="col-6 col-md-3">
+                    <label class="form-label fw-semibold">Número empleado <span class="text-danger">*</span></label>
+                    <input class="form-control" @bind="_form.EmployeeNumber" placeholder="001" />
+                </div>
+                <div class="col-6 col-md-3">
+                    <label class="form-label fw-semibold">Código <span class="text-danger">*</span></label>
+                    <input class="form-control" @bind="_form.Code" placeholder="EMP-001" />
+                </div>
+                <div class="col-6 col-md-3">
+                    <label class="form-label fw-semibold">Clave reloj</label>
+                    <input class="form-control" @bind="_form.ClockKey" />
+                </div>
+                <div class="col-6 col-md-3">
+                    <label class="form-label fw-semibold">Clave NOI</label>
+                    <input class="form-control" @bind="_form.NoiKey" />
+                </div>
+                <div class="col-6 col-md-3">
+                    <label class="form-label fw-semibold">Estatus</label>
+                    <select class="form-select" @bind="_form.Status">
+                        <option value="active">Activo</option>
+                        <option value="inactive">Inactivo</option>
+                        <option value="suspended">Suspendido</option>
+                        <option value="terminated">Baja</option>
+                    </select>
+                </div>
+                <div class="col-auto d-flex align-items-end">
+                    <div class="form-check form-switch mb-2">
+                        <input class="form-check-input" type="checkbox" @bind="_form.IsActive" />
+                        <label class="form-check-label">Activo en sistema</label>
+                    </div>
+                </div>
+            </div>
+        }
+
+        <!-- ─── PESTAÑA 1: DATOS PERSONALES ─── -->
+        @if (_activeTab == 1)
+        {
+            <div class="row g-3">
+                <div class="col-12 col-md-4">
+                    <label class="form-label fw-semibold">Nombre <span class="text-danger">*</span></label>
+                    <input class="form-control" @bind="_form.FirstName" />
+                </div>
+                <div class="col-12 col-md-4">
+                    <label class="form-label fw-semibold">Apellido paterno <span class="text-danger">*</span></label>
+                    <input class="form-control" @bind="_form.LastName" />
+                </div>
+                <div class="col-12 col-md-4">
+                    <label class="form-label fw-semibold">Apellido materno</label>
+                    <input class="form-control" @bind="_form.SecondLastName" />
+                </div>
+                <div class="col-12 col-md-4">
+                    <label class="form-label fw-semibold">Segundo nombre</label>
+                    <input class="form-control" @bind="_form.MiddleName" />
+                </div>
+                <div class="col-6 col-md-3">
+                    <label class="form-label fw-semibold">Fecha nacimiento</label>
+                    <input type="date" class="form-control" @bind="_form.BirthDate" />
+                </div>
+                <div class="col-6 col-md-2">
+                    <label class="form-label fw-semibold">Sexo</label>
+                    <select class="form-select" @bind="_form.Gender">
+                        <option value="">—</option>
+                        <option value="M">Masculino</option>
+                        <option value="F">Femenino</option>
+                    </select>
+                </div>
+                <div class="col-6 col-md-3">
+                    <label class="form-label fw-semibold">Estado civil</label>
+                    <select class="form-select" @bind="_form.MaritalStatus">
+                        <option value="">—</option>
+                        <option value="soltero">Soltero(a)</option>
+                        <option value="casado">Casado(a)</option>
+                        <option value="divorciado">Divorciado(a)</option>
+                        <option value="viudo">Viudo(a)</option>
+                        <option value="union">Unión libre</option>
+                    </select>
+                </div>
+                <div class="col-6 col-md-2">
+                    <label class="form-label fw-semibold">Tipo sangre</label>
+                    <select class="form-select" @bind="_form.BloodType">
+                        <option value="">—</option>
+                        @foreach (var bt in new[]{"A+","A-","B+","B-","AB+","AB-","O+","O-"})
+                        {
+                            <option value="@bt">@bt</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-12 col-md-4">
+                    <label class="form-label fw-semibold">Lugar nacimiento</label>
+                    <input class="form-control" @bind="_form.PlaceOfBirth" />
+                </div>
+                <div class="col-12 col-md-3">
+                    <label class="form-label fw-semibold">Nacionalidad</label>
+                    <input class="form-control" @bind="_form.Nationality" placeholder="Mexicana" />
+                </div>
+                <div class="col-12 col-md-5">
+                    <label class="form-label fw-semibold">Email</label>
+                    <input type="email" class="form-control" @bind="_form.Email" />
+                </div>
+                <div class="col-6 col-md-3">
+                    <label class="form-label fw-semibold">Teléfono</label>
+                    <input class="form-control" @bind="_form.Phone" />
+                </div>
+                <div class="col-6 col-md-3">
+                    <label class="form-label fw-semibold">Tel. emergencia</label>
+                    <input class="form-control" @bind="_form.EmergencyPhone" />
+                </div>
+                <div class="col-12 col-md-4">
+                    <label class="form-label fw-semibold">Nombre del padre</label>
+                    <input class="form-control" @bind="_form.FatherName" />
+                </div>
+                <div class="col-12 col-md-4">
+                    <label class="form-label fw-semibold">Nombre de la madre</label>
+                    <input class="form-control" @bind="_form.MotherName" />
+                </div>
+            </div>
+        }
+
+        <!-- ─── PESTAÑA 2: DOMICILIO ─── -->
+        @if (_activeTab == 2)
+        {
+            <div class="row g-3">
+                <div class="col-12">
+                    <label class="form-label fw-semibold">Calle y número</label>
+                    <input class="form-control" @bind="_form.AddressStreet" placeholder="Av. Independencia 456 Col. Centro" />
+                </div>
+                <div class="col-12 col-md-4">
+                    <label class="form-label fw-semibold">Colonia</label>
+                    <input class="form-control" @bind="_form.AddressColony" />
+                </div>
+                <div class="col-12 col-md-4">
+                    <label class="form-label fw-semibold">Ciudad / Municipio</label>
+                    <input class="form-control" @bind="_form.AddressCity" />
+                </div>
+                <div class="col-12 col-md-3">
+                    <label class="form-label fw-semibold">Estado</label>
+                    <input class="form-control" @bind="_form.AddressState" />
+                </div>
+                <div class="col-6 col-md-2">
+                    <label class="form-label fw-semibold">C.P.</label>
+                    <input class="form-control" @bind="_form.AddressZipCode" maxlength="5" />
+                </div>
+            </div>
+        }
+
+        <!-- ─── PESTAÑA 3: LABORAL ─── -->
+        @if (_activeTab == 3)
+        {
+            <div class="row g-3">
+                <div class="col-6 col-md-3">
+                    <label class="form-label fw-semibold">Fecha ingreso <span class="text-danger">*</span></label>
+                    <input type="date" class="form-control" @bind="_form.HireDate" />
+                </div>
+                <div class="col-6 col-md-3">
+                    <label class="form-label fw-semibold">Tipo contrato</label>
+                    <select class="form-select" @bind="_form.ContractType">
+                        <option value="indefinite">Indeterminado</option>
+                        <option value="determined">Determinado</option>
+                        <option value="construction_temp">Obra determinada</option>
+                        <option value="field_temp">Temporada</option>
+                        <option value="trial">A prueba</option>
+                        <option value="training">Capacitación</option>
+                    </select>
+                </div>
+                <div class="col-6 col-md-3">
+                    <label class="form-label fw-semibold">Tipo empleado</label>
+                    <select class="form-select" @bind="_form.EmployeeType">
+                        <option value="base">Base</option>
+                        <option value="confianza">Confianza</option>
+                        <option value="eventual">Eventual</option>
+                    </select>
+                </div>
+                <div class="col-6 col-md-3">
+                    <label class="form-label fw-semibold">Periodo nómina</label>
+                    <select class="form-select" @bind="_form.PayrollPeriodType">
+                        <option value="semanal">Semanal</option>
+                        <option value="decenal">Decenal</option>
+                        <option value="quincenal">Quincenal</option>
+                        <option value="mensual">Mensual</option>
+                    </select>
+                </div>
+                <div class="col-6 col-md-3">
+                    <label class="form-label fw-semibold">Salario diario</label>
+                    <input type="number" step="0.01" class="form-control" @bind="_form.DailySalary" />
+                </div>
+                <div class="col-6 col-md-3">
+                    <label class="form-label fw-semibold">SDI (diario integrado)</label>
+                    <input type="number" step="0.01" class="form-control" @bind="_form.IntegratedDailySalary" />
+                </div>
+                <div class="col-6 col-md-3">
+                    <label class="form-label fw-semibold">SBC Fija</label>
+                    <input type="number" step="0.01" class="form-control" @bind="_form.SbcFija" />
+                </div>
+                <div class="col-6 col-md-3">
+                    <label class="form-label fw-semibold">Zona salarial</label>
+                    <select class="form-select" @bind="_form.SalaryZone">
+                        <option value="A">Zona A</option>
+                        <option value="B">Zona B</option>
+                        <option value="C">Zona C</option>
+                    </select>
+                </div>
+                <div class="col-12 col-md-4">
+                    <label class="form-label fw-semibold">Jefe directo</label>
+                    <input class="form-control" @bind="_form.ImmediateSupervisor" />
+                </div>
+                <div class="col-12 col-md-3">
+                    <label class="form-label fw-semibold">Categoría</label>
+                    <input class="form-control" @bind="_form.Category" />
+                </div>
+                <div class="col-auto d-flex align-items-end">
+                    <div class="form-check form-switch mb-2">
+                        <input class="form-check-input" type="checkbox" @bind="_form.PrintReceipt" />
+                        <label class="form-check-label">Imprime recibo</label>
+                    </div>
+                </div>
+                <div class="col-12"><hr class="my-1" /></div>
+                <div class="col-6 col-md-3">
+                    <label class="form-label fw-semibold">Fecha de baja</label>
+                    <input type="date" class="form-control" @bind="_form.TerminationDate" />
+                </div>
+                <div class="col-12 col-md-5">
+                    <label class="form-label fw-semibold">Motivo de baja</label>
+                    <input class="form-control" @bind="_form.TerminationReason" />
+                </div>
+                <div class="col-6 col-md-3">
+                    <label class="form-label fw-semibold">Fecha reingreso</label>
+                    <input type="date" class="form-control" @bind="_form.ReentryDate" />
+                </div>
+                <div class="col-12">
+                    <label class="form-label fw-semibold">Notas / Expediente</label>
+                    <textarea class="form-control" rows="3" @bind="_form.Notes"></textarea>
+                </div>
+            </div>
+        }
+
+        <!-- ─── PESTAÑA 4: IMSS / SAT ─── -->
+        @if (_activeTab == 4)
+        {
+            <div class="row g-3">
+                <div class="col-12 col-md-4">
+                    <label class="form-label fw-semibold">RFC</label>
+                    <input class="form-control text-uppercase" @bind="_form.TaxId" maxlength="13" />
+                </div>
+                <div class="col-12 col-md-5">
+                    <label class="form-label fw-semibold">CURP</label>
+                    <input class="form-control text-uppercase" @bind="_form.Curp" maxlength="18" />
+                </div>
+                <div class="col-12 col-md-4">
+                    <label class="form-label fw-semibold">NSS</label>
+                    <input class="form-control" @bind="_form.Nss" maxlength="11" />
+                </div>
+                <div class="col-12 col-md-4">
+                    <label class="form-label fw-semibold">Reg. patronal (IMSS)</label>
+                    <input class="form-control" @bind="_form.ImssRegId" />
+                </div>
+                <div class="col-6 col-md-3">
+                    <label class="form-label fw-semibold">Fecha alta IMSS</label>
+                    <input type="date" class="form-control" @bind="_form.ImssRegistrationDate" />
+                </div>
+                <div class="col-6 col-md-3">
+                    <label class="form-label fw-semibold">Fecha baja IMSS</label>
+                    <input type="date" class="form-control" @bind="_form.ImssTerminationDate" />
+                </div>
+                <div class="col-6 col-md-2">
+                    <label class="form-label fw-semibold">UMF</label>
+                    <input class="form-control" @bind="_form.Umf" maxlength="10" />
+                </div>
+                <div class="col-auto d-flex align-items-end">
+                    <div class="form-check form-switch mb-2">
+                        <input class="form-check-input" type="checkbox" @bind="_form.IsImssRegistered" />
+                        <label class="form-check-label">Registrado IMSS</label>
+                    </div>
+                </div>
+                <div class="col-12"><hr class="my-1" /></div>
+                <div class="col-12 col-md-4">
+                    <label class="form-label fw-semibold">Régimen fiscal SAT</label>
+                    <select class="form-select" @bind="_form.TaxRegime">
+                        <option value="sueldos_salarios">Sueldos y Salarios</option>
+                        <option value="asimilados">Asimilados a Salarios</option>
+                    </select>
+                </div>
+                <div class="col-12 col-md-4">
+                    <label class="form-label fw-semibold">Base cotización</label>
+                    <select class="form-select" @bind="_form.CotizationBase">
+                        <option value="fixed">Fija</option>
+                        <option value="variable">Variable</option>
+                        <option value="mixed">Mixta</option>
+                    </select>
+                </div>
+                <div class="col-12 col-md-4">
+                    <label class="form-label fw-semibold">ID nacional</label>
+                    <input class="form-control" @bind="_form.NationalId" />
+                </div>
+                <div class="col-12"><hr class="my-1" /></div>
+                <div class="col-12 col-md-3">
+                    <label class="form-label fw-semibold">AFORE</label>
+                    <input class="form-control" @bind="_form.Afore" />
+                </div>
+                <div class="col-12 col-md-3">
+                    <label class="form-label fw-semibold">No. FONACOT</label>
+                    <input class="form-control" @bind="_form.Fonacot" />
+                </div>
+                <div class="col-12 col-md-4">
+                    <label class="form-label fw-semibold">Crédito INFONAVIT</label>
+                    <input class="form-control" @bind="_form.Infonavit" />
+                </div>
+            </div>
+        }
+
+        <!-- ─── PESTAÑA 5: BANCO ─── -->
+        @if (_activeTab == 5)
+        {
+            <div class="row g-3">
+                <div class="col-12 col-md-4">
+                    <label class="form-label fw-semibold">Forma de pago</label>
+                    <select class="form-select" @bind="_form.PaymentForm">
+                        <option value="tarjeta">Tarjeta bancaria</option>
+                        <option value="transferencia">Transferencia</option>
+                        <option value="efectivo">Efectivo</option>
+                        <option value="cheque">Cheque</option>
+                    </select>
+                </div>
+                <div class="col-12 col-md-4">
+                    <label class="form-label fw-semibold">Banco</label>
+                    <select class="form-select" @bind="_form.BankCode">
+                        <option value="">— Selecciona —</option>
+                        @foreach (var b in _banks)
+                        {
+                            <option value="@b.Code">@b.ShortName — @b.Name</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-12 col-md-4">
+                    <label class="form-label fw-semibold">Sucursal bancaria</label>
+                    <input class="form-control" @bind="_form.BankBranch" />
+                </div>
+                <div class="col-12 col-md-5">
+                    <label class="form-label fw-semibold">Número de cuenta</label>
+                    <input class="form-control" @bind="_form.BankAccount" />
+                </div>
+                <div class="col-12 col-md-7">
+                    <label class="form-label fw-semibold">CLABE interbancaria (18 dígitos)</label>
+                    <input class="form-control" @bind="_form.Clabe" maxlength="18" />
+                </div>
+            </div>
+        }
+
+        <!-- Botón inferior guardar -->
+        <div class="d-flex justify-content-end mt-4 gap-2">
+            <button class="btn btn-outline-secondary" @onclick='() => Nav.NavigateTo("/human-resources/employees")'>Cancelar</button>
+            <button class="btn btn-primary" @onclick="SaveAsync" disabled="@_saving">
+                @if (_saving) { <span class="spinner-border spinner-border-sm me-1"></span> }
+                Guardar cambios
+            </button>
+        </div>
+    }
+</div>
+
+<!-- ═══════════ MODAL CREAR DEPARTAMENTO ═══════════ -->
+@if (_showDeptModal)
+{
+    <div class="modal fade show d-block" style="background:rgba(0,0,0,.5);" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Nuevo departamento</h5>
+                    <button type="button" class="btn-close" @onclick="() => _showDeptModal = false"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Código</label>
+                        <input class="form-control" @bind="_newDept.Code" placeholder="PROD" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Nombre</label>
+                        <input class="form-control" @bind="_newDept.Name" placeholder="Producción" />
+                    </div>
+                    @if (!string.IsNullOrEmpty(_deptError)) { <div class="alert alert-danger py-2">@_deptError</div> }
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-outline-secondary" @onclick="() => _showDeptModal = false">Cancelar</button>
+                    <button class="btn btn-primary" @onclick="SaveDeptAsync" disabled="@_savingModal">Crear</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- ═══════════ MODAL CREAR PUESTO ═══════════ -->
+@if (_showPosModal)
+{
+    <div class="modal fade show d-block" style="background:rgba(0,0,0,.5);" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Nuevo puesto</h5>
+                    <button type="button" class="btn-close" @onclick="() => _showPosModal = false"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Código</label>
+                        <input class="form-control" @bind="_newPos.Code" placeholder="OPER" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Nombre</label>
+                        <input class="form-control" @bind="_newPos.Name" placeholder="Operario" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Departamento</label>
+                        <select class="form-select" @bind="_newPos.DepartmentId">
+                            <option value="">— Ninguno —</option>
+                            @foreach (var d in _departments)
+                            {
+                                <option value="@d.DepartmentId">@d.Name</option>
+                            }
+                        </select>
+                    </div>
+                    @if (!string.IsNullOrEmpty(_posError)) { <div class="alert alert-danger py-2">@_posError</div> }
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-outline-secondary" @onclick="() => _showPosModal = false">Cancelar</button>
+                    <button class="btn btn-primary" @onclick="SavePosAsync" disabled="@_savingModal">Crear</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- ═══════════ MODAL CREAR HORARIO ═══════════ -->
+@if (_showSchedModal)
+{
+    <div class="modal fade show d-block" style="background:rgba(0,0,0,.5);" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Nuevo horario</h5>
+                    <button type="button" class="btn-close" @onclick="() => _showSchedModal = false"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Código</label>
+                        <input class="form-control" @bind="_newSched.Code" placeholder="L-V-8" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Nombre</label>
+                        <input class="form-control" @bind="_newSched.Name" placeholder="Lunes a Viernes 8h" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Horas semanales</label>
+                        <input type="number" class="form-control" @bind="_newSched.WeeklyHours" />
+                    </div>
+                    @if (!string.IsNullOrEmpty(_schedError)) { <div class="alert alert-danger py-2">@_schedError</div> }
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-outline-secondary" @onclick="() => _showSchedModal = false">Cancelar</button>
+                    <button class="btn btn-primary" @onclick="SaveSchedAsync" disabled="@_savingModal">Crear</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public Guid? EmployeeId { get; set; }
+
+    private readonly string[] _tabs = ["General", "Datos personales", "Domicilio", "Laboral", "IMSS / SAT", "Banco"];
+    private int _activeTab;
+    private bool _loading = true;
+    private bool _saving;
+    private bool _savingModal;
+    private string _error = string.Empty;
+    private string _success = string.Empty;
+    private bool _isNew => !EmployeeId.HasValue || EmployeeId == Guid.Empty;
+
+    private EmployeeFormModel _form = new();
+
+    // Lookups
+    private List<CompanyItem> _companies = [];
+    private List<BranchItem> _branches = [];
+    private List<DeptItem> _departments = [];
+    private List<PosItem> _positions = [];
+    private List<SchedItem> _schedules = [];
+    private List<BankItem> _banks = [];
+
+    // Quick-add modals
+    private bool _showDeptModal, _showPosModal, _showSchedModal;
+    private string _deptError = string.Empty, _posError = string.Empty, _schedError = string.Empty;
+    private NewDeptForm _newDept = new();
+    private NewPosForm _newPos = new();
+    private NewSchedForm _newSched = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        var client = HttpClientFactory.CreateClient("Nanchesoft.Api");
+
+        var companiesTask = client.GetFromJsonAsync<List<CompanyItem>>("/api/organization/companies");
+        var branchesTask = client.GetFromJsonAsync<List<BranchItem>>("/api/organization/branches");
+        var deptsTask = client.GetFromJsonAsync<List<DeptItem>>("/api/hr/departments");
+        var posTask = client.GetFromJsonAsync<List<PosItem>>("/api/hr/positions");
+        var schedsTask = client.GetFromJsonAsync<List<SchedItem>>("/api/hr/work-schedules");
+        var banksTask = client.GetFromJsonAsync<List<BankItem>>("/api/hr/banks");
+
+        await Task.WhenAll(companiesTask, branchesTask, deptsTask, posTask, schedsTask, banksTask);
+
+        _companies = (await companiesTask)?.Where(x => x.IsActive).OrderBy(x => x.Name).ToList() ?? [];
+        _branches = (await branchesTask)?.Where(x => x.IsActive).OrderBy(x => x.Name).ToList() ?? [];
+        _departments = (await deptsTask)?.Where(x => x.IsActive).OrderBy(x => x.Name).ToList() ?? [];
+        _positions = (await posTask)?.Where(x => x.IsActive).OrderBy(x => x.Name).ToList() ?? [];
+        _schedules = (await schedsTask)?.Where(x => x.IsActive).OrderBy(x => x.Name).ToList() ?? [];
+        _banks = (await banksTask)?.Where(x => x.IsActive).OrderBy(x => x.ShortName).ToList() ?? [];
+
+        if (!_isNew)
+        {
+            var emp = await client.GetFromJsonAsync<EmployeeFormModel>($"/api/hr/employees/{EmployeeId}");
+            if (emp is not null)
+            {
+                _form = emp;
+            }
+        }
+        else
+        {
+            if (_companies.Count > 0) _form.CompanyId = _companies[0].CompanyId;
+            if (_branches.Count > 0) _form.BranchId = _branches[0].BranchId;
+            _form.HireDate = DateTime.Today;
+            _form.Status = "active";
+            _form.IsActive = true;
+            _form.PrintReceipt = true;
+            _form.ContractType = "indefinite";
+            _form.EmployeeType = "base";
+            _form.PayrollPeriodType = "semanal";
+            _form.TaxRegime = "sueldos_salarios";
+            _form.CotizationBase = "fixed";
+            _form.PaymentForm = "tarjeta";
+            _form.SalaryZone = "A";
+        }
+
+        _loading = false;
+    }
+
+    private async Task OnCompanyChanged()
+    {
+        if (_form.CompanyId == Guid.Empty) return;
+        var client = HttpClientFactory.CreateClient("Nanchesoft.Api");
+        _branches = (await client.GetFromJsonAsync<List<BranchItem>>($"/api/organization/branches?companyId={_form.CompanyId}"))
+            ?.Where(x => x.IsActive).OrderBy(x => x.Name).ToList() ?? [];
+        _departments = (await client.GetFromJsonAsync<List<DeptItem>>("/api/hr/departments"))
+            ?.Where(x => x.IsActive && (x.CompanyId == _form.CompanyId || x.CompanyId == null)).OrderBy(x => x.Name).ToList() ?? [];
+        _positions = (await client.GetFromJsonAsync<List<PosItem>>("/api/hr/positions"))
+            ?.Where(x => x.IsActive && (x.CompanyId == _form.CompanyId || x.CompanyId == null)).OrderBy(x => x.Name).ToList() ?? [];
+        _form.BranchId = _branches.FirstOrDefault()?.BranchId;
+        _form.DepartmentId = null;
+        _form.PositionId = null;
+    }
+
+    private async Task SaveAsync()
+    {
+        _saving = true;
+        _error = string.Empty;
+        _success = string.Empty;
+
+        try
+        {
+            var client = HttpClientFactory.CreateClient("Nanchesoft.Api");
+            HttpResponseMessage response;
+            if (_isNew)
+                response = await client.PostAsJsonAsync("/api/hr/employees", _form);
+            else
+                response = await client.PutAsJsonAsync($"/api/hr/employees/{EmployeeId}", _form);
+
+            if (response.IsSuccessStatusCode)
+            {
+                _success = _isNew ? "Colaborador creado correctamente." : "Cambios guardados correctamente.";
+                if (_isNew)
+                {
+                    var result = await response.Content.ReadFromJsonAsync<IdResult>();
+                    if (result?.Id.HasValue == true)
+                        Nav.NavigateTo($"/human-resources/empleado/{result.Id.Value}");
+                }
+            }
+            else
+            {
+                var body = await response.Content.ReadAsStringAsync();
+                _error = $"Error: {body}";
+            }
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    // ── Quick-add Department ──
+    private void OpenDeptModal() { _newDept = new(); _deptError = string.Empty; _showDeptModal = true; }
+    private async Task SaveDeptAsync()
+    {
+        _savingModal = true; _deptError = string.Empty;
+        try
+        {
+            var client = HttpClientFactory.CreateClient("Nanchesoft.Api");
+            var payload = new { CompanyId = _form.CompanyId == Guid.Empty ? (Guid?)null : _form.CompanyId, _newDept.Code, _newDept.Name, IsActive = true };
+            var r = await client.PostAsJsonAsync("/api/hr/departments", payload);
+            if (!r.IsSuccessStatusCode) { _deptError = await r.Content.ReadAsStringAsync(); return; }
+            var created = await r.Content.ReadFromJsonAsync<IdResult>();
+            _departments = (await client.GetFromJsonAsync<List<DeptItem>>("/api/hr/departments"))
+                ?.Where(x => x.IsActive).OrderBy(x => x.Name).ToList() ?? [];
+            _form.DepartmentId = created?.Id;
+            _showDeptModal = false;
+        }
+        finally { _savingModal = false; }
+    }
+
+    // ── Quick-add Position ──
+    private void OpenPosModal() { _newPos = new(); _posError = string.Empty; _showPosModal = true; }
+    private async Task SavePosAsync()
+    {
+        _savingModal = true; _posError = string.Empty;
+        try
+        {
+            var client = HttpClientFactory.CreateClient("Nanchesoft.Api");
+            var payload = new { CompanyId = _form.CompanyId == Guid.Empty ? (Guid?)null : _form.CompanyId, _newPos.DepartmentId, _newPos.Code, _newPos.Name, IsActive = true };
+            var r = await client.PostAsJsonAsync("/api/hr/positions", payload);
+            if (!r.IsSuccessStatusCode) { _posError = await r.Content.ReadAsStringAsync(); return; }
+            var created = await r.Content.ReadFromJsonAsync<IdResult>();
+            _positions = (await client.GetFromJsonAsync<List<PosItem>>("/api/hr/positions"))
+                ?.Where(x => x.IsActive).OrderBy(x => x.Name).ToList() ?? [];
+            _form.PositionId = created?.Id;
+            _showPosModal = false;
+        }
+        finally { _savingModal = false; }
+    }
+
+    // ── Quick-add WorkSchedule ──
+    private void OpenSchedModal() { _newSched = new(); _schedError = string.Empty; _showSchedModal = true; }
+    private async Task SaveSchedAsync()
+    {
+        _savingModal = true; _schedError = string.Empty;
+        try
+        {
+            var client = HttpClientFactory.CreateClient("Nanchesoft.Api");
+            var payload = new { CompanyId = _form.CompanyId == Guid.Empty ? (Guid?)null : _form.CompanyId, _newSched.Code, _newSched.Name, _newSched.WeeklyHours, Monday = true, Tuesday = true, Wednesday = true, Thursday = true, Friday = true, Saturday = false, Sunday = false, IsFlexible = false, IsActive = true };
+            var r = await client.PostAsJsonAsync("/api/hr/work-schedules", payload);
+            if (!r.IsSuccessStatusCode) { _schedError = await r.Content.ReadAsStringAsync(); return; }
+            var created = await r.Content.ReadFromJsonAsync<IdResult>();
+            _schedules = (await client.GetFromJsonAsync<List<SchedItem>>("/api/hr/work-schedules"))
+                ?.Where(x => x.IsActive).OrderBy(x => x.Name).ToList() ?? [];
+            _form.WorkScheduleId = created?.Id;
+            _showSchedModal = false;
+        }
+        finally { _savingModal = false; }
+    }
+
+    // ─────────── Inner types ───────────
+    private sealed class EmployeeFormModel
+    {
+        public Guid? CompanyId { get; set; }
+        public Guid? BranchId { get; set; }
+        public Guid? DepartmentId { get; set; }
+        public Guid? PositionId { get; set; }
+        public Guid? WorkScheduleId { get; set; }
+        public string Code { get; set; } = string.Empty;
+        public string EmployeeNumber { get; set; } = string.Empty;
+        public string? ClockKey { get; set; }
+        public string? NoiKey { get; set; }
+        public string FirstName { get; set; } = string.Empty;
+        public string LastName { get; set; } = string.Empty;
+        public string? SecondLastName { get; set; }
+        public string? MiddleName { get; set; }
+        public string? Email { get; set; }
+        public string? Phone { get; set; }
+        public string? EmergencyPhone { get; set; }
+        public string? TaxId { get; set; }
+        public string? NationalId { get; set; }
+        public string? Curp { get; set; }
+        public string? Nss { get; set; }
+        public string? ImssRegId { get; set; }
+        public string? Gender { get; set; }
+        public string? BloodType { get; set; }
+        public string? MaritalStatus { get; set; }
+        public string? PlaceOfBirth { get; set; }
+        public string? Nationality { get; set; }
+        public string? FatherName { get; set; }
+        public string? MotherName { get; set; }
+        public string? AddressStreet { get; set; }
+        public string? AddressColony { get; set; }
+        public string? AddressCity { get; set; }
+        public string? AddressState { get; set; }
+        public string? AddressZipCode { get; set; }
+        public decimal DailySalary { get; set; }
+        public decimal IntegratedDailySalary { get; set; }
+        public decimal SbcFija { get; set; }
+        public string Status { get; set; } = "active";
+        public DateTime? HireDate { get; set; }
+        public DateTime? BirthDate { get; set; }
+        public DateTime? TerminationDate { get; set; }
+        public string? TerminationReason { get; set; }
+        public DateTime? ReentryDate { get; set; }
+        public bool IsImssRegistered { get; set; }
+        public DateTime? ImssRegistrationDate { get; set; }
+        public DateTime? ImssTerminationDate { get; set; }
+        public string? Umf { get; set; }
+        public string ContractType { get; set; } = "indefinite";
+        public string CotizationBase { get; set; } = "fixed";
+        public string TaxRegime { get; set; } = "sueldos_salarios";
+        public string EmployeeType { get; set; } = "base";
+        public string SalaryZone { get; set; } = "A";
+        public string PayrollPeriodType { get; set; } = "semanal";
+        public string? Afore { get; set; }
+        public string? Fonacot { get; set; }
+        public string? Infonavit { get; set; }
+        public string PaymentForm { get; set; } = "tarjeta";
+        public string? BankCode { get; set; }
+        public string? BankAccount { get; set; }
+        public string? Clabe { get; set; }
+        public string? BankBranch { get; set; }
+        public string? ImmediateSupervisor { get; set; }
+        public string? Category { get; set; }
+        public string? Notes { get; set; }
+        public bool PrintReceipt { get; set; } = true;
+        public bool IsActive { get; set; } = true;
+
+        public string FullName() => string.Join(" ", new[] { FirstName, LastName, SecondLastName }
+            .Where(x => !string.IsNullOrWhiteSpace(x)));
+    }
+
+    private sealed record CompanyItem(Guid CompanyId, string Name, bool IsActive);
+    private sealed record BranchItem(Guid BranchId, string Name, bool IsActive);
+    private sealed record DeptItem(Guid DepartmentId, Guid? CompanyId, string Name, bool IsActive);
+    private sealed record PosItem(Guid PositionId, Guid? CompanyId, string Name, bool IsActive);
+    private sealed record SchedItem(Guid WorkScheduleId, string Name, bool IsActive);
+    private sealed record BankItem(Guid BankId, string Code, string ShortName, string Name, bool IsActive);
+    private sealed record IdResult(Guid? Id);
+
+    private sealed class NewDeptForm { public string Code { get; set; } = string.Empty; public string Name { get; set; } = string.Empty; }
+    private sealed class NewPosForm { public string Code { get; set; } = string.Empty; public string Name { get; set; } = string.Empty; public Guid? DepartmentId { get; set; } }
+    private sealed class NewSchedForm { public string Code { get; set; } = string.Empty; public string Name { get; set; } = string.Empty; public decimal WeeklyHours { get; set; } = 40; }
+}

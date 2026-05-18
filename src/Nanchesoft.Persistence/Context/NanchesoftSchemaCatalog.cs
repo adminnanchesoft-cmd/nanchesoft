@@ -146,6 +146,9 @@ public static class NanchesoftSchemaCatalog
         modelBuilder.Entity<Department>().ToTable("hr_departments", HrSchema);
         modelBuilder.Entity<Position>().ToTable("hr_positions", HrSchema);
         modelBuilder.Entity<Employee>().ToTable("hr_employees", HrSchema);
+        modelBuilder.Entity<HrBank>().ToTable("hr_banks", HrSchema);
+        modelBuilder.Entity<HrTerminationReason>().ToTable("hr_termination_reasons", HrSchema);
+        modelBuilder.Entity<HrEmployerRegistration>().ToTable("hr_employer_registrations", HrSchema);
         modelBuilder.Entity<EmployeeContract>().ToTable("employee_contracts", HrSchema);
         modelBuilder.Entity<EmployeeIncident>().ToTable("hr_employee_incidents", HrSchema);
         modelBuilder.Entity<PayrollPeriod>().ToTable("payroll_periods", PayrollSchema);

@@ -26,6 +26,12 @@
             {
                 <button class="btn btn-warning btn-sm" @onclick="ApproveAllPendingAsync" disabled="@_busy">Aprobar todos pendientes</button>
             }
+            @if (_records.Any(r => r.Status == "approved"))
+            {
+                <button class="btn btn-success btn-sm" @onclick="OpenPayrollModal" disabled="@_busy">
+                    <span class="bi bi-send me-1"></span> Procesar a nómina
+                </button>
+            }
             <a class="btn btn-outline-secondary btn-sm" href="/produccion/tarifas-destajo">Tarifas</a>
             <a class="btn btn-primary btn-sm" href="/produccion/dashboard">Dashboard</a>
         </div>
@@ -56,13 +62,17 @@
             {
                 <div class="badge bg-warning text-dark">@_records.Count(r => r.Status == "pending") pendiente(s)</div>
             }
+            @if (_records.Count(r => r.Status == "approved") > 0)
+            {
+                <div class="badge bg-success">@_records.Count(r => r.Status == "approved") aprobado(s)</div>
+            }
         </div>
 
         <div class="table-responsive">
             <table class="table table-sm table-hover align-middle">
                 <thead class="table-light">
                     <tr>
-                        <th>Empleado (ID)</th>
+                        <th>Empleado</th>
                         <th>Fase</th>
                         <th>Fecha trabajo</th>
                         <th class="text-end">Producido</th>
@@ -79,7 +89,16 @@
                     @foreach (var r in _records)
                     {
                         <tr>
-                            <td class="text-muted small font-monospace" title="@r.EmployeeId">@r.EmployeeId.ToString("D")[..8]…</td>
+                            <td class="small">
+                                @if (!string.IsNullOrEmpty(r.EmployeeName))
+                                {
+                                    <span>@r.EmployeeName</span>
+                                }
+                                else
+                                {
+                                    <span class="text-muted font-monospace" title="@r.EmployeeId">@r.EmployeeId.ToString("D")[..8]…</span>
+                                }
+                            </td>
                             <td>@r.PhaseName</td>
                             <td>@r.WorkDate.ToString("dd/MM/yy")</td>
                             <td class="text-end">@r.UnitsProduced</td>
@@ -121,6 +140,94 @@
     }
 </div>
 
+@* ── Modal: Procesar a nómina ── *@
+@if (_showPayrollModal)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background:rgba(0,0,0,.5);">
+        <div class="modal-dialog modal-dialog-centered" style="max-width:500px;">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Procesar destajo a nómina</h5>
+                    <button type="button" class="btn-close" @onclick="ClosePayrollModal" disabled="@_busy"></button>
+                </div>
+                <div class="modal-body">
+                    @if (_payrollResult is null)
+                    {
+                        <p class="text-secondary mb-3">
+                            Se procesarán <strong>@_records.Count(r => r.Status == "approved")</strong> registro(s) aprobados
+                            (neto: <strong>@_records.Where(r => r.Status == "approved").Sum(r => r.NetAmount).ToString("C2")</strong>)
+                            a una corrida de nómina de tipo <em>DESTAJO</em>.
+                        </p>
+
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Periodo de nómina</label>
+                            @if (_periods.Count == 0)
+                            {
+                                <div class="text-muted small">Cargando periodos…</div>
+                            }
+                            else
+                            {
+                                <select class="form-select" @bind="_payrollPeriodId">
+                                    <option value="">— Selecciona un periodo —</option>
+                                    @foreach (var p in _periods)
+                                    {
+                                        <option value="@p.PayrollPeriodId">@p.Name (@(p.StartDate?.ToString("dd/MM/yyyy")) – @(p.EndDate?.ToString("dd/MM/yyyy")))</option>
+                                    }
+                                </select>
+                            }
+                        </div>
+
+                        <div class="row g-2 mb-3">
+                            <div class="col">
+                                <label class="form-label fw-semibold">Fecha inicio</label>
+                                <input type="date" class="form-control" @bind="_fromDate" />
+                            </div>
+                            <div class="col">
+                                <label class="form-label fw-semibold">Fecha fin</label>
+                                <input type="date" class="form-control" @bind="_toDate" />
+                            </div>
+                        </div>
+
+                        @if (!string.IsNullOrWhiteSpace(_modalError))
+                        {
+                            <div class="alert alert-danger py-2 mb-2">@_modalError</div>
+                        }
+                    }
+                    else
+                    {
+                        <div class="alert alert-success mb-3">
+                            <strong>✓ Destajo procesado a nómina correctamente.</strong>
+                        </div>
+                        <table class="table table-sm table-borderless mb-0">
+                            <tbody>
+                                <tr><td class="text-secondary">Corrida creada</td><td><strong>@_payrollResult.PayrollRunFolio</strong></td></tr>
+                                <tr><td class="text-secondary">Empleados</td><td><strong>@_payrollResult.EmployeesProcessed</strong></td></tr>
+                                <tr><td class="text-secondary">Registros</td><td><strong>@_payrollResult.RecordsProcessed</strong></td></tr>
+                                <tr><td class="text-secondary">Neto inyectado</td><td><strong class="text-success">@_payrollResult.TotalNetInjected.ToString("C2")</strong></td></tr>
+                            </tbody>
+                        </table>
+                    }
+                </div>
+                <div class="modal-footer">
+                    @if (_payrollResult is null)
+                    {
+                        <button class="btn btn-outline-secondary" @onclick="ClosePayrollModal" disabled="@_busy">Cancelar</button>
+                        <button class="btn btn-success" @onclick="ProcessToPayrollAsync"
+                                disabled="@(_busy || _payrollPeriodId == Guid.Empty || _fromDate == default || _toDate == default)">
+                            @(_busy ? "Procesando…" : "Procesar a nómina")
+                        </button>
+                    }
+                    else
+                    {
+                        <a class="btn btn-outline-primary" href="/payroll/runs">Ver corridas de nómina</a>
+                        <button class="btn btn-secondary" @onclick="ClosePayrollModal">Cerrar</button>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
 @code {
     private List<PieceWorkRow> _records = [];
     private string _statusFilter = "pending";
@@ -128,6 +235,15 @@
     private bool _busy = false;
     private string _message = string.Empty;
     private string _error = string.Empty;
+
+    // Modal procesar a nómina
+    private bool _showPayrollModal;
+    private List<PeriodItem> _periods = [];
+    private Guid _payrollPeriodId;
+    private DateOnly _fromDate = DateOnly.FromDateTime(DateTime.Today.AddDays(-7));
+    private DateOnly _toDate = DateOnly.FromDateTime(DateTime.Today);
+    private string? _modalError;
+    private PayrollResult? _payrollResult;
 
     protected override async Task OnInitializedAsync() => await LoadAsync();
 
@@ -138,7 +254,7 @@
         try
         {
             var client = HttpClientFactory.CreateClient("Nanchesoft.Api");
-            var url = $"/api/production/piecework/records?pageSize=200{(string.IsNullOrWhiteSpace(_statusFilter) ? "" : $"&status={_statusFilter}")}";
+            var url = $"/api/production/piecework/records?pageSize=500{(string.IsNullOrWhiteSpace(_statusFilter) ? "" : $"&status={_statusFilter}")}";
             var result = await client.GetFromJsonAsync<PagedPieceWork>(url);
             _records = result?.Items ?? [];
         }
@@ -180,26 +296,111 @@
 
     private async Task ApproveAllPendingAsync()
     {
-        var pending = _records.Where(r => r.Status == "pending").ToList();
+        var pending = _records.Where(r => r.Status == "pending").Select(r => r.PieceWorkRecordId).ToList();
         if (pending.Count == 0) return;
 
         _busy = true;
         _error = string.Empty;
-        var approved = 0;
         try
         {
             var client = HttpClientFactory.CreateClient("Nanchesoft.Api");
-            foreach (var r in pending)
+            var response = await client.PostAsJsonAsync("/api/production/piecework/records/bulk-approve",
+                new { ids = pending });
+            if (!response.IsSuccessStatusCode)
+                _error = await ExtractErrorAsync(response);
+            else
             {
-                var response = await client.PostAsJsonAsync($"/api/production/piecework/records/{r.PieceWorkRecordId}/approve", new { });
-                if (response.IsSuccessStatusCode) approved++;
+                _message = $"{pending.Count} registro(s) aprobado(s).";
+                await LoadAsync();
             }
-            _message = $"{approved} registro(s) aprobado(s).";
-            await LoadAsync();
         }
         catch (Exception ex)
         {
             _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task OpenPayrollModal()
+    {
+        _payrollResult = null;
+        _modalError = null;
+        _showPayrollModal = true;
+
+        if (_periods.Count == 0)
+        {
+            try
+            {
+                var client = HttpClientFactory.CreateClient("Nanchesoft.Api");
+                var list = await client.GetFromJsonAsync<List<PeriodItem>>("/api/payroll/periods");
+                _periods = list?.Where(p => !p.IsClosed).OrderByDescending(p => p.StartDate).ToList() ?? [];
+                if (_periods.Count > 0)
+                    _payrollPeriodId = _periods[0].PayrollPeriodId;
+            }
+            catch { }
+        }
+    }
+
+    private void ClosePayrollModal()
+    {
+        _showPayrollModal = false;
+        _payrollResult = null;
+        _modalError = null;
+        if (_payrollResult is not null) _ = LoadAsync();
+    }
+
+    private async Task ProcessToPayrollAsync()
+    {
+        _modalError = null;
+        if (_payrollPeriodId == Guid.Empty) { _modalError = "Selecciona un periodo de nómina."; return; }
+        if (_fromDate == default || _toDate == default || _fromDate > _toDate)
+        {
+            _modalError = "Fechas inválidas.";
+            return;
+        }
+
+        _busy = true;
+        try
+        {
+            var client = HttpClientFactory.CreateClient("Nanchesoft.Api");
+
+            // Resolve companyId from the first approved record via period
+            var period = _periods.FirstOrDefault(p => p.PayrollPeriodId == _payrollPeriodId);
+            if (period is null) { _modalError = "Periodo no encontrado."; return; }
+
+            if (period.CompanyId is null || period.CompanyId == Guid.Empty)
+            {
+                _modalError = "El periodo no tiene empresa asociada.";
+                return;
+            }
+
+            var payload = new
+            {
+                companyId = period.CompanyId.Value,
+                payrollPeriodId = _payrollPeriodId,
+                fromDate = _fromDate.ToString("yyyy-MM-dd"),
+                toDate = _toDate.ToString("yyyy-MM-dd"),
+                userId = "web-destajo"
+            };
+
+            var response = await client.PostAsJsonAsync("/api/production/piecework/process-to-payroll", payload);
+            if (!response.IsSuccessStatusCode)
+            {
+                _modalError = await ExtractErrorAsync(response);
+            }
+            else
+            {
+                _payrollResult = await response.Content.ReadFromJsonAsync<PayrollResult>();
+                _message = $"Destajo procesado. Corrida: {_payrollResult?.PayrollRunFolio}";
+                await LoadAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            _modalError = ex.Message;
         }
         finally
         {
@@ -238,10 +439,13 @@
         _           => status
     };
 
+    // ── DTOs ──
+
     private sealed class PieceWorkRow
     {
         public Guid PieceWorkRecordId { get; set; }
         public Guid EmployeeId { get; set; }
+        public string EmployeeName { get; set; } = string.Empty;
         public string PhaseName { get; set; } = string.Empty;
         public DateOnly WorkDate { get; set; }
         public int UnitsProduced { get; set; }
@@ -261,5 +465,23 @@
         public int Total { get; set; }
         public int Page { get; set; }
         public int PageSize { get; set; }
+    }
+
+    private sealed class PeriodItem
+    {
+        public Guid PayrollPeriodId { get; set; }
+        public Guid? CompanyId { get; set; }
+        public string Name { get; set; } = string.Empty;
+        public DateTime? StartDate { get; set; }
+        public DateTime? EndDate { get; set; }
+        public bool IsClosed { get; set; }
+    }
+
+    private sealed class PayrollResult
+    {
+        public string PayrollRunFolio { get; set; } = string.Empty;
+        public int EmployeesProcessed { get; set; }
+        public int RecordsProcessed { get; set; }
+        public decimal TotalNetInjected { get; set; }
     }
 }

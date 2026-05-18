@@ -10,6 +10,8 @@ public static class PayrollMvpEndpoints
     public static IEndpointRouteBuilder MapPayrollMvpEndpoints(this IEndpointRouteBuilder app)
     {
         var employees = app.MapGroup("/api/hr/employees").WithTags("HrEmployees");
+        employees.MapGet("/import/template", DownloadImportTemplateAsync);
+        employees.MapPost("/import/preview", PreviewImportFromExcelAsync).DisableAntiforgery();
         employees.MapPost("/import", ImportEmployeesFromExcelAsync).DisableAntiforgery();
 
         var clock = app.MapGroup("/api/hr/time-clock").WithTags("PayrollTimeClock");
@@ -1104,5 +1106,214 @@ public static class PayrollMvpEndpoints
         if (!headers.TryGetValue(name, out var col)) return string.Empty;
         var cell = ws.Cell(row, col);
         return cell.IsEmpty() ? string.Empty : cell.GetString();
+    }
+
+    // ──────────────────────────────────────────────────────────────
+    // PLANTILLA EXCEL PARA IMPORTAR EMPLEADOS
+    // ──────────────────────────────────────────────────────────────
+    private static IResult DownloadImportTemplateAsync()
+    {
+        using var wb = new XLWorkbook();
+        var ws = wb.AddWorksheet("Empleados");
+
+        var headers = new[]
+        {
+            "NoEmpleado", "Nombre", "ApellidoPaterno", "ApellidoMaterno",
+            "RFC", "CURP", "NSS",
+            "Email", "Telefono", "TelefonoEmergencia",
+            "FechaIngreso", "FechaNacimiento",
+            "Sexo", "EstadoCivil", "TipoSangre",
+            "SalarioDiario", "SalarioDiarioIntegrado",
+            "DepartamentoCodigo", "PuestoCodigo",
+            "TipoContrato", "PeriodoNomina",
+            "ClaveReloj", "ClaveNOI",
+            "Curp_Domicilio_Calle", "Colonia", "Ciudad", "Estado", "CodigoPostal",
+            "Banco", "Cuenta", "CLABE",
+            "RegPatronal", "ZonaSalarial"
+        };
+
+        for (int c = 0; c < headers.Length; c++)
+        {
+            var cell = ws.Cell(1, c + 1);
+            cell.Value = headers[c];
+            cell.Style.Font.Bold = true;
+            cell.Style.Fill.BackgroundColor = XLColor.FromHtml("#2563EB");
+            cell.Style.Font.FontColor = XLColor.White;
+        }
+
+        // Fila de ejemplo
+        ws.Cell(2, 1).Value = "001";
+        ws.Cell(2, 2).Value = "Juan";
+        ws.Cell(2, 3).Value = "García";
+        ws.Cell(2, 4).Value = "López";
+        ws.Cell(2, 5).Value = "GALJ800101ABC";
+        ws.Cell(2, 6).Value = "GALJ800101HDFXXX01";
+        ws.Cell(2, 7).Value = "12345678901";
+        ws.Cell(2, 8).Value = "juan.garcia@empresa.com";
+        ws.Cell(2, 9).Value = "5512345678";
+        ws.Cell(2, 10).Value = "";
+        ws.Cell(2, 11).Value = DateTime.Today.ToString("yyyy-MM-dd");
+        ws.Cell(2, 12).Value = "1980-01-01";
+        ws.Cell(2, 13).Value = "M";
+        ws.Cell(2, 14).Value = "soltero";
+        ws.Cell(2, 15).Value = "O+";
+        ws.Cell(2, 16).Value = 300.00;
+        ws.Cell(2, 17).Value = 320.00;
+        ws.Cell(2, 18).Value = "PROD";
+        ws.Cell(2, 19).Value = "OPER";
+        ws.Cell(2, 20).Value = "indefinite";
+        ws.Cell(2, 21).Value = "semanal";
+        ws.Cell(2, 22).Value = "001";
+        ws.Cell(2, 23).Value = "";
+        ws.Cell(2, 24).Value = "Av. Principal 123";
+        ws.Cell(2, 25).Value = "Centro";
+        ws.Cell(2, 26).Value = "Monterrey";
+        ws.Cell(2, 27).Value = "NL";
+        ws.Cell(2, 28).Value = "64000";
+        ws.Cell(2, 29).Value = "BBVA";
+        ws.Cell(2, 30).Value = "";
+        ws.Cell(2, 31).Value = "";
+        ws.Cell(2, 32).Value = "Y1234567890";
+        ws.Cell(2, 33).Value = "A";
+
+        ws.Columns().AdjustToContents();
+
+        using var ms = new MemoryStream();
+        wb.SaveAs(ms);
+        var bytes = ms.ToArray();
+
+        return Results.File(bytes,
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            "plantilla_importar_empleados.xlsx");
+    }
+
+    // ──────────────────────────────────────────────────────────────
+    // PREVIEW DE IMPORTACIÓN (sin guardar en BD)
+    // ──────────────────────────────────────────────────────────────
+    private static async Task<IResult> PreviewImportFromExcelAsync(IFormFile file, NanchesoftDbContext db)
+    {
+        if (file is null || file.Length == 0)
+            return Results.BadRequest(new { message = "El archivo está vacío." });
+
+        var company = await db.Companies.OrderBy(x => x.CreatedAt).FirstOrDefaultAsync();
+        if (company is null)
+            return Results.BadRequest(new { message = "No existe empresa configurada." });
+
+        var departments = await db.Departments.Where(x => x.CompanyId == company.Id)
+            .ToDictionaryAsync(x => x.Code.ToUpperInvariant(), x => x.Name);
+        var positions = await db.Positions.Where(x => x.CompanyId == company.Id)
+            .ToDictionaryAsync(x => x.Code.ToUpperInvariant(), x => x.Name);
+        var existingNumbers = await db.Employees.Where(x => x.CompanyId == company.Id)
+            .Select(x => x.EmployeeNumber.ToUpperInvariant())
+            .ToHashSetAsync();
+
+        using var stream = file.OpenReadStream();
+        using var workbook = new XLWorkbook(stream);
+        var ws = workbook.Worksheet(1);
+
+        var headers = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        foreach (var cell in ws.Row(1).CellsUsed())
+            headers[cell.GetString().Trim()] = cell.Address.ColumnNumber;
+
+        var lastRow = ws.LastRowUsed()?.RowNumber() ?? 1;
+        var rows = new List<EmployeeImportPreviewRow>();
+
+        for (int r = 2; r <= lastRow; r++)
+        {
+            var empNum = GetCell(ws, r, headers, "NoEmpleado").Trim().ToUpperInvariant();
+            if (string.IsNullOrWhiteSpace(empNum))
+            {
+                rows.Add(new EmployeeImportPreviewRow { RowNumber = r, Status = "skip", Message = "Sin número de empleado" });
+                continue;
+            }
+
+            var firstName = GetCell(ws, r, headers, "Nombre").Trim();
+            var lastName = GetCell(ws, r, headers, "ApellidoPaterno").Trim();
+            var secondLastName = GetCell(ws, r, headers, "ApellidoMaterno").Trim();
+            var taxId = GetCell(ws, r, headers, "RFC").Trim().ToUpperInvariant();
+            var curp = GetCell(ws, r, headers, "CURP").Trim().ToUpperInvariant();
+            var nss = GetCell(ws, r, headers, "NSS").Trim();
+            var email = GetCell(ws, r, headers, "Email").Trim();
+            var phone = GetCell(ws, r, headers, "Telefono").Trim();
+            var hireDateStr = GetCell(ws, r, headers, "FechaIngreso").Trim();
+            var salaryStr = GetCell(ws, r, headers, "SalarioDiario").Trim();
+            var deptCode = GetCell(ws, r, headers, "DepartamentoCodigo").Trim().ToUpperInvariant();
+            var posCode = GetCell(ws, r, headers, "PuestoCodigo").Trim().ToUpperInvariant();
+
+            var rowErrors = new List<string>();
+
+            if (string.IsNullOrWhiteSpace(firstName)) rowErrors.Add("Nombre vacío");
+            if (string.IsNullOrWhiteSpace(lastName)) rowErrors.Add("Apellido paterno vacío");
+
+            _ = DateTime.TryParse(hireDateStr, out var hireDate);
+            if (hireDate == default && !string.IsNullOrWhiteSpace(hireDateStr))
+                rowErrors.Add($"Fecha ingreso inválida: '{hireDateStr}'");
+
+            _ = decimal.TryParse(salaryStr, System.Globalization.NumberStyles.Any,
+                System.Globalization.CultureInfo.InvariantCulture, out var salary);
+
+            var deptName = !string.IsNullOrWhiteSpace(deptCode) && departments.TryGetValue(deptCode, out var dn) ? dn : "";
+            if (!string.IsNullOrWhiteSpace(deptCode) && string.IsNullOrWhiteSpace(deptName))
+                rowErrors.Add($"Departamento '{deptCode}' no encontrado");
+
+            var posName = !string.IsNullOrWhiteSpace(posCode) && positions.TryGetValue(posCode, out var pn) ? pn : "";
+            if (!string.IsNullOrWhiteSpace(posCode) && string.IsNullOrWhiteSpace(posName))
+                rowErrors.Add($"Puesto '{posCode}' no encontrado");
+
+            var isUpdate = existingNumbers.Contains(empNum);
+            var status = rowErrors.Count > 0 ? "error" : isUpdate ? "update" : "new";
+
+            rows.Add(new EmployeeImportPreviewRow
+            {
+                RowNumber = r,
+                EmployeeNumber = empNum,
+                FullName = $"{firstName} {lastName} {secondLastName}".Trim(),
+                TaxId = taxId,
+                Curp = curp,
+                Nss = nss,
+                Email = email,
+                Phone = phone,
+                HireDate = hireDate == default ? null : hireDate.Date,
+                DailySalary = salary,
+                DepartmentCode = deptCode,
+                DepartmentName = deptName,
+                PositionCode = posCode,
+                PositionName = posName,
+                Status = status,
+                Message = rowErrors.Count > 0 ? string.Join("; ", rowErrors) : isUpdate ? "Actualización" : "Nuevo"
+            });
+        }
+
+        var summary = new
+        {
+            total = rows.Count,
+            newCount = rows.Count(x => x.Status == "new"),
+            updateCount = rows.Count(x => x.Status == "update"),
+            errorCount = rows.Count(x => x.Status == "error"),
+            skipCount = rows.Count(x => x.Status == "skip"),
+            rows
+        };
+
+        return Results.Ok(summary);
+    }
+
+    public sealed class EmployeeImportPreviewRow
+    {
+        public int RowNumber { get; set; }
+        public string EmployeeNumber { get; set; } = string.Empty;
+        public string FullName { get; set; } = string.Empty;
+        public string TaxId { get; set; } = string.Empty;
+        public string Curp { get; set; } = string.Empty;
+        public string Nss { get; set; } = string.Empty;
+        public string Email { get; set; } = string.Empty;
+        public string Phone { get; set; } = string.Empty;
+        public DateTime? HireDate { get; set; }
+        public decimal DailySalary { get; set; }
+        public string DepartmentCode { get; set; } = string.Empty;
+        public string DepartmentName { get; set; } = string.Empty;
+        public string PositionCode { get; set; } = string.Empty;
+        public string PositionName { get; set; } = string.Empty;
+        public string Status { get; set; } = string.Empty;
+        public string Message { get; set; } = string.Empty;
     }
 }

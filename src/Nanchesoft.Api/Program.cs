@@ -5,6 +5,7 @@ using Nanchesoft.Persistence.Context;
 using Nanchesoft.Persistence.Seed;
 using Npgsql;
 QuestPDF.Settings.License = QuestPDF.Infrastructure.LicenseType.Community;
+AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -211,6 +212,7 @@ app.MapCfdiEndpoints();
 app.MapAccountingEndpoints();
 app.MapFinanceEndpoints();
 app.MapHumanResourcesEndpoints();
+app.MapHumanResourcesCatalogsEndpoints();
 app.MapPayrollDetailEndpoints();
 app.MapPayrollAdvancedEndpoints();
 app.MapHumanResourcesEnterpriseEndpoints();

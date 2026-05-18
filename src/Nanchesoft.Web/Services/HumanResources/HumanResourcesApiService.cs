@@ -21,6 +21,9 @@ public sealed class HumanResourcesApiService
             "hr-employees" => GetEmployeesAsync(),
             "hr-incidents" => GetIncidentsAsync(),
             "employee-contracts" => GetContractsAsync(),
+            "hr-banks" => GetHrBanksAsync(),
+            "hr-termination-reasons" => GetTerminationReasonsAsync(),
+            "hr-employer-registrations" => GetEmployerRegistrationsAsync(),
             "payroll-periods" => GetPayrollPeriodsAsync(),
             "payroll-concepts" => GetPayrollConceptsAsync(),
             "payroll-runs" => GetPayrollRunsAsync(),
@@ -40,6 +43,9 @@ public sealed class HumanResourcesApiService
             "hr-employees" => await client.PostAsJsonAsync("/api/hr/employees", MapEmployeeRequest(payload)),
             "hr-incidents" => await client.PostAsJsonAsync("/api/hr/incidents", MapIncidentRequest(payload)),
             "employee-contracts" => await client.PostAsJsonAsync("/api/contracts/employee-contracts", MapContractRequest(payload)),
+            "hr-banks" => await client.PostAsJsonAsync("/api/hr/banks", MapHrBankRequest(payload)),
+            "hr-termination-reasons" => await client.PostAsJsonAsync("/api/hr/termination-reasons", MapTerminationReasonRequest(payload)),
+            "hr-employer-registrations" => await client.PostAsJsonAsync("/api/hr/employer-registrations", MapEmployerRegistrationRequest(payload)),
             "payroll-periods" => await client.PostAsJsonAsync("/api/payroll/periods", MapPayrollPeriodRequest(payload)),
             "payroll-concepts" => await client.PostAsJsonAsync("/api/payroll/concepts", MapPayrollConceptRequest(payload)),
             "payroll-runs" => await client.PostAsJsonAsync("/api/payroll/runs", MapPayrollRunRequest(payload)),
@@ -63,6 +69,9 @@ public sealed class HumanResourcesApiService
             "hr-employees" => await client.PutAsJsonAsync($"/api/hr/employees/{key}", MapEmployeeRequest(payload)),
             "hr-incidents" => await client.PutAsJsonAsync($"/api/hr/incidents/{key}", MapIncidentRequest(payload)),
             "employee-contracts" => await client.PutAsJsonAsync($"/api/contracts/employee-contracts/{key}", MapContractRequest(payload)),
+            "hr-banks" => await client.PutAsJsonAsync($"/api/hr/banks/{key}", MapHrBankRequest(payload)),
+            "hr-termination-reasons" => await client.PutAsJsonAsync($"/api/hr/termination-reasons/{key}", MapTerminationReasonRequest(payload)),
+            "hr-employer-registrations" => await client.PutAsJsonAsync($"/api/hr/employer-registrations/{key}", MapEmployerRegistrationRequest(payload)),
             "payroll-periods" => await client.PutAsJsonAsync($"/api/payroll/periods/{key}", MapPayrollPeriodRequest(payload)),
             "payroll-concepts" => await client.PutAsJsonAsync($"/api/payroll/concepts/{key}", MapPayrollConceptRequest(payload)),
             "payroll-runs" => await client.PutAsJsonAsync($"/api/payroll/runs/{key}", MapPayrollRunRequest(payload)),
@@ -86,6 +95,9 @@ public sealed class HumanResourcesApiService
             "hr-employees" => $"/api/hr/employees/{key}",
             "hr-incidents" => $"/api/hr/incidents/{key}",
             "employee-contracts" => $"/api/contracts/employee-contracts/{key}",
+            "hr-banks" => $"/api/hr/banks/{key}",
+            "hr-termination-reasons" => $"/api/hr/termination-reasons/{key}",
+            "hr-employer-registrations" => $"/api/hr/employer-registrations/{key}",
             "payroll-periods" => $"/api/payroll/periods/{key}",
             "payroll-concepts" => $"/api/payroll/concepts/{key}",
             "payroll-runs" => $"/api/payroll/runs/{key}",
@@ -172,6 +184,7 @@ public sealed class HumanResourcesApiService
         var branches = await GetBranchLookupsAsync();
         var departments = await GetDepartmentLookupsAsync();
         var positions = await GetPositionLookupsAsync();
+        var workSchedules = await GetWorkScheduleLookupsAsync();
 
         return BuildView(
             "hr-employees",
@@ -184,36 +197,77 @@ public sealed class HumanResourcesApiService
                 SmartLookupColumn("BranchId", "Sucursal", branches, width: 180),
                 LookupColumn("DepartmentId", "Departamento", departments, width: 220),
                 LookupColumn("PositionId", "Puesto", positions, width: 220),
+                LookupColumn("WorkScheduleId", "Horario", workSchedules, width: 180),
+                // Identificadores
                 TextColumn("Code", "Código", required: true, width: 110),
                 TextColumn("EmployeeNumber", "Número empleado", required: true, width: 140),
+                TextColumn("ClockKey", "Clave reloj", width: 120),
+                TextColumn("NoiKey", "Clave NOI", width: 120),
+                // Nombre
                 TextColumn("FirstName", "Nombre", required: true, width: 160),
+                TextColumn("LastName", "Apellido paterno", required: true, width: 180),
+                TextColumn("SecondLastName", "Apellido materno", width: 180),
                 TextColumn("MiddleName", "Segundo nombre", width: 160),
-                TextColumn("LastName", "Apellidos", required: true, width: 180),
+                // Contacto
                 TextColumn("Email", "Email", width: 180),
                 TextColumn("Phone", "Teléfono", width: 120),
+                TextColumn("EmergencyPhone", "Tel. emergencia", width: 130),
+                // Datos personales
                 TextColumn("TaxId", "RFC", width: 140),
-                TextColumn("NationalId", "NSS/ID", width: 140),
+                TextColumn("NationalId", "CURP/ID", width: 140),
                 DateColumn("HireDate", "Ingreso", required: true, width: 120),
                 DateColumn("BirthDate", "Nacimiento", width: 120),
+                LookupColumn("Gender", "Sexo", Genders(), width: 90),
+                LookupColumn("BloodType", "Tipo sangre", BloodTypes(), width: 110),
+                LookupColumn("MaritalStatus", "Estado civil", MaritalStatuses(), width: 130),
+                TextColumn("PlaceOfBirth", "Lugar nacimiento", width: 160),
+                TextColumn("Nationality", "Nacionalidad", width: 130),
+                TextColumn("FatherName", "Nombre del padre", width: 160),
+                TextColumn("MotherName", "Nombre de la madre", width: 160),
+                // Domicilio
+                TextColumn("AddressStreet", "Calle y número", width: 180),
+                TextColumn("AddressColony", "Colonia", width: 150),
+                TextColumn("AddressCity", "Ciudad", width: 130),
+                TextColumn("AddressState", "Estado", width: 130),
+                TextColumn("AddressZipCode", "C.P.", width: 80),
+                // Salario
                 NumberColumn("DailySalary", "Salario diario", width: 120),
                 NumberColumn("IntegratedDailySalary", "SDI", width: 120),
+                NumberColumn("SbcFija", "SBC Fija", width: 110),
                 TextColumn("Status", "Estatus", width: 110),
+                // Baja
+                DateColumn("TerminationDate", "Fecha baja", width: 120),
+                TextColumn("TerminationReason", "Motivo baja", width: 150),
+                DateColumn("ReentryDate", "Fecha reingreso", width: 130),
                 // IMSS / SAT
                 TextColumn("Curp", "CURP", width: 180),
                 TextColumn("Nss", "NSS", width: 130),
                 TextColumn("ImssRegId", "Reg. Patronal", width: 150),
+                BoolColumn("IsImssRegistered", "IMSS registrado", width: 130),
+                DateColumn("ImssRegistrationDate", "Fecha IMSS alta", width: 140),
+                DateColumn("ImssTerminationDate", "Fecha IMSS baja", width: 140),
+                TextColumn("Umf", "UMF", width: 80),
                 LookupColumn("ContractType", "Tipo contrato", ContractTypes(), width: 170),
                 LookupColumn("CotizationBase", "Base cotización", CotizationBases(), width: 150),
-                NumberColumn("SbcFija", "SBC Fija", width: 110),
                 LookupColumn("TaxRegime", "Régimen fiscal", TaxRegimes(), width: 190),
                 LookupColumn("EmployeeType", "Tipo empleado", EmployeeTypes(), width: 140),
                 LookupColumn("SalaryZone", "Zona salarial", SalaryZones(), width: 110),
                 LookupColumn("PayrollPeriodType", "Periodo nómina", PeriodTypes(), width: 180),
+                // Fondos
+                TextColumn("Afore", "AFORE", width: 120),
+                TextColumn("Fonacot", "FONACOT", width: 120),
+                TextColumn("Infonavit", "INFONAVIT", width: 130),
                 // Banco
                 LookupColumn("PaymentForm", "Forma pago", PaymentForms(), width: 150),
                 TextColumn("BankCode", "Banco", width: 100),
                 TextColumn("BankAccount", "Cuenta", width: 150),
                 TextColumn("Clabe", "CLABE", width: 190),
+                TextColumn("BankBranch", "Sucursal banco", width: 130),
+                // Otros
+                TextColumn("ImmediateSupervisor", "Jefe directo", width: 160),
+                TextColumn("Category", "Categoría", width: 130),
+                TextColumn("Notes", "Notas", width: 180),
+                BoolColumn("PrintReceipt", "Imprime recibo", width: 120),
                 BoolColumn("IsActive", "Activo", width: 90)
             ],
             rows.Select(x => Row(
@@ -222,34 +276,66 @@ public sealed class HumanResourcesApiService
                 ("BranchId", x.BranchId?.ToString("D")),
                 ("DepartmentId", x.DepartmentId?.ToString("D")),
                 ("PositionId", x.PositionId?.ToString("D")),
+                ("WorkScheduleId", x.WorkScheduleId?.ToString("D")),
                 ("Code", x.Code),
                 ("EmployeeNumber", x.EmployeeNumber),
+                ("ClockKey", x.ClockKey),
+                ("NoiKey", x.NoiKey),
                 ("FirstName", x.FirstName),
-                ("MiddleName", x.MiddleName),
                 ("LastName", x.LastName),
+                ("SecondLastName", x.SecondLastName),
+                ("MiddleName", x.MiddleName),
                 ("Email", x.Email),
                 ("Phone", x.Phone),
+                ("EmergencyPhone", x.EmergencyPhone),
                 ("TaxId", x.TaxId),
                 ("NationalId", x.NationalId),
                 ("HireDate", x.HireDate),
                 ("BirthDate", x.BirthDate),
+                ("Gender", x.Gender),
+                ("BloodType", x.BloodType),
+                ("MaritalStatus", x.MaritalStatus),
+                ("PlaceOfBirth", x.PlaceOfBirth),
+                ("Nationality", x.Nationality),
+                ("FatherName", x.FatherName),
+                ("MotherName", x.MotherName),
+                ("AddressStreet", x.AddressStreet),
+                ("AddressColony", x.AddressColony),
+                ("AddressCity", x.AddressCity),
+                ("AddressState", x.AddressState),
+                ("AddressZipCode", x.AddressZipCode),
                 ("DailySalary", x.DailySalary),
                 ("IntegratedDailySalary", x.IntegratedDailySalary),
+                ("SbcFija", x.SbcFija),
                 ("Status", x.Status),
+                ("TerminationDate", x.TerminationDate),
+                ("TerminationReason", x.TerminationReason),
+                ("ReentryDate", x.ReentryDate),
                 ("Curp", x.Curp),
                 ("Nss", x.Nss),
                 ("ImssRegId", x.ImssRegId),
+                ("IsImssRegistered", x.IsImssRegistered),
+                ("ImssRegistrationDate", x.ImssRegistrationDate),
+                ("ImssTerminationDate", x.ImssTerminationDate),
+                ("Umf", x.Umf),
                 ("ContractType", x.ContractType),
                 ("CotizationBase", x.CotizationBase),
-                ("SbcFija", x.SbcFija),
                 ("TaxRegime", x.TaxRegime),
                 ("EmployeeType", x.EmployeeType),
                 ("SalaryZone", x.SalaryZone),
                 ("PayrollPeriodType", x.PayrollPeriodType),
+                ("Afore", x.Afore),
+                ("Fonacot", x.Fonacot),
+                ("Infonavit", x.Infonavit),
                 ("PaymentForm", x.PaymentForm),
                 ("BankCode", x.BankCode),
                 ("BankAccount", x.BankAccount),
                 ("Clabe", x.Clabe),
+                ("BankBranch", x.BankBranch),
+                ("ImmediateSupervisor", x.ImmediateSupervisor),
+                ("Category", x.Category),
+                ("Notes", x.Notes),
+                ("PrintReceipt", x.PrintReceipt),
                 ("IsActive", x.IsActive)))
             .ToList());
     }
@@ -291,6 +377,98 @@ public sealed class HumanResourcesApiService
                 ("Amount", x.Amount),
                 ("Notes", x.Notes),
                 ("Status", x.Status),
+                ("IsActive", x.IsActive)))
+            .ToList());
+    }
+
+    private async Task<CatalogViewDefinition> GetHrBanksAsync()
+    {
+        var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
+        var rows = await client.GetFromJsonAsync<List<HrBankDto>>("/api/hr/banks") ?? [];
+
+        return BuildView(
+            "hr-banks",
+            "Bancos",
+            "Catálogo de bancos para datos bancarios de colaboradores.",
+            "BankId",
+            [
+                TextColumn("BankId", "ID", allowEditing: false, width: 220),
+                TextColumn("Code", "Clave", required: true, width: 100),
+                TextColumn("ShortName", "Nombre corto", required: true, width: 140),
+                TextColumn("Name", "Nombre completo", required: true, width: 260),
+                TextColumn("SatCode", "Clave SAT", width: 100),
+                BoolColumn("IsActive", "Activo", width: 90)
+            ],
+            rows.Select(x => Row(
+                ("BankId", x.BankId.ToString("D")),
+                ("Code", x.Code),
+                ("ShortName", x.ShortName),
+                ("Name", x.Name),
+                ("SatCode", x.SatCode),
+                ("IsActive", x.IsActive)))
+            .ToList());
+    }
+
+    private async Task<CatalogViewDefinition> GetTerminationReasonsAsync()
+    {
+        var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
+        var rows = await client.GetFromJsonAsync<List<HrTerminationReasonDto>>("/api/hr/termination-reasons") ?? [];
+        var companies = await GetCompanyLookupsAsync();
+
+        return BuildView(
+            "hr-termination-reasons",
+            "Motivos de baja",
+            "Causas de terminación de relación laboral por empresa.",
+            "TerminationReasonId",
+            [
+                TextColumn("TerminationReasonId", "ID", allowEditing: false, width: 220),
+                SmartLookupColumn("CompanyId", "Empresa", companies, required: true, width: 220),
+                TextColumn("Code", "Código", required: true, width: 100),
+                TextColumn("Name", "Motivo", required: true, width: 220),
+                TextColumn("Description", "Descripción", width: 280),
+                BoolColumn("IsActive", "Activo", width: 90)
+            ],
+            rows.Select(x => Row(
+                ("TerminationReasonId", x.TerminationReasonId.ToString("D")),
+                ("CompanyId", x.CompanyId?.ToString("D")),
+                ("Code", x.Code),
+                ("Name", x.Name),
+                ("Description", x.Description),
+                ("IsActive", x.IsActive)))
+            .ToList());
+    }
+
+    private async Task<CatalogViewDefinition> GetEmployerRegistrationsAsync()
+    {
+        var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
+        var rows = await client.GetFromJsonAsync<List<HrEmployerRegistrationDto>>("/api/hr/employer-registrations") ?? [];
+        var companies = await GetCompanyLookupsAsync();
+
+        return BuildView(
+            "hr-employer-registrations",
+            "Registros Patronales",
+            "Registros ante el IMSS para cálculo de cuotas y emisión de comprobantes.",
+            "EmployerRegistrationId",
+            [
+                TextColumn("EmployerRegistrationId", "ID", allowEditing: false, width: 220),
+                SmartLookupColumn("CompanyId", "Empresa", companies, required: true, width: 220),
+                TextColumn("Code", "Código", required: true, width: 100),
+                TextColumn("Name", "Nombre", required: true, width: 200),
+                TextColumn("RegistrationNumber", "No. Registro patronal", required: true, width: 180),
+                TextColumn("RiskClass", "Clase de riesgo", width: 120),
+                TextColumn("State", "Estado", width: 130),
+                TextColumn("Notes", "Notas", width: 200),
+                BoolColumn("IsActive", "Activo", width: 90)
+            ],
+            rows.Select(x => Row(
+                ("EmployerRegistrationId", x.EmployerRegistrationId.ToString("D")),
+                ("CompanyId", x.CompanyId?.ToString("D")),
+                ("Code", x.Code),
+                ("Name", x.Name),
+                ("RegistrationNumber", x.RegistrationNumber),
+                ("RiskClass", x.RiskClass),
+                ("State", x.State),
+                ("Notes", x.Notes),
                 ("IsActive", x.IsActive)))
             .ToList());
     }
@@ -393,6 +571,33 @@ public sealed class HumanResourcesApiService
         new() { Id = "transferencia", Name = "Transferencia" },
         new() { Id = "efectivo",      Name = "Efectivo" },
         new() { Id = "cheque",        Name = "Cheque" },
+    ];
+
+    private static List<CatalogLookupItem> Genders() =>
+    [
+        new() { Id = "M", Name = "Masculino" },
+        new() { Id = "F", Name = "Femenino" },
+    ];
+
+    private static List<CatalogLookupItem> BloodTypes() =>
+    [
+        new() { Id = "A+",  Name = "A+" },
+        new() { Id = "A-",  Name = "A-" },
+        new() { Id = "B+",  Name = "B+" },
+        new() { Id = "B-",  Name = "B-" },
+        new() { Id = "AB+", Name = "AB+" },
+        new() { Id = "AB-", Name = "AB-" },
+        new() { Id = "O+",  Name = "O+" },
+        new() { Id = "O-",  Name = "O-" },
+    ];
+
+    private static List<CatalogLookupItem> MaritalStatuses() =>
+    [
+        new() { Id = "soltero",   Name = "Soltero(a)" },
+        new() { Id = "casado",    Name = "Casado(a)" },
+        new() { Id = "divorciado",Name = "Divorciado(a)" },
+        new() { Id = "viudo",     Name = "Viudo(a)" },
+        new() { Id = "union",     Name = "Unión libre" },
     ];
 
     private static List<CatalogLookupItem> PeriodStatuses() =>
@@ -690,6 +895,17 @@ public sealed class HumanResourcesApiService
         }).ToList();
     }
 
+    private async Task<List<CatalogLookupItem>> GetWorkScheduleLookupsAsync()
+    {
+        var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
+        var rows = await client.GetFromJsonAsync<List<WorkScheduleLookupDto>>("/api/hr/work-schedules") ?? [];
+        return rows.Where(x => x.IsActive).OrderBy(x => x.Name).Select(x => new CatalogLookupItem
+        {
+            Id = x.WorkScheduleId.ToString("D"),
+            Name = x.Name
+        }).ToList();
+    }
+
     private async Task<List<CatalogLookupItem>> GetEmployeeLookupsAsync()
     {
         var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
@@ -772,34 +988,66 @@ public sealed class HumanResourcesApiService
         BranchId = ReadGuid(payload, "BranchId"),
         DepartmentId = ReadGuid(payload, "DepartmentId"),
         PositionId = ReadGuid(payload, "PositionId"),
+        WorkScheduleId = ReadGuid(payload, "WorkScheduleId"),
         Code = ReadString(payload, "Code"),
         EmployeeNumber = ReadString(payload, "EmployeeNumber"),
+        ClockKey = ReadString(payload, "ClockKey"),
+        NoiKey = ReadString(payload, "NoiKey"),
         FirstName = ReadString(payload, "FirstName"),
         MiddleName = ReadString(payload, "MiddleName"),
         LastName = ReadString(payload, "LastName"),
+        SecondLastName = ReadString(payload, "SecondLastName"),
         Email = ReadString(payload, "Email"),
         Phone = ReadString(payload, "Phone"),
+        EmergencyPhone = ReadString(payload, "EmergencyPhone"),
         TaxId = ReadString(payload, "TaxId"),
         NationalId = ReadString(payload, "NationalId"),
         HireDate = ReadDate(payload, "HireDate"),
         BirthDate = ReadDate(payload, "BirthDate"),
+        Gender = ReadString(payload, "Gender"),
+        BloodType = ReadString(payload, "BloodType"),
+        MaritalStatus = ReadString(payload, "MaritalStatus"),
+        PlaceOfBirth = ReadString(payload, "PlaceOfBirth"),
+        Nationality = ReadString(payload, "Nationality"),
+        FatherName = ReadString(payload, "FatherName"),
+        MotherName = ReadString(payload, "MotherName"),
+        AddressStreet = ReadString(payload, "AddressStreet"),
+        AddressColony = ReadString(payload, "AddressColony"),
+        AddressCity = ReadString(payload, "AddressCity"),
+        AddressState = ReadString(payload, "AddressState"),
+        AddressZipCode = ReadString(payload, "AddressZipCode"),
         DailySalary = ReadDecimal(payload, "DailySalary"),
         IntegratedDailySalary = ReadDecimal(payload, "IntegratedDailySalary"),
+        SbcFija = ReadDecimal(payload, "SbcFija"),
         Status = ReadString(payload, "Status"),
+        TerminationDate = ReadDate(payload, "TerminationDate"),
+        TerminationReason = ReadString(payload, "TerminationReason"),
+        ReentryDate = ReadDate(payload, "ReentryDate"),
         Curp = ReadString(payload, "Curp"),
         Nss = ReadString(payload, "Nss"),
         ImssRegId = ReadString(payload, "ImssRegId"),
+        IsImssRegistered = ReadBool(payload, "IsImssRegistered"),
+        ImssRegistrationDate = ReadDate(payload, "ImssRegistrationDate"),
+        ImssTerminationDate = ReadDate(payload, "ImssTerminationDate"),
+        Umf = ReadString(payload, "Umf"),
         ContractType = ReadString(payload, "ContractType"),
         CotizationBase = ReadString(payload, "CotizationBase"),
-        SbcFija = ReadDecimal(payload, "SbcFija"),
         TaxRegime = ReadString(payload, "TaxRegime"),
         EmployeeType = ReadString(payload, "EmployeeType"),
         SalaryZone = ReadString(payload, "SalaryZone"),
         PayrollPeriodType = ReadString(payload, "PayrollPeriodType"),
+        Afore = ReadString(payload, "Afore"),
+        Fonacot = ReadString(payload, "Fonacot"),
+        Infonavit = ReadString(payload, "Infonavit"),
         PaymentForm = ReadString(payload, "PaymentForm"),
         BankCode = ReadString(payload, "BankCode"),
         BankAccount = ReadString(payload, "BankAccount"),
         Clabe = ReadString(payload, "Clabe"),
+        BankBranch = ReadString(payload, "BankBranch"),
+        ImmediateSupervisor = ReadString(payload, "ImmediateSupervisor"),
+        Category = ReadString(payload, "Category"),
+        Notes = ReadString(payload, "Notes"),
+        PrintReceipt = ReadBool(payload, "PrintReceipt", true),
         IsActive = ReadBool(payload, "IsActive", true)
     };
 
@@ -830,6 +1078,36 @@ public sealed class HumanResourcesApiService
         BaseSalary = ReadDecimal(payload, "BaseSalary"),
         IntegratedSalary = ReadDecimal(payload, "IntegratedSalary"),
         Status = ReadString(payload, "Status"),
+        Notes = ReadString(payload, "Notes"),
+        IsActive = ReadBool(payload, "IsActive", true)
+    };
+
+    private static HrBankRequest MapHrBankRequest(JsonElement payload) => new()
+    {
+        Code = ReadString(payload, "Code"),
+        ShortName = ReadString(payload, "ShortName"),
+        Name = ReadString(payload, "Name"),
+        SatCode = ReadString(payload, "SatCode"),
+        IsActive = ReadBool(payload, "IsActive", true)
+    };
+
+    private static HrTerminationReasonRequest MapTerminationReasonRequest(JsonElement payload) => new()
+    {
+        CompanyId = ReadGuid(payload, "CompanyId"),
+        Code = ReadString(payload, "Code"),
+        Name = ReadString(payload, "Name"),
+        Description = ReadString(payload, "Description"),
+        IsActive = ReadBool(payload, "IsActive", true)
+    };
+
+    private static HrEmployerRegistrationRequest MapEmployerRegistrationRequest(JsonElement payload) => new()
+    {
+        CompanyId = ReadGuid(payload, "CompanyId"),
+        Code = ReadString(payload, "Code"),
+        Name = ReadString(payload, "Name"),
+        RegistrationNumber = ReadString(payload, "RegistrationNumber"),
+        RiskClass = ReadString(payload, "RiskClass"),
+        State = ReadString(payload, "State"),
         Notes = ReadString(payload, "Notes"),
         IsActive = ReadBool(payload, "IsActive", true)
     };
@@ -1165,37 +1443,79 @@ public sealed class EmployeeDto
     public string DepartmentName { get; set; } = string.Empty;
     public Guid? PositionId { get; set; }
     public string PositionName { get; set; } = string.Empty;
+    public Guid? WorkScheduleId { get; set; }
+    public string WorkScheduleName { get; set; } = string.Empty;
     public string Code { get; set; } = string.Empty;
     public string EmployeeNumber { get; set; } = string.Empty;
+    public string? ClockKey { get; set; }
+    public string? NoiKey { get; set; }
     public string FullName { get; set; } = string.Empty;
     public string FirstName { get; set; } = string.Empty;
     public string LastName { get; set; } = string.Empty;
+    public string? SecondLastName { get; set; }
     public string MiddleName { get; set; } = string.Empty;
     public string Email { get; set; } = string.Empty;
     public string Phone { get; set; } = string.Empty;
+    public string? EmergencyPhone { get; set; }
     public string TaxId { get; set; } = string.Empty;
     public string NationalId { get; set; } = string.Empty;
     public DateTime? HireDate { get; set; }
     public DateTime? BirthDate { get; set; }
+    public string? Gender { get; set; }
+    public string? BloodType { get; set; }
+    public string? MaritalStatus { get; set; }
+    public string? PlaceOfBirth { get; set; }
+    public string? Nationality { get; set; }
+    public string? FatherName { get; set; }
+    public string? MotherName { get; set; }
+    public string? AddressStreet { get; set; }
+    public string? AddressColony { get; set; }
+    public string? AddressCity { get; set; }
+    public string? AddressState { get; set; }
+    public string? AddressZipCode { get; set; }
     public decimal DailySalary { get; set; }
     public decimal IntegratedDailySalary { get; set; }
+    public decimal SbcFija { get; set; }
     public string Status { get; set; } = string.Empty;
+    public DateTime? TerminationDate { get; set; }
+    public string? TerminationReason { get; set; }
+    public DateTime? ReentryDate { get; set; }
     // IMSS / SAT
     public string Curp { get; set; } = string.Empty;
     public string Nss { get; set; } = string.Empty;
     public string ImssRegId { get; set; } = string.Empty;
+    public bool IsImssRegistered { get; set; }
+    public DateTime? ImssRegistrationDate { get; set; }
+    public DateTime? ImssTerminationDate { get; set; }
+    public string? Umf { get; set; }
     public string ContractType { get; set; } = string.Empty;
     public string CotizationBase { get; set; } = string.Empty;
-    public decimal SbcFija { get; set; }
     public string TaxRegime { get; set; } = string.Empty;
     public string EmployeeType { get; set; } = string.Empty;
     public string SalaryZone { get; set; } = string.Empty;
     public string PayrollPeriodType { get; set; } = string.Empty;
+    // Fondos
+    public string? Afore { get; set; }
+    public string? Fonacot { get; set; }
+    public string? Infonavit { get; set; }
     // Banco
     public string PaymentForm { get; set; } = string.Empty;
     public string BankCode { get; set; } = string.Empty;
     public string BankAccount { get; set; } = string.Empty;
     public string Clabe { get; set; } = string.Empty;
+    public string? BankBranch { get; set; }
+    // Otros
+    public string? ImmediateSupervisor { get; set; }
+    public string? Category { get; set; }
+    public string? Notes { get; set; }
+    public bool PrintReceipt { get; set; }
+    public bool IsActive { get; set; }
+}
+
+public sealed class WorkScheduleLookupDto
+{
+    public Guid WorkScheduleId { get; set; }
+    public string Name { get; set; } = string.Empty;
     public bool IsActive { get; set; }
 }
 
@@ -1351,4 +1671,72 @@ public sealed class PayrollRunLineDetailDto
     public string Status { get; set; } = string.Empty;
     public string Notes { get; set; } = string.Empty;
     public bool IsActive { get; set; }
+}
+
+public sealed class HrBankDto
+{
+    public Guid BankId { get; set; }
+    public Guid? TenantId { get; set; }
+    public string Code { get; set; } = string.Empty;
+    public string ShortName { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
+    public string? SatCode { get; set; }
+    public bool IsActive { get; set; }
+}
+
+public sealed class HrTerminationReasonDto
+{
+    public Guid TerminationReasonId { get; set; }
+    public Guid? TenantId { get; set; }
+    public Guid? CompanyId { get; set; }
+    public string CompanyName { get; set; } = string.Empty;
+    public string Code { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
+    public string? Description { get; set; }
+    public bool IsActive { get; set; }
+}
+
+public sealed class HrEmployerRegistrationDto
+{
+    public Guid EmployerRegistrationId { get; set; }
+    public Guid? TenantId { get; set; }
+    public Guid? CompanyId { get; set; }
+    public string CompanyName { get; set; } = string.Empty;
+    public string Code { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
+    public string RegistrationNumber { get; set; } = string.Empty;
+    public string? RiskClass { get; set; }
+    public string? State { get; set; }
+    public string? Notes { get; set; }
+    public bool IsActive { get; set; }
+}
+
+public sealed class HrBankRequest
+{
+    public string? Code { get; set; }
+    public string? ShortName { get; set; }
+    public string? Name { get; set; }
+    public string? SatCode { get; set; }
+    public bool IsActive { get; set; } = true;
+}
+
+public sealed class HrTerminationReasonRequest
+{
+    public Guid? CompanyId { get; set; }
+    public string? Code { get; set; }
+    public string? Name { get; set; }
+    public string? Description { get; set; }
+    public bool IsActive { get; set; } = true;
+}
+
+public sealed class HrEmployerRegistrationRequest
+{
+    public Guid? CompanyId { get; set; }
+    public string? Code { get; set; }
+    public string? Name { get; set; }
+    public string? RegistrationNumber { get; set; }
+    public string? RiskClass { get; set; }
+    public string? State { get; set; }
+    public string? Notes { get; set; }
+    public bool IsActive { get; set; } = true;
 }

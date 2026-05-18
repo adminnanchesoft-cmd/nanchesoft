@@ -27,36 +27,77 @@ public sealed class EmployeeRequest
     public Guid? BranchId { get; set; }
     public Guid? DepartmentId { get; set; }
     public Guid? PositionId { get; set; }
+    public Guid? WorkScheduleId { get; set; }
+    // Identificadores
     public string Code { get; set; } = string.Empty;
     public string EmployeeNumber { get; set; } = string.Empty;
+    public string? ClockKey { get; set; }
+    public string? NoiKey { get; set; }
+    // Nombre
     public string FirstName { get; set; } = string.Empty;
-    public string MiddleName { get; set; } = string.Empty;
     public string LastName { get; set; } = string.Empty;
+    public string? SecondLastName { get; set; }
+    public string MiddleName { get; set; } = string.Empty;
+    // Contacto
     public string Email { get; set; } = string.Empty;
     public string Phone { get; set; } = string.Empty;
+    public string? EmergencyPhone { get; set; }
+    // Datos personales
     public string TaxId { get; set; } = string.Empty;
     public string NationalId { get; set; } = string.Empty;
     public DateTime? HireDate { get; set; }
     public DateTime? BirthDate { get; set; }
+    public string? Gender { get; set; }
+    public string? BloodType { get; set; }
+    public string? MaritalStatus { get; set; }
+    public string? PlaceOfBirth { get; set; }
+    public string? Nationality { get; set; }
+    public string? FatherName { get; set; }
+    public string? MotherName { get; set; }
+    // Domicilio
+    public string? AddressStreet { get; set; }
+    public string? AddressColony { get; set; }
+    public string? AddressCity { get; set; }
+    public string? AddressState { get; set; }
+    public string? AddressZipCode { get; set; }
+    // Salario
     public decimal DailySalary { get; set; }
     public decimal IntegratedDailySalary { get; set; }
+    public decimal SbcFija { get; set; }
     public string Status { get; set; } = string.Empty;
+    // Baja
+    public DateTime? TerminationDate { get; set; }
+    public string? TerminationReason { get; set; }
+    public DateTime? ReentryDate { get; set; }
     // IMSS / SAT
     public string Curp { get; set; } = string.Empty;
     public string Nss { get; set; } = string.Empty;
     public string ImssRegId { get; set; } = string.Empty;
+    public bool IsImssRegistered { get; set; }
+    public DateTime? ImssRegistrationDate { get; set; }
+    public DateTime? ImssTerminationDate { get; set; }
+    public string? Umf { get; set; }
     public string ContractType { get; set; } = string.Empty;
     public string CotizationBase { get; set; } = string.Empty;
-    public decimal SbcFija { get; set; }
     public string TaxRegime { get; set; } = string.Empty;
     public string EmployeeType { get; set; } = string.Empty;
     public string SalaryZone { get; set; } = string.Empty;
     public string PayrollPeriodType { get; set; } = string.Empty;
+    // Fondos
+    public string? Afore { get; set; }
+    public string? Fonacot { get; set; }
+    public string? Infonavit { get; set; }
     // Banco
     public string PaymentForm { get; set; } = string.Empty;
     public string BankCode { get; set; } = string.Empty;
     public string BankAccount { get; set; } = string.Empty;
     public string Clabe { get; set; } = string.Empty;
+    public string? BankBranch { get; set; }
+    // Otros
+    public string? ImmediateSupervisor { get; set; }
+    public string? Category { get; set; }
+    public string? Notes { get; set; }
+    public bool PrintReceipt { get; set; } = true;
     public bool IsActive { get; set; } = true;
 }
 

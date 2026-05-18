@@ -1,5 +1,30 @@
 @page "/human-resources/employees"
+@inject NavigationManager Nav
 
 <PageTitle>Colaboradores | Nanchesoft</PageTitle>
 
+<div style="display:flex;justify-content:flex-end;gap:8px;padding:8px 16px 0 16px;">
+    <a href="/human-resources/empleado" class="btn btn-primary btn-sm">
+        <span class="bi bi-person-plus me-1"></span> Nuevo colaborador
+    </a>
+    <a href="/human-resources/employees/report" target="_blank" class="btn btn-outline-secondary btn-sm">
+        <span class="bi bi-printer me-1"></span> Reporte / PDF
+    </a>
+    <button class="btn btn-outline-secondary btn-sm" @onclick="ExportarExcel">
+        <span class="bi bi-download me-1"></span> Exportar Excel
+    </button>
+    <a href="/human-resources/importar-empleados" class="btn btn-outline-success btn-sm">
+        <span class="bi bi-file-earmark-excel me-1"></span> Importar desde Excel
+    </a>
+</div>
+
 <CatalogCrudPage CatalogKey="hr-employees" />
+
+@code {
+    private static string ApiBase => "http://localhost:5000";
+
+    private void ExportarExcel()
+    {
+        Nav.NavigateTo(ApiBase + "/api/hr/employees/report/excel", forceLoad: true);
+    }
+}

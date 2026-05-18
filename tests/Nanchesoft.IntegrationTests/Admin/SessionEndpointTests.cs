@@ -11,6 +11,7 @@ public class SessionEndpointTests
     public SessionEndpointTests(NanchesoftWebFactory factory)
     {
         _client = factory.CreateClient();
+        _client.DefaultRequestHeaders.Add("X-Is-Platform-Owner", "true");
     }
 
     [Fact]
