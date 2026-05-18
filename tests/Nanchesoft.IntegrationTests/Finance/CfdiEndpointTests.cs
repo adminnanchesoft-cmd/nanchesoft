@@ -3,7 +3,8 @@ using Nanchesoft.IntegrationTests.Infrastructure;
 
 namespace Nanchesoft.IntegrationTests.Finance;
 
-public class CfdiEndpointTests : IClassFixture<NanchesoftWebFactory>
+[Collection("NanchesoftApi")]
+public class CfdiEndpointTests
 {
     private readonly HttpClient _client;
 

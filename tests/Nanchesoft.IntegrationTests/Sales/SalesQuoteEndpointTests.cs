@@ -5,7 +5,8 @@ using Nanchesoft.Persistence.Context;
 
 namespace Nanchesoft.IntegrationTests.Sales;
 
-public class SalesQuoteEndpointTests : IClassFixture<NanchesoftWebFactory>
+[Collection("NanchesoftApi")]
+public class SalesQuoteEndpointTests
 {
     private readonly HttpClient _client;
     private readonly NanchesoftWebFactory _factory;

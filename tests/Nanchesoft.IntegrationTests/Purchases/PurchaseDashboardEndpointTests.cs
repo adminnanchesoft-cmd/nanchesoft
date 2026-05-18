@@ -4,7 +4,8 @@ using Nanchesoft.IntegrationTests.Infrastructure;
 
 namespace Nanchesoft.IntegrationTests.Purchases;
 
-public class PurchaseDashboardEndpointTests : IClassFixture<NanchesoftWebFactory>
+[Collection("NanchesoftApi")]
+public class PurchaseDashboardEndpointTests
 {
     private readonly HttpClient _client;
 

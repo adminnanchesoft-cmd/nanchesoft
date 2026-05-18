@@ -4,7 +4,8 @@ using Nanchesoft.IntegrationTests.Infrastructure;
 
 namespace Nanchesoft.IntegrationTests.Payroll;
 
-public class PayrollDisbursementEndpointTests : IClassFixture<NanchesoftWebFactory>
+[Collection("NanchesoftApi")]
+public class PayrollDisbursementEndpointTests
 {
     private readonly HttpClient _client;
 

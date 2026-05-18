@@ -4,7 +4,8 @@ using Nanchesoft.IntegrationTests.Infrastructure;
 
 namespace Nanchesoft.IntegrationTests.Sales;
 
-public class SalesInvoiceEndpointTests : IClassFixture<NanchesoftWebFactory>
+[Collection("NanchesoftApi")]
+public class SalesInvoiceEndpointTests
 {
     private readonly HttpClient _client;
 

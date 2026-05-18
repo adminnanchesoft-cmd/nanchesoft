@@ -4,7 +4,8 @@ using Nanchesoft.IntegrationTests.Infrastructure;
 
 namespace Nanchesoft.IntegrationTests.ThirdParties;
 
-public class ProductCatalogEndpointTests : IClassFixture<NanchesoftWebFactory>
+[Collection("NanchesoftApi")]
+public class ProductCatalogEndpointTests
 {
     private readonly HttpClient _client;
 

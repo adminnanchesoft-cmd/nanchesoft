@@ -5,7 +5,8 @@ using Nanchesoft.Persistence.Context;
 
 namespace Nanchesoft.IntegrationTests.Production;
 
-public class ProductionOrderEndpointTests : IClassFixture<NanchesoftWebFactory>
+[Collection("NanchesoftApi")]
+public class ProductionOrderEndpointTests
 {
     private readonly HttpClient _client;
     private readonly NanchesoftWebFactory _factory;

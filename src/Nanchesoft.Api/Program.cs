@@ -21,7 +21,8 @@ builder.Services.AddCors(options =>
     });
 });
 
-var defaultConnection = builder.Configuration.GetConnectionString("DefaultConnection")
+var defaultConnection = Environment.GetEnvironmentVariable("NANCHESOFT_TEST_DB")
+                       ?? builder.Configuration.GetConnectionString("DefaultConnection")
                        ?? throw new InvalidOperationException("No se encontró la cadena de conexión 'DefaultConnection'.");
 
 builder.Services.AddDbContext<NanchesoftDbContext>(options =>

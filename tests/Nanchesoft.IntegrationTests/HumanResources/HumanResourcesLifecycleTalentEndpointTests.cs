@@ -4,7 +4,8 @@ using Nanchesoft.IntegrationTests.Infrastructure;
 
 namespace Nanchesoft.IntegrationTests.HumanResources;
 
-public class HumanResourcesLifecycleTalentEndpointTests : IClassFixture<NanchesoftWebFactory>
+[Collection("NanchesoftApi")]
+public class HumanResourcesLifecycleTalentEndpointTests
 {
     private readonly HttpClient _client;
 

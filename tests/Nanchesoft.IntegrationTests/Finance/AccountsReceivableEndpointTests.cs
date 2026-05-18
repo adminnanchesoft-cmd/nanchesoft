@@ -3,7 +3,8 @@ using Nanchesoft.IntegrationTests.Infrastructure;
 
 namespace Nanchesoft.IntegrationTests.Finance;
 
-public class AccountsReceivableEndpointTests : IClassFixture<NanchesoftWebFactory>
+[Collection("NanchesoftApi")]
+public class AccountsReceivableEndpointTests
 {
     private readonly HttpClient _client;
 

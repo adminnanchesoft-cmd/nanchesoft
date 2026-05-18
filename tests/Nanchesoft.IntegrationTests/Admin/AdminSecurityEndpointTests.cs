@@ -4,7 +4,8 @@ using Nanchesoft.IntegrationTests.Infrastructure;
 
 namespace Nanchesoft.IntegrationTests.Admin;
 
-public class AdminSecurityEndpointTests : IClassFixture<NanchesoftWebFactory>
+[Collection("NanchesoftApi")]
+public class AdminSecurityEndpointTests
 {
     private readonly HttpClient _client;
 

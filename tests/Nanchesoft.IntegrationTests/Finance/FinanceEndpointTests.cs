@@ -3,7 +3,8 @@ using Nanchesoft.IntegrationTests.Infrastructure;
 
 namespace Nanchesoft.IntegrationTests.Finance;
 
-public class FinanceEndpointTests : IClassFixture<NanchesoftWebFactory>
+[Collection("NanchesoftApi")]
+public class FinanceEndpointTests
 {
     private readonly HttpClient _client;
     private readonly int _year = DateTime.UtcNow.Year;

@@ -4,7 +4,8 @@ using Nanchesoft.IntegrationTests.Infrastructure;
 
 namespace Nanchesoft.IntegrationTests.Production;
 
-public class QualityControlEndpointTests : IClassFixture<NanchesoftWebFactory>
+[Collection("NanchesoftApi")]
+public class QualityControlEndpointTests
 {
     private readonly HttpClient _client;
     private readonly int _year = DateTime.UtcNow.Year;

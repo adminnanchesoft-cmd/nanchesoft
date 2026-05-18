@@ -742,7 +742,8 @@ public static class ProductCatalogOperationsEndpoints
     private static async Task<IResult> UpsertFinishedProductAsync(Guid? id, FinishedProductRequest request, NanchesoftDbContext db)
     {
         var ctx = await ResolveDefaultContextAsync(db); if (!ctx.TenantId.HasValue || !ctx.CompanyId.HasValue) return Results.BadRequest();
-        var code = N(request.Code, true); if (await db.FinishedProducts.AnyAsync(x => x.CompanyId == ctx.CompanyId && x.Code == code && (!id.HasValue || x.Id != id.Value))) return Results.BadRequest(new { message = "Finished product code already exists." });
+        var code = N(request.Code, true); if (string.IsNullOrWhiteSpace(code)) return Results.BadRequest(new { message = "Code is required." });
+        if (await db.FinishedProducts.AnyAsync(x => x.CompanyId == ctx.CompanyId && x.Code == code && (!id.HasValue || x.Id != id.Value))) return Results.BadRequest(new { message = "Finished product code already exists." });
         var entity = id.HasValue ? await db.FinishedProducts.FirstOrDefaultAsync(x => x.Id == id.Value) : null; if (id.HasValue && entity is null) return Results.NotFound();
         entity ??= new FinishedProduct { TenantId = ctx.TenantId.Value, CompanyId = ctx.CompanyId.Value, CreatedBy = "web-api" };
         entity.ProductStyleId = request.ProductStyleId;
