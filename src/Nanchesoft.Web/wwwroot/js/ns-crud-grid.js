@@ -470,12 +470,13 @@ window.nsCrudGrid = (() => {
         const editUrl = getEditUrl(definition);
         const keyExpr = getKeyExpr(definition);
         const mapped = columns
-            .filter(x => getColumnValue(x, "showInGrid", "ShowInGrid", true) !== false && getColumnValue(x, "dataField", "DataField", "") !== keyExpr)
+            .filter(x => getColumnValue(x, "dataField", "DataField", "") !== keyExpr)
             .map(col => {
                 const dataType = getColumnValue(col, "dataType", "DataType", "string");
                 const useLookup = getColumnValue(col, "useLookup", "UseLookup", false);
                 const lookupItems = getLookupItems(col);
                 const dataField = getColumnValue(col, "dataField", "DataField", "");
+                const showInGrid = getColumnValue(col, "showInGrid", "ShowInGrid", true) !== false;
 
                 const dxColumn = {
                     dataField: dataField,
@@ -484,7 +485,9 @@ window.nsCrudGrid = (() => {
                     width: getColumnValue(col, "width", "Width", 160),
                     allowEditing: getColumnValue(col, "allowEditing", "AllowEditing", true),
                     allowFiltering: getColumnValue(col, "allowFiltering", "AllowFiltering", true),
-                    allowSorting: getColumnValue(col, "allowSorting", "AllowSorting", true)
+                    allowSorting: getColumnValue(col, "allowSorting", "AllowSorting", true),
+                    visible: showInGrid,
+                    showInColumnChooser: showInGrid
                 };
 
                 if (String(dataType).toLowerCase() === "boolean") {
