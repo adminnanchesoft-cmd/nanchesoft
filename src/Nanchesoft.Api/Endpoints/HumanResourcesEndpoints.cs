@@ -437,6 +437,7 @@ public static class HumanResourcesEndpoints
                 Category = x.Category,
                 Notes = x.Notes,
                 PrintReceipt = x.PrintReceipt,
+                PeriodSalary = x.PeriodSalary,
                 DailySalary = x.DailySalary,
                 IntegratedDailySalary = x.IntegratedDailySalary,
                 Status = x.Status,
@@ -547,6 +548,7 @@ public static class HumanResourcesEndpoints
             Category = request.Category,
             Notes = request.Notes,
             PrintReceipt = request.PrintReceipt,
+            PeriodSalary = request.PeriodSalary,
             DailySalary = request.DailySalary,
             IntegratedDailySalary = request.IntegratedDailySalary,
             Status = NormalizeStatus(request.Status, "active"),
@@ -643,6 +645,7 @@ public static class HumanResourcesEndpoints
         entity.Category = request.Category;
         entity.Notes = request.Notes;
         entity.PrintReceipt = request.PrintReceipt;
+        entity.PeriodSalary = request.PeriodSalary;
         entity.DailySalary = request.DailySalary;
         entity.IntegratedDailySalary = request.IntegratedDailySalary;
         entity.Status = NormalizeStatus(request.Status, entity.Status);
@@ -1644,6 +1647,7 @@ public class EmployeeRequest
     public string? Category { get; set; }
     public string? Notes { get; set; }
     public bool PrintReceipt { get; set; } = true;
+    public decimal PeriodSalary { get; set; }
     public decimal DailySalary { get; set; }
     public decimal IntegratedDailySalary { get; set; }
     public string? Status { get; set; }

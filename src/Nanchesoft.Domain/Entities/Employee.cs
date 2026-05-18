@@ -60,6 +60,7 @@ public sealed class Employee : BaseEntity
     public string? AddressZipCode { get; set; }      // CodigoPostal
 
     // Salario
+    public decimal PeriodSalary { get; set; }
     public decimal DailySalary { get; set; }
     public decimal IntegratedDailySalary { get; set; }
     public decimal SbcFija { get; set; }

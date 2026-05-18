@@ -240,6 +240,7 @@ public sealed class HumanResourcesApiService
                 TextColumn("AddressState", "Estado", width: 130),
                 TextColumn("AddressZipCode", "C.P.", width: 80),
                 // Salario
+                NumberColumn("PeriodSalary", "Sueldo del periodo", width: 140),
                 NumberColumn("DailySalary", "Salario diario", width: 120),
                 NumberColumn("IntegratedDailySalary", "SDI", width: 120),
                 NumberColumn("SbcFija", "SBC Fija", width: 110),
@@ -313,6 +314,7 @@ public sealed class HumanResourcesApiService
                 ("AddressCity", x.AddressCity),
                 ("AddressState", x.AddressState),
                 ("AddressZipCode", x.AddressZipCode),
+                ("PeriodSalary", x.PeriodSalary),
                 ("DailySalary", x.DailySalary),
                 ("IntegratedDailySalary", x.IntegratedDailySalary),
                 ("SbcFija", x.SbcFija),
@@ -1072,6 +1074,7 @@ public sealed class HumanResourcesApiService
         AddressCity = ReadString(payload, "AddressCity"),
         AddressState = ReadString(payload, "AddressState"),
         AddressZipCode = ReadString(payload, "AddressZipCode"),
+        PeriodSalary = ReadDecimal(payload, "PeriodSalary"),
         DailySalary = ReadDecimal(payload, "DailySalary"),
         IntegratedDailySalary = ReadDecimal(payload, "IntegratedDailySalary"),
         SbcFija = ReadDecimal(payload, "SbcFija"),
@@ -1542,6 +1545,7 @@ public sealed class EmployeeDto
     public string? AddressCity { get; set; }
     public string? AddressState { get; set; }
     public string? AddressZipCode { get; set; }
+    public decimal PeriodSalary { get; set; }
     public decimal DailySalary { get; set; }
     public decimal IntegratedDailySalary { get; set; }
     public decimal SbcFija { get; set; }

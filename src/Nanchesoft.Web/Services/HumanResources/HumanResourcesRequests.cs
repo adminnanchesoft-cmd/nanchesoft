@@ -61,6 +61,7 @@ public sealed class EmployeeRequest
     public string? AddressState { get; set; }
     public string? AddressZipCode { get; set; }
     // Salario
+    public decimal PeriodSalary { get; set; }
     public decimal DailySalary { get; set; }
     public decimal IntegratedDailySalary { get; set; }
     public decimal SbcFija { get; set; }
