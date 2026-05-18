@@ -22,6 +22,11 @@ public sealed class WorkSchedule : BaseEntity
     public bool Friday { get; set; }
     public bool Saturday { get; set; }
     public bool Sunday { get; set; }
+    public string EntryTime { get; set; } = string.Empty;
+    public int ToleranceMinutes { get; set; }
+    public string LunchStartTime { get; set; } = string.Empty;
+    public string LunchEndTime { get; set; } = string.Empty;
+    public string ExitTime { get; set; } = string.Empty;
     public decimal WeeklyHours { get; set; }
     public bool IsFlexible { get; set; }
     public string Notes { get; set; } = string.Empty;

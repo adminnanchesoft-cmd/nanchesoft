@@ -96,6 +96,12 @@ public static class HumanResourcesEndpoints
         contracts.MapPut("/{id:guid}", UpdateEmployeeContractAsync);
         contracts.MapDelete("/{id:guid}", DeleteEmployeeContractAsync);
 
+        var periodTypes = app.MapGroup("/api/payroll/period-types").WithTags("PayrollPeriodTypes");
+        periodTypes.MapGet("/", GetPayrollPeriodTypesAsync);
+        periodTypes.MapPost("/", CreatePayrollPeriodTypeAsync);
+        periodTypes.MapPut("/{id:guid}", UpdatePayrollPeriodTypeAsync);
+        periodTypes.MapDelete("/{id:guid}", DeletePayrollPeriodTypeAsync);
+
         var periods = app.MapGroup("/api/payroll/periods").WithTags("PayrollPeriods");
         periods.MapGet("/", GetPayrollPeriodsAsync);
         periods.MapGet("/{id:guid}", async (Guid id, NanchesoftDbContext db) =>
@@ -1081,6 +1087,99 @@ public static class HumanResourcesEndpoints
         return Results.Ok(new { success = true });
     }
 
+    private static async Task<IResult> GetPayrollPeriodTypesAsync(NanchesoftDbContext db)
+    {
+        var rows = await db.PayrollPeriodTypes.AsNoTracking()
+            .Include(x => x.Company)
+            .OrderBy(x => x.Code)
+            .Select(x => new PayrollPeriodTypeDto
+            {
+                PayrollPeriodTypeId = x.Id,
+                TenantId = x.TenantId,
+                CompanyId = x.CompanyId,
+                CompanyName = x.Company != null ? x.Company.Name : string.Empty,
+                Code = x.Code,
+                Name = x.Name,
+                DaysPerPeriod = x.DaysPerPeriod,
+                PeriodsPerYear = x.PeriodsPerYear,
+                Notes = x.Notes,
+                IsActive = x.IsActive
+            })
+            .ToListAsync();
+
+        return Results.Ok(rows);
+    }
+
+    private static async Task<IResult> CreatePayrollPeriodTypeAsync(PayrollPeriodTypeRequest request, NanchesoftDbContext db)
+    {
+        var context = await ResolveDefaultContextAsync(db);
+        var tenantId = request.TenantId ?? context.TenantId;
+        var companyId = request.CompanyId ?? context.CompanyId;
+
+        if (!tenantId.HasValue || !companyId.HasValue)
+            return Results.BadRequest(new { message = "No existe contexto de tenant/empresa para el tipo de nómina." });
+
+        var code = NormalizeUpper(request.Code);
+        var name = NormalizeText(request.Name);
+
+        if (string.IsNullOrWhiteSpace(code) || string.IsNullOrWhiteSpace(name))
+            return Results.BadRequest(new { message = "Código y nombre son obligatorios." });
+
+        if (await db.PayrollPeriodTypes.AnyAsync(x => x.CompanyId == companyId && x.Code == code))
+            return Results.BadRequest(new { message = "Ya existe un tipo de nómina con ese código." });
+
+        var entity = new PayrollPeriodType
+        {
+            TenantId = tenantId.Value,
+            CompanyId = companyId.Value,
+            Code = code,
+            Name = name,
+            DaysPerPeriod = request.DaysPerPeriod,
+            PeriodsPerYear = request.PeriodsPerYear,
+            Notes = NormalizeText(request.Notes),
+            IsActive = request.IsActive,
+            CreatedBy = "web-api"
+        };
+
+        db.PayrollPeriodTypes.Add(entity);
+        await db.SaveChangesAsync();
+        return Results.Ok(new { success = true, id = entity.Id });
+    }
+
+    private static async Task<IResult> UpdatePayrollPeriodTypeAsync(Guid id, PayrollPeriodTypeRequest request, NanchesoftDbContext db)
+    {
+        var entity = await db.PayrollPeriodTypes.FirstOrDefaultAsync(x => x.Id == id);
+        if (entity is null)
+            return Results.NotFound(new { message = "No se encontró el tipo de nómina." });
+
+        var code = NormalizeUpper(request.Code, entity.Code);
+        if (await db.PayrollPeriodTypes.AnyAsync(x => x.Id != id && x.CompanyId == entity.CompanyId && x.Code == code))
+            return Results.BadRequest(new { message = "Ya existe otro tipo de nómina con ese código." });
+
+        entity.Code = code;
+        entity.Name = NormalizeText(request.Name, entity.Name);
+        entity.DaysPerPeriod = request.DaysPerPeriod;
+        entity.PeriodsPerYear = request.PeriodsPerYear;
+        entity.Notes = NormalizeText(request.Notes, entity.Notes);
+        entity.IsActive = request.IsActive;
+        entity.UpdatedAt = DateTime.UtcNow;
+        entity.UpdatedBy = "web-api";
+
+        await db.SaveChangesAsync();
+        return Results.Ok(new { success = true });
+    }
+
+    private static async Task<IResult> DeletePayrollPeriodTypeAsync(Guid id, NanchesoftDbContext db)
+    {
+        var entity = await db.PayrollPeriodTypes.FirstOrDefaultAsync(x => x.Id == id);
+        if (entity is null)
+            return Results.NotFound(new { message = "No se encontró el tipo de nómina." });
+
+        db.PayrollPeriodTypes.Remove(entity);
+        await db.SaveChangesAsync();
+        return Results.Ok(new { success = true });
+    }
+
     private static async Task<IResult> GetPayrollConceptsAsync(NanchesoftDbContext db)
     {
         var rows = await db.PayrollConcepts.AsNoTracking()
@@ -1708,4 +1807,22 @@ public sealed class PayrollRunLineDto : PayrollRunLineRequest
     public string EmployeeName { get; set; } = string.Empty;
     public string DepartmentName { get; set; } = string.Empty;
     public string PositionName { get; set; } = string.Empty;
+}
+
+public class PayrollPeriodTypeRequest
+{
+    public Guid? TenantId { get; set; }
+    public Guid? CompanyId { get; set; }
+    public string? Code { get; set; }
+    public string? Name { get; set; }
+    public int DaysPerPeriod { get; set; }
+    public int PeriodsPerYear { get; set; }
+    public string? Notes { get; set; }
+    public bool IsActive { get; set; } = true;
+}
+
+public sealed class PayrollPeriodTypeDto : PayrollPeriodTypeRequest
+{
+    public Guid PayrollPeriodTypeId { get; set; }
+    public string CompanyName { get; set; } = string.Empty;
 }

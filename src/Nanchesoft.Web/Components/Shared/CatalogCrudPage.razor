@@ -237,7 +237,7 @@
                 "service-catalog" or "customer-service-rates" or "service-notes" => await ServiceBillingApiService.DeleteAsync(CatalogKey, key),
                 "tenants" => await TenantApiService.DeleteAsync(key),
                 "plans" => await PlanApiService.DeleteAsync(key),
-                "hr-departments" or "hr-positions" or "hr-employees" or "hr-incidents" or "employee-contracts" or "payroll-periods" or "payroll-concepts" or "payroll-runs" or "payroll-run-lines" or "payroll-run-line-details" => await HumanResourcesApiService.DeleteAsync(CatalogKey, key),
+                "hr-departments" or "hr-positions" or "hr-employees" or "hr-incidents" or "employee-contracts" or "payroll-period-types" or "payroll-periods" or "payroll-concepts" or "payroll-runs" or "payroll-run-lines" or "payroll-run-line-details" => await HumanResourcesApiService.DeleteAsync(CatalogKey, key),
                 "time-clock" or "attendance-daily-summaries" or "payroll-recurring-movements" or "prepayroll-adjustments" or "prepayroll-cutoffs" or "employee-loans" or "employee-loan-deductions" or
                 "payroll-source-applications" or "payroll-receipt-control" or "payroll-run-closings" or "payroll-dispersion-batches" or "payroll-dispersion-lines" or
                 "payroll-accounting-postings" or "payroll-tax-accumulators" or "payroll-employer-obligations" or "payroll-fiscal-reconciliations" => await PayrollOperationsApiService.DeleteAsync(CatalogKey, key),
@@ -263,6 +263,93 @@
 
     [JSInvokable]
     public void HandleNavigateTo(string url) => Nav.NavigateTo(url);
+
+    [JSInvokable]
+    public async Task<QuickCreateResult> HandleQuickCreate(string quickCreateKey, string code, string name)
+    {
+        try
+        {
+            var payloadJson = JsonSerializer.Serialize(new { Code = code.Trim().ToUpperInvariant(), Name = name.Trim(), IsActive = true });
+            using var doc = JsonDocument.Parse(payloadJson);
+            var payload = doc.RootElement.Clone();
+
+            var updatedDef = await RouteQuickInsertAsync(quickCreateKey.ToLowerInvariant(), payload);
+            var keyExpr = updatedDef.KeyExpr;
+
+            var allItems = updatedDef.Rows
+                .Select(r =>
+                {
+                    var id = r.TryGetValue(keyExpr, out var idVal) ? idVal?.ToString() ?? "" : "";
+                    var rowCode = GetRowString(r, "Code") ?? "";
+                    var rowName = GetRowString(r, "Name") ?? rowCode;
+                    var display = string.IsNullOrEmpty(rowCode) ? rowName : $"{rowCode} · {rowName}";
+                    return new CatalogLookupItem { Id = id, Name = display };
+                })
+                .Where(x => !string.IsNullOrEmpty(x.Id))
+                .OrderBy(x => x.Name)
+                .ToList();
+
+            var codeUpper = code.Trim().ToUpperInvariant();
+            var newItem = allItems.FirstOrDefault(x => x.Name.StartsWith(codeUpper + " ·", StringComparison.OrdinalIgnoreCase))
+                       ?? allItems.LastOrDefault(x => x.Name.Contains(codeUpper, StringComparison.OrdinalIgnoreCase));
+
+            return new QuickCreateResult { Success = true, NewId = newItem?.Id ?? "", AllItems = allItems };
+        }
+        catch (Exception ex)
+        {
+            return new QuickCreateResult { Success = false, Error = ex.Message };
+        }
+    }
+
+    private static string? GetRowString(Dictionary<string, object?> row, string key)
+    {
+        if (row.TryGetValue(key, out var val)) return val?.ToString();
+        var kv = row.FirstOrDefault(x => string.Equals(x.Key, key, StringComparison.OrdinalIgnoreCase));
+        return kv.Value?.ToString();
+    }
+
+    private Task<CatalogViewDefinition> RouteQuickInsertAsync(string catalogKey, JsonElement payload)
+        => catalogKey switch
+        {
+            "hr-departments" or "hr-positions" or "hr-employees" or "hr-incidents" or "employee-contracts"
+            or "payroll-period-types" or "payroll-periods" or "payroll-concepts" or "payroll-runs" or "payroll-run-lines" or "payroll-run-line-details"
+                => HumanResourcesApiService.InsertAsync(catalogKey, payload),
+            "time-clock" or "attendance-daily-summaries" or "payroll-recurring-movements" or "prepayroll-adjustments"
+            or "prepayroll-cutoffs" or "employee-loans" or "employee-loan-deductions" or "payroll-source-applications"
+            or "payroll-receipt-control" or "payroll-run-closings" or "payroll-dispersion-batches" or "payroll-dispersion-lines"
+            or "payroll-accounting-postings" or "payroll-tax-accumulators" or "payroll-employer-obligations" or "payroll-fiscal-reconciliations"
+                => PayrollOperationsApiService.InsertAsync(catalogKey, payload),
+            "hr-shifts" or "hr-work-schedules" or "hr-time-clock-devices" or "hr-leave-types" or "hr-vacation-requests"
+            or "hr-employee-documents" or "hr-employee-movements" or "hr-employee-certifications" or "hr-recruitment-vacancies"
+            or "hr-candidate-applications" or "hr-onboarding-checklists" or "hr-performance-reviews"
+            or "hr-competency-assessments" or "hr-succession-plans"
+                => HumanResourcesEnterpriseApiService.InsertAsync(catalogKey, payload),
+            "currencies" or "exchange-rates" or "taxes" or "units" or "banks" or "countries" or "states"
+            or "cities" or "document-series" or "document-folios" or "company-settings"
+                => MasterCatalogApiService.InsertAsync(catalogKey, payload),
+            "customers" or "suppliers" or "contacts" or "addresses" or "bank-accounts" or "categories"
+            or "brands" or "models" or "items" or "price-lists" or "barcodes"
+                => ThirdPartiesProductsApiService.InsertAsync(catalogKey, payload),
+            "colors" or "leather-types" or "soles" or "manufacturing-types" or "toe-caps" or "sole-colors"
+            or "dies" or "quality-control-dies" or "folio-patterns" or "unit-conversions" or "size-runs"
+            or "families" or "lasts" or "lines" or "styles" or "embroidery-patterns" or "item-engineering-profiles"
+            or "material-characteristics" or "material-sizes" or "material-families" or "material-subfamilies"
+            or "material-items" or "material-suppliers" or "material-supplier-cost-history" or "finished-products"
+            or "product-components" or "finished-product-materials" or "product-consumption-profiles" or "production-phases"
+                => ProductEngineeringApiService.InsertAsync(catalogKey, payload),
+            "production-orders" or "production-vouchers" or "piecework-records" or "piecework-rates"
+            or "production-cells" or "production-surplus"
+                => ProductionApiService.InsertAsync(catalogKey, payload),
+            _ => throw new InvalidOperationException($"Quick-create no soportado para el catálogo: '{catalogKey}'.")
+        };
+
+    public sealed class QuickCreateResult
+    {
+        public bool Success { get; set; }
+        public string? Error { get; set; }
+        public string NewId { get; set; } = "";
+        public List<CatalogLookupItem> AllItems { get; set; } = [];
+    }
 
     [JSInvokable]
     public async Task<CatalogViewDefinition> HandleRefresh()
@@ -309,7 +396,7 @@
             "service-catalog" or "customer-service-rates" or "service-notes" => action == "insert" ? await ServiceBillingApiService.InsertAsync(CatalogKey, row) : await ServiceBillingApiService.UpdateAsync(CatalogKey, key!, row),
             "tenants" => action == "insert" ? await TenantApiService.InsertAsync(row) : await TenantApiService.UpdateAsync(key!, row),
             "plans" => action == "insert" ? await PlanApiService.InsertAsync(row) : await PlanApiService.UpdateAsync(key!, row),
-            "hr-departments" or "hr-positions" or "hr-employees" or "hr-incidents" or "employee-contracts" or "payroll-periods" or "payroll-concepts" or "payroll-runs" or "payroll-run-lines" or "payroll-run-line-details" => action == "insert" ? await HumanResourcesApiService.InsertAsync(CatalogKey, row) : await HumanResourcesApiService.UpdateAsync(CatalogKey, key!, row),
+            "hr-departments" or "hr-positions" or "hr-employees" or "hr-incidents" or "employee-contracts" or "payroll-period-types" or "payroll-periods" or "payroll-concepts" or "payroll-runs" or "payroll-run-lines" or "payroll-run-line-details" => action == "insert" ? await HumanResourcesApiService.InsertAsync(CatalogKey, row) : await HumanResourcesApiService.UpdateAsync(CatalogKey, key!, row),
             "time-clock" or "attendance-daily-summaries" or "payroll-recurring-movements" or "prepayroll-adjustments" or "prepayroll-cutoffs" or "employee-loans" or "employee-loan-deductions" or
             "payroll-source-applications" or "payroll-receipt-control" or "payroll-run-closings" or "payroll-dispersion-batches" or "payroll-dispersion-lines" or
             "payroll-accounting-postings" or "payroll-tax-accumulators" or "payroll-employer-obligations" or "payroll-fiscal-reconciliations" => action == "insert" ? await PayrollOperationsApiService.InsertAsync(CatalogKey, row) : await PayrollOperationsApiService.UpdateAsync(CatalogKey, key!, row),
@@ -343,7 +430,7 @@
             "service-catalog" or "customer-service-rates" or "service-notes" => ServiceBillingApiService.GetCatalogAsync(CatalogKey),
             "tenants" => TenantApiService.GetCatalogAsync(),
             "plans" => PlanApiService.GetCatalogAsync(),
-            "hr-departments" or "hr-positions" or "hr-employees" or "hr-incidents" or "employee-contracts" or "payroll-periods" or "payroll-concepts" or "payroll-runs" or "payroll-run-lines" or "payroll-run-line-details" => HumanResourcesApiService.GetCatalogAsync(CatalogKey),
+            "hr-departments" or "hr-positions" or "hr-employees" or "hr-incidents" or "employee-contracts" or "payroll-period-types" or "payroll-periods" or "payroll-concepts" or "payroll-runs" or "payroll-run-lines" or "payroll-run-line-details" => HumanResourcesApiService.GetCatalogAsync(CatalogKey),
             "time-clock" or "attendance-daily-summaries" or "payroll-recurring-movements" or "prepayroll-adjustments" or "prepayroll-cutoffs" or "employee-loans" or "employee-loan-deductions" or
             "payroll-source-applications" or "payroll-receipt-control" or "payroll-run-closings" or "payroll-dispersion-batches" or "payroll-dispersion-lines" or
             "payroll-accounting-postings" or "payroll-tax-accumulators" or "payroll-employer-obligations" or "payroll-fiscal-reconciliations" => PayrollOperationsApiService.GetCatalogAsync(CatalogKey),

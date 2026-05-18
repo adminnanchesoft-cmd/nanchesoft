@@ -1,16 +1,21 @@
 using System.Net.Http.Json;
 using System.Text.Json;
 using Nanchesoft.Web.Services.Catalogs;
+using Nanchesoft.Web.State;
 
 namespace Nanchesoft.Web.Services.HumanResources;
 
 public sealed class HumanResourcesEnterpriseApiService
 {
     private readonly IHttpClientFactory _httpClientFactory;
+    private readonly AppState _appState;
+    private readonly AuthState _authState;
 
-    public HumanResourcesEnterpriseApiService(IHttpClientFactory httpClientFactory)
+    public HumanResourcesEnterpriseApiService(IHttpClientFactory httpClientFactory, AppState appState, AuthState authState)
     {
         _httpClientFactory = httpClientFactory;
+        _appState = appState;
+        _authState = authState;
     }
 
     public Task<CatalogViewDefinition> GetCatalogAsync(string catalogKey)
@@ -169,13 +174,18 @@ public sealed class HumanResourcesEnterpriseApiService
                 LookupColumn("WorkShiftId", "Turno base", shifts, width: 220, quickCreateKey: "hr-shifts"),
                 TextColumn("Code", "Código", required: true, width: 120),
                 TextColumn("Name", "Horario", required: true, width: 220),
-                BoolColumn("Monday", "Lun", width: 70),
-                BoolColumn("Tuesday", "Mar", width: 70),
-                BoolColumn("Wednesday", "Mié", width: 70),
-                BoolColumn("Thursday", "Jue", width: 70),
-                BoolColumn("Friday", "Vie", width: 70),
-                BoolColumn("Saturday", "Sáb", width: 70),
-                BoolColumn("Sunday", "Dom", width: 70),
+                BoolColumn("Monday", "Lun", width: 60),
+                BoolColumn("Tuesday", "Mar", width: 60),
+                BoolColumn("Wednesday", "Mié", width: 60),
+                BoolColumn("Thursday", "Jue", width: 60),
+                BoolColumn("Friday", "Vie", width: 60),
+                BoolColumn("Saturday", "Sáb", width: 60),
+                BoolColumn("Sunday", "Dom", width: 60),
+                TextColumn("EntryTime", "Entrada", width: 90),
+                NumberColumn("ToleranceMinutes", "Tolerancia (min)", width: 130),
+                TextColumn("LunchStartTime", "Salida comida", width: 110),
+                TextColumn("LunchEndTime", "Regreso comida", width: 120),
+                TextColumn("ExitTime", "Salida", width: 90),
                 NumberColumn("WeeklyHours", "Horas sem", width: 110),
                 BoolColumn("IsFlexible", "Flexible", width: 90),
                 TextColumn("Notes", "Notas", width: 260),
@@ -194,6 +204,11 @@ public sealed class HumanResourcesEnterpriseApiService
                 ("Friday", x.Friday),
                 ("Saturday", x.Saturday),
                 ("Sunday", x.Sunday),
+                ("EntryTime", x.EntryTime),
+                ("ToleranceMinutes", x.ToleranceMinutes),
+                ("LunchStartTime", x.LunchStartTime),
+                ("LunchEndTime", x.LunchEndTime),
+                ("ExitTime", x.ExitTime),
                 ("WeeklyHours", x.WeeklyHours),
                 ("IsFlexible", x.IsFlexible),
                 ("Notes", x.Notes),
@@ -854,7 +869,11 @@ private async Task<CatalogViewDefinition> GetSuccessionPlansAsync()
     {
         var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
         var rows = await client.GetFromJsonAsync<List<CompanyLookupDto>>("/api/organization/companies") ?? [];
-        return rows.Where(x => x.IsActive).Select(x => new CatalogLookupItem { Id = x.CompanyId.ToString("D"), Name = x.Name }).ToList();
+
+        if (!_authState.IsPlatformOwner && _appState.CurrentTenantId.HasValue)
+            rows = rows.Where(x => x.TenantId == _appState.CurrentTenantId.Value).ToList();
+
+        return rows.Where(x => x.IsActive).OrderBy(x => x.Name).Select(x => new CatalogLookupItem { Id = x.CompanyId.ToString("D"), Name = x.Name }).ToList();
     }
 
     private async Task<List<CatalogLookupItem>> GetBranchLookupsAsync()
@@ -947,6 +966,11 @@ private async Task<CatalogViewDefinition> GetSuccessionPlansAsync()
         Friday = ReadBool(payload, "Friday"),
         Saturday = ReadBool(payload, "Saturday"),
         Sunday = ReadBool(payload, "Sunday"),
+        EntryTime = ReadString(payload, "EntryTime"),
+        ToleranceMinutes = ReadInt(payload, "ToleranceMinutes"),
+        LunchStartTime = ReadString(payload, "LunchStartTime"),
+        LunchEndTime = ReadString(payload, "LunchEndTime"),
+        ExitTime = ReadString(payload, "ExitTime"),
         WeeklyHours = ReadDecimal(payload, "WeeklyHours"),
         IsFlexible = ReadBool(payload, "IsFlexible"),
         Notes = ReadString(payload, "Notes"),
@@ -1388,6 +1412,7 @@ private static SuccessionPlanRecordRequest MapSuccessionPlanRequest(JsonElement 
     private sealed class CompanyLookupDto
     {
         public Guid CompanyId { get; set; }
+        public Guid TenantId { get; set; }
         public string Name { get; set; } = string.Empty;
         public bool IsActive { get; set; }
     }
@@ -1462,6 +1487,11 @@ public sealed class WorkScheduleDto
     public bool Friday { get; set; }
     public bool Saturday { get; set; }
     public bool Sunday { get; set; }
+    public string EntryTime { get; set; } = string.Empty;
+    public int ToleranceMinutes { get; set; }
+    public string LunchStartTime { get; set; } = string.Empty;
+    public string LunchEndTime { get; set; } = string.Empty;
+    public string ExitTime { get; set; } = string.Empty;
     public decimal WeeklyHours { get; set; }
     public bool IsFlexible { get; set; }
     public string Notes { get; set; } = string.Empty;
@@ -1556,6 +1586,11 @@ public sealed class WorkScheduleRequest
     public bool Friday { get; set; }
     public bool Saturday { get; set; }
     public bool Sunday { get; set; }
+    public string? EntryTime { get; set; }
+    public int ToleranceMinutes { get; set; }
+    public string? LunchStartTime { get; set; }
+    public string? LunchEndTime { get; set; }
+    public string? ExitTime { get; set; }
     public decimal WeeklyHours { get; set; }
     public bool IsFlexible { get; set; }
     public string? Notes { get; set; }

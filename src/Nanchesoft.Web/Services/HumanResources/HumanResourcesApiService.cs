@@ -1,16 +1,21 @@
 using System.Net.Http.Json;
 using System.Text.Json;
 using Nanchesoft.Web.Services.Catalogs;
+using Nanchesoft.Web.State;
 
 namespace Nanchesoft.Web.Services.HumanResources;
 
 public sealed class HumanResourcesApiService
 {
     private readonly IHttpClientFactory _httpClientFactory;
+    private readonly AppState _appState;
+    private readonly AuthState _authState;
 
-    public HumanResourcesApiService(IHttpClientFactory httpClientFactory)
+    public HumanResourcesApiService(IHttpClientFactory httpClientFactory, AppState appState, AuthState authState)
     {
         _httpClientFactory = httpClientFactory;
+        _appState = appState;
+        _authState = authState;
     }
 
     public Task<CatalogViewDefinition> GetCatalogAsync(string catalogKey)
@@ -24,6 +29,7 @@ public sealed class HumanResourcesApiService
             "hr-banks" => GetHrBanksAsync(),
             "hr-termination-reasons" => GetTerminationReasonsAsync(),
             "hr-employer-registrations" => GetEmployerRegistrationsAsync(),
+            "payroll-period-types" => GetPayrollPeriodTypesAsync(),
             "payroll-periods" => GetPayrollPeriodsAsync(),
             "payroll-concepts" => GetPayrollConceptsAsync(),
             "payroll-runs" => GetPayrollRunsAsync(),
@@ -46,6 +52,7 @@ public sealed class HumanResourcesApiService
             "hr-banks" => await client.PostAsJsonAsync("/api/hr/banks", MapHrBankRequest(payload)),
             "hr-termination-reasons" => await client.PostAsJsonAsync("/api/hr/termination-reasons", MapTerminationReasonRequest(payload)),
             "hr-employer-registrations" => await client.PostAsJsonAsync("/api/hr/employer-registrations", MapEmployerRegistrationRequest(payload)),
+            "payroll-period-types" => await client.PostAsJsonAsync("/api/payroll/period-types", MapPayrollPeriodTypeRequest(payload)),
             "payroll-periods" => await client.PostAsJsonAsync("/api/payroll/periods", MapPayrollPeriodRequest(payload)),
             "payroll-concepts" => await client.PostAsJsonAsync("/api/payroll/concepts", MapPayrollConceptRequest(payload)),
             "payroll-runs" => await client.PostAsJsonAsync("/api/payroll/runs", MapPayrollRunRequest(payload)),
@@ -72,6 +79,7 @@ public sealed class HumanResourcesApiService
             "hr-banks" => await client.PutAsJsonAsync($"/api/hr/banks/{key}", MapHrBankRequest(payload)),
             "hr-termination-reasons" => await client.PutAsJsonAsync($"/api/hr/termination-reasons/{key}", MapTerminationReasonRequest(payload)),
             "hr-employer-registrations" => await client.PutAsJsonAsync($"/api/hr/employer-registrations/{key}", MapEmployerRegistrationRequest(payload)),
+            "payroll-period-types" => await client.PutAsJsonAsync($"/api/payroll/period-types/{key}", MapPayrollPeriodTypeRequest(payload)),
             "payroll-periods" => await client.PutAsJsonAsync($"/api/payroll/periods/{key}", MapPayrollPeriodRequest(payload)),
             "payroll-concepts" => await client.PutAsJsonAsync($"/api/payroll/concepts/{key}", MapPayrollConceptRequest(payload)),
             "payroll-runs" => await client.PutAsJsonAsync($"/api/payroll/runs/{key}", MapPayrollRunRequest(payload)),
@@ -98,6 +106,7 @@ public sealed class HumanResourcesApiService
             "hr-banks" => $"/api/hr/banks/{key}",
             "hr-termination-reasons" => $"/api/hr/termination-reasons/{key}",
             "hr-employer-registrations" => $"/api/hr/employer-registrations/{key}",
+            "payroll-period-types" => $"/api/payroll/period-types/{key}",
             "payroll-periods" => $"/api/payroll/periods/{key}",
             "payroll-concepts" => $"/api/payroll/concepts/{key}",
             "payroll-runs" => $"/api/payroll/runs/{key}",
@@ -523,6 +532,13 @@ public sealed class HumanResourcesApiService
             .ToList());
     }
 
+    private static List<CatalogLookupItem> ConceptTypes() =>
+    [
+        new() { Id = "percepcion",  Name = "Percepción" },
+        new() { Id = "deduccion",   Name = "Deducción" },
+        new() { Id = "obligacion",  Name = "Obligación" },
+    ];
+
     private static List<CatalogLookupItem> PeriodTypes() =>
     [
         new() { Id = "semanal",    Name = "Semanal (7 días)" },
@@ -611,6 +627,39 @@ public sealed class HumanResourcesApiService
         new() { Id = "closed",    Name = "Cerrado" },
     ];
 
+    private async Task<CatalogViewDefinition> GetPayrollPeriodTypesAsync()
+    {
+        var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
+        var rows = await client.GetFromJsonAsync<List<PayrollPeriodTypeDto>>("/api/payroll/period-types") ?? [];
+        var companies = await GetCompanyLookupsAsync();
+
+        return BuildView(
+            "payroll-period-types",
+            "Tipos de nómina",
+            "Frecuencias de pago configurables: semanal, quincenal, mensual, etc.",
+            "PayrollPeriodTypeId",
+            [
+                TextColumn("PayrollPeriodTypeId", "ID", allowEditing: false, width: 200),
+                SmartLookupColumn("CompanyId", "Empresa", companies, required: true, width: 220),
+                TextColumn("Code", "Código", required: true, width: 120),
+                TextColumn("Name", "Nombre", required: true, width: 220),
+                NumberColumn("DaysPerPeriod", "Días/Periodo", width: 120),
+                NumberColumn("PeriodsPerYear", "Periodos/año", width: 120),
+                TextColumn("Notes", "Notas", width: 260),
+                BoolColumn("IsActive", "Activo", width: 90)
+            ],
+            rows.Select(x => Row(
+                ("PayrollPeriodTypeId", x.PayrollPeriodTypeId.ToString("D")),
+                ("CompanyId", x.CompanyId?.ToString("D")),
+                ("Code", x.Code),
+                ("Name", x.Name),
+                ("DaysPerPeriod", x.DaysPerPeriod),
+                ("PeriodsPerYear", x.PeriodsPerYear),
+                ("Notes", x.Notes),
+                ("IsActive", x.IsActive)))
+            .ToList());
+    }
+
     private async Task<CatalogViewDefinition> GetPayrollPeriodsAsync()
     {
         var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
@@ -668,7 +717,7 @@ public sealed class HumanResourcesApiService
                 SmartLookupColumn("CompanyId", "Empresa", companies, required: true, width: 220),
                 TextColumn("Code", "Código", required: true, width: 110),
                 TextColumn("Name", "Concepto", required: true, width: 220),
-                TextColumn("ConceptType", "Tipo", required: true, width: 110),
+                LookupColumn("ConceptType", "Tipo", ConceptTypes(), required: true, width: 140),
                 TextColumn("CalculationType", "Cálculo", required: true, width: 120),
                 TextColumn("SatCode", "Código SAT", width: 100),
                 TextColumn("SatAgrupador", "Agrupador SAT", width: 130),
@@ -858,6 +907,10 @@ public sealed class HumanResourcesApiService
     {
         var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
         var rows = await client.GetFromJsonAsync<List<CompanyLookupDto>>("/api/organization/companies") ?? [];
+
+        if (!_authState.IsPlatformOwner && _appState.CurrentTenantId.HasValue)
+            rows = rows.Where(x => x.TenantId == _appState.CurrentTenantId.Value).ToList();
+
         return rows.Where(x => x.IsActive).OrderBy(x => x.Name).Select(x => new CatalogLookupItem
         {
             Id = x.CompanyId.ToString("D"),
@@ -1111,6 +1164,17 @@ public sealed class HumanResourcesApiService
         RegistrationNumber = ReadString(payload, "RegistrationNumber"),
         RiskClass = ReadString(payload, "RiskClass"),
         State = ReadString(payload, "State"),
+        Notes = ReadString(payload, "Notes"),
+        IsActive = ReadBool(payload, "IsActive", true)
+    };
+
+    private static PayrollPeriodTypeRequest MapPayrollPeriodTypeRequest(JsonElement payload) => new()
+    {
+        CompanyId = ReadGuid(payload, "CompanyId"),
+        Code = ReadString(payload, "Code"),
+        Name = ReadString(payload, "Name"),
+        DaysPerPeriod = ReadInt(payload, "DaysPerPeriod"),
+        PeriodsPerYear = ReadInt(payload, "PeriodsPerYear"),
         Notes = ReadString(payload, "Notes"),
         IsActive = ReadBool(payload, "IsActive", true)
     };
@@ -1395,6 +1459,7 @@ public sealed class HumanResourcesApiService
 public sealed class CompanyLookupDto
 {
     public Guid CompanyId { get; set; }
+    public Guid TenantId { get; set; }
     public string Name { get; set; } = string.Empty;
     public bool IsActive { get; set; }
 }
@@ -1562,6 +1627,32 @@ public sealed class EmployeeContractDto
     public string Status { get; set; } = string.Empty;
     public string Notes { get; set; } = string.Empty;
     public bool IsActive { get; set; }
+}
+
+public sealed class PayrollPeriodTypeDto
+{
+    public Guid PayrollPeriodTypeId { get; set; }
+    public Guid? TenantId { get; set; }
+    public Guid? CompanyId { get; set; }
+    public string CompanyName { get; set; } = string.Empty;
+    public string Code { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
+    public int DaysPerPeriod { get; set; }
+    public int PeriodsPerYear { get; set; }
+    public string Notes { get; set; } = string.Empty;
+    public bool IsActive { get; set; }
+}
+
+public sealed class PayrollPeriodTypeRequest
+{
+    public Guid? TenantId { get; set; }
+    public Guid? CompanyId { get; set; }
+    public string? Code { get; set; }
+    public string? Name { get; set; }
+    public int DaysPerPeriod { get; set; }
+    public int PeriodsPerYear { get; set; }
+    public string? Notes { get; set; }
+    public bool IsActive { get; set; } = true;
 }
 
 public sealed class PayrollPeriodDto

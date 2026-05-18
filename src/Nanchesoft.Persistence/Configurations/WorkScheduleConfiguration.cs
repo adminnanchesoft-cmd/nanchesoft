@@ -13,6 +13,10 @@ public sealed class WorkScheduleConfiguration : IEntityTypeConfiguration<WorkSch
 
         builder.Property(x => x.Code).HasMaxLength(30).IsRequired();
         builder.Property(x => x.Name).HasMaxLength(160).IsRequired();
+        builder.Property(x => x.EntryTime).HasMaxLength(8);
+        builder.Property(x => x.LunchStartTime).HasMaxLength(8);
+        builder.Property(x => x.LunchEndTime).HasMaxLength(8);
+        builder.Property(x => x.ExitTime).HasMaxLength(8);
         builder.Property(x => x.WeeklyHours).HasPrecision(18, 2);
         builder.Property(x => x.Notes).HasMaxLength(600);
 

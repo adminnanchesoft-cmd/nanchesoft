@@ -1,0 +1,334 @@
+@page "/human-resources"
+@using Microsoft.AspNetCore.Components
+
+<PageTitle>Recursos Humanos | Nanchesoft</PageTitle>
+
+<div class="ns-page-header">
+    <div class="ns-breadcrumb mb-2">
+        <span class="text-dark fw-semibold">Recursos Humanos</span>
+    </div>
+    <div class="d-flex align-items-center gap-3 mb-3">
+        <div style="width:46px;height:46px;background:#F5F3FF;border-radius:10px;display:flex;align-items:center;justify-content:center;">
+            <span class="bi bi-people-fill fs-4" style="color:#7c3aed;"></span>
+        </div>
+        <div>
+            <h4 class="mb-0 fw-bold" style="font-size:20px;">Recursos Humanos</h4>
+            <small class="text-muted" style="font-size:12px;">Selecciona el módulo al que deseas acceder</small>
+        </div>
+    </div>
+</div>
+
+<div class="row g-3">
+
+    <div class="col-12">
+        <div class="fw-semibold text-muted text-uppercase" style="font-size:11px;letter-spacing:.08em;">Organización</div>
+    </div>
+
+    <div class="col-md-4 col-lg-3">
+        <a href="/human-resources/employees" class="ns-module-card text-decoration-none">
+            <div class="ns-module-card__icon" style="background:#EFF6FF;">
+                <span class="bi bi-people fs-4 text-primary"></span>
+            </div>
+            <div class="ns-module-card__body">
+                <div class="ns-module-card__title">Colaboradores</div>
+                <div class="ns-module-card__sub">Expediente del personal activo e inactivo</div>
+            </div>
+        </a>
+    </div>
+
+    <div class="col-md-4 col-lg-3">
+        <a href="/human-resources/departments" class="ns-module-card text-decoration-none">
+            <div class="ns-module-card__icon" style="background:#F0FDF4;">
+                <span class="bi bi-diagram-3 fs-4" style="color:#15803D;"></span>
+            </div>
+            <div class="ns-module-card__body">
+                <div class="ns-module-card__title">Departamentos</div>
+                <div class="ns-module-card__sub">Estructura organizacional por empresa</div>
+            </div>
+        </a>
+    </div>
+
+    <div class="col-md-4 col-lg-3">
+        <a href="/human-resources/positions" class="ns-module-card text-decoration-none">
+            <div class="ns-module-card__icon" style="background:#FFF7ED;">
+                <span class="bi bi-person-badge fs-4" style="color:#C2410C;"></span>
+            </div>
+            <div class="ns-module-card__body">
+                <div class="ns-module-card__title">Puestos</div>
+                <div class="ns-module-card__sub">Puestos y grupos de nómina</div>
+            </div>
+        </a>
+    </div>
+
+    <div class="col-md-4 col-lg-3">
+        <a href="/human-resources/work-schedules" class="ns-module-card text-decoration-none">
+            <div class="ns-module-card__icon" style="background:#F5F3FF;">
+                <span class="bi bi-calendar-week fs-4" style="color:#7c3aed;"></span>
+            </div>
+            <div class="ns-module-card__body">
+                <div class="ns-module-card__title">Horarios laborales</div>
+                <div class="ns-module-card__sub">Jornadas semanales con turnos y días activos</div>
+            </div>
+        </a>
+    </div>
+
+    <div class="col-md-4 col-lg-3">
+        <a href="/human-resources/shifts" class="ns-module-card text-decoration-none">
+            <div class="ns-module-card__icon" style="background:#F0F9FF;">
+                <span class="bi bi-clock fs-4" style="color:#0369a1;"></span>
+            </div>
+            <div class="ns-module-card__body">
+                <div class="ns-module-card__title">Turnos</div>
+                <div class="ns-module-card__sub">Turnos con horario de entrada y salida</div>
+            </div>
+        </a>
+    </div>
+
+    <div class="col-12 mt-2">
+        <div class="fw-semibold text-muted text-uppercase" style="font-size:11px;letter-spacing:.08em;">Asistencia y Permisos</div>
+    </div>
+
+    <div class="col-md-4 col-lg-3">
+        <a href="/human-resources/time-clock" class="ns-module-card text-decoration-none">
+            <div class="ns-module-card__icon" style="background:#FFF1F2;">
+                <span class="bi bi-clock-history fs-4" style="color:#BE123C;"></span>
+            </div>
+            <div class="ns-module-card__body">
+                <div class="ns-module-card__title">Checador</div>
+                <div class="ns-module-card__sub">Registro de asistencia y puntualidad</div>
+            </div>
+        </a>
+    </div>
+
+    <div class="col-md-4 col-lg-3">
+        <a href="/human-resources/attendance-daily-summaries" class="ns-module-card text-decoration-none">
+            <div class="ns-module-card__icon" style="background:#ECFDF5;">
+                <span class="bi bi-calendar-check fs-4" style="color:#059669;"></span>
+            </div>
+            <div class="ns-module-card__body">
+                <div class="ns-module-card__title">Asistencia diaria</div>
+                <div class="ns-module-card__sub">Resúmenes de asistencia por día</div>
+            </div>
+        </a>
+    </div>
+
+    <div class="col-md-4 col-lg-3">
+        <a href="/human-resources/vacation-requests" class="ns-module-card text-decoration-none">
+            <div class="ns-module-card__icon" style="background:#FFF7ED;">
+                <span class="bi bi-umbrella fs-4" style="color:#D97706;"></span>
+            </div>
+            <div class="ns-module-card__body">
+                <div class="ns-module-card__title">Solicitudes de vacaciones</div>
+                <div class="ns-module-card__sub">Gestión de vacaciones y ausencias</div>
+            </div>
+        </a>
+    </div>
+
+    <div class="col-md-4 col-lg-3">
+        <a href="/human-resources/leave-types" class="ns-module-card text-decoration-none">
+            <div class="ns-module-card__icon" style="background:#F8FAFC;">
+                <span class="bi bi-journal-text fs-4 text-secondary"></span>
+            </div>
+            <div class="ns-module-card__body">
+                <div class="ns-module-card__title">Tipos de ausencia</div>
+                <div class="ns-module-card__sub">Categorías de permiso e incapacidad</div>
+            </div>
+        </a>
+    </div>
+
+    <div class="col-md-4 col-lg-3">
+        <a href="/human-resources/incidents" class="ns-module-card text-decoration-none">
+            <div class="ns-module-card__icon" style="background:#FEF2F2;">
+                <span class="bi bi-exclamation-triangle fs-4" style="color:#DC2626;"></span>
+            </div>
+            <div class="ns-module-card__body">
+                <div class="ns-module-card__title">Incidencias</div>
+                <div class="ns-module-card__sub">Faltas, retardos y incidentes de nómina</div>
+            </div>
+        </a>
+    </div>
+
+    <div class="col-12 mt-2">
+        <div class="fw-semibold text-muted text-uppercase" style="font-size:11px;letter-spacing:.08em;">Catálogos de Nómina</div>
+    </div>
+
+    <div class="col-md-4 col-lg-3">
+        <a href="/payroll/periods" class="ns-module-card text-decoration-none">
+            <div class="ns-module-card__icon" style="background:#F0FDFA;">
+                <span class="bi bi-calendar-range fs-4" style="color:#0d9488;"></span>
+            </div>
+            <div class="ns-module-card__body">
+                <div class="ns-module-card__title">Periodos de nómina</div>
+                <div class="ns-module-card__sub">Ventanas operativas de cálculo y pago</div>
+            </div>
+        </a>
+    </div>
+
+    <div class="col-md-4 col-lg-3">
+        <a href="/payroll/period-types" class="ns-module-card text-decoration-none">
+            <div class="ns-module-card__icon" style="background:#F0FDFA;">
+                <span class="bi bi-list-ul fs-4" style="color:#0d9488;"></span>
+            </div>
+            <div class="ns-module-card__body">
+                <div class="ns-module-card__title">Tipos de nómina</div>
+                <div class="ns-module-card__sub">Frecuencias de pago: semanal, quincenal...</div>
+            </div>
+        </a>
+    </div>
+
+    <div class="col-md-4 col-lg-3">
+        <a href="/payroll/concepts" class="ns-module-card text-decoration-none">
+            <div class="ns-module-card__icon" style="background:#F0FDFA;">
+                <span class="bi bi-tags fs-4" style="color:#0d9488;"></span>
+            </div>
+            <div class="ns-module-card__body">
+                <div class="ns-module-card__title">Conceptos de nómina</div>
+                <div class="ns-module-card__sub">Percepciones, deducciones y obligaciones</div>
+            </div>
+        </a>
+    </div>
+
+    <div class="col-12 mt-2">
+        <div class="fw-semibold text-muted text-uppercase" style="font-size:11px;letter-spacing:.08em;">Talento y Operación</div>
+    </div>
+
+    <div class="col-md-4 col-lg-3">
+        <a href="/human-resources/recruitment-vacancies" class="ns-module-card text-decoration-none">
+            <div class="ns-module-card__icon" style="background:#EFF6FF;">
+                <span class="bi bi-search fs-4 text-primary"></span>
+            </div>
+            <div class="ns-module-card__body">
+                <div class="ns-module-card__title">Vacantes</div>
+                <div class="ns-module-card__sub">Reclutamiento y selección de personal</div>
+            </div>
+        </a>
+    </div>
+
+    <div class="col-md-4 col-lg-3">
+        <a href="/human-resources/performance-reviews" class="ns-module-card text-decoration-none">
+            <div class="ns-module-card__icon" style="background:#F5F3FF;">
+                <span class="bi bi-star fs-4" style="color:#7c3aed;"></span>
+            </div>
+            <div class="ns-module-card__body">
+                <div class="ns-module-card__title">Evaluaciones de desempeño</div>
+                <div class="ns-module-card__sub">Revisiones periódicas de rendimiento</div>
+            </div>
+        </a>
+    </div>
+
+    <div class="col-md-4 col-lg-3">
+        <a href="/human-resources/employee-movements" class="ns-module-card text-decoration-none">
+            <div class="ns-module-card__icon" style="background:#FFF7ED;">
+                <span class="bi bi-arrow-left-right fs-4" style="color:#C2410C;"></span>
+            </div>
+            <div class="ns-module-card__body">
+                <div class="ns-module-card__title">Movimientos de personal</div>
+                <div class="ns-module-card__sub">Altas, bajas y cambios de puesto</div>
+            </div>
+        </a>
+    </div>
+
+    <div class="col-md-4 col-lg-3">
+        <a href="/human-resources/employee-documents" class="ns-module-card text-decoration-none">
+            <div class="ns-module-card__icon" style="background:#F8FAFC;">
+                <span class="bi bi-file-earmark-text fs-4 text-secondary"></span>
+            </div>
+            <div class="ns-module-card__body">
+                <div class="ns-module-card__title">Documentos del empleado</div>
+                <div class="ns-module-card__sub">Contratos, IDs y certificados del expediente</div>
+            </div>
+        </a>
+    </div>
+
+    <div class="col-12 mt-2">
+        <div class="fw-semibold text-muted text-uppercase" style="font-size:11px;letter-spacing:.08em;">Configuración</div>
+    </div>
+
+    <div class="col-md-4 col-lg-3">
+        <a href="/human-resources/banks" class="ns-module-card text-decoration-none">
+            <div class="ns-module-card__icon" style="background:#EFF6FF;">
+                <span class="bi bi-bank fs-4 text-primary"></span>
+            </div>
+            <div class="ns-module-card__body">
+                <div class="ns-module-card__title">Bancos RH</div>
+                <div class="ns-module-card__sub">Bancos configurados para nómina</div>
+            </div>
+        </a>
+    </div>
+
+    <div class="col-md-4 col-lg-3">
+        <a href="/human-resources/termination-reasons" class="ns-module-card text-decoration-none">
+            <div class="ns-module-card__icon" style="background:#FEF2F2;">
+                <span class="bi bi-person-dash fs-4" style="color:#DC2626;"></span>
+            </div>
+            <div class="ns-module-card__body">
+                <div class="ns-module-card__title">Motivos de baja</div>
+                <div class="ns-module-card__sub">Causas de terminación de contrato</div>
+            </div>
+        </a>
+    </div>
+
+    <div class="col-md-4 col-lg-3">
+        <a href="/human-resources/employer-registrations" class="ns-module-card text-decoration-none">
+            <div class="ns-module-card__icon" style="background:#F0FDF4;">
+                <span class="bi bi-building-check fs-4" style="color:#15803D;"></span>
+            </div>
+            <div class="ns-module-card__body">
+                <div class="ns-module-card__title">Registros patronales</div>
+                <div class="ns-module-card__sub">Registros IMSS e instituciones patronales</div>
+            </div>
+        </a>
+    </div>
+
+    <div class="col-md-4 col-lg-3">
+        <a href="/human-resources/time-clock-devices" class="ns-module-card text-decoration-none">
+            <div class="ns-module-card__icon" style="background:#F8FAFC;">
+                <span class="bi bi-hdd-network fs-4 text-secondary"></span>
+            </div>
+            <div class="ns-module-card__body">
+                <div class="ns-module-card__title">Dispositivos reloj</div>
+                <div class="ns-module-card__sub">Relojes biométricos y endpoints de integración</div>
+            </div>
+        </a>
+    </div>
+
+</div>
+
+<style>
+    .ns-module-card {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        padding: 16px;
+        border: 1px solid #e5e7eb;
+        border-radius: 10px;
+        background: #fff;
+        transition: box-shadow .15s, border-color .15s;
+        color: inherit;
+    }
+    .ns-module-card:hover {
+        box-shadow: 0 4px 16px rgba(0,0,0,.08);
+        border-color: #c7d2fe;
+        text-decoration: none;
+        color: inherit;
+    }
+    .ns-module-card__icon {
+        flex-shrink: 0;
+        width: 44px;
+        height: 44px;
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .ns-module-card__title {
+        font-weight: 600;
+        font-size: 14px;
+        color: #111827;
+    }
+    .ns-module-card__sub {
+        font-size: 12px;
+        color: #6b7280;
+        margin-top: 2px;
+    }
+</style>

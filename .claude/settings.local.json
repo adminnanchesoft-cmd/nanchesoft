@@ -90,7 +90,32 @@
       "Bash(kill 239214 239330)",
       "Bash(ps -p 239260 -o cmd --no-headers)",
       "Bash(ps -p 239063 -o cmd --no-headers)",
-      "Bash(kill 241657)"
+      "Bash(kill 241657)",
+      "Bash(pdftotext /opt/nanchesoft/Nanchesoft/docs/NOMINAS_Elemental.pdf -)",
+      "Bash(journalctl -u nanchesoft-api -n 5 --no-pager)",
+      "Bash(PGPASSWORD=CambiaEstaClave123* psql -h localhost -U nancheadmin -d nanchesoftdb1 -c ' *)",
+      "Bash(grep -v \"\\\\.vb$\")",
+      "Bash(iconv -f UTF-16LE -t UTF-8 \"/opt/nanchesoft/Nanchesoft/Silvasoft/NanchesoftSilvasoft/Schema Retryver.sql\")",
+      "Bash(xargs ls -la)",
+      "Bash(mkdir -p /opt/nanchesoft/Nanchesoft/src/Nanchesoft.Domain/Entities/Production)",
+      "Bash(mkdir -p /opt/nanchesoft/Nanchesoft/src/Nanchesoft.Persistence/Configurations/Production)",
+      "Bash(dotnet restore *)",
+      "Bash(dotnet test *)",
+      "Bash(xargs basename -a)",
+      "Bash(grep -v \"^--$\")",
+      "Bash(Read /tmp/claude-0/-opt-nanchesoft-Nanchesoft/8eb41082-6e2e-445b-891d-8481de97f247/tasks/bzkdjfopb.output)",
+      "Bash(pg_isready -h localhost -p 5432)",
+      "Bash(psql -h localhost -p 5432 -U nancheadmin -d nanchesoftdb -c \"SELECT 1\")",
+      "Bash(psql *)",
+      "Bash(PGPASSWORD=postgres psql *)",
+      "Bash(NANCHESOFT_TEST_DB='Host=localhost;Port=5432;Database=nanchesoftdb1;Username=nancheadmin;Password=$Sandokan89240371' dotnet test tests/Nanchesoft.IntegrationTests/ --filter FullyQualifiedName~AdminOrganizationEndpointTests.ListBranches)",
+      "Bash(timeout 5 nc -zv 158.23.144.95 5432)",
+      "Bash(grep -v \"warning\\\\|Warning\\\\|Time\\\\|Note\\\\|MSBUILD.*Building\\\\|^  $\")",
+      "Bash(PGPASSWORD=CambiaEstaClave123* psql -h localhost -U nancheadmin -d nanchesoftdb_test -c \"SELECT COUNT\\(*\\) FROM companies;\")",
+      "Bash(PGPASSWORD=CambiaEstaClave123* psql -h localhost -U nancheadmin -d nanchesoftdb_test -c '\\\\dt')",
+      "Bash(PGPASSWORD=CambiaEstaClave123* psql -h localhost -U nancheadmin -d nanchesoftdb1 -c \"\\\\dt\")",
+      "Bash(PGPASSWORD=CambiaEstaClave123* psql *)",
+      "Bash(systemctl show *)"
     ]
   }
 }

@@ -201,6 +201,11 @@ public static class HumanResourcesEnterpriseEndpoints
                 Friday = x.Friday,
                 Saturday = x.Saturday,
                 Sunday = x.Sunday,
+                EntryTime = x.EntryTime,
+                ToleranceMinutes = x.ToleranceMinutes,
+                LunchStartTime = x.LunchStartTime,
+                LunchEndTime = x.LunchEndTime,
+                ExitTime = x.ExitTime,
                 WeeklyHours = x.WeeklyHours,
                 IsFlexible = x.IsFlexible,
                 Notes = x.Notes,
@@ -241,6 +246,11 @@ public static class HumanResourcesEnterpriseEndpoints
             Friday = request.Friday,
             Saturday = request.Saturday,
             Sunday = request.Sunday,
+            EntryTime = NormalizeText(request.EntryTime),
+            ToleranceMinutes = request.ToleranceMinutes,
+            LunchStartTime = NormalizeText(request.LunchStartTime),
+            LunchEndTime = NormalizeText(request.LunchEndTime),
+            ExitTime = NormalizeText(request.ExitTime),
             WeeklyHours = request.WeeklyHours,
             IsFlexible = request.IsFlexible,
             Notes = NormalizeText(request.Notes),
@@ -273,6 +283,11 @@ public static class HumanResourcesEnterpriseEndpoints
         entity.Friday = request.Friday;
         entity.Saturday = request.Saturday;
         entity.Sunday = request.Sunday;
+        entity.EntryTime = NormalizeText(request.EntryTime, entity.EntryTime);
+        entity.ToleranceMinutes = request.ToleranceMinutes;
+        entity.LunchStartTime = NormalizeText(request.LunchStartTime, entity.LunchStartTime);
+        entity.LunchEndTime = NormalizeText(request.LunchEndTime, entity.LunchEndTime);
+        entity.ExitTime = NormalizeText(request.ExitTime, entity.ExitTime);
         entity.WeeklyHours = request.WeeklyHours;
         entity.IsFlexible = request.IsFlexible;
         entity.Notes = NormalizeText(request.Notes, entity.Notes);
@@ -697,6 +712,11 @@ public sealed class WorkScheduleRequest
     public bool Friday { get; set; }
     public bool Saturday { get; set; }
     public bool Sunday { get; set; }
+    public string? EntryTime { get; set; }
+    public int ToleranceMinutes { get; set; }
+    public string? LunchStartTime { get; set; }
+    public string? LunchEndTime { get; set; }
+    public string? ExitTime { get; set; }
     public decimal WeeklyHours { get; set; }
     public bool IsFlexible { get; set; }
     public string? Notes { get; set; }
@@ -720,6 +740,11 @@ public sealed class WorkScheduleDto
     public bool Friday { get; set; }
     public bool Saturday { get; set; }
     public bool Sunday { get; set; }
+    public string EntryTime { get; set; } = string.Empty;
+    public int ToleranceMinutes { get; set; }
+    public string LunchStartTime { get; set; } = string.Empty;
+    public string LunchEndTime { get; set; } = string.Empty;
+    public string ExitTime { get; set; } = string.Empty;
     public decimal WeeklyHours { get; set; }
     public bool IsFlexible { get; set; }
     public string Notes { get; set; } = string.Empty;
