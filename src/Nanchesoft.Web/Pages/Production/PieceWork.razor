@@ -1,7 +1,265 @@
 @page "/produccion/destajo"
+@using System.Net.Http.Json
+@using System.Text.Json
+@inject IHttpClientFactory HttpClientFactory
+@inject NavigationManager Navigation
+
 <PageTitle>Registros de destajo | Nanchesoft</PageTitle>
-<div class="d-flex justify-content-end gap-2 mb-3 flex-wrap">
-    <a class="btn btn-outline-secondary" href="/produccion/dashboard">Dashboard producción</a>
-    <a class="btn btn-outline-secondary" href="/produccion/tarifas-destajo">Tarifas de destajo</a>
+
+<div class="container-fluid py-3">
+    <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-3">
+        <div>
+            <div class="text-uppercase small text-secondary fw-semibold">Producción · Destajo</div>
+            <h2 class="mb-1">Registros de destajo</h2>
+            <div class="text-secondary">Captura y aprobación del trabajo a destajo por operario, fase y jornada.</div>
+        </div>
+        <div class="d-flex gap-2 flex-wrap">
+            <select class="form-select form-select-sm" style="width:160px;" @bind="_statusFilter" @bind:after="LoadAsync">
+                <option value="">Todos los estados</option>
+                <option value="pending">Pendiente</option>
+                <option value="approved">Aprobado</option>
+                <option value="processed">Procesado</option>
+                <option value="cancelled">Cancelado</option>
+            </select>
+            <button class="btn btn-outline-secondary btn-sm" @onclick="LoadAsync">Actualizar</button>
+            @if (_records.Any(r => r.Status == "pending"))
+            {
+                <button class="btn btn-warning btn-sm" @onclick="ApproveAllPendingAsync" disabled="@_busy">Aprobar todos pendientes</button>
+            }
+            <a class="btn btn-outline-secondary btn-sm" href="/produccion/tarifas-destajo">Tarifas</a>
+            <a class="btn btn-primary btn-sm" href="/produccion/dashboard">Dashboard</a>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(_message))
+    {
+        <div class="alert alert-success alert-dismissible">@_message <button type="button" class="btn-close" @onclick='() => _message = string.Empty'></button></div>
+    }
+    @if (!string.IsNullOrWhiteSpace(_error))
+    {
+        <div class="alert alert-danger alert-dismissible">@_error <button type="button" class="btn-close" @onclick='() => _error = string.Empty'></button></div>
+    }
+
+    @if (_loading)
+    {
+        <div class="alert alert-info">Cargando registros...</div>
+    }
+    else if (_records.Count == 0)
+    {
+        <div class="alert alert-secondary">No hay registros para los filtros seleccionados.</div>
+    }
+    else
+    {
+        <div class="d-flex align-items-center gap-3 mb-2">
+            <div class="text-muted small">@_records.Count registro(s) · Neto total: <strong>@_records.Sum(r => r.NetAmount).ToString("C2")</strong></div>
+            @if (_records.Count(r => r.Status == "pending") > 0)
+            {
+                <div class="badge bg-warning text-dark">@_records.Count(r => r.Status == "pending") pendiente(s)</div>
+            }
+        </div>
+
+        <div class="table-responsive">
+            <table class="table table-sm table-hover align-middle">
+                <thead class="table-light">
+                    <tr>
+                        <th>Empleado (ID)</th>
+                        <th>Fase</th>
+                        <th>Fecha trabajo</th>
+                        <th class="text-end">Producido</th>
+                        <th class="text-end">Rechazado</th>
+                        <th class="text-end">Precio</th>
+                        <th class="text-end">Bruto</th>
+                        <th class="text-end">Deducción</th>
+                        <th class="text-end">Neto</th>
+                        <th>Estatus</th>
+                        <th>Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var r in _records)
+                    {
+                        <tr>
+                            <td class="text-muted small font-monospace" title="@r.EmployeeId">@r.EmployeeId.ToString("D")[..8]…</td>
+                            <td>@r.PhaseName</td>
+                            <td>@r.WorkDate.ToString("dd/MM/yy")</td>
+                            <td class="text-end">@r.UnitsProduced</td>
+                            <td class="text-end @(r.UnitsRejected > 0 ? "text-danger" : "")">@r.UnitsRejected</td>
+                            <td class="text-end">@r.UnitPrice.ToString("C4")</td>
+                            <td class="text-end">@r.GrossAmount.ToString("C2")</td>
+                            <td class="text-end @(r.QualityDeduction > 0 ? "text-danger" : "text-muted")">@(r.QualityDeduction > 0 ? r.QualityDeduction.ToString("C2") : "—")</td>
+                            <td class="text-end fw-semibold">@r.NetAmount.ToString("C2")</td>
+                            <td>
+                                <span class="badge @StatusBadgeClass(r.Status)">@StatusLabel(r.Status)</span>
+                            </td>
+                            <td>
+                                @if (r.Status == "pending")
+                                {
+                                    <button class="btn btn-warning btn-sm" @onclick="() => ApproveAsync(r.PieceWorkRecordId)" disabled="@_busy">Aprobar</button>
+                                }
+                                else if (r.Status == "approved")
+                                {
+                                    <span class="text-success small" title="@r.ApprovedBy · @(r.ApprovedAt?.ToString("dd/MM HH:mm"))">✓ @r.ApprovedBy</span>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+                <tfoot class="table-light fw-semibold">
+                    <tr>
+                        <td colspan="3">Totales</td>
+                        <td class="text-end">@_records.Sum(r => r.UnitsProduced)</td>
+                        <td class="text-end text-danger">@_records.Sum(r => r.UnitsRejected)</td>
+                        <td></td>
+                        <td class="text-end">@_records.Sum(r => r.GrossAmount).ToString("C2")</td>
+                        <td class="text-end text-danger">@_records.Sum(r => r.QualityDeduction).ToString("C2")</td>
+                        <td class="text-end">@_records.Sum(r => r.NetAmount).ToString("C2")</td>
+                        <td colspan="2"></td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    }
 </div>
-<CatalogCrudPage CatalogKey="piecework-records" />
+
+@code {
+    private List<PieceWorkRow> _records = [];
+    private string _statusFilter = "pending";
+    private bool _loading = true;
+    private bool _busy = false;
+    private string _message = string.Empty;
+    private string _error = string.Empty;
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _error = string.Empty;
+        try
+        {
+            var client = HttpClientFactory.CreateClient("Nanchesoft.Api");
+            var url = $"/api/production/piecework/records?pageSize=200{(string.IsNullOrWhiteSpace(_statusFilter) ? "" : $"&status={_statusFilter}")}";
+            var result = await client.GetFromJsonAsync<PagedPieceWork>(url);
+            _records = result?.Items ?? [];
+        }
+        catch (Exception ex)
+        {
+            _error = $"Error al cargar registros: {ex.Message}";
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task ApproveAsync(Guid recordId)
+    {
+        _busy = true;
+        _error = string.Empty;
+        try
+        {
+            var client = HttpClientFactory.CreateClient("Nanchesoft.Api");
+            var response = await client.PostAsJsonAsync($"/api/production/piecework/records/{recordId}/approve", new { });
+            if (!response.IsSuccessStatusCode)
+                _error = await ExtractErrorAsync(response);
+            else
+            {
+                _message = "Registro aprobado.";
+                await LoadAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task ApproveAllPendingAsync()
+    {
+        var pending = _records.Where(r => r.Status == "pending").ToList();
+        if (pending.Count == 0) return;
+
+        _busy = true;
+        _error = string.Empty;
+        var approved = 0;
+        try
+        {
+            var client = HttpClientFactory.CreateClient("Nanchesoft.Api");
+            foreach (var r in pending)
+            {
+                var response = await client.PostAsJsonAsync($"/api/production/piecework/records/{r.PieceWorkRecordId}/approve", new { });
+                if (response.IsSuccessStatusCode) approved++;
+            }
+            _message = $"{approved} registro(s) aprobado(s).";
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private static async Task<string> ExtractErrorAsync(HttpResponseMessage response)
+    {
+        var content = await response.Content.ReadAsStringAsync();
+        try
+        {
+            using var doc = JsonDocument.Parse(content);
+            if (doc.RootElement.TryGetProperty("message", out var msg))
+                return msg.GetString() ?? "Error desconocido.";
+        }
+        catch { }
+        return string.IsNullOrWhiteSpace(content) ? "Error sin detalle." : content;
+    }
+
+    private static string StatusBadgeClass(string status) => status switch
+    {
+        "pending"   => "bg-warning text-dark",
+        "approved"  => "bg-success",
+        "processed" => "bg-primary",
+        "cancelled" => "bg-secondary",
+        _           => "bg-light text-dark"
+    };
+
+    private static string StatusLabel(string status) => status switch
+    {
+        "pending"   => "Pendiente",
+        "approved"  => "Aprobado",
+        "processed" => "Procesado",
+        "cancelled" => "Cancelado",
+        _           => status
+    };
+
+    private sealed class PieceWorkRow
+    {
+        public Guid PieceWorkRecordId { get; set; }
+        public Guid EmployeeId { get; set; }
+        public string PhaseName { get; set; } = string.Empty;
+        public DateOnly WorkDate { get; set; }
+        public int UnitsProduced { get; set; }
+        public int UnitsRejected { get; set; }
+        public decimal UnitPrice { get; set; }
+        public decimal GrossAmount { get; set; }
+        public decimal QualityDeduction { get; set; }
+        public decimal NetAmount { get; set; }
+        public string Status { get; set; } = string.Empty;
+        public string? ApprovedBy { get; set; }
+        public DateTime? ApprovedAt { get; set; }
+    }
+
+    private sealed class PagedPieceWork
+    {
+        public List<PieceWorkRow> Items { get; set; } = [];
+        public int Total { get; set; }
+        public int Page { get; set; }
+        public int PageSize { get; set; }
+    }
+}
