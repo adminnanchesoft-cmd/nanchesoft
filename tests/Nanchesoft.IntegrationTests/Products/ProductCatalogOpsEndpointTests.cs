@@ -14,6 +14,82 @@ public class ProductCatalogOpsEndpointTests
         _client = factory.CreateClient();
     }
 
+    // ── Material characteristics ───────────────────────────────────────────────
+
+    [Fact]
+    public async Task ListMaterialCharacteristics_ReturnsOk()
+    {
+        var response = await _client.GetAsync("/api/products/material-characteristics");
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+    }
+
+    [Fact]
+    public async Task ListMaterialCharacteristicsOptions_ReturnsOk()
+    {
+        var response = await _client.GetAsync("/api/products/material-characteristics/options");
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+    }
+
+    [Fact]
+    public async Task CreateMaterialCharacteristic_MissingCode_Returns400()
+    {
+        var payload = new { code = "", name = "" };
+        var response = await _client.PostAsJsonAsync("/api/products/material-characteristics", payload);
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    public async Task UpdateMaterialCharacteristic_UnknownId_Returns404()
+    {
+        var response = await _client.PutAsJsonAsync($"/api/products/material-characteristics/{Guid.NewGuid()}", new { code = "ZZ-NOTFOUND", name = "Test", isActive = true });
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
+    public async Task DeleteMaterialCharacteristic_UnknownId_Returns404()
+    {
+        var response = await _client.DeleteAsync($"/api/products/material-characteristics/{Guid.NewGuid()}");
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
+    // ── Material sizes ─────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task ListMaterialSizes_ReturnsOk()
+    {
+        var response = await _client.GetAsync("/api/products/material-sizes");
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+    }
+
+    [Fact]
+    public async Task ListMaterialSizesOptions_ReturnsOk()
+    {
+        var response = await _client.GetAsync("/api/products/material-sizes/options");
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+    }
+
+    [Fact]
+    public async Task CreateMaterialSize_MissingCode_Returns400()
+    {
+        var payload = new { code = "", name = "" };
+        var response = await _client.PostAsJsonAsync("/api/products/material-sizes", payload);
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    public async Task UpdateMaterialSize_UnknownId_Returns404()
+    {
+        var response = await _client.PutAsJsonAsync($"/api/products/material-sizes/{Guid.NewGuid()}", new { code = "ZZ-NOTFOUND", name = "Test", isActive = true });
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
+    public async Task DeleteMaterialSize_UnknownId_Returns404()
+    {
+        var response = await _client.DeleteAsync($"/api/products/material-sizes/{Guid.NewGuid()}");
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
     // ── Material families ──────────────────────────────────────────────────────
 
     [Fact]
