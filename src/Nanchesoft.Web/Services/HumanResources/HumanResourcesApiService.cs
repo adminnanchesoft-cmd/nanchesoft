@@ -186,7 +186,7 @@ public sealed class HumanResourcesApiService
         var positions = await GetPositionLookupsAsync();
         var workSchedules = await GetWorkScheduleLookupsAsync();
 
-        return BuildView(
+        var view = BuildView(
             "hr-employees",
             "Colaboradores",
             "Expediente base del colaborador para RH, contratos y nómina.",
@@ -338,6 +338,9 @@ public sealed class HumanResourcesApiService
                 ("PrintReceipt", x.PrintReceipt),
                 ("IsActive", x.IsActive)))
             .ToList());
+        view.NewUrl = "/human-resources/empleado";
+        view.EditUrl = "/human-resources/empleado";
+        return view;
     }
 
     private async Task<CatalogViewDefinition> GetIncidentsAsync()

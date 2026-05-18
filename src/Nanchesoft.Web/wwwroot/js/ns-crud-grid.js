@@ -40,6 +40,14 @@ window.nsCrudGrid = (() => {
         return pick(definition, "allowDelete", "AllowDelete", true);
     }
 
+    function getNewUrl(definition) {
+        return pick(definition, "newUrl", "NewUrl", null);
+    }
+
+    function getEditUrl(definition) {
+        return pick(definition, "editUrl", "EditUrl", null);
+    }
+
     function getMetadata(definition) {
         return pick(definition, "metadata", "Metadata", {});
     }
@@ -172,6 +180,8 @@ window.nsCrudGrid = (() => {
         const allowCreate = getAllowCreate(definition);
         const allowUpdate = getAllowUpdate(definition);
         const allowDelete = getAllowDelete(definition);
+        const newUrl = getNewUrl(definition);
+        const editUrl = getEditUrl(definition);
 
         const editableColumns = columns.filter(x =>
             getColumnValue(x, "visible", "Visible", true) !== false &&
@@ -219,12 +229,12 @@ window.nsCrudGrid = (() => {
                 storageKey: `nanchesoft:${catalogKey}:grid-state:v6`
             },
 
-            columns: buildColumns(columns, definition),
+            columns: buildColumns(columns, definition, dotNetRef),
 
             editing: {
                 mode: "popup",
-                allowAdding: allowCreate,
-                allowUpdating: allowUpdate,
+                allowAdding: allowCreate && !newUrl,
+                allowUpdating: allowUpdate && !editUrl,
                 allowDeleting: allowDelete,
                 useIcons: true,
                 popup: {
@@ -268,7 +278,17 @@ window.nsCrudGrid = (() => {
                             return el;
                         }
                     },
-                    ...(allowCreate ? [{
+                    ...(allowCreate && newUrl ? [{
+                        location: "after",
+                        widget: "dxButton",
+                        options: {
+                            text: "Nuevo",
+                            icon: "add",
+                            type: "success",
+                            stylingMode: "contained",
+                            onClick: () => dotNetRef.invokeMethodAsync("HandleNavigateTo", newUrl)
+                        }
+                    }] : allowCreate ? [{
                         name: "addRowButton",
                         location: "after",
                         showText: "always",
@@ -337,9 +357,10 @@ window.nsCrudGrid = (() => {
         };
     }
 
-    function buildColumns(columns, definition) {
+    function buildColumns(columns, definition, dotNetRef) {
         const allowUpdate = getAllowUpdate(definition);
         const allowDelete = getAllowDelete(definition);
+        const editUrl = getEditUrl(definition);
         const keyExpr = getKeyExpr(definition);
         const mapped = columns
             .filter(x => getColumnValue(x, "visible", "Visible", true) !== false && getColumnValue(x, "dataField", "DataField", "") !== keyExpr)
@@ -382,7 +403,18 @@ window.nsCrudGrid = (() => {
             });
 
         const commandButtons = [];
-        if (allowUpdate) commandButtons.push("edit");
+        if (allowUpdate && editUrl) {
+            commandButtons.push({
+                hint: "Editar",
+                icon: "edit",
+                onClick(e) {
+                    const key = e.row?.data?.[keyExpr];
+                    if (key) dotNetRef.invokeMethodAsync("HandleNavigateTo", `${editUrl}/${key}`);
+                }
+            });
+        } else if (allowUpdate) {
+            commandButtons.push("edit");
+        }
         if (allowDelete) commandButtons.push("delete");
 
         if (commandButtons.length > 0) {

@@ -20,6 +20,7 @@
 @using Nanchesoft.Web.Services.Treasury
 @implements IAsyncDisposable
 @inject IJSRuntime JS
+@inject NavigationManager Nav
 @inject CompanyApiService CompanyApiService
 @inject BranchApiService BranchApiService
 @inject WarehouseApiService WarehouseApiService
@@ -259,6 +260,9 @@
             return new CatalogCrudOperationResult { Success = false, Error = ex.Message, Definition = _definition ?? await GetDefinitionAsync() };
         }
     }
+
+    [JSInvokable]
+    public void HandleNavigateTo(string url) => Nav.NavigateTo(url);
 
     [JSInvokable]
     public async Task<CatalogViewDefinition> HandleRefresh()

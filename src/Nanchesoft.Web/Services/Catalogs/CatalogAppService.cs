@@ -732,6 +732,8 @@ public sealed class CatalogViewDefinition
     public List<CatalogColumnDefinition> Columns { get; set; } = [];
     public List<Dictionary<string, object?>> Rows { get; set; } = [];
     public Dictionary<string, object?> Metadata { get; set; } = [];
+    public string? NewUrl { get; set; }
+    public string? EditUrl { get; set; }
 }
 
 public sealed class CatalogColumnDefinition
