@@ -1,20 +1,94 @@
 @page "/human-resources/employees"
+@using System.Net.Http.Json
 @inject NavigationManager Nav
+@inject IHttpClientFactory HttpClientFactory
 
 <PageTitle>Colaboradores | Nanchesoft</PageTitle>
 
-<div style="display:flex;justify-content:flex-end;gap:8px;padding:8px 16px 0 16px;">
-    <a href="/human-resources/empleado" class="btn btn-primary btn-sm">
-        <span class="bi bi-person-plus me-1"></span> Nuevo colaborador
+<style>
+    .ns-page-header { background:#fff; border-bottom:1px solid #e2e8f0; padding:20px 24px 16px 24px; }
+    .ns-stat-card { background:#fff; border:1px solid #e2e8f0; border-radius:10px; padding:14px 20px; display:flex; align-items:center; gap:14px; box-shadow:0 1px 3px rgba(0,0,0,.04); min-width:150px; flex:1; }
+    .ns-stat-icon { width:40px; height:40px; border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:18px; flex-shrink:0; }
+    .ns-stat-value { font-size:22px; font-weight:700; line-height:1; }
+    .ns-stat-label { font-size:11px; color:#64748b; font-weight:500; letter-spacing:.3px; text-transform:uppercase; margin-top:2px; }
+    .ns-breadcrumb { font-size:12px; color:#94a3b8; }
+    .ns-breadcrumb a { color:#94a3b8; text-decoration:none; }
+    .ns-breadcrumb a:hover { color:#1D4ED8; }
+    .ns-breadcrumb .sep { margin:0 4px; }
+    .ns-action-bar { background:#f8fafc; border-bottom:1px solid #e2e8f0; padding:10px 24px; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+</style>
+
+<!-- ══ PAGE HEADER ══ -->
+<div class="ns-page-header">
+    <div class="ns-breadcrumb mb-2">
+        <a href="/human-resources">RRHH</a>
+        <span class="sep">/</span>
+        <span class="text-dark fw-semibold">Colaboradores</span>
+    </div>
+    <div class="d-flex align-items-center gap-3 mb-3">
+        <div style="width:46px;height:46px;background:#EFF6FF;border-radius:10px;display:flex;align-items:center;justify-content:center;">
+            <span class="bi bi-people-fill fs-4 text-primary"></span>
+        </div>
+        <div>
+            <h4 class="mb-0 fw-bold" style="font-size:20px;">Colaboradores</h4>
+            <small class="text-muted" style="font-size:12px;">Gestión del personal de la empresa</small>
+        </div>
+    </div>
+
+    <!-- Stats bar -->
+    <div class="d-flex gap-3 flex-wrap mb-1">
+        <div class="ns-stat-card">
+            <div class="ns-stat-icon" style="background:#EFF6FF;">
+                <span class="bi bi-people text-primary"></span>
+            </div>
+            <div>
+                <div class="ns-stat-value text-dark">@_statsTotal</div>
+                <div class="ns-stat-label">Total</div>
+            </div>
+        </div>
+        <div class="ns-stat-card">
+            <div class="ns-stat-icon" style="background:#F0FDF4;">
+                <span class="bi bi-person-check" style="color:#15803D;"></span>
+            </div>
+            <div>
+                <div class="ns-stat-value" style="color:#15803D;">@_statsActive</div>
+                <div class="ns-stat-label">Activos</div>
+            </div>
+        </div>
+        <div class="ns-stat-card">
+            <div class="ns-stat-icon" style="background:#FFF1F2;">
+                <span class="bi bi-person-dash" style="color:#BE123C;"></span>
+            </div>
+            <div>
+                <div class="ns-stat-value" style="color:#BE123C;">@_statsInactive</div>
+                <div class="ns-stat-label">Inactivos</div>
+            </div>
+        </div>
+        <div class="ns-stat-card">
+            <div class="ns-stat-icon" style="background:#F8FAFC;">
+                <span class="bi bi-person-x" style="color:#475569;"></span>
+            </div>
+            <div>
+                <div class="ns-stat-value" style="color:#475569;">@_statsTerminated</div>
+                <div class="ns-stat-label">En baja</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ══ ACTION BAR ══ -->
+<div class="ns-action-bar">
+    <a href="/human-resources/empleado" class="btn btn-primary btn-sm px-3">
+        <span class="bi bi-person-plus-fill me-1"></span> Nuevo colaborador
     </a>
-    <a href="/human-resources/employees/report" target="_blank" class="btn btn-outline-secondary btn-sm">
+    <a href="/human-resources/employees/report" target="_blank" class="btn btn-outline-secondary btn-sm px-3">
         <span class="bi bi-printer me-1"></span> Reporte / PDF
     </a>
-    <button class="btn btn-outline-secondary btn-sm" @onclick="ExportarExcel">
-        <span class="bi bi-download me-1"></span> Exportar Excel
+    <button class="btn btn-outline-success btn-sm px-3" @onclick="ExportarExcel">
+        <span class="bi bi-file-earmark-excel me-1"></span> Exportar Excel
     </button>
-    <a href="/human-resources/importar-empleados" class="btn btn-outline-success btn-sm">
-        <span class="bi bi-file-earmark-excel me-1"></span> Importar desde Excel
+    <a href="/human-resources/importar-empleados" class="btn btn-outline-secondary btn-sm px-3">
+        <span class="bi bi-upload me-1"></span> Importar
     </a>
 </div>
 
@@ -23,8 +97,35 @@
 @code {
     private static string ApiBase => "http://localhost:5000";
 
+    private int _statsTotal;
+    private int _statsActive;
+    private int _statsInactive;
+    private int _statsTerminated;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var client = HttpClientFactory.CreateClient("Nanchesoft.Api");
+            var employees = await client.GetFromJsonAsync<List<EmployeeStat>>("/api/hr/employees");
+            if (employees is not null)
+            {
+                _statsTotal = employees.Count;
+                _statsActive = employees.Count(e => e.IsActive && e.Status == "active");
+                _statsInactive = employees.Count(e => !e.IsActive || e.Status == "inactive" || e.Status == "suspended");
+                _statsTerminated = employees.Count(e => e.Status == "terminated");
+            }
+        }
+        catch
+        {
+            // Stats are decorative — ignore errors silently
+        }
+    }
+
     private void ExportarExcel()
     {
         Nav.NavigateTo(ApiBase + "/api/hr/employees/report/excel", forceLoad: true);
     }
+
+    private sealed record EmployeeStat(bool IsActive, string Status);
 }

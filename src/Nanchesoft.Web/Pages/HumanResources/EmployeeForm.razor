@@ -6,473 +6,768 @@
 
 <PageTitle>@(_isNew ? "Nuevo colaborador" : "Editar colaborador") | Nanchesoft</PageTitle>
 
-<div style="max-width:1100px;margin:0 auto;padding:16px;">
+<style>
+    .ns-section { background:#fff; border-radius:8px; border:1px solid #e2e8f0; box-shadow:0 1px 3px rgba(0,0,0,.06); overflow:hidden; margin-bottom:16px; }
+    .ns-section-header { display:flex; align-items:center; gap:8px; padding:10px 16px; border-bottom:1px solid #e2e8f0; font-weight:600; font-size:13px; letter-spacing:.3px; }
+    .ns-section-body { padding:16px; }
+    .ns-field-label { font-size:12px; font-weight:600; color:#475569; text-transform:uppercase; letter-spacing:.4px; margin-bottom:4px; display:block; }
+    .ns-form-input { border-color:#d1d5db; border-radius:6px; font-size:14px; }
+    .ns-form-input:focus { border-color:#1D4ED8; box-shadow:0 0 0 3px rgba(29,78,216,.1); }
+    .ns-tab-nav .nav-link { border:none; border-radius:8px; padding:8px 16px; font-size:13px; font-weight:500; color:#64748b; display:flex; align-items:center; gap:6px; transition:all .15s; }
+    .ns-tab-nav .nav-link.active { background:#1D4ED8; color:#fff; }
+    .ns-tab-nav .nav-link:not(.active):hover { background:#f1f5f9; color:#1e40af; }
+    .ns-header { background:#fff; border-bottom:1px solid #e2e8f0; padding:12px 20px; position:sticky; top:0; z-index:100; display:flex; align-items:center; gap:12px; box-shadow:0 1px 4px rgba(0,0,0,.06); }
+    .ns-badge-active { background:#dcfce7; color:#166534; border-radius:20px; font-size:11px; padding:2px 10px; font-weight:600; }
+    .ns-badge-inactive { background:#fee2e2; color:#991b1b; border-radius:20px; font-size:11px; padding:2px 10px; font-weight:600; }
+    .ns-plus-btn { width:34px; height:34px; border-radius:6px; border:1px solid #d1d5db; background:#f8fafc; display:inline-flex; align-items:center; justify-content:center; cursor:pointer; font-size:18px; font-weight:700; color:#475569; flex-shrink:0; transition:all .15s; line-height:1; }
+    .ns-plus-btn:hover { background:#1D4ED8; color:#fff; border-color:#1D4ED8; }
+    .ns-fk-group { display:flex; gap:6px; align-items:stretch; }
+    .ns-fk-group select, .ns-fk-group .form-select { flex:1; min-width:0; }
+    /* Color variants */
+    .ns-blue .ns-section-header { background:#EFF6FF; border-left:4px solid #1D4ED8; color:#1e40af; }
+    .ns-green .ns-section-header { background:#F0FDF4; border-left:4px solid #15803D; color:#166534; }
+    .ns-orange .ns-section-header { background:#FFF7ED; border-left:4px solid #C2410C; color:#9a3412; }
+    .ns-purple .ns-section-header { background:#F5F3FF; border-left:4px solid #6D28D9; color:#5b21b6; }
+    .ns-amber .ns-section-header { background:#FFFBEB; border-left:4px solid #D97706; color:#92400e; }
+    .ns-cyan .ns-section-header { background:#F0F9FF; border-left:4px solid #0369A1; color:#075985; }
+    .ns-slate .ns-section-header { background:#F8FAFC; border-left:4px solid #475569; color:#334155; }
+    .ns-rose .ns-section-header { background:#FFF1F2; border-left:4px solid #BE123C; color:#9f1239; }
+    .ns-tab-nav { gap:4px; flex-wrap:wrap; }
+    .ns-breadcrumb { font-size:12px; color:#94a3b8; }
+    .ns-breadcrumb a { color:#94a3b8; text-decoration:none; }
+    .ns-breadcrumb a:hover { color:#1D4ED8; }
+    .ns-breadcrumb .sep { margin:0 4px; }
+</style>
 
-    <!-- Header -->
-    <div class="d-flex align-items-center gap-3 mb-3">
-        <button class="btn btn-link p-0" @onclick='() => Nav.NavigateTo("/human-resources/employees")'>
-            <span class="bi bi-arrow-left fs-5"></span>
-        </button>
-        <div class="flex-grow-1">
-            <h4 class="mb-0 fw-bold">@(_isNew ? "Nuevo colaborador" : _form.FullName())</h4>
-            <small class="text-muted">@(_isNew ? "Ingresa los datos del nuevo colaborador" : $"No. {_form.EmployeeNumber} · {_form.Code}")</small>
+<!-- ══════════ HEADER STICKY ══════════ -->
+<div class="ns-header">
+    <button class="btn btn-link p-0 text-secondary" @onclick='() => Nav.NavigateTo("/human-resources/employees")' title="Volver">
+        <span class="bi bi-arrow-left fs-5"></span>
+    </button>
+    <div class="flex-grow-1">
+        <div class="ns-breadcrumb mb-0">
+            <a href="/human-resources/employees">RRHH</a>
+            <span class="sep">/</span>
+            <a href="/human-resources/employees">Colaboradores</a>
+            <span class="sep">/</span>
+            <span class="text-dark fw-semibold">@(_isNew ? "Nuevo" : _form.FullName())</span>
         </div>
-        <div class="d-flex gap-2">
-            <button class="btn btn-outline-secondary" @onclick='() => Nav.NavigateTo("/human-resources/employees")'>Cancelar</button>
-            <button class="btn btn-primary" @onclick="SaveAsync" disabled="@_saving">
-                @if (_saving) { <span class="spinner-border spinner-border-sm me-1"></span> }
-                Guardar
-            </button>
+        <div class="d-flex align-items-center gap-2 mt-1">
+            <span class="fw-bold" style="font-size:15px;">
+                @(_isNew ? "Nuevo colaborador" : _form.FullName())
+            </span>
+            @if (!_isNew)
+            {
+                <span class="ns-badge-@(_form.IsActive ? "active" : "inactive")">
+                    @(_form.IsActive ? "Activo" : "Inactivo")
+                </span>
+                <small class="text-muted" style="font-size:12px;">No. @_form.EmployeeNumber &middot; @_form.Code</small>
+            }
         </div>
     </div>
+    <div class="d-flex gap-2 align-items-center">
+        <button class="btn btn-outline-secondary btn-sm px-3" @onclick='() => Nav.NavigateTo("/human-resources/employees")'>
+            <span class="bi bi-x-lg me-1"></span>Cancelar
+        </button>
+        <button class="btn btn-primary btn-sm px-4" @onclick="SaveAsync" disabled="@_saving">
+            @if (_saving)
+            {
+                <span class="spinner-border spinner-border-sm me-1"></span>
+                <span>Guardando…</span>
+            }
+            else
+            {
+                <span class="bi bi-check2 me-1"></span>
+                <span>Guardar</span>
+            }
+        </button>
+    </div>
+</div>
+
+<div style="max-width:1120px;margin:0 auto;padding:20px 16px 40px 16px;">
 
     @if (!string.IsNullOrEmpty(_error))
     {
-        <div class="alert alert-danger alert-dismissible mb-3">
+        <div class="alert alert-danger alert-dismissible d-flex align-items-center gap-2 mb-3 py-2" style="font-size:13px;">
+            <span class="bi bi-exclamation-triangle-fill"></span>
+            <span class="flex-grow-1">@_error</span>
             <button type="button" class="btn-close" @onclick='() => _error = string.Empty'></button>
-            @_error
         </div>
     }
     @if (!string.IsNullOrEmpty(_success))
     {
-        <div class="alert alert-success alert-dismissible mb-3">
+        <div class="alert alert-success alert-dismissible d-flex align-items-center gap-2 mb-3 py-2" style="font-size:13px;">
+            <span class="bi bi-check-circle-fill"></span>
+            <span class="flex-grow-1">@_success</span>
             <button type="button" class="btn-close" @onclick='() => _success = string.Empty'></button>
-            @_success
         </div>
     }
 
     @if (_loading)
     {
-        <div class="text-center py-5"><div class="spinner-border"></div><p class="mt-2 text-muted">Cargando…</p></div>
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary mb-2" style="width:2.5rem;height:2.5rem;"></div>
+            <p class="text-muted" style="font-size:13px;">Cargando datos del colaborador…</p>
+        </div>
     }
     else
     {
-        <!-- Pestañas -->
-        <ul class="nav nav-tabs mb-3">
-            @foreach (var (tab, idx) in _tabs.Select((t, i) => (t, i)))
-            {
-                <li class="nav-item">
-                    <button class="nav-link @(_activeTab == idx ? "active" : "")" @onclick="() => _activeTab = idx">@tab</button>
-                </li>
-            }
+        <!-- ══ TABS PILLS ══ -->
+        <ul class="nav ns-tab-nav mb-4">
+            <li class="nav-item">
+                <button class="nav-link @(_activeTab == 0 ? "active" : "")" @onclick="() => _activeTab = 0">
+                    <span class="bi bi-person-badge"></span> Identificación
+                </button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-link @(_activeTab == 1 ? "active" : "")" @onclick="() => _activeTab = 1">
+                    <span class="bi bi-person-lines-fill"></span> Datos personales
+                </button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-link @(_activeTab == 2 ? "active" : "")" @onclick="() => _activeTab = 2">
+                    <span class="bi bi-house-door"></span> Domicilio
+                </button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-link @(_activeTab == 3 ? "active" : "")" @onclick="() => _activeTab = 3">
+                    <span class="bi bi-briefcase"></span> Laboral
+                </button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-link @(_activeTab == 4 ? "active" : "")" @onclick="() => _activeTab = 4">
+                    <span class="bi bi-shield-check"></span> IMSS / SAT
+                </button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-link @(_activeTab == 5 ? "active" : "")" @onclick="() => _activeTab = 5">
+                    <span class="bi bi-bank"></span> Banco
+                </button>
+            </li>
         </ul>
 
-        <!-- ─── PESTAÑA 0: GENERAL ─── -->
+        <!-- ════════════════════════════════════════ -->
+        <!-- TAB 0: IDENTIFICACIÓN                    -->
+        <!-- ════════════════════════════════════════ -->
         @if (_activeTab == 0)
         {
-            <div class="row g-3">
-                <div class="col-12 col-md-6">
-                    <label class="form-label fw-semibold">Empresa <span class="text-danger">*</span></label>
-                    <select class="form-select" @bind="_form.CompanyId" @bind:after="OnCompanyChanged">
-                        <option value="">— Selecciona —</option>
-                        @foreach (var c in _companies)
-                        {
-                            <option value="@c.CompanyId">@c.Name</option>
-                        }
-                    </select>
+            <!-- Empresa y Organización -->
+            <div class="ns-section ns-blue">
+                <div class="ns-section-header">
+                    <span class="bi bi-building"></span> Empresa y Organización
                 </div>
-                <div class="col-12 col-md-6">
-                    <label class="form-label fw-semibold">Sucursal</label>
-                    <select class="form-select" @bind="_form.BranchId">
-                        <option value="">— Ninguna —</option>
-                        @foreach (var b in _branches)
-                        {
-                            <option value="@b.BranchId">@b.Name</option>
-                        }
-                    </select>
-                </div>
-                <div class="col-12 col-md-5">
-                    <label class="form-label fw-semibold">Departamento</label>
-                    <div class="input-group">
-                        <select class="form-select" @bind="_form.DepartmentId">
-                            <option value="">— Ninguno —</option>
-                            @foreach (var d in _departments)
-                            {
-                                <option value="@d.DepartmentId">@d.Name</option>
-                            }
-                        </select>
-                        <button class="btn btn-outline-secondary" title="Crear departamento" @onclick="() => OpenDeptModal()">+</button>
+                <div class="ns-section-body">
+                    <div class="row g-3">
+                        <div class="col-12 col-md-6">
+                            <label class="ns-field-label">Empresa <span class="text-danger">*</span></label>
+                            <select class="form-select ns-form-input" @bind="_form.CompanyId" @bind:after="OnCompanyChanged">
+                                <option value="">— Selecciona empresa —</option>
+                                @foreach (var c in _companies)
+                                {
+                                    <option value="@c.CompanyId">@c.Name</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-12 col-md-6">
+                            <label class="ns-field-label">Sucursal</label>
+                            <select class="form-select ns-form-input" @bind="_form.BranchId">
+                                <option value="">— Ninguna —</option>
+                                @foreach (var b in _branches)
+                                {
+                                    <option value="@b.BranchId">@b.Name</option>
+                                }
+                            </select>
+                        </div>
                     </div>
                 </div>
-                <div class="col-12 col-md-5">
-                    <label class="form-label fw-semibold">Puesto</label>
-                    <div class="input-group">
-                        <select class="form-select" @bind="_form.PositionId">
-                            <option value="">— Ninguno —</option>
-                            @foreach (var p in _positions)
-                            {
-                                <option value="@p.PositionId">@p.Name</option>
-                            }
-                        </select>
-                        <button class="btn btn-outline-secondary" title="Crear puesto" @onclick="() => OpenPosModal()">+</button>
+            </div>
+
+            <!-- Asignación -->
+            <div class="ns-section ns-green">
+                <div class="ns-section-header">
+                    <span class="bi bi-diagram-3"></span> Asignación
+                </div>
+                <div class="ns-section-body">
+                    <div class="row g-3">
+                        <div class="col-12 col-md-4">
+                            <label class="ns-field-label">Departamento</label>
+                            <div class="ns-fk-group">
+                                <select class="form-select ns-form-input" @bind="_form.DepartmentId">
+                                    <option value="">— Ninguno —</option>
+                                    @foreach (var d in _departments)
+                                    {
+                                        <option value="@d.DepartmentId">@d.Name</option>
+                                    }
+                                </select>
+                                <button type="button" class="ns-plus-btn" title="Crear departamento" @onclick="() => OpenDeptModal()">+</button>
+                            </div>
+                        </div>
+                        <div class="col-12 col-md-4">
+                            <label class="ns-field-label">Puesto</label>
+                            <div class="ns-fk-group">
+                                <select class="form-select ns-form-input" @bind="_form.PositionId">
+                                    <option value="">— Ninguno —</option>
+                                    @foreach (var p in _positions)
+                                    {
+                                        <option value="@p.PositionId">@p.Name</option>
+                                    }
+                                </select>
+                                <button type="button" class="ns-plus-btn" title="Crear puesto" @onclick="() => OpenPosModal()">+</button>
+                            </div>
+                        </div>
+                        <div class="col-12 col-md-4">
+                            <label class="ns-field-label">Horario</label>
+                            <div class="ns-fk-group">
+                                <select class="form-select ns-form-input" @bind="_form.WorkScheduleId">
+                                    <option value="">— Ninguno —</option>
+                                    @foreach (var w in _schedules)
+                                    {
+                                        <option value="@w.WorkScheduleId">@w.Name</option>
+                                    }
+                                </select>
+                                <button type="button" class="ns-plus-btn" title="Crear horario" @onclick="() => OpenSchedModal()">+</button>
+                            </div>
+                        </div>
                     </div>
                 </div>
-                <div class="col-12 col-md-4">
-                    <label class="form-label fw-semibold">Horario</label>
-                    <div class="input-group">
-                        <select class="form-select" @bind="_form.WorkScheduleId">
-                            <option value="">— Ninguno —</option>
-                            @foreach (var w in _schedules)
-                            {
-                                <option value="@w.WorkScheduleId">@w.Name</option>
-                            }
-                        </select>
-                        <button class="btn btn-outline-secondary" title="Crear horario" @onclick="() => OpenSchedModal()">+</button>
+            </div>
+
+            <!-- Identificadores del sistema -->
+            <div class="ns-section ns-slate">
+                <div class="ns-section-header">
+                    <span class="bi bi-hash"></span> Identificadores del sistema
+                </div>
+                <div class="ns-section-body">
+                    <div class="row g-3">
+                        <div class="col-6 col-md-3">
+                            <label class="ns-field-label">No. empleado <span class="text-danger">*</span></label>
+                            <input class="form-control ns-form-input" @bind="_form.EmployeeNumber" placeholder="0001" />
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <label class="ns-field-label">Código <span class="text-danger">*</span></label>
+                            <input class="form-control ns-form-input" @bind="_form.Code" placeholder="EMP-001" />
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <label class="ns-field-label">Clave reloj</label>
+                            <input class="form-control ns-form-input" @bind="_form.ClockKey" placeholder="001" />
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <label class="ns-field-label">Clave NOI</label>
+                            <input class="form-control ns-form-input" @bind="_form.NoiKey" placeholder="001" />
+                        </div>
                     </div>
                 </div>
-                <div class="col-6 col-md-3">
-                    <label class="form-label fw-semibold">Número empleado <span class="text-danger">*</span></label>
-                    <input class="form-control" @bind="_form.EmployeeNumber" placeholder="001" />
+            </div>
+
+            <!-- Estado -->
+            <div class="ns-section ns-slate">
+                <div class="ns-section-header">
+                    <span class="bi bi-toggle-on"></span> Estado
                 </div>
-                <div class="col-6 col-md-3">
-                    <label class="form-label fw-semibold">Código <span class="text-danger">*</span></label>
-                    <input class="form-control" @bind="_form.Code" placeholder="EMP-001" />
-                </div>
-                <div class="col-6 col-md-3">
-                    <label class="form-label fw-semibold">Clave reloj</label>
-                    <input class="form-control" @bind="_form.ClockKey" />
-                </div>
-                <div class="col-6 col-md-3">
-                    <label class="form-label fw-semibold">Clave NOI</label>
-                    <input class="form-control" @bind="_form.NoiKey" />
-                </div>
-                <div class="col-6 col-md-3">
-                    <label class="form-label fw-semibold">Estatus</label>
-                    <select class="form-select" @bind="_form.Status">
-                        <option value="active">Activo</option>
-                        <option value="inactive">Inactivo</option>
-                        <option value="suspended">Suspendido</option>
-                        <option value="terminated">Baja</option>
-                    </select>
-                </div>
-                <div class="col-auto d-flex align-items-end">
-                    <div class="form-check form-switch mb-2">
-                        <input class="form-check-input" type="checkbox" @bind="_form.IsActive" />
-                        <label class="form-check-label">Activo en sistema</label>
+                <div class="ns-section-body">
+                    <div class="row g-3 align-items-center">
+                        <div class="col-12 col-md-3">
+                            <label class="ns-field-label">Estatus</label>
+                            <select class="form-select ns-form-input" @bind="_form.Status">
+                                <option value="active">Activo</option>
+                                <option value="inactive">Inactivo</option>
+                                <option value="suspended">Suspendido</option>
+                                <option value="terminated">Baja</option>
+                            </select>
+                        </div>
+                        <div class="col-auto">
+                            <label class="ns-field-label">&nbsp;</label>
+                            <div class="form-check form-switch pt-1">
+                                <input class="form-check-input" type="checkbox" id="chkActive" @bind="_form.IsActive" />
+                                <label class="form-check-label" for="chkActive" style="font-size:13px;">Activo en sistema</label>
+                            </div>
+                        </div>
+                        <div class="col-auto">
+                            <label class="ns-field-label">&nbsp;</label>
+                            <div class="form-check form-switch pt-1">
+                                <input class="form-check-input" type="checkbox" id="chkRecibo" @bind="_form.PrintReceipt" />
+                                <label class="form-check-label" for="chkRecibo" style="font-size:13px;">Imprime recibo</label>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
         }
 
-        <!-- ─── PESTAÑA 1: DATOS PERSONALES ─── -->
+        <!-- ════════════════════════════════════════ -->
+        <!-- TAB 1: DATOS PERSONALES                  -->
+        <!-- ════════════════════════════════════════ -->
         @if (_activeTab == 1)
         {
-            <div class="row g-3">
-                <div class="col-12 col-md-4">
-                    <label class="form-label fw-semibold">Nombre <span class="text-danger">*</span></label>
-                    <input class="form-control" @bind="_form.FirstName" />
+            <!-- Nombre completo -->
+            <div class="ns-section ns-purple">
+                <div class="ns-section-header">
+                    <span class="bi bi-person-vcard"></span> Nombre completo
                 </div>
-                <div class="col-12 col-md-4">
-                    <label class="form-label fw-semibold">Apellido paterno <span class="text-danger">*</span></label>
-                    <input class="form-control" @bind="_form.LastName" />
+                <div class="ns-section-body">
+                    <div class="row g-3">
+                        <div class="col-12 col-md-3">
+                            <label class="ns-field-label">Apellido paterno <span class="text-danger">*</span></label>
+                            <input class="form-control ns-form-input" @bind="_form.LastName" placeholder="García" />
+                        </div>
+                        <div class="col-12 col-md-3">
+                            <label class="ns-field-label">Apellido materno</label>
+                            <input class="form-control ns-form-input" @bind="_form.SecondLastName" placeholder="López" />
+                        </div>
+                        <div class="col-12 col-md-3">
+                            <label class="ns-field-label">Nombre(s) <span class="text-danger">*</span></label>
+                            <input class="form-control ns-form-input" @bind="_form.FirstName" placeholder="Juan" />
+                        </div>
+                        <div class="col-12 col-md-3">
+                            <label class="ns-field-label">Segundo nombre</label>
+                            <input class="form-control ns-form-input" @bind="_form.MiddleName" placeholder="Carlos" />
+                        </div>
+                    </div>
                 </div>
-                <div class="col-12 col-md-4">
-                    <label class="form-label fw-semibold">Apellido materno</label>
-                    <input class="form-control" @bind="_form.SecondLastName" />
+            </div>
+
+            <!-- Datos personales -->
+            <div class="ns-section ns-green">
+                <div class="ns-section-header">
+                    <span class="bi bi-info-circle"></span> Datos personales
                 </div>
-                <div class="col-12 col-md-4">
-                    <label class="form-label fw-semibold">Segundo nombre</label>
-                    <input class="form-control" @bind="_form.MiddleName" />
+                <div class="ns-section-body">
+                    <div class="row g-3">
+                        <div class="col-6 col-md-3">
+                            <label class="ns-field-label">F. nacimiento</label>
+                            <input type="date" class="form-control ns-form-input" @bind="_form.BirthDate" />
+                        </div>
+                        <div class="col-6 col-md-2">
+                            <label class="ns-field-label">Sexo</label>
+                            <select class="form-select ns-form-input" @bind="_form.Gender">
+                                <option value="">—</option>
+                                <option value="M">Masculino</option>
+                                <option value="F">Femenino</option>
+                            </select>
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <label class="ns-field-label">Estado civil</label>
+                            <select class="form-select ns-form-input" @bind="_form.MaritalStatus">
+                                <option value="">—</option>
+                                <option value="soltero">Soltero(a)</option>
+                                <option value="casado">Casado(a)</option>
+                                <option value="divorciado">Divorciado(a)</option>
+                                <option value="viudo">Viudo(a)</option>
+                                <option value="union">Unión libre</option>
+                            </select>
+                        </div>
+                        <div class="col-6 col-md-2">
+                            <label class="ns-field-label">Tipo sangre</label>
+                            <select class="form-select ns-form-input" @bind="_form.BloodType">
+                                <option value="">—</option>
+                                @foreach (var bt in new[] { "A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-" })
+                                {
+                                    <option value="@bt">@bt</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-12 col-md-5">
+                            <label class="ns-field-label">Lugar nacimiento</label>
+                            <input class="form-control ns-form-input" @bind="_form.PlaceOfBirth" placeholder="Chihuahua, Chih." />
+                        </div>
+                        <div class="col-12 col-md-3">
+                            <label class="ns-field-label">Nacionalidad</label>
+                            <input class="form-control ns-form-input" @bind="_form.Nationality" placeholder="Mexicana" />
+                        </div>
+                    </div>
                 </div>
-                <div class="col-6 col-md-3">
-                    <label class="form-label fw-semibold">Fecha nacimiento</label>
-                    <input type="date" class="form-control" @bind="_form.BirthDate" />
+            </div>
+
+            <!-- Contacto -->
+            <div class="ns-section ns-cyan">
+                <div class="ns-section-header">
+                    <span class="bi bi-telephone"></span> Contacto
                 </div>
-                <div class="col-6 col-md-2">
-                    <label class="form-label fw-semibold">Sexo</label>
-                    <select class="form-select" @bind="_form.Gender">
-                        <option value="">—</option>
-                        <option value="M">Masculino</option>
-                        <option value="F">Femenino</option>
-                    </select>
+                <div class="ns-section-body">
+                    <div class="row g-3">
+                        <div class="col-12 col-md-5">
+                            <label class="ns-field-label">Email</label>
+                            <input type="email" class="form-control ns-form-input" @bind="_form.Email" placeholder="nombre@empresa.com" />
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <label class="ns-field-label">Teléfono</label>
+                            <input class="form-control ns-form-input" @bind="_form.Phone" placeholder="614 123 4567" />
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <label class="ns-field-label">Tel. emergencia</label>
+                            <input class="form-control ns-form-input" @bind="_form.EmergencyPhone" placeholder="614 987 6543" />
+                        </div>
+                    </div>
                 </div>
-                <div class="col-6 col-md-3">
-                    <label class="form-label fw-semibold">Estado civil</label>
-                    <select class="form-select" @bind="_form.MaritalStatus">
-                        <option value="">—</option>
-                        <option value="soltero">Soltero(a)</option>
-                        <option value="casado">Casado(a)</option>
-                        <option value="divorciado">Divorciado(a)</option>
-                        <option value="viudo">Viudo(a)</option>
-                        <option value="union">Unión libre</option>
-                    </select>
+            </div>
+
+            <!-- Familia -->
+            <div class="ns-section ns-orange">
+                <div class="ns-section-header">
+                    <span class="bi bi-people"></span> Familia
                 </div>
-                <div class="col-6 col-md-2">
-                    <label class="form-label fw-semibold">Tipo sangre</label>
-                    <select class="form-select" @bind="_form.BloodType">
-                        <option value="">—</option>
-                        @foreach (var bt in new[]{"A+","A-","B+","B-","AB+","AB-","O+","O-"})
-                        {
-                            <option value="@bt">@bt</option>
-                        }
-                    </select>
-                </div>
-                <div class="col-12 col-md-4">
-                    <label class="form-label fw-semibold">Lugar nacimiento</label>
-                    <input class="form-control" @bind="_form.PlaceOfBirth" />
-                </div>
-                <div class="col-12 col-md-3">
-                    <label class="form-label fw-semibold">Nacionalidad</label>
-                    <input class="form-control" @bind="_form.Nationality" placeholder="Mexicana" />
-                </div>
-                <div class="col-12 col-md-5">
-                    <label class="form-label fw-semibold">Email</label>
-                    <input type="email" class="form-control" @bind="_form.Email" />
-                </div>
-                <div class="col-6 col-md-3">
-                    <label class="form-label fw-semibold">Teléfono</label>
-                    <input class="form-control" @bind="_form.Phone" />
-                </div>
-                <div class="col-6 col-md-3">
-                    <label class="form-label fw-semibold">Tel. emergencia</label>
-                    <input class="form-control" @bind="_form.EmergencyPhone" />
-                </div>
-                <div class="col-12 col-md-4">
-                    <label class="form-label fw-semibold">Nombre del padre</label>
-                    <input class="form-control" @bind="_form.FatherName" />
-                </div>
-                <div class="col-12 col-md-4">
-                    <label class="form-label fw-semibold">Nombre de la madre</label>
-                    <input class="form-control" @bind="_form.MotherName" />
+                <div class="ns-section-body">
+                    <div class="row g-3">
+                        <div class="col-12 col-md-5">
+                            <label class="ns-field-label">Nombre del padre</label>
+                            <input class="form-control ns-form-input" @bind="_form.FatherName" placeholder="Nombre completo del padre" />
+                        </div>
+                        <div class="col-12 col-md-5">
+                            <label class="ns-field-label">Nombre de la madre</label>
+                            <input class="form-control ns-form-input" @bind="_form.MotherName" placeholder="Nombre completo de la madre" />
+                        </div>
+                    </div>
                 </div>
             </div>
         }
 
-        <!-- ─── PESTAÑA 2: DOMICILIO ─── -->
+        <!-- ════════════════════════════════════════ -->
+        <!-- TAB 2: DOMICILIO                         -->
+        <!-- ════════════════════════════════════════ -->
         @if (_activeTab == 2)
         {
-            <div class="row g-3">
-                <div class="col-12">
-                    <label class="form-label fw-semibold">Calle y número</label>
-                    <input class="form-control" @bind="_form.AddressStreet" placeholder="Av. Independencia 456 Col. Centro" />
+            <div class="ns-section ns-orange">
+                <div class="ns-section-header">
+                    <span class="bi bi-geo-alt"></span> Domicilio
                 </div>
-                <div class="col-12 col-md-4">
-                    <label class="form-label fw-semibold">Colonia</label>
-                    <input class="form-control" @bind="_form.AddressColony" />
-                </div>
-                <div class="col-12 col-md-4">
-                    <label class="form-label fw-semibold">Ciudad / Municipio</label>
-                    <input class="form-control" @bind="_form.AddressCity" />
-                </div>
-                <div class="col-12 col-md-3">
-                    <label class="form-label fw-semibold">Estado</label>
-                    <input class="form-control" @bind="_form.AddressState" />
-                </div>
-                <div class="col-6 col-md-2">
-                    <label class="form-label fw-semibold">C.P.</label>
-                    <input class="form-control" @bind="_form.AddressZipCode" maxlength="5" />
+                <div class="ns-section-body">
+                    <div class="row g-3">
+                        <div class="col-12">
+                            <label class="ns-field-label">Calle y número</label>
+                            <input class="form-control ns-form-input" @bind="_form.AddressStreet" placeholder="Av. Independencia 456 Interior 3" />
+                        </div>
+                        <div class="col-12 col-md-4">
+                            <label class="ns-field-label">Colonia</label>
+                            <input class="form-control ns-form-input" @bind="_form.AddressColony" placeholder="Col. Centro" />
+                        </div>
+                        <div class="col-12 col-md-4">
+                            <label class="ns-field-label">Ciudad / Municipio</label>
+                            <input class="form-control ns-form-input" @bind="_form.AddressCity" placeholder="Chihuahua" />
+                        </div>
+                        <div class="col-12 col-md-3">
+                            <label class="ns-field-label">Estado</label>
+                            <input class="form-control ns-form-input" @bind="_form.AddressState" placeholder="Chihuahua" />
+                        </div>
+                        <div class="col-6 col-md-2">
+                            <label class="ns-field-label">C.P.</label>
+                            <input class="form-control ns-form-input" @bind="_form.AddressZipCode" maxlength="5" placeholder="31000" />
+                        </div>
+                    </div>
                 </div>
             </div>
         }
 
-        <!-- ─── PESTAÑA 3: LABORAL ─── -->
+        <!-- ════════════════════════════════════════ -->
+        <!-- TAB 3: LABORAL                           -->
+        <!-- ════════════════════════════════════════ -->
         @if (_activeTab == 3)
         {
-            <div class="row g-3">
-                <div class="col-6 col-md-3">
-                    <label class="form-label fw-semibold">Fecha ingreso <span class="text-danger">*</span></label>
-                    <input type="date" class="form-control" @bind="_form.HireDate" />
+            <!-- Contratación -->
+            <div class="ns-section ns-purple">
+                <div class="ns-section-header">
+                    <span class="bi bi-file-earmark-person"></span> Contratación
                 </div>
-                <div class="col-6 col-md-3">
-                    <label class="form-label fw-semibold">Tipo contrato</label>
-                    <select class="form-select" @bind="_form.ContractType">
-                        <option value="indefinite">Indeterminado</option>
-                        <option value="determined">Determinado</option>
-                        <option value="construction_temp">Obra determinada</option>
-                        <option value="field_temp">Temporada</option>
-                        <option value="trial">A prueba</option>
-                        <option value="training">Capacitación</option>
-                    </select>
-                </div>
-                <div class="col-6 col-md-3">
-                    <label class="form-label fw-semibold">Tipo empleado</label>
-                    <select class="form-select" @bind="_form.EmployeeType">
-                        <option value="base">Base</option>
-                        <option value="confianza">Confianza</option>
-                        <option value="eventual">Eventual</option>
-                    </select>
-                </div>
-                <div class="col-6 col-md-3">
-                    <label class="form-label fw-semibold">Periodo nómina</label>
-                    <select class="form-select" @bind="_form.PayrollPeriodType">
-                        <option value="semanal">Semanal</option>
-                        <option value="decenal">Decenal</option>
-                        <option value="quincenal">Quincenal</option>
-                        <option value="mensual">Mensual</option>
-                    </select>
-                </div>
-                <div class="col-6 col-md-3">
-                    <label class="form-label fw-semibold">Salario diario</label>
-                    <input type="number" step="0.01" class="form-control" @bind="_form.DailySalary" />
-                </div>
-                <div class="col-6 col-md-3">
-                    <label class="form-label fw-semibold">SDI (diario integrado)</label>
-                    <input type="number" step="0.01" class="form-control" @bind="_form.IntegratedDailySalary" />
-                </div>
-                <div class="col-6 col-md-3">
-                    <label class="form-label fw-semibold">SBC Fija</label>
-                    <input type="number" step="0.01" class="form-control" @bind="_form.SbcFija" />
-                </div>
-                <div class="col-6 col-md-3">
-                    <label class="form-label fw-semibold">Zona salarial</label>
-                    <select class="form-select" @bind="_form.SalaryZone">
-                        <option value="A">Zona A</option>
-                        <option value="B">Zona B</option>
-                        <option value="C">Zona C</option>
-                    </select>
-                </div>
-                <div class="col-12 col-md-4">
-                    <label class="form-label fw-semibold">Jefe directo</label>
-                    <input class="form-control" @bind="_form.ImmediateSupervisor" />
-                </div>
-                <div class="col-12 col-md-3">
-                    <label class="form-label fw-semibold">Categoría</label>
-                    <input class="form-control" @bind="_form.Category" />
-                </div>
-                <div class="col-auto d-flex align-items-end">
-                    <div class="form-check form-switch mb-2">
-                        <input class="form-check-input" type="checkbox" @bind="_form.PrintReceipt" />
-                        <label class="form-check-label">Imprime recibo</label>
+                <div class="ns-section-body">
+                    <div class="row g-3">
+                        <div class="col-6 col-md-3">
+                            <label class="ns-field-label">F. ingreso <span class="text-danger">*</span></label>
+                            <input type="date" class="form-control ns-form-input" @bind="_form.HireDate" />
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <label class="ns-field-label">Tipo contrato</label>
+                            <select class="form-select ns-form-input" @bind="_form.ContractType">
+                                <option value="indefinite">Indeterminado</option>
+                                <option value="determined">Determinado</option>
+                                <option value="construction_temp">Obra determinada</option>
+                                <option value="field_temp">Temporada</option>
+                                <option value="trial">A prueba</option>
+                                <option value="training">Capacitación</option>
+                            </select>
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <label class="ns-field-label">Tipo empleado</label>
+                            <select class="form-select ns-form-input" @bind="_form.EmployeeType">
+                                <option value="base">Base</option>
+                                <option value="confianza">Confianza</option>
+                                <option value="eventual">Eventual</option>
+                            </select>
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <label class="ns-field-label">Periodo nómina</label>
+                            <select class="form-select ns-form-input" @bind="_form.PayrollPeriodType">
+                                <option value="semanal">Semanal</option>
+                                <option value="decenal">Decenal</option>
+                                <option value="quincenal">Quincenal</option>
+                                <option value="mensual">Mensual</option>
+                            </select>
+                        </div>
+                        <div class="col-12 col-md-4">
+                            <label class="ns-field-label">Jefe directo</label>
+                            <input class="form-control ns-form-input" @bind="_form.ImmediateSupervisor" placeholder="Nombre del supervisor" />
+                        </div>
+                        <div class="col-12 col-md-3">
+                            <label class="ns-field-label">Categoría</label>
+                            <input class="form-control ns-form-input" @bind="_form.Category" placeholder="Ej: Operario A" />
+                        </div>
                     </div>
                 </div>
-                <div class="col-12"><hr class="my-1" /></div>
-                <div class="col-6 col-md-3">
-                    <label class="form-label fw-semibold">Fecha de baja</label>
-                    <input type="date" class="form-control" @bind="_form.TerminationDate" />
+            </div>
+
+            <!-- Salario -->
+            <div class="ns-section ns-green">
+                <div class="ns-section-header">
+                    <span class="bi bi-cash-coin"></span> Salario
                 </div>
-                <div class="col-12 col-md-5">
-                    <label class="form-label fw-semibold">Motivo de baja</label>
-                    <input class="form-control" @bind="_form.TerminationReason" />
+                <div class="ns-section-body">
+                    <div class="row g-3">
+                        <div class="col-6 col-md-3">
+                            <label class="ns-field-label">Salario diario</label>
+                            <div class="input-group input-group-sm">
+                                <span class="input-group-text">$</span>
+                                <input type="number" step="0.01" class="form-control ns-form-input" @bind="_form.DailySalary" placeholder="0.00" />
+                            </div>
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <label class="ns-field-label">SDI (diario integrado)</label>
+                            <div class="input-group input-group-sm">
+                                <span class="input-group-text">$</span>
+                                <input type="number" step="0.01" class="form-control ns-form-input" @bind="_form.IntegratedDailySalary" placeholder="0.00" />
+                            </div>
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <label class="ns-field-label">SBC Fija</label>
+                            <div class="input-group input-group-sm">
+                                <span class="input-group-text">$</span>
+                                <input type="number" step="0.01" class="form-control ns-form-input" @bind="_form.SbcFija" placeholder="0.00" />
+                            </div>
+                        </div>
+                        <div class="col-6 col-md-2">
+                            <label class="ns-field-label">Zona salarial</label>
+                            <select class="form-select ns-form-input" @bind="_form.SalaryZone">
+                                <option value="A">Zona A</option>
+                                <option value="B">Zona B</option>
+                                <option value="C">Zona C</option>
+                            </select>
+                        </div>
+                    </div>
                 </div>
-                <div class="col-6 col-md-3">
-                    <label class="form-label fw-semibold">Fecha reingreso</label>
-                    <input type="date" class="form-control" @bind="_form.ReentryDate" />
+            </div>
+
+            <!-- Baja -->
+            <div class="ns-section ns-rose">
+                <div class="ns-section-header">
+                    <span class="bi bi-door-open"></span> Baja (si aplica)
                 </div>
-                <div class="col-12">
-                    <label class="form-label fw-semibold">Notas / Expediente</label>
-                    <textarea class="form-control" rows="3" @bind="_form.Notes"></textarea>
+                <div class="ns-section-body">
+                    <div class="row g-3">
+                        <div class="col-6 col-md-3">
+                            <label class="ns-field-label">Fecha de baja</label>
+                            <input type="date" class="form-control ns-form-input" @bind="_form.TerminationDate" />
+                        </div>
+                        <div class="col-12 col-md-5">
+                            <label class="ns-field-label">Motivo de baja</label>
+                            <input class="form-control ns-form-input" @bind="_form.TerminationReason" placeholder="Ej: Renuncia voluntaria" />
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <label class="ns-field-label">F. reingreso</label>
+                            <input type="date" class="form-control ns-form-input" @bind="_form.ReentryDate" />
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Notas -->
+            <div class="ns-section ns-slate">
+                <div class="ns-section-header">
+                    <span class="bi bi-journal-text"></span> Notas / Expediente
+                </div>
+                <div class="ns-section-body">
+                    <textarea class="form-control ns-form-input" rows="4" @bind="_form.Notes" placeholder="Observaciones, notas de expediente, acuerdos especiales…"></textarea>
                 </div>
             </div>
         }
 
-        <!-- ─── PESTAÑA 4: IMSS / SAT ─── -->
+        <!-- ════════════════════════════════════════ -->
+        <!-- TAB 4: IMSS / SAT                        -->
+        <!-- ════════════════════════════════════════ -->
         @if (_activeTab == 4)
         {
-            <div class="row g-3">
-                <div class="col-12 col-md-4">
-                    <label class="form-label fw-semibold">RFC</label>
-                    <input class="form-control text-uppercase" @bind="_form.TaxId" maxlength="13" />
+            <!-- Documentos fiscales -->
+            <div class="ns-section ns-amber">
+                <div class="ns-section-header">
+                    <span class="bi bi-file-earmark-text"></span> Documentos fiscales
                 </div>
-                <div class="col-12 col-md-5">
-                    <label class="form-label fw-semibold">CURP</label>
-                    <input class="form-control text-uppercase" @bind="_form.Curp" maxlength="18" />
-                </div>
-                <div class="col-12 col-md-4">
-                    <label class="form-label fw-semibold">NSS</label>
-                    <input class="form-control" @bind="_form.Nss" maxlength="11" />
-                </div>
-                <div class="col-12 col-md-4">
-                    <label class="form-label fw-semibold">Reg. patronal (IMSS)</label>
-                    <input class="form-control" @bind="_form.ImssRegId" />
-                </div>
-                <div class="col-6 col-md-3">
-                    <label class="form-label fw-semibold">Fecha alta IMSS</label>
-                    <input type="date" class="form-control" @bind="_form.ImssRegistrationDate" />
-                </div>
-                <div class="col-6 col-md-3">
-                    <label class="form-label fw-semibold">Fecha baja IMSS</label>
-                    <input type="date" class="form-control" @bind="_form.ImssTerminationDate" />
-                </div>
-                <div class="col-6 col-md-2">
-                    <label class="form-label fw-semibold">UMF</label>
-                    <input class="form-control" @bind="_form.Umf" maxlength="10" />
-                </div>
-                <div class="col-auto d-flex align-items-end">
-                    <div class="form-check form-switch mb-2">
-                        <input class="form-check-input" type="checkbox" @bind="_form.IsImssRegistered" />
-                        <label class="form-check-label">Registrado IMSS</label>
+                <div class="ns-section-body">
+                    <div class="row g-3">
+                        <div class="col-12 col-md-4">
+                            <label class="ns-field-label">RFC</label>
+                            <input class="form-control ns-form-input text-uppercase" @bind="_form.TaxId" maxlength="13" placeholder="XAXX010101000" />
+                        </div>
+                        <div class="col-12 col-md-5">
+                            <label class="ns-field-label">CURP</label>
+                            <input class="form-control ns-form-input text-uppercase" @bind="_form.Curp" maxlength="18" placeholder="XAXX010101MXXXXX00" />
+                        </div>
+                        <div class="col-12 col-md-3">
+                            <label class="ns-field-label">NSS</label>
+                            <input class="form-control ns-form-input" @bind="_form.Nss" maxlength="11" placeholder="12345678901" />
+                        </div>
+                        <div class="col-12 col-md-4">
+                            <label class="ns-field-label">ID nacional</label>
+                            <input class="form-control ns-form-input" @bind="_form.NationalId" placeholder="Número de identificación" />
+                        </div>
                     </div>
                 </div>
-                <div class="col-12"><hr class="my-1" /></div>
-                <div class="col-12 col-md-4">
-                    <label class="form-label fw-semibold">Régimen fiscal SAT</label>
-                    <select class="form-select" @bind="_form.TaxRegime">
-                        <option value="sueldos_salarios">Sueldos y Salarios</option>
-                        <option value="asimilados">Asimilados a Salarios</option>
-                    </select>
+            </div>
+
+            <!-- IMSS -->
+            <div class="ns-section ns-blue">
+                <div class="ns-section-header">
+                    <span class="bi bi-hospital"></span> IMSS
                 </div>
-                <div class="col-12 col-md-4">
-                    <label class="form-label fw-semibold">Base cotización</label>
-                    <select class="form-select" @bind="_form.CotizationBase">
-                        <option value="fixed">Fija</option>
-                        <option value="variable">Variable</option>
-                        <option value="mixed">Mixta</option>
-                    </select>
+                <div class="ns-section-body">
+                    <div class="row g-3 align-items-end">
+                        <div class="col-12 col-md-4">
+                            <label class="ns-field-label">Reg. patronal</label>
+                            <input class="form-control ns-form-input" @bind="_form.ImssRegId" placeholder="B123456789" />
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <label class="ns-field-label">F. alta IMSS</label>
+                            <input type="date" class="form-control ns-form-input" @bind="_form.ImssRegistrationDate" />
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <label class="ns-field-label">F. baja IMSS</label>
+                            <input type="date" class="form-control ns-form-input" @bind="_form.ImssTerminationDate" />
+                        </div>
+                        <div class="col-6 col-md-2">
+                            <label class="ns-field-label">UMF</label>
+                            <input class="form-control ns-form-input" @bind="_form.Umf" maxlength="10" placeholder="068" />
+                        </div>
+                        <div class="col-auto">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" id="chkImss" @bind="_form.IsImssRegistered" />
+                                <label class="form-check-label" for="chkImss" style="font-size:13px;">Registrado en IMSS</label>
+                            </div>
+                        </div>
+                    </div>
                 </div>
-                <div class="col-12 col-md-4">
-                    <label class="form-label fw-semibold">ID nacional</label>
-                    <input class="form-control" @bind="_form.NationalId" />
+            </div>
+
+            <!-- Configuración fiscal -->
+            <div class="ns-section ns-purple">
+                <div class="ns-section-header">
+                    <span class="bi bi-receipt"></span> Configuración fiscal
                 </div>
-                <div class="col-12"><hr class="my-1" /></div>
-                <div class="col-12 col-md-3">
-                    <label class="form-label fw-semibold">AFORE</label>
-                    <input class="form-control" @bind="_form.Afore" />
+                <div class="ns-section-body">
+                    <div class="row g-3">
+                        <div class="col-12 col-md-5">
+                            <label class="ns-field-label">Régimen fiscal SAT</label>
+                            <select class="form-select ns-form-input" @bind="_form.TaxRegime">
+                                <option value="sueldos_salarios">Sueldos y Salarios</option>
+                                <option value="asimilados">Asimilados a Salarios</option>
+                            </select>
+                        </div>
+                        <div class="col-12 col-md-4">
+                            <label class="ns-field-label">Base cotización</label>
+                            <select class="form-select ns-form-input" @bind="_form.CotizationBase">
+                                <option value="fixed">Fija</option>
+                                <option value="variable">Variable</option>
+                                <option value="mixed">Mixta</option>
+                            </select>
+                        </div>
+                    </div>
                 </div>
-                <div class="col-12 col-md-3">
-                    <label class="form-label fw-semibold">No. FONACOT</label>
-                    <input class="form-control" @bind="_form.Fonacot" />
+            </div>
+
+            <!-- Fondos y créditos -->
+            <div class="ns-section ns-green">
+                <div class="ns-section-header">
+                    <span class="bi bi-piggy-bank"></span> Fondos y créditos
                 </div>
-                <div class="col-12 col-md-4">
-                    <label class="form-label fw-semibold">Crédito INFONAVIT</label>
-                    <input class="form-control" @bind="_form.Infonavit" />
+                <div class="ns-section-body">
+                    <div class="row g-3">
+                        <div class="col-12 col-md-3">
+                            <label class="ns-field-label">AFORE</label>
+                            <input class="form-control ns-form-input" @bind="_form.Afore" placeholder="Nombre de la AFORE" />
+                        </div>
+                        <div class="col-12 col-md-3">
+                            <label class="ns-field-label">No. FONACOT</label>
+                            <input class="form-control ns-form-input" @bind="_form.Fonacot" placeholder="Número de crédito" />
+                        </div>
+                        <div class="col-12 col-md-4">
+                            <label class="ns-field-label">Crédito INFONAVIT</label>
+                            <input class="form-control ns-form-input" @bind="_form.Infonavit" placeholder="Número de crédito INFONAVIT" />
+                        </div>
+                    </div>
                 </div>
             </div>
         }
 
-        <!-- ─── PESTAÑA 5: BANCO ─── -->
+        <!-- ════════════════════════════════════════ -->
+        <!-- TAB 5: BANCO                             -->
+        <!-- ════════════════════════════════════════ -->
         @if (_activeTab == 5)
         {
-            <div class="row g-3">
-                <div class="col-12 col-md-4">
-                    <label class="form-label fw-semibold">Forma de pago</label>
-                    <select class="form-select" @bind="_form.PaymentForm">
-                        <option value="tarjeta">Tarjeta bancaria</option>
-                        <option value="transferencia">Transferencia</option>
-                        <option value="efectivo">Efectivo</option>
-                        <option value="cheque">Cheque</option>
-                    </select>
+            <div class="ns-section ns-cyan">
+                <div class="ns-section-header">
+                    <span class="bi bi-credit-card"></span> Datos bancarios
                 </div>
-                <div class="col-12 col-md-4">
-                    <label class="form-label fw-semibold">Banco</label>
-                    <select class="form-select" @bind="_form.BankCode">
-                        <option value="">— Selecciona —</option>
-                        @foreach (var b in _banks)
-                        {
-                            <option value="@b.Code">@b.ShortName — @b.Name</option>
-                        }
-                    </select>
-                </div>
-                <div class="col-12 col-md-4">
-                    <label class="form-label fw-semibold">Sucursal bancaria</label>
-                    <input class="form-control" @bind="_form.BankBranch" />
-                </div>
-                <div class="col-12 col-md-5">
-                    <label class="form-label fw-semibold">Número de cuenta</label>
-                    <input class="form-control" @bind="_form.BankAccount" />
-                </div>
-                <div class="col-12 col-md-7">
-                    <label class="form-label fw-semibold">CLABE interbancaria (18 dígitos)</label>
-                    <input class="form-control" @bind="_form.Clabe" maxlength="18" />
+                <div class="ns-section-body">
+                    <div class="row g-3">
+                        <div class="col-12 col-md-4">
+                            <label class="ns-field-label">Forma de pago</label>
+                            <select class="form-select ns-form-input" @bind="_form.PaymentForm">
+                                <option value="tarjeta">Tarjeta bancaria</option>
+                                <option value="transferencia">Transferencia</option>
+                                <option value="efectivo">Efectivo</option>
+                                <option value="cheque">Cheque</option>
+                            </select>
+                        </div>
+                        <div class="col-12 col-md-4">
+                            <label class="ns-field-label">Banco</label>
+                            <div class="ns-fk-group">
+                                <select class="form-select ns-form-input" @bind="_form.BankCode">
+                                    <option value="">— Selecciona banco —</option>
+                                    @foreach (var b in _banks)
+                                    {
+                                        <option value="@b.Code">@b.ShortName — @b.Name</option>
+                                    }
+                                </select>
+                                <button type="button" class="ns-plus-btn" title="Registrar banco" @onclick="() => OpenBankModal()">+</button>
+                            </div>
+                        </div>
+                        <div class="col-12 col-md-4">
+                            <label class="ns-field-label">Sucursal bancaria</label>
+                            <input class="form-control ns-form-input" @bind="_form.BankBranch" placeholder="Sucursal o plaza" />
+                        </div>
+                        <div class="col-12 col-md-5">
+                            <label class="ns-field-label">Número de cuenta</label>
+                            <input class="form-control ns-form-input" @bind="_form.BankAccount" placeholder="1234567890" />
+                        </div>
+                        <div class="col-12 col-md-7">
+                            <label class="ns-field-label">CLABE interbancaria (18 dígitos)</label>
+                            <input class="form-control ns-form-input" @bind="_form.Clabe" maxlength="18" placeholder="012 345 678901234567" />
+                        </div>
+                    </div>
                 </div>
             </div>
         }
 
-        <!-- Botón inferior guardar -->
+        <!-- ── Botón inferior guardar ── -->
         <div class="d-flex justify-content-end mt-4 gap-2">
-            <button class="btn btn-outline-secondary" @onclick='() => Nav.NavigateTo("/human-resources/employees")'>Cancelar</button>
-            <button class="btn btn-primary" @onclick="SaveAsync" disabled="@_saving">
-                @if (_saving) { <span class="spinner-border spinner-border-sm me-1"></span> }
-                Guardar cambios
+            <button class="btn btn-outline-secondary px-4" @onclick='() => Nav.NavigateTo("/human-resources/employees")'>
+                <span class="bi bi-x-lg me-1"></span> Cancelar
+            </button>
+            <button class="btn btn-primary px-5" @onclick="SaveAsync" disabled="@_saving">
+                @if (_saving)
+                {
+                    <span class="spinner-border spinner-border-sm me-1"></span>
+                    <span>Guardando…</span>
+                }
+                else
+                {
+                    <span class="bi bi-check2 me-1"></span>
+                    <span>Guardar cambios</span>
+                }
             </button>
         </div>
     }
@@ -481,27 +776,36 @@
 <!-- ═══════════ MODAL CREAR DEPARTAMENTO ═══════════ -->
 @if (_showDeptModal)
 {
-    <div class="modal fade show d-block" style="background:rgba(0,0,0,.5);" tabindex="-1">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">Nuevo departamento</h5>
+    <div class="modal fade show d-block" style="background:rgba(0,0,0,.45);" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content" style="border-radius:10px;border:none;box-shadow:0 20px 60px rgba(0,0,0,.2);">
+                <div class="modal-header" style="background:#F0FDF4;border-bottom:1px solid #bbf7d0;border-radius:10px 10px 0 0;">
+                    <div class="d-flex align-items-center gap-2">
+                        <span class="bi bi-diagram-3 text-success fs-5"></span>
+                        <h6 class="modal-title mb-0 fw-bold">Nuevo departamento</h6>
+                    </div>
                     <button type="button" class="btn-close" @onclick="() => _showDeptModal = false"></button>
                 </div>
-                <div class="modal-body">
+                <div class="modal-body p-4">
                     <div class="mb-3">
-                        <label class="form-label">Código</label>
-                        <input class="form-control" @bind="_newDept.Code" placeholder="PROD" />
+                        <label class="ns-field-label">Código</label>
+                        <input class="form-control ns-form-input" @bind="_newDept.Code" placeholder="PROD" />
                     </div>
                     <div class="mb-3">
-                        <label class="form-label">Nombre</label>
-                        <input class="form-control" @bind="_newDept.Name" placeholder="Producción" />
+                        <label class="ns-field-label">Nombre</label>
+                        <input class="form-control ns-form-input" @bind="_newDept.Name" placeholder="Producción" />
                     </div>
-                    @if (!string.IsNullOrEmpty(_deptError)) { <div class="alert alert-danger py-2">@_deptError</div> }
+                    @if (!string.IsNullOrEmpty(_deptError))
+                    {
+                        <div class="alert alert-danger py-2 mb-0" style="font-size:13px;">@_deptError</div>
+                    }
                 </div>
-                <div class="modal-footer">
-                    <button class="btn btn-outline-secondary" @onclick="() => _showDeptModal = false">Cancelar</button>
-                    <button class="btn btn-primary" @onclick="SaveDeptAsync" disabled="@_savingModal">Crear</button>
+                <div class="modal-footer" style="border-top:1px solid #e2e8f0;">
+                    <button class="btn btn-outline-secondary btn-sm" @onclick="() => _showDeptModal = false">Cancelar</button>
+                    <button class="btn btn-success btn-sm px-4" @onclick="SaveDeptAsync" disabled="@_savingModal">
+                        @if (_savingModal) { <span class="spinner-border spinner-border-sm me-1"></span> }
+                        Crear departamento
+                    </button>
                 </div>
             </div>
         </div>
@@ -511,25 +815,28 @@
 <!-- ═══════════ MODAL CREAR PUESTO ═══════════ -->
 @if (_showPosModal)
 {
-    <div class="modal fade show d-block" style="background:rgba(0,0,0,.5);" tabindex="-1">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">Nuevo puesto</h5>
+    <div class="modal fade show d-block" style="background:rgba(0,0,0,.45);" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content" style="border-radius:10px;border:none;box-shadow:0 20px 60px rgba(0,0,0,.2);">
+                <div class="modal-header" style="background:#F5F3FF;border-bottom:1px solid #ddd6fe;border-radius:10px 10px 0 0;">
+                    <div class="d-flex align-items-center gap-2">
+                        <span class="bi bi-person-gear text-purple fs-5" style="color:#6D28D9;"></span>
+                        <h6 class="modal-title mb-0 fw-bold">Nuevo puesto</h6>
+                    </div>
                     <button type="button" class="btn-close" @onclick="() => _showPosModal = false"></button>
                 </div>
-                <div class="modal-body">
+                <div class="modal-body p-4">
                     <div class="mb-3">
-                        <label class="form-label">Código</label>
-                        <input class="form-control" @bind="_newPos.Code" placeholder="OPER" />
+                        <label class="ns-field-label">Código</label>
+                        <input class="form-control ns-form-input" @bind="_newPos.Code" placeholder="OPER" />
                     </div>
                     <div class="mb-3">
-                        <label class="form-label">Nombre</label>
-                        <input class="form-control" @bind="_newPos.Name" placeholder="Operario" />
+                        <label class="ns-field-label">Nombre</label>
+                        <input class="form-control ns-form-input" @bind="_newPos.Name" placeholder="Operario" />
                     </div>
                     <div class="mb-3">
-                        <label class="form-label">Departamento</label>
-                        <select class="form-select" @bind="_newPos.DepartmentId">
+                        <label class="ns-field-label">Departamento</label>
+                        <select class="form-select ns-form-input" @bind="_newPos.DepartmentId">
                             <option value="">— Ninguno —</option>
                             @foreach (var d in _departments)
                             {
@@ -537,11 +844,17 @@
                             }
                         </select>
                     </div>
-                    @if (!string.IsNullOrEmpty(_posError)) { <div class="alert alert-danger py-2">@_posError</div> }
+                    @if (!string.IsNullOrEmpty(_posError))
+                    {
+                        <div class="alert alert-danger py-2 mb-0" style="font-size:13px;">@_posError</div>
+                    }
                 </div>
-                <div class="modal-footer">
-                    <button class="btn btn-outline-secondary" @onclick="() => _showPosModal = false">Cancelar</button>
-                    <button class="btn btn-primary" @onclick="SavePosAsync" disabled="@_savingModal">Crear</button>
+                <div class="modal-footer" style="border-top:1px solid #e2e8f0;">
+                    <button class="btn btn-outline-secondary btn-sm" @onclick="() => _showPosModal = false">Cancelar</button>
+                    <button class="btn btn-primary btn-sm px-4" @onclick="SavePosAsync" disabled="@_savingModal">
+                        @if (_savingModal) { <span class="spinner-border spinner-border-sm me-1"></span> }
+                        Crear puesto
+                    </button>
                 </div>
             </div>
         </div>
@@ -551,31 +864,87 @@
 <!-- ═══════════ MODAL CREAR HORARIO ═══════════ -->
 @if (_showSchedModal)
 {
-    <div class="modal fade show d-block" style="background:rgba(0,0,0,.5);" tabindex="-1">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">Nuevo horario</h5>
+    <div class="modal fade show d-block" style="background:rgba(0,0,0,.45);" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content" style="border-radius:10px;border:none;box-shadow:0 20px 60px rgba(0,0,0,.2);">
+                <div class="modal-header" style="background:#FFFBEB;border-bottom:1px solid #fde68a;border-radius:10px 10px 0 0;">
+                    <div class="d-flex align-items-center gap-2">
+                        <span class="bi bi-clock fs-5" style="color:#D97706;"></span>
+                        <h6 class="modal-title mb-0 fw-bold">Nuevo horario</h6>
+                    </div>
                     <button type="button" class="btn-close" @onclick="() => _showSchedModal = false"></button>
                 </div>
-                <div class="modal-body">
+                <div class="modal-body p-4">
                     <div class="mb-3">
-                        <label class="form-label">Código</label>
-                        <input class="form-control" @bind="_newSched.Code" placeholder="L-V-8" />
+                        <label class="ns-field-label">Código</label>
+                        <input class="form-control ns-form-input" @bind="_newSched.Code" placeholder="L-V-8" />
                     </div>
                     <div class="mb-3">
-                        <label class="form-label">Nombre</label>
-                        <input class="form-control" @bind="_newSched.Name" placeholder="Lunes a Viernes 8h" />
+                        <label class="ns-field-label">Nombre</label>
+                        <input class="form-control ns-form-input" @bind="_newSched.Name" placeholder="Lunes a Viernes 8h" />
                     </div>
                     <div class="mb-3">
-                        <label class="form-label">Horas semanales</label>
-                        <input type="number" class="form-control" @bind="_newSched.WeeklyHours" />
+                        <label class="ns-field-label">Horas semanales</label>
+                        <input type="number" class="form-control ns-form-input" @bind="_newSched.WeeklyHours" placeholder="40" />
                     </div>
-                    @if (!string.IsNullOrEmpty(_schedError)) { <div class="alert alert-danger py-2">@_schedError</div> }
+                    @if (!string.IsNullOrEmpty(_schedError))
+                    {
+                        <div class="alert alert-danger py-2 mb-0" style="font-size:13px;">@_schedError</div>
+                    }
                 </div>
-                <div class="modal-footer">
-                    <button class="btn btn-outline-secondary" @onclick="() => _showSchedModal = false">Cancelar</button>
-                    <button class="btn btn-primary" @onclick="SaveSchedAsync" disabled="@_savingModal">Crear</button>
+                <div class="modal-footer" style="border-top:1px solid #e2e8f0;">
+                    <button class="btn btn-outline-secondary btn-sm" @onclick="() => _showSchedModal = false">Cancelar</button>
+                    <button class="btn btn-warning btn-sm px-4" @onclick="SaveSchedAsync" disabled="@_savingModal">
+                        @if (_savingModal) { <span class="spinner-border spinner-border-sm me-1"></span> }
+                        Crear horario
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- ═══════════ MODAL CREAR BANCO ═══════════ -->
+@if (_showBankModal)
+{
+    <div class="modal fade show d-block" style="background:rgba(0,0,0,.45);" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content" style="border-radius:10px;border:none;box-shadow:0 20px 60px rgba(0,0,0,.2);">
+                <div class="modal-header" style="background:#F0F9FF;border-bottom:1px solid #bae6fd;border-radius:10px 10px 0 0;">
+                    <div class="d-flex align-items-center gap-2">
+                        <span class="bi bi-bank fs-5" style="color:#0369A1;"></span>
+                        <h6 class="modal-title mb-0 fw-bold">Registrar banco</h6>
+                    </div>
+                    <button type="button" class="btn-close" @onclick="() => _showBankModal = false"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <div class="mb-3">
+                        <label class="ns-field-label">Código</label>
+                        <input class="form-control ns-form-input" @bind="_newBank.Code" placeholder="002" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="ns-field-label">Nombre corto</label>
+                        <input class="form-control ns-form-input" @bind="_newBank.ShortName" placeholder="BBVA" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="ns-field-label">Nombre completo</label>
+                        <input class="form-control ns-form-input" @bind="_newBank.Name" placeholder="BBVA Bancomer" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="ns-field-label">Código SAT <span class="text-muted fw-normal">(opcional)</span></label>
+                        <input class="form-control ns-form-input" @bind="_newBank.SatCode" placeholder="002" />
+                    </div>
+                    @if (!string.IsNullOrEmpty(_bankError))
+                    {
+                        <div class="alert alert-danger py-2 mb-0" style="font-size:13px;">@_bankError</div>
+                    }
+                </div>
+                <div class="modal-footer" style="border-top:1px solid #e2e8f0;">
+                    <button class="btn btn-outline-secondary btn-sm" @onclick="() => _showBankModal = false">Cancelar</button>
+                    <button class="btn btn-sm px-4" style="background:#0369A1;color:#fff;" @onclick="SaveBankAsync" disabled="@_savingModal">
+                        @if (_savingModal) { <span class="spinner-border spinner-border-sm me-1"></span> }
+                        Registrar banco
+                    </button>
                 </div>
             </div>
         </div>
@@ -585,7 +954,6 @@
 @code {
     [Parameter] public Guid? EmployeeId { get; set; }
 
-    private readonly string[] _tabs = ["General", "Datos personales", "Domicilio", "Laboral", "IMSS / SAT", "Banco"];
     private int _activeTab;
     private bool _loading = true;
     private bool _saving;
@@ -605,11 +973,12 @@
     private List<BankItem> _banks = [];
 
     // Quick-add modals
-    private bool _showDeptModal, _showPosModal, _showSchedModal;
-    private string _deptError = string.Empty, _posError = string.Empty, _schedError = string.Empty;
+    private bool _showDeptModal, _showPosModal, _showSchedModal, _showBankModal;
+    private string _deptError = string.Empty, _posError = string.Empty, _schedError = string.Empty, _bankError = string.Empty;
     private NewDeptForm _newDept = new();
     private NewPosForm _newPos = new();
     private NewSchedForm _newSched = new();
+    private NewBankForm _newBank = new();
 
     protected override async Task OnInitializedAsync()
     {
@@ -775,6 +1144,25 @@
         finally { _savingModal = false; }
     }
 
+    // ── Quick-add Bank ──
+    private void OpenBankModal() { _newBank = new(); _bankError = string.Empty; _showBankModal = true; }
+    private async Task SaveBankAsync()
+    {
+        _savingModal = true; _bankError = string.Empty;
+        try
+        {
+            var client = HttpClientFactory.CreateClient("Nanchesoft.Api");
+            var payload = new { _newBank.Code, _newBank.ShortName, _newBank.Name, SatCode = _newBank.SatCode, IsActive = true };
+            var r = await client.PostAsJsonAsync("/api/hr/banks", payload);
+            if (!r.IsSuccessStatusCode) { _bankError = await r.Content.ReadAsStringAsync(); return; }
+            _banks = (await client.GetFromJsonAsync<List<BankItem>>("/api/hr/banks"))
+                ?.Where(x => x.IsActive).OrderBy(x => x.ShortName).ToList() ?? [];
+            _form.BankCode = _newBank.Code;
+            _showBankModal = false;
+        }
+        finally { _savingModal = false; }
+    }
+
     // ─────────── Inner types ───────────
     private sealed class EmployeeFormModel
     {
@@ -859,4 +1247,5 @@
     private sealed class NewDeptForm { public string Code { get; set; } = string.Empty; public string Name { get; set; } = string.Empty; }
     private sealed class NewPosForm { public string Code { get; set; } = string.Empty; public string Name { get; set; } = string.Empty; public Guid? DepartmentId { get; set; } }
     private sealed class NewSchedForm { public string Code { get; set; } = string.Empty; public string Name { get; set; } = string.Empty; public decimal WeeklyHours { get; set; } = 40; }
+    private sealed class NewBankForm { public string Code { get; set; } = string.Empty; public string ShortName { get; set; } = string.Empty; public string Name { get; set; } = string.Empty; public string? SatCode { get; set; } }
 }
