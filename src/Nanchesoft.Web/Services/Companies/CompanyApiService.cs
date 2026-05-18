@@ -98,7 +98,9 @@ public sealed class CompanyApiService
                 Caption = "Zona horaria",
                 DataType = "string",
                 Required = true,
-                Width = 180
+                Width = 240,
+                UseLookup = true,
+                LookupItems = Catalogs.TimeZoneLookups.GetItems()
             },
             new()
             {

@@ -1177,12 +1177,16 @@ public static class MasterCatalogEndpoints
         if (await db.CompanySettings.AnyAsync(x => x.CompanyId == company.Id))
             return Results.BadRequest(new { message = "Esa empresa ya tiene configuración operativa." });
 
+        var timezone = NormalizeText(request.Timezone, "America/Mexico_City");
+        if (!TimeZoneInfo.TryFindSystemTimeZoneById(timezone, out _))
+            return Results.BadRequest(new { message = $"Zona horaria no válida: '{timezone}'." });
+
         var entity = new CompanySetting
         {
             TenantId = company.TenantId,
             CompanyId = company.Id,
             CurrencyId = request.CurrencyId.Value,
-            Timezone = NormalizeText(request.Timezone, "America/Mexico_City"),
+            Timezone = timezone,
             MonetaryDecimals = request.MonetaryDecimals,
             QuantityDecimals = request.QuantityDecimals,
             DefaultPurchaseSeriesId = request.DefaultPurchaseSeriesId,
@@ -1212,10 +1216,14 @@ public static class MasterCatalogEndpoints
         if (await db.CompanySettings.AnyAsync(x => x.Id != id && x.CompanyId == companyId))
             return Results.BadRequest(new { message = "La empresa ya tiene otra configuración operativa." });
 
+        var updatedTimezone = NormalizeText(request.Timezone, entity.Timezone);
+        if (!TimeZoneInfo.TryFindSystemTimeZoneById(updatedTimezone, out _))
+            return Results.BadRequest(new { message = $"Zona horaria no válida: '{updatedTimezone}'." });
+
         entity.TenantId = company.TenantId;
         entity.CompanyId = companyId;
         entity.CurrencyId = currencyId;
-        entity.Timezone = NormalizeText(request.Timezone, entity.Timezone);
+        entity.Timezone = updatedTimezone;
         entity.MonetaryDecimals = request.MonetaryDecimals;
         entity.QuantityDecimals = request.QuantityDecimals;
         entity.DefaultPurchaseSeriesId = request.DefaultPurchaseSeriesId;

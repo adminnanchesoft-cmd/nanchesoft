@@ -104,6 +104,9 @@ public static class CompanyEndpoints
             ? "America/Mexico_City"
             : request.TimeZone.Trim();
 
+        if (!TimeZoneInfo.TryFindSystemTimeZoneById(timeZone, out _))
+            return Results.BadRequest(new { message = $"Zona horaria no válida: '{timeZone}'." });
+
         if (string.IsNullOrWhiteSpace(code) ||
             string.IsNullOrWhiteSpace(name) ||
             string.IsNullOrWhiteSpace(legalName) ||
@@ -161,7 +164,7 @@ public static class CompanyEndpoints
         if (!isPlatformOwner && tenantScopeId.HasValue)
         {
             if (company.TenantId != tenantScopeId.Value)
-                return Results.Forbid();
+                return Results.StatusCode(403);
             request.TenantId = tenantScopeId;
         }
 
@@ -181,6 +184,9 @@ public static class CompanyEndpoints
         var legalName = string.IsNullOrWhiteSpace(request.LegalName) ? company.LegalName : request.LegalName.Trim();
         var rfc = string.IsNullOrWhiteSpace(request.Rfc) ? company.TaxId : request.Rfc.Trim().ToUpperInvariant();
         var timeZone = string.IsNullOrWhiteSpace(request.TimeZone) ? company.Timezone : request.TimeZone.Trim();
+
+        if (!TimeZoneInfo.TryFindSystemTimeZoneById(timeZone, out _))
+            return Results.BadRequest(new { message = $"Zona horaria no válida: '{timeZone}'." });
 
         if (string.IsNullOrWhiteSpace(code) || string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(legalName) || string.IsNullOrWhiteSpace(rfc))
         {
@@ -230,7 +236,7 @@ public static class CompanyEndpoints
         var tenantId = ApiTenantScope.ResolveTenantId(httpContext);
         if (!ApiTenantScope.IsPlatformOwner(httpContext) && tenantId.HasValue && company.TenantId != tenantId.Value)
         {
-            return Results.Forbid();
+            return Results.StatusCode(403);
         }
 
         if (company.Branches.Any())

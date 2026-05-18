@@ -426,7 +426,7 @@ public sealed class MasterCatalogApiService
                 TextColumn("TenantId", "Tenant", allowEditing: false, visible: false),
                 LookupColumn("CompanyId", "Empresa", companies, required: true, width: 220),
                 LookupColumn("CurrencyId", "Moneda base", currencies, required: true, width: 220),
-                TextColumn("Timezone", "Zona horaria", required: true, width: 180),
+                LookupColumn("Timezone", "Zona horaria", TimeZoneLookups.GetItems(), required: true, width: 240),
                 NumberColumn("MonetaryDecimals", "Decimales moneda", required: true, width: 120),
                 NumberColumn("QuantityDecimals", "Decimales cantidad", required: true, width: 120),
                 LookupColumn("DefaultPurchaseSeriesId", "Serie compras", series, width: 220, required: false),
