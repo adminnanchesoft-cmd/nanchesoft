@@ -131,6 +131,9 @@ public sealed class CompanyApiService
                 ? "Administración empresarial real desde API + PostgreSQL."
                 : $"Empresas del tenant activo: {_appState.CurrentTenantName}.",
             KeyExpr = "CompanyId",
+            AllowCreate = true,
+            AllowUpdate = true,
+            AllowDelete = true,
             Columns = columns,
             Rows = rows,
             TotalCount = rows.Count,
