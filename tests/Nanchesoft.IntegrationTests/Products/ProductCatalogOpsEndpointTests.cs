@@ -100,6 +100,13 @@ public class ProductCatalogOpsEndpointTests
     }
 
     [Fact]
+    public async Task ListMaterialFamiliesOptions_ReturnsOk()
+    {
+        var response = await _client.GetAsync("/api/products/material-families/options");
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+    }
+
+    [Fact]
     public async Task CreateMaterialFamily_MissingCode_Returns400()
     {
         var payload = new { code = "", name = "" };
@@ -127,6 +134,13 @@ public class ProductCatalogOpsEndpointTests
     public async Task ListMaterialSubfamilies_ReturnsOk()
     {
         var response = await _client.GetAsync("/api/products/material-subfamilies");
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+    }
+
+    [Fact]
+    public async Task ListMaterialSubfamiliesOptions_ReturnsOk()
+    {
+        var response = await _client.GetAsync("/api/products/material-subfamilies/options");
         response.StatusCode.Should().Be(HttpStatusCode.OK);
     }
 
@@ -162,6 +176,13 @@ public class ProductCatalogOpsEndpointTests
     }
 
     [Fact]
+    public async Task ListMaterialItemsOptions_ReturnsOk()
+    {
+        var response = await _client.GetAsync("/api/products/material-items/options");
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+    }
+
+    [Fact]
     public async Task CreateMaterialItem_MissingCode_Returns400()
     {
         var payload = new { code = "", name = "" };
@@ -193,6 +214,13 @@ public class ProductCatalogOpsEndpointTests
     }
 
     [Fact]
+    public async Task ListFinishedProductsOptions_ReturnsOk()
+    {
+        var response = await _client.GetAsync("/api/products/finished-products/options");
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+    }
+
+    [Fact]
     public async Task CreateFinishedProduct_MissingCode_Returns400()
     {
         var payload = new { code = "", name = "" };
@@ -220,6 +248,13 @@ public class ProductCatalogOpsEndpointTests
     public async Task ListProductComponents_ReturnsOk()
     {
         var response = await _client.GetAsync("/api/products/product-components");
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+    }
+
+    [Fact]
+    public async Task ListProductComponentsOptions_ReturnsOk()
+    {
+        var response = await _client.GetAsync("/api/products/product-components/options");
         response.StatusCode.Should().Be(HttpStatusCode.OK);
     }
 
