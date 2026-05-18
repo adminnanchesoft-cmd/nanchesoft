@@ -499,6 +499,27 @@ window.nsCrudGrid = (() => {
                     dxColumn.format = "dd/MM/yyyy";
                 }
 
+                if (String(dataType).toLowerCase() === "time") {
+                    dxColumn.dataType = "string";
+                    dxColumn.formItem = {
+                        editorType: "dxDateBox",
+                        editorOptions: {
+                            type: "time",
+                            displayFormat: "HH:mm",
+                            pickerType: "list",
+                            interval: 15,
+                            useMaskBehavior: true,
+                            onValueChanged(ev) {
+                                if (ev.value instanceof Date) {
+                                    const h = String(ev.value.getHours()).padStart(2, "0");
+                                    const m = String(ev.value.getMinutes()).padStart(2, "0");
+                                    ev.component.option("value", `${h}:${m}`);
+                                }
+                            }
+                        }
+                    };
+                }
+
                 if (useLookup && Array.isArray(lookupItems) && lookupItems.length > 0) {
                     dxColumn.lookup = {
                         dataSource: lookupItems.map(x => ({
