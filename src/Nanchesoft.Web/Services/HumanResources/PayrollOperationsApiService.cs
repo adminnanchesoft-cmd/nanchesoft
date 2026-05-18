@@ -208,7 +208,7 @@ public sealed class PayrollOperationsApiService
                 LookupColumn("CompanyId", "Empresa", companies, required: true, width: 220),
                 LookupColumn("BranchId", "Sucursal", branches, width: 180),
                 LookupColumn("EmployeeId", "Colaborador", employees, required: true, width: 240),
-                LookupColumn("PayrollPeriodId", "Periodo", periods, width: 220),
+                LookupColumn("PayrollPeriodId", "Periodo", periods, width: 220, quickCreateKey: "payroll-periods"),
                 DateColumn("WorkDate", "Fecha laboral", required: true, width: 120),
                 DateColumn("ScheduledEntryTime", "Entrada prog.", width: 150),
                 DateColumn("ScheduledExitTime", "Salida prog.", width: 150),
@@ -266,7 +266,7 @@ public sealed class PayrollOperationsApiService
                 TextColumn("PayrollRecurringMovementId", "RecurringMovement ID", allowEditing: false, width: 220),
                 LookupColumn("CompanyId", "Empresa", companies, required: true, width: 220),
                 LookupColumn("EmployeeId", "Colaborador", employees, required: true, width: 240),
-                LookupColumn("PayrollConceptId", "Concepto nómina", concepts, required: true, width: 220),
+                LookupColumn("PayrollConceptId", "Concepto nómina", concepts, required: true, width: 220, quickCreateKey: "payroll-concepts"),
                 TextColumn("MovementCode", "Código", required: true, width: 130),
                 TextColumn("MovementName", "Movimiento", required: true, width: 220),
                 TextColumn("MovementType", "Tipo", required: true, width: 100),
@@ -324,8 +324,8 @@ public sealed class PayrollOperationsApiService
                 TextColumn("PrePayrollAdjustmentId", "PrePayrollAdjustment ID", allowEditing: false, width: 220),
                 LookupColumn("CompanyId", "Empresa", companies, required: true, width: 220),
                 LookupColumn("EmployeeId", "Colaborador", employees, required: true, width: 240),
-                LookupColumn("PayrollPeriodId", "Periodo", periods, required: true, width: 220),
-                LookupColumn("PayrollConceptId", "Concepto", concepts, width: 220),
+                LookupColumn("PayrollPeriodId", "Periodo", periods, required: true, width: 220, quickCreateKey: "payroll-periods"),
+                LookupColumn("PayrollConceptId", "Concepto", concepts, width: 220, quickCreateKey: "payroll-concepts"),
                 TextColumn("AdjustmentCode", "Código", required: true, width: 130),
                 TextColumn("AdjustmentName", "Ajuste", required: true, width: 220),
                 TextColumn("AdjustmentType", "Tipo", required: true, width: 100),
@@ -377,7 +377,7 @@ public sealed class PayrollOperationsApiService
                 TextColumn("PrePayrollCutoffId", "PrePayrollCutoff ID", allowEditing: false, width: 220),
                 LookupColumn("CompanyId", "Empresa", companies, required: true, width: 220),
                 LookupColumn("BranchId", "Sucursal", branches, width: 180),
-                LookupColumn("PayrollPeriodId", "Periodo", periods, required: true, width: 220),
+                LookupColumn("PayrollPeriodId", "Periodo", periods, required: true, width: 220, quickCreateKey: "payroll-periods"),
                 TextColumn("CutoffCode", "Código", required: true, width: 130),
                 TextColumn("CutoffName", "Corte", required: true, width: 220),
                 DateColumn("StartDate", "Desde", required: true, width: 120),
@@ -430,7 +430,7 @@ public sealed class PayrollOperationsApiService
                 TextColumn("EmployeeLoanId", "EmployeeLoan ID", allowEditing: false, width: 220),
                 LookupColumn("CompanyId", "Empresa", companies, required: true, width: 220),
                 LookupColumn("EmployeeId", "Colaborador", employees, required: true, width: 240),
-                LookupColumn("PayrollConceptId", "Concepto descuento", concepts, required: true, width: 220),
+                LookupColumn("PayrollConceptId", "Concepto descuento", concepts, required: true, width: 220, quickCreateKey: "payroll-concepts"),
                 TextColumn("LoanNumber", "Préstamo", required: true, width: 130),
                 DateColumn("LoanDate", "Fecha préstamo", required: true, width: 120),
                 DateColumn("StartDate", "Inicio desc.", required: true, width: 120),
@@ -484,7 +484,7 @@ public sealed class PayrollOperationsApiService
                 LookupColumn("CompanyId", "Empresa", companies, required: true, width: 220),
                 LookupColumn("EmployeeLoanId", "Préstamo", loans, required: true, width: 220),
                 LookupColumn("EmployeeId", "Colaborador", employees, required: true, width: 240),
-                LookupColumn("PayrollPeriodId", "Periodo", periods, width: 220),
+                LookupColumn("PayrollPeriodId", "Periodo", periods, width: 220, quickCreateKey: "payroll-periods"),
                 LookupColumn("PayrollRunId", "Corrida", runs, width: 220),
                 DateColumn("DeductionDate", "Fecha", required: true, width: 120),
                 NumberColumn("InstallmentNumber", "No. cuota", width: 90),
@@ -587,8 +587,8 @@ public sealed class PayrollOperationsApiService
                 LookupColumn("PayrollRunId", "Proceso nómina", runs, required: true, width: 220),
                 TextColumn("PayrollRunLineId", "Recibo / línea", width: 220),
                 LookupColumn("EmployeeId", "Colaborador", employees, required: true, width: 240),
-                LookupColumn("PayrollPeriodId", "Periodo", periods, width: 220),
-                LookupColumn("PayrollConceptId", "Concepto nómina", concepts, width: 220),
+                LookupColumn("PayrollPeriodId", "Periodo", periods, width: 220, quickCreateKey: "payroll-periods"),
+                LookupColumn("PayrollConceptId", "Concepto nómina", concepts, width: 220, quickCreateKey: "payroll-concepts"),
                 TextColumn("SourceId", "Fuente ID", width: 220),
                 TextColumn("SourceType", "Tipo fuente", required: true, width: 130),
                 TextColumn("ApplicationCode", "Código", required: true, width: 110),
@@ -925,7 +925,7 @@ public sealed class PayrollOperationsApiService
                 LookupColumn("CompanyId", "Empresa", companies, required: true, width: 220),
                 LookupColumn("PayrollRunId", "Proceso nómina", runs, required: true, width: 220),
                 TextColumn("PayrollRunLineId", "Línea nómina", required: true, width: 220),
-                LookupColumn("PayrollPeriodId", "Periodo", periods, required: true, width: 220),
+                LookupColumn("PayrollPeriodId", "Periodo", periods, required: true, width: 220, quickCreateKey: "payroll-periods"),
                 LookupColumn("EmployeeId", "Colaborador", employees, required: true, width: 240),
                 TextColumn("AccumulatorCode", "Código", required: true, width: 140),
                 TextColumn("AccumulatorName", "Nombre", required: true, width: 220),
@@ -983,7 +983,7 @@ public sealed class PayrollOperationsApiService
                 TextColumn("PayrollEmployerObligationId", "EmployerObligation ID", allowEditing: false, width: 220),
                 LookupColumn("CompanyId", "Empresa", companies, required: true, width: 220),
                 LookupColumn("PayrollRunId", "Proceso nómina", runs, required: true, width: 220),
-                LookupColumn("PayrollPeriodId", "Periodo", periods, required: true, width: 220),
+                LookupColumn("PayrollPeriodId", "Periodo", periods, required: true, width: 220, quickCreateKey: "payroll-periods"),
                 TextColumn("ObligationCode", "Código", required: true, width: 120),
                 TextColumn("ObligationName", "Nombre", required: true, width: 220),
                 TextColumn("ObligationType", "Tipo", width: 140),
@@ -1052,7 +1052,7 @@ public sealed class PayrollOperationsApiService
                 TextColumn("PayrollFiscalReconciliationId", "FiscalReconciliation ID", allowEditing: false, width: 220),
                 LookupColumn("CompanyId", "Empresa", companies, required: true, width: 220),
                 LookupColumn("PayrollRunId", "Proceso nómina", runs, required: true, width: 220),
-                LookupColumn("PayrollPeriodId", "Periodo", periods, required: true, width: 220),
+                LookupColumn("PayrollPeriodId", "Periodo", periods, required: true, width: 220, quickCreateKey: "payroll-periods"),
                 LookupColumn("PayrollDispersionBatchId", "Disp. bancaria", batches, width: 180),
                 LookupColumn("PayrollAccountingPostingId", "Póliza", postings, width: 180),
                 TextColumn("ReconciliationCode", "Código", required: true, width: 150),
@@ -1478,8 +1478,8 @@ public sealed class PayrollOperationsApiService
     private static CatalogColumnDefinition DateColumn(string field, string caption, bool required = false, int width = 120)
         => new() { DataField = field, Caption = caption, DataType = "date", Required = required, Width = width };
 
-    private static CatalogColumnDefinition LookupColumn(string field, string caption, List<CatalogLookupItem> lookupItems, bool required = false, int width = 180)
-        => new() { DataField = field, Caption = caption, DataType = "string", Required = required, Width = width, UseLookup = true, LookupItems = lookupItems };
+    private static CatalogColumnDefinition LookupColumn(string field, string caption, List<CatalogLookupItem> lookupItems, bool required = false, int width = 180, string? quickCreateKey = null)
+        => new() { DataField = field, Caption = caption, DataType = "string", Required = required, Width = width, UseLookup = true, LookupItems = lookupItems, QuickCreateKey = quickCreateKey };
 
     private static string ReadString(JsonElement payload, string name, string fallback = "")
     {

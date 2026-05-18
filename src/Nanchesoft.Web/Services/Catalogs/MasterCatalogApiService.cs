@@ -150,7 +150,7 @@ public sealed class MasterCatalogApiService
             [
                 TextColumn("ExchangeRateId", "ExchangeRate ID", allowEditing: false, width: 220),
                 TextColumn("TenantId", "Tenant", allowEditing: false, visible: false),
-                LookupColumn("CurrencyId", "Moneda", currencies, required: true, width: 220),
+                LookupColumn("CurrencyId", "Moneda", currencies, required: true, width: 220, quickCreateKey: "currencies"),
                 DateColumn("RateDate", "Fecha", required: true, width: 140),
                 NumberColumn("BuyRate", "Compra", required: true, width: 120),
                 NumberColumn("SellRate", "Venta", required: true, width: 120),
@@ -296,7 +296,7 @@ public sealed class MasterCatalogApiService
             "StateId",
             [
                 TextColumn("StateId", "State ID", allowEditing: false, width: 220),
-                LookupColumn("CountryId", "País", countries, required: true, width: 220),
+                LookupColumn("CountryId", "País", countries, required: true, width: 220, quickCreateKey: "countries"),
                 TextColumn("Code", "Código", required: true, width: 110),
                 TextColumn("Name", "Estado", required: true, width: 220),
                 BoolColumn("IsActive", "Activo", width: 90)
@@ -323,7 +323,7 @@ public sealed class MasterCatalogApiService
             "CityId",
             [
                 TextColumn("CityId", "City ID", allowEditing: false, width: 220),
-                LookupColumn("StateId", "Estado", states, required: true, width: 240),
+                LookupColumn("StateId", "Estado", states, required: true, width: 240, quickCreateKey: "states"),
                 TextColumn("Code", "Código", required: true, width: 110),
                 TextColumn("Name", "Ciudad", required: true, width: 220),
                 BoolColumn("IsActive", "Activo", width: 90)
@@ -393,7 +393,7 @@ public sealed class MasterCatalogApiService
                 TextColumn("TenantId", "Tenant", allowEditing: false, visible: false),
                 LookupColumn("CompanyId", "Empresa", companies, required: true, width: 220),
                 TextColumn("DocumentType", "Documento", required: true, width: 180),
-                LookupColumn("SeriesId", "Serie", series, required: true, width: 240),
+                LookupColumn("SeriesId", "Serie", series, required: true, width: 240, quickCreateKey: "document-series"),
                 NumberColumn("CurrentNumber", "Consecutivo", required: true, width: 120),
                 BoolColumn("IsActive", "Activo", width: 90)
             ],
@@ -425,12 +425,12 @@ public sealed class MasterCatalogApiService
                 TextColumn("CompanySettingId", "Setting ID", allowEditing: false, width: 220),
                 TextColumn("TenantId", "Tenant", allowEditing: false, visible: false),
                 LookupColumn("CompanyId", "Empresa", companies, required: true, width: 220),
-                LookupColumn("CurrencyId", "Moneda base", currencies, required: true, width: 220),
+                LookupColumn("CurrencyId", "Moneda base", currencies, required: true, width: 220, quickCreateKey: "currencies"),
                 LookupColumn("Timezone", "Zona horaria", TimeZoneLookups.GetItems(), required: true, width: 240),
                 NumberColumn("MonetaryDecimals", "Decimales moneda", required: true, width: 120),
                 NumberColumn("QuantityDecimals", "Decimales cantidad", required: true, width: 120),
-                LookupColumn("DefaultPurchaseSeriesId", "Serie compras", series, width: 220, required: false),
-                LookupColumn("DefaultSalesSeriesId", "Serie ventas", series, width: 220, required: false),
+                LookupColumn("DefaultPurchaseSeriesId", "Serie compras", series, width: 220, required: false, quickCreateKey: "document-series"),
+                LookupColumn("DefaultSalesSeriesId", "Serie ventas", series, width: 220, required: false, quickCreateKey: "document-series"),
                 BoolColumn("IsActive", "Activo", width: 90)
             ],
             rows.Select(x => Row(
@@ -596,7 +596,7 @@ public sealed class MasterCatalogApiService
             Width = width
         };
 
-    private static CatalogColumnDefinition LookupColumn(string field, string caption, List<CatalogLookupItem> lookupItems, bool required = false, int width = 180)
+    private static CatalogColumnDefinition LookupColumn(string field, string caption, List<CatalogLookupItem> lookupItems, bool required = false, int width = 180, string? quickCreateKey = null)
         => new()
         {
             DataField = field,
@@ -605,7 +605,8 @@ public sealed class MasterCatalogApiService
             Required = required,
             Width = width,
             UseLookup = true,
-            LookupItems = lookupItems
+            LookupItems = lookupItems,
+            QuickCreateKey = quickCreateKey
         };
 
     private static Dictionary<string, object?> Row(params (string Key, object? Value)[] values)

@@ -155,7 +155,7 @@ public sealed class HumanResourcesApiService
             [
                 TextColumn("PositionId", "Position ID", allowEditing: false, width: 220),
                 SmartLookupColumn("CompanyId", "Empresa", companies, required: true, width: 220),
-                LookupColumn("DepartmentId", "Departamento", departments, width: 220),
+                LookupColumn("DepartmentId", "Departamento", departments, width: 220, quickCreateKey: "hr-departments"),
                 TextColumn("Code", "Código", required: true, width: 110),
                 TextColumn("Name", "Puesto", required: true, width: 220),
                 TextColumn("Description", "Descripción", width: 280),
@@ -195,9 +195,9 @@ public sealed class HumanResourcesApiService
                 TextColumn("EmployeeId", "Employee ID", allowEditing: false, width: 220),
                 SmartLookupColumn("CompanyId", "Empresa", companies, required: true, width: 220),
                 SmartLookupColumn("BranchId", "Sucursal", branches, width: 180),
-                LookupColumn("DepartmentId", "Departamento", departments, width: 220),
-                LookupColumn("PositionId", "Puesto", positions, width: 220),
-                LookupColumn("WorkScheduleId", "Horario", workSchedules, width: 180),
+                LookupColumn("DepartmentId", "Departamento", departments, width: 220, quickCreateKey: "hr-departments"),
+                LookupColumn("PositionId", "Puesto", positions, width: 220, quickCreateKey: "hr-positions"),
+                LookupColumn("WorkScheduleId", "Horario", workSchedules, width: 180, quickCreateKey: "hr-work-schedules"),
                 // Identificadores
                 TextColumn("Code", "Código", required: true, width: 110),
                 TextColumn("EmployeeNumber", "Número empleado", required: true, width: 140),
@@ -360,7 +360,7 @@ public sealed class HumanResourcesApiService
                 TextColumn("EmployeeIncidentId", "Incident ID", allowEditing: false, width: 220),
                 SmartLookupColumn("CompanyId", "Empresa", companies, required: true, width: 220),
                 LookupColumn("EmployeeId", "Colaborador", employees, required: true, width: 240),
-                LookupColumn("PayrollPeriodId", "Periodo nómina", periods, width: 220),
+                LookupColumn("PayrollPeriodId", "Periodo nómina", periods, width: 220, quickCreateKey: "payroll-periods"),
                 DateColumn("IncidentDate", "Fecha", required: true, width: 120),
                 TextColumn("IncidentType", "Tipo", required: true, width: 120),
                 NumberColumn("Quantity", "Cantidad", width: 110),
@@ -718,7 +718,7 @@ public sealed class HumanResourcesApiService
                 TextColumn("PayrollRunId", "PayrollRun ID", allowEditing: false, width: 220),
                 SmartLookupColumn("CompanyId", "Empresa", companies, required: true, width: 220),
                 SmartLookupColumn("BranchId", "Sucursal", branches, width: 180),
-                LookupColumn("PayrollPeriodId", "Periodo nómina", periods, required: true, width: 220),
+                LookupColumn("PayrollPeriodId", "Periodo nómina", periods, required: true, width: 220, quickCreateKey: "payroll-periods"),
                 TextColumn("Folio", "Folio", required: true, width: 120),
                 DateColumn("RunDate", "Fecha", required: true, width: 120),
                 TextColumn("Status", "Estatus", width: 110),
@@ -766,8 +766,8 @@ public sealed class HumanResourcesApiService
                 SmartLookupColumn("CompanyId", "Empresa", companies, required: true, width: 220),
                 LookupColumn("PayrollRunId", "Proceso nómina", runs, required: true, width: 220),
                 LookupColumn("EmployeeId", "Colaborador", employees, required: true, width: 240),
-                LookupColumn("DepartmentId", "Departamento", departments, width: 220),
-                LookupColumn("PositionId", "Puesto", positions, width: 220),
+                LookupColumn("DepartmentId", "Departamento", departments, width: 220, quickCreateKey: "hr-departments"),
+                LookupColumn("PositionId", "Puesto", positions, width: 220, quickCreateKey: "hr-positions"),
                 NumberColumn("DaysPaid", "Días pagados", width: 100),
                 NumberColumn("GrossAmount", "Bruto", width: 110),
                 NumberColumn("DeductionsAmount", "Deducciones", width: 120),
@@ -814,7 +814,7 @@ public sealed class HumanResourcesApiService
                 LookupColumn("PayrollRunId", "Proceso nómina", runs, required: true, width: 220),
                 LookupColumn("PayrollRunLineId", "Recibo/colaborador", runLines, required: true, width: 240),
                 LookupColumn("EmployeeId", "Colaborador", employees, required: true, width: 220),
-                LookupColumn("PayrollConceptId", "Concepto nómina", concepts, required: true, width: 220),
+                LookupColumn("PayrollConceptId", "Concepto nómina", concepts, required: true, width: 220, quickCreateKey: "payroll-concepts"),
                 TextColumn("ConceptCode", "Código", required: true, width: 100),
                 TextColumn("ConceptName", "Concepto", required: true, width: 220),
                 TextColumn("ConceptType", "Tipo", required: true, width: 110),
@@ -1246,7 +1246,7 @@ public sealed class HumanResourcesApiService
     private static CatalogColumnDefinition DateColumn(string field, string caption, bool required = false, int width = 120)
         => new() { DataField = field, Caption = caption, DataType = "date", Required = required, Width = width };
 
-    private static CatalogColumnDefinition LookupColumn(string field, string caption, List<CatalogLookupItem> lookupItems, bool required = false, int width = 180)
+    private static CatalogColumnDefinition LookupColumn(string field, string caption, List<CatalogLookupItem> lookupItems, bool required = false, int width = 180, string? quickCreateKey = null)
         => new()
         {
             DataField = field,
@@ -1255,7 +1255,8 @@ public sealed class HumanResourcesApiService
             Required = required,
             Width = width,
             UseLookup = true,
-            LookupItems = lookupItems
+            LookupItems = lookupItems,
+            QuickCreateKey = quickCreateKey
         };
 
     private static CatalogColumnDefinition SmartLookupColumn(string field, string caption, List<CatalogLookupItem> lookupItems, bool required = false, int width = 180)

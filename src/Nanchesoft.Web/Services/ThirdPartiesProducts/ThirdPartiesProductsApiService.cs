@@ -132,8 +132,8 @@ public sealed class ThirdPartiesProductsApiService
             [
                 TextColumn("CustomerId", "Customer ID", allowEditing: false, width: 220),
                 CompanyLookupColumn(companies),
-                LookupColumn("CurrencyId", "Moneda", currencies, width: 140),
-                LookupColumn("PriceListId", "Lista precios", priceLists, width: 220),
+                LookupColumn("CurrencyId", "Moneda", currencies, width: 140, quickCreateKey: "currencies"),
+                LookupColumn("PriceListId", "Lista precios", priceLists, width: 220, quickCreateKey: "price-lists"),
                 TextColumn("Code", "Código", required: true, width: 110),
                 TextColumn("Name", "Cliente", required: true, width: 180),
                 TextColumn("LegalName", "Razón social", required: true, width: 240),
@@ -176,7 +176,7 @@ public sealed class ThirdPartiesProductsApiService
             [
                 TextColumn("SupplierId", "Supplier ID", allowEditing: false, width: 220),
                 CompanyLookupColumn(companies),
-                LookupColumn("CurrencyId", "Moneda", currencies, width: 140),
+                LookupColumn("CurrencyId", "Moneda", currencies, width: 140, quickCreateKey: "currencies"),
                 TextColumn("Code", "Código", required: true, width: 110),
                 TextColumn("Name", "Proveedor", required: true, width: 180),
                 TextColumn("LegalName", "Razón social", required: true, width: 240),
@@ -267,9 +267,9 @@ public sealed class ThirdPartiesProductsApiService
                 TextColumn("InteriorNumber", "No. Int", width: 90),
                 TextColumn("Neighborhood", "Colonia", width: 140),
                 TextColumn("ZipCode", "CP", width: 90),
-                LookupColumn("CountryId", "País", countries, width: 140),
-                LookupColumn("StateId", "Estado", states, width: 160),
-                LookupColumn("CityId", "Ciudad", cities, width: 160),
+                LookupColumn("CountryId", "País", countries, width: 140, quickCreateKey: "countries"),
+                LookupColumn("StateId", "Estado", states, width: 160, quickCreateKey: "states"),
+                LookupColumn("CityId", "Ciudad", cities, width: 160, quickCreateKey: "cities"),
                 TextColumn("Reference", "Referencia", width: 180),
                 BoolColumn("IsPrimary", "Principal", width: 90),
                 BoolColumn("IsActive", "Activo", width: 90)
@@ -313,8 +313,8 @@ public sealed class ThirdPartiesProductsApiService
                 CompanyLookupColumn(companies),
                 LookupColumn("ThirdPartyType", "Tipo", ThirdPartyTypeLookups(), required: true, width: 120),
                 LookupColumn("ThirdPartyId", "Tercero", thirdParties, required: true, width: 220),
-                LookupColumn("BankId", "Banco", banks, required: true, width: 180),
-                LookupColumn("CurrencyId", "Moneda", currencies, width: 120),
+                LookupColumn("BankId", "Banco", banks, required: true, width: 180, quickCreateKey: "banks"),
+                LookupColumn("CurrencyId", "Moneda", currencies, width: 120, quickCreateKey: "currencies"),
                 TextColumn("AccountHolder", "Titular", required: true, width: 200),
                 TextColumn("AccountNumber", "Cuenta", required: true, width: 150),
                 TextColumn("Clabe", "CLABE", width: 170),
@@ -440,12 +440,12 @@ public sealed class ThirdPartiesProductsApiService
             [
                 TextColumn("ItemId", "Item ID", allowEditing: false, width: 220),
                 CompanyLookupColumn(companies),
-                LookupColumn("CategoryId", "Categoría", categories, width: 180),
-                LookupColumn("BrandId", "Marca", brands, width: 160),
-                LookupColumn("ModelId", "Modelo", models, width: 160),
-                LookupColumn("UnitId", "Unidad", units, width: 140),
+                LookupColumn("CategoryId", "Categoría", categories, width: 180, quickCreateKey: "categories"),
+                LookupColumn("BrandId", "Marca", brands, width: 160, quickCreateKey: "brands"),
+                LookupColumn("ModelId", "Modelo", models, width: 160, quickCreateKey: "models"),
+                LookupColumn("UnitId", "Unidad", units, width: 140, quickCreateKey: "units"),
                 LookupColumn("TaxId", "Impuesto", taxes, width: 140),
-                LookupColumn("CurrencyId", "Moneda", currencies, width: 120),
+                LookupColumn("CurrencyId", "Moneda", currencies, width: 120, quickCreateKey: "currencies"),
                 TextColumn("Code", "Código", required: true, width: 110),
                 TextColumn("Barcode", "Código barras", width: 140),
                 TextColumn("Name", "Producto / servicio", required: true, width: 220),
@@ -500,7 +500,7 @@ public sealed class ThirdPartiesProductsApiService
             [
                 TextColumn("PriceListId", "PriceList ID", allowEditing: false, width: 220),
                 CompanyLookupColumn(companies),
-                LookupColumn("CurrencyId", "Moneda", currencies, width: 140),
+                LookupColumn("CurrencyId", "Moneda", currencies, width: 140, quickCreateKey: "currencies"),
                 TextColumn("Code", "Código", required: true, width: 110),
                 TextColumn("Name", "Lista", required: true, width: 180),
                 BoolColumn("IsDefault", "Default", width: 90),
@@ -758,8 +758,8 @@ public sealed class ThirdPartiesProductsApiService
     private static CatalogColumnDefinition BoolColumn(string field, string caption, int width = 90)
         => new() { DataField = field, Caption = caption, DataType = "boolean", Width = width };
 
-    private static CatalogColumnDefinition LookupColumn(string field, string caption, List<CatalogLookupItem> lookupItems, bool required = false, int width = 180)
-        => new() { DataField = field, Caption = caption, DataType = "string", Required = required, Width = width, UseLookup = true, LookupItems = lookupItems };
+    private static CatalogColumnDefinition LookupColumn(string field, string caption, List<CatalogLookupItem> lookupItems, bool required = false, int width = 180, string? quickCreateKey = null)
+        => new() { DataField = field, Caption = caption, DataType = "string", Required = required, Width = width, UseLookup = true, LookupItems = lookupItems, QuickCreateKey = quickCreateKey };
 
     private static CatalogColumnDefinition CompanyLookupColumn(List<CatalogLookupItem> companies)
     {

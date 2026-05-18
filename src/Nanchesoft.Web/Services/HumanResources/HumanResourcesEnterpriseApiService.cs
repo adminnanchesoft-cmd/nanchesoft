@@ -166,7 +166,7 @@ public sealed class HumanResourcesEnterpriseApiService
             [
                 TextColumn("WorkScheduleId", "Schedule ID", allowEditing: false, width: 220),
                 SmartLookupColumn("CompanyId", "Empresa", companies, required: true, width: 220),
-                LookupColumn("WorkShiftId", "Turno base", shifts, width: 220),
+                LookupColumn("WorkShiftId", "Turno base", shifts, width: 220, quickCreateKey: "hr-shifts"),
                 TextColumn("Code", "Código", required: true, width: 120),
                 TextColumn("Name", "Horario", required: true, width: 220),
                 BoolColumn("Monday", "Lun", width: 70),
@@ -264,7 +264,7 @@ public sealed class HumanResourcesEnterpriseApiService
             [
                 TextColumn("LeaveTypeId", "Leave Type ID", allowEditing: false, width: 220),
                 SmartLookupColumn("CompanyId", "Empresa", companies, required: true, width: 220),
-                LookupColumn("PayrollConceptId", "Concepto nómina", payrollConcepts, width: 220),
+                LookupColumn("PayrollConceptId", "Concepto nómina", payrollConcepts, width: 220, quickCreateKey: "payroll-concepts"),
                 TextColumn("Code", "Código", required: true, width: 120),
                 TextColumn("Name", "Tipo ausencia", required: true, width: 220),
                 TextColumn("Category", "Categoría", width: 120),
@@ -308,7 +308,7 @@ public sealed class HumanResourcesEnterpriseApiService
                 SmartLookupColumn("CompanyId", "Empresa", companies, required: true, width: 220),
                 SmartLookupColumn("BranchId", "Sucursal", branches, width: 180),
                 LookupColumn("EmployeeId", "Colaborador", employees, required: true, width: 220),
-                LookupColumn("LeaveTypeId", "Tipo ausencia", leaveTypes, width: 220),
+                LookupColumn("LeaveTypeId", "Tipo ausencia", leaveTypes, width: 220, quickCreateKey: "hr-leave-types"),
                 TextColumn("Folio", "Folio", width: 140),
                 DateColumn("RequestDate", "Solicitud", required: true, width: 120),
                 DateColumn("StartDate", "Inicio", required: true, width: 120),
@@ -421,8 +421,8 @@ private async Task<CatalogViewDefinition> GetEmployeeMovementsAsync()
             SmartLookupColumn("CompanyId", "Empresa", companies, required: true, width: 220),
             SmartLookupColumn("BranchId", "Sucursal", branches, width: 180),
             LookupColumn("EmployeeId", "Colaborador", employees, required: true, width: 220),
-            LookupColumn("DepartmentId", "Departamento", departments, width: 180),
-            LookupColumn("PositionId", "Puesto", positions, width: 180),
+            LookupColumn("DepartmentId", "Departamento", departments, width: 180, quickCreateKey: "hr-departments"),
+            LookupColumn("PositionId", "Puesto", positions, width: 180, quickCreateKey: "hr-positions"),
             TextColumn("MovementCode", "Código", required: true, width: 120),
             TextColumn("MovementType", "Tipo", required: true, width: 140),
             DateColumn("EffectiveDate", "Efectivo", required: true, width: 120),
@@ -529,8 +529,8 @@ private async Task<CatalogViewDefinition> GetRecruitmentVacanciesAsync()
             TextColumn("RecruitmentVacancyId", "Vacancy ID", allowEditing: false, width: 220),
             SmartLookupColumn("CompanyId", "Empresa", companies, required: true, width: 220),
             SmartLookupColumn("BranchId", "Sucursal", branches, width: 220),
-            LookupColumn("DepartmentId", "Departamento", departments, width: 220),
-            LookupColumn("PositionId", "Puesto", positions, width: 220),
+            LookupColumn("DepartmentId", "Departamento", departments, width: 220, quickCreateKey: "hr-departments"),
+            LookupColumn("PositionId", "Puesto", positions, width: 220, quickCreateKey: "hr-positions"),
             TextColumn("VacancyCode", "Código", required: true, width: 130),
             TextColumn("Title", "Vacante", required: true, width: 240),
             TextColumn("EmploymentType", "Tipo empleo", width: 120),
@@ -700,8 +700,8 @@ private async Task<CatalogViewDefinition> GetPerformanceReviewsAsync()
             SmartLookupColumn("CompanyId", "Empresa", companies, required: true, width: 220),
             SmartLookupColumn("BranchId", "Sucursal", branches, width: 220),
             LookupColumn("EmployeeId", "Colaborador", employees, required: true, width: 260),
-            LookupColumn("DepartmentId", "Departamento", departments, width: 220),
-            LookupColumn("PositionId", "Puesto", positions, width: 220),
+            LookupColumn("DepartmentId", "Departamento", departments, width: 220, quickCreateKey: "hr-departments"),
+            LookupColumn("PositionId", "Puesto", positions, width: 220, quickCreateKey: "hr-positions"),
             TextColumn("ReviewCode", "Código", required: true, width: 130),
             TextColumn("ReviewCycle", "Ciclo", required: true, width: 150),
             DateColumn("PeriodStart", "Inicio", width: 130),
@@ -759,8 +759,8 @@ private async Task<CatalogViewDefinition> GetCompetencyAssessmentsAsync()
             SmartLookupColumn("CompanyId", "Empresa", companies, required: true, width: 220),
             SmartLookupColumn("BranchId", "Sucursal", branches, width: 220),
             LookupColumn("EmployeeId", "Colaborador", employees, required: true, width: 260),
-            LookupColumn("DepartmentId", "Departamento", departments, width: 220),
-            LookupColumn("PositionId", "Puesto", positions, width: 220),
+            LookupColumn("DepartmentId", "Departamento", departments, width: 220, quickCreateKey: "hr-departments"),
+            LookupColumn("PositionId", "Puesto", positions, width: 220, quickCreateKey: "hr-positions"),
             TextColumn("AssessmentCode", "Código", required: true, width: 130),
             TextColumn("CompetencyCode", "Comp. código", required: true, width: 130),
             TextColumn("CompetencyName", "Competencia", required: true, width: 220),
@@ -814,7 +814,7 @@ private async Task<CatalogViewDefinition> GetSuccessionPlansAsync()
             TextColumn("SuccessionPlanRecordId", "Plan ID", allowEditing: false, width: 220),
             SmartLookupColumn("CompanyId", "Empresa", companies, required: true, width: 220),
             SmartLookupColumn("BranchId", "Sucursal", branches, width: 220),
-            LookupColumn("PositionId", "Puesto objetivo", positions, required: true, width: 220),
+            LookupColumn("PositionId", "Puesto objetivo", positions, required: true, width: 220, quickCreateKey: "hr-positions"),
             LookupColumn("IncumbentEmployeeId", "Titular actual", employees, width: 260),
             LookupColumn("SuccessorEmployeeId", "Sucesor", employees, required: true, width: 260),
             TextColumn("PlanCode", "Código", required: true, width: 130),
@@ -1170,7 +1170,7 @@ private static OnboardingChecklistRecordRequest MapOnboardingChecklistRequest(Js
     private static CatalogColumnDefinition DateColumn(string field, string caption, bool required = false, int width = 120)
         => new() { DataField = field, Caption = caption, DataType = "date", Required = required, Width = width };
 
-    private static CatalogColumnDefinition LookupColumn(string field, string caption, List<CatalogLookupItem> lookupItems, bool required = false, int width = 180)
+    private static CatalogColumnDefinition LookupColumn(string field, string caption, List<CatalogLookupItem> lookupItems, bool required = false, int width = 180, string? quickCreateKey = null)
         => new()
         {
             DataField = field,
@@ -1179,7 +1179,8 @@ private static OnboardingChecklistRecordRequest MapOnboardingChecklistRequest(Js
             Required = required,
             Width = width,
             UseLookup = true,
-            LookupItems = lookupItems
+            LookupItems = lookupItems,
+            QuickCreateKey = quickCreateKey
         };
 
     private static CatalogColumnDefinition SmartLookupColumn(string field, string caption, List<CatalogLookupItem> lookupItems, bool required = false, int width = 180)
