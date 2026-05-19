@@ -80,6 +80,7 @@ builder.Services.AddScoped<AccountsReceivableApiService>();
 builder.Services.AddScoped<AccountingApiService>();
 builder.Services.AddScoped<CfdiApiService>();
 builder.Services.AddScoped<FinanceApiService>();
+builder.Services.AddScoped<Nanchesoft.Web.Services.Finance.FinancePhase1ApiService>();
 builder.Services.AddScoped<HumanResourcesApiService>();
 builder.Services.AddScoped<HumanResourcesEnterpriseApiService>();
 builder.Services.AddScoped<PayrollOperationsApiService>();

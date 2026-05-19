@@ -1,0 +1,235 @@
+@page "/finance/bank-transfers"
+@using Nanchesoft.Web.Services.Finance
+@using Nanchesoft.Web.Services.Treasury
+@inject FinancePhase1ApiService Phase1
+@inject TreasuryApiService TreasuryApi
+
+<PageTitle>Transferencias internas | Nanchesoft</PageTitle>
+
+<div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-3">
+    <div>
+        <div class="text-muted small">Nanchesoft ERP · Finanzas · Bancos</div>
+        <h1 class="h3 mb-1">Transferencias internas</h1>
+        <div class="text-muted">Mueve saldo entre cuentas bancarias y cajas propias. Genera dos movimientos vinculados.</div>
+    </div>
+    <div class="d-flex gap-2 flex-wrap">
+        <a class="btn btn-outline-secondary" href="/finance/bank-movements">Movimientos bancarios</a>
+        <a class="btn btn-outline-secondary" href="/treasury/bank-accounts">Cuentas bancarias</a>
+        <button class="btn btn-primary" @onclick="OpenNew">Nueva transferencia</button>
+    </div>
+</div>
+
+@if (!string.IsNullOrWhiteSpace(_message))
+{
+    <div class="alert alert-success">@_message</div>
+}
+@if (!string.IsNullOrWhiteSpace(_error))
+{
+    <div class="alert alert-danger">@_error</div>
+}
+
+<div class="card shadow-sm">
+    <div class="table-responsive">
+        <table class="table table-striped align-middle mb-0">
+            <thead>
+                <tr>
+                    <th>Fecha</th>
+                    <th>Origen</th>
+                    <th>Destino</th>
+                    <th class="text-end">Importe</th>
+                    <th>Referencia</th>
+                    <th>Notas</th>
+                    <th>Estatus</th>
+                </tr>
+            </thead>
+            <tbody>
+                @if (_transfers.Count == 0)
+                {
+                    <tr><td colspan="7" class="text-center text-muted py-4">Sin transferencias registradas.</td></tr>
+                }
+                else
+                {
+                    @foreach (var transfer in _transfers)
+                    {
+                        <tr>
+                            <td>@transfer.TransferDate.ToString("dd/MM/yyyy")</td>
+                            <td>@AccountLabel(transfer.SourceAccountType, transfer.SourceAccountId)</td>
+                            <td>@AccountLabel(transfer.DestinationAccountType, transfer.DestinationAccountId)</td>
+                            <td class="text-end fw-bold">@transfer.Amount.ToString("C")</td>
+                            <td>@transfer.Reference</td>
+                            <td>@transfer.Notes</td>
+                            <td><span class="badge bg-success">@transfer.Status</span></td>
+                        </tr>
+                    }
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+@if (_editing is not null)
+{
+    <div class="modal d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Nueva transferencia interna</h5>
+                    <button class="btn-close" @onclick="CloseEditor"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row g-3">
+                        <div class="col-md-3">
+                            <label class="form-label">Fecha</label>
+                            <input type="date" class="form-control" @bind="_editing.TransferDate" />
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Tipo origen</label>
+                            <select class="form-select" @bind="_editing.SourceAccountType">
+                                <option value="bank">Banco</option>
+                                <option value="cash">Caja</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Cuenta origen</label>
+                            <select class="form-select" @bind="_sourceText">
+                                <option value="">Selecciona...</option>
+                                @foreach (var item in SourceOptions)
+                                {
+                                    <option value="@item.Id">@item.Label</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-md-3 offset-md-3">
+                            <label class="form-label">Tipo destino</label>
+                            <select class="form-select" @bind="_editing.DestinationAccountType">
+                                <option value="bank">Banco</option>
+                                <option value="cash">Caja</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Cuenta destino</label>
+                            <select class="form-select" @bind="_destinationText">
+                                <option value="">Selecciona...</option>
+                                @foreach (var item in DestinationOptions)
+                                {
+                                    <option value="@item.Id">@item.Label</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Importe</label>
+                            <input type="number" step="0.01" class="form-control text-end" @bind="_editing.Amount" />
+                        </div>
+                        <div class="col-md-9">
+                            <label class="form-label">Referencia</label>
+                            <input class="form-control" @bind="_editing.Reference" placeholder="Concepto o folio" />
+                        </div>
+                        <div class="col-md-12">
+                            <label class="form-label">Notas</label>
+                            <textarea class="form-control" rows="2" @bind="_editing.Notes"></textarea>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" @onclick="CloseEditor">Cancelar</button>
+                    <button class="btn btn-primary" @onclick="SaveAsync">Guardar transferencia</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<InternalTransferRow> _transfers = new();
+    private List<AccountOption> _bankOptions = new();
+    private List<AccountOption> _cashOptions = new();
+    private Dictionary<Guid, string> _accountLabels = new();
+    private InternalTransferRequest? _editing;
+    private string _sourceText = string.Empty;
+    private string _destinationText = string.Empty;
+    private string? _message;
+    private string? _error;
+
+    private IEnumerable<AccountOption> SourceOptions => string.Equals(_editing?.SourceAccountType, "cash", StringComparison.OrdinalIgnoreCase) ? _cashOptions : _bankOptions;
+    private IEnumerable<AccountOption> DestinationOptions => string.Equals(_editing?.DestinationAccountType, "cash", StringComparison.OrdinalIgnoreCase) ? _cashOptions : _bankOptions;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadLookupsAsync();
+        await ReloadAsync();
+    }
+
+    private async Task LoadLookupsAsync()
+    {
+        try
+        {
+            var lookups = await TreasuryApi.GetLookupsAsync();
+            _bankOptions = lookups.BankAccounts.Select(x => new AccountOption(Guid.Parse(x.Id), x.Name, "bank")).ToList();
+            _cashOptions = lookups.CashAccounts.Select(x => new AccountOption(Guid.Parse(x.Id), x.Name, "cash")).ToList();
+            _accountLabels = _bankOptions.Concat(_cashOptions).ToDictionary(x => x.Id, x => x.Label);
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private async Task ReloadAsync()
+    {
+        try
+        {
+            _transfers = await Phase1.GetTransfersAsync(DateTime.Today.AddMonths(-3), DateTime.Today);
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private void OpenNew()
+    {
+        _editing = new InternalTransferRequest { TransferDate = DateTime.Today, SourceAccountType = "bank", DestinationAccountType = "bank" };
+        _sourceText = string.Empty;
+        _destinationText = string.Empty;
+        _message = null;
+        _error = null;
+    }
+
+    private void CloseEditor() => _editing = null;
+
+    private async Task SaveAsync()
+    {
+        if (_editing is null) return;
+        if (!Guid.TryParse(_sourceText, out var sourceId) || !Guid.TryParse(_destinationText, out var destId))
+        {
+            _error = "Selecciona origen y destino.";
+            return;
+        }
+        _editing.SourceAccountId = sourceId;
+        _editing.DestinationAccountId = destId;
+        try
+        {
+            var response = await Phase1.CreateTransferAsync(_editing);
+            if (!response.IsSuccessStatusCode)
+            {
+                _error = await response.Content.ReadAsStringAsync();
+                return;
+            }
+            _message = "Transferencia registrada.";
+            _editing = null;
+            await ReloadAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private string AccountLabel(string type, Guid id)
+    {
+        if (_accountLabels.TryGetValue(id, out var label)) return $"{(type == "bank" ? "Banco" : "Caja")}: {label}";
+        return $"{type}: {id}";
+    }
+
+    public sealed record AccountOption(Guid Id, string Label, string Type);
+}

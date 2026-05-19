@@ -1,0 +1,187 @@
+@page "/finance/reconciliation-suggestions"
+@using Nanchesoft.Web.Services.Finance
+@using Nanchesoft.Web.Services.Treasury
+@inject FinancePhase1ApiService Phase1
+@inject TreasuryApiService TreasuryApi
+
+<PageTitle>Conciliación asistida | Nanchesoft</PageTitle>
+
+<div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-3">
+    <div>
+        <div class="text-muted small">Nanchesoft ERP · Finanzas · Bancos</div>
+        <h1 class="h3 mb-1">Conciliación asistida</h1>
+        <div class="text-muted">Sugerencias automáticas para emparejar partidas del estado de cuenta con movimientos del sistema.</div>
+    </div>
+    <div class="d-flex gap-2 flex-wrap">
+        <a class="btn btn-outline-secondary" href="/finance/bank-movements">Movimientos</a>
+        <a class="btn btn-outline-secondary" href="/finance/bank-statements">Estados de cuenta</a>
+        <a class="btn btn-outline-secondary" href="/treasury/reconciliations">Conciliaciones</a>
+    </div>
+</div>
+
+@if (!string.IsNullOrWhiteSpace(_message))
+{
+    <div class="alert alert-success">@_message</div>
+}
+@if (!string.IsNullOrWhiteSpace(_error))
+{
+    <div class="alert alert-danger">@_error</div>
+}
+
+<div class="card shadow-sm mb-3">
+    <div class="card-body">
+        <div class="row g-3 align-items-end">
+            <div class="col-md-4">
+                <label class="form-label">Cuenta bancaria</label>
+                <select class="form-select" @bind="_accountText">
+                    <option value="">Selecciona una cuenta...</option>
+                    @foreach (var account in _accounts)
+                    {
+                        <option value="@account.Id">@account.Name</option>
+                    }
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Tolerancia (días)</label>
+                <input type="number" min="0" max="30" class="form-control" @bind="_toleranceDays" />
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Estado de cuenta</label>
+                <select class="form-select" @bind="_statementText">
+                    <option value="">Todos los pendientes</option>
+                    @foreach (var statement in _statements)
+                    {
+                        <option value="@statement.BankStatementId">@statement.StatementDate.ToString("dd/MM/yyyy") · @statement.Source</option>
+                    }
+                </select>
+            </div>
+            <div class="col-md-2 d-grid">
+                <button class="btn btn-primary" @onclick="LoadSuggestionsAsync">Calcular sugerencias</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card shadow-sm">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <strong>Sugerencias (@_suggestions.Count)</strong>
+        <button class="btn btn-sm btn-outline-success" disabled="@(_suggestions.Count == 0)" @onclick="ApplySelectedAsync">Aplicar selección</button>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-striped align-middle mb-0">
+            <thead>
+                <tr>
+                    <th><input type="checkbox" @bind="_selectAll" @bind:after="ApplySelectAll" /></th>
+                    <th>Estado de cuenta</th>
+                    <th>Movimiento sistema</th>
+                    <th>Descripción</th>
+                    <th>Referencia</th>
+                    <th class="text-end">Importe</th>
+                    <th>Días</th>
+                    <th>Confianza</th>
+                </tr>
+            </thead>
+            <tbody>
+                @if (_suggestions.Count == 0)
+                {
+                    <tr><td colspan="8" class="text-center text-muted py-4">Selecciona una cuenta y presiona "Calcular sugerencias".</td></tr>
+                }
+                else
+                {
+                    @foreach (var suggestion in _suggestions)
+                    {
+                        <tr>
+                            <td><input type="checkbox" @bind="suggestion.Selected" /></td>
+                            <td>@suggestion.EntryDate.ToString("dd/MM/yyyy")</td>
+                            <td>@suggestion.MovementDate.ToString("dd/MM/yyyy")</td>
+                            <td>@suggestion.Description</td>
+                            <td>@suggestion.Reference</td>
+                            <td class="text-end fw-bold">@suggestion.Amount.ToString("C")</td>
+                            <td>@suggestion.DaysDifference</td>
+                            <td>
+                                <span class="badge bg-@(suggestion.Confidence >= 80m ? "success" : suggestion.Confidence >= 50m ? "warning" : "danger")">
+                                    @suggestion.Confidence.ToString("F0")%
+                                </span>
+                            </td>
+                        </tr>
+                    }
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+@code {
+    private List<TreasuryListItem> _accounts = new();
+    private List<BankStatementListRow> _statements = new();
+    private List<ReconciliationSuggestion> _suggestions = new();
+    private string _accountText = string.Empty;
+    private string _statementText = string.Empty;
+    private int _toleranceDays = 3;
+    private bool _selectAll = true;
+    private string? _message;
+    private string? _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var lookups = await TreasuryApi.GetLookupsAsync();
+        _accounts = lookups.BankAccounts.Select(x => new TreasuryListItem(Guid.Parse(x.Id), x.Name)).ToList();
+    }
+
+    private async Task LoadSuggestionsAsync()
+    {
+        _message = null;
+        _error = null;
+        if (!Guid.TryParse(_accountText, out var accountId))
+        {
+            _error = "Selecciona una cuenta bancaria.";
+            return;
+        }
+        try
+        {
+            _statements = await Phase1.GetStatementsAsync(accountId);
+            var statementId = Guid.TryParse(_statementText, out var sid) ? sid : (Guid?)null;
+            _suggestions = await Phase1.GetSuggestionsAsync(accountId, statementId, _toleranceDays);
+            foreach (var suggestion in _suggestions) suggestion.Selected = true;
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private void ApplySelectAll()
+    {
+        foreach (var suggestion in _suggestions) suggestion.Selected = _selectAll;
+    }
+
+    private async Task ApplySelectedAsync()
+    {
+        var selected = _suggestions.Where(x => x.Selected).ToList();
+        if (selected.Count == 0)
+        {
+            _error = "No hay sugerencias seleccionadas.";
+            return;
+        }
+        try
+        {
+            var response = await Phase1.ApplyMatchesAsync(new ApplyMatchesRequest
+            {
+                Matches = selected.Select(s => new ReconciliationMatchPair { StatementEntryId = s.StatementEntryId, BankMovementId = s.BankMovementId }).ToList()
+            });
+            if (!response.IsSuccessStatusCode)
+            {
+                _error = await response.Content.ReadAsStringAsync();
+                return;
+            }
+            _message = $"Se aplicaron {selected.Count} coincidencias. Los saldos conciliados se actualizaron.";
+            _suggestions = _suggestions.Where(x => !x.Selected).ToList();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    public sealed record TreasuryListItem(Guid Id, string Name);
+}

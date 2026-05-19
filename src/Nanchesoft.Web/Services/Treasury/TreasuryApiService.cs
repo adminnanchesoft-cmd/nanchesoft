@@ -765,7 +765,7 @@ public sealed class TreasuryApiService
         return columns;
     }
 
-    private async Task<TreasuryLookups> GetLookupsAsync()
+    public async Task<TreasuryLookups> GetLookupsAsync()
     {
         var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
         return await client.GetFromJsonAsync<TreasuryLookups>("/api/treasury/lookups") ?? new TreasuryLookups();

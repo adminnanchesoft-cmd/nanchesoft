@@ -216,6 +216,7 @@ app.MapAccountsPayableEndpoints();
 app.MapCfdiEndpoints();
 app.MapAccountingEndpoints();
 app.MapFinanceEndpoints();
+app.MapFinancePhase1Endpoints();
 app.MapHumanResourcesEndpoints();
 app.MapHumanResourcesCatalogsEndpoints();
 app.MapPayrollDetailEndpoints();
