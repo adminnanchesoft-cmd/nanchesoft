@@ -111,7 +111,84 @@
             <a class="ns-secondary-btn" href="@_csvHref" download="@GetExportFileName("csv")">Exportar CSV</a>
             <a class="ns-secondary-btn" href="@_jsonHref" download="@GetExportFileName("json")">Exportar JSON</a>
             <a class="ns-secondary-btn" href="@_printHref" target="_blank">Imprimir catálogo</a>
+            @if (_definition.AllowImport)
+            {
+                <button class="ns-secondary-btn" @onclick="() => _showImport = !_showImport">
+                    @(_showImport ? "Cerrar importación" : "Importar CSV")
+                </button>
+                <a class="ns-secondary-btn" href="@_importTemplateHref" download="@($"plantilla_{_definition.CatalogKey}.csv")">Descargar plantilla</a>
+            }
         </div>
+
+        @if (_definition.AllowImport && _showImport)
+        {
+            <div style="margin:0 0 18px 0;padding:20px;border-radius:14px;border:1px solid #dbeafe;background:#f0f7ff;">
+                <h3 style="margin:0 0 12px 0;font-size:1rem;font-weight:600;color:#1d4ed8;">Importar desde CSV</h3>
+                <p style="margin:0 0 14px 0;font-size:.875rem;color:#475569;">
+                    Descarga la plantilla, llena los datos y sube el archivo. Las columnas deben mantenerse en el mismo orden.
+                </p>
+
+                <InputFile OnChange="OnImportFileSelected" accept=".csv" style="display:block;margin-bottom:12px;" />
+
+                @if (_importRows.Count > 0)
+                {
+                    <div style="margin:12px 0;overflow-x:auto;max-height:260px;border:1px solid #bfdbfe;border-radius:8px;">
+                        <table style="border-collapse:collapse;font-size:.8rem;width:100%;">
+                            <thead>
+                                <tr style="background:#eff6ff;position:sticky;top:0;">
+                                    <th style="padding:6px 10px;border-bottom:1px solid #bfdbfe;">#</th>
+                                    @foreach (var h in _importHeaders)
+                                    {
+                                        <th style="padding:6px 10px;border-bottom:1px solid #bfdbfe;white-space:nowrap;">@h</th>
+                                    }
+                                    <th style="padding:6px 10px;border-bottom:1px solid #bfdbfe;">Estado</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @for (int i = 0; i < _importRows.Count; i++)
+                                {
+                                    var row = _importRows[i];
+                                    var status = i < _importStatuses.Count ? _importStatuses[i] : "";
+                                    var bg = status == "OK" ? "#f0fdf4" : status.StartsWith("Error") ? "#fff1f2" : "white";
+                                    <tr style="background:@bg;">
+                                        <td style="padding:5px 10px;border-bottom:1px solid #e2e8f0;color:#64748b;">@(i + 1)</td>
+                                        @foreach (var cell in row)
+                                        {
+                                            <td style="padding:5px 10px;border-bottom:1px solid #e2e8f0;">@cell</td>
+                                        }
+                                        <td style="padding:5px 10px;border-bottom:1px solid #e2e8f0;font-size:.75rem;color:@(status == "OK" ? "#16a34a" : status.StartsWith("Error") ? "#dc2626" : "#94a3b8");">
+                                            @status
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                    <p style="margin:8px 0 14px 0;font-size:.8rem;color:#64748b;">@_importRows.Count fila(s) detectada(s)</p>
+
+                    @if (!_importing)
+                    {
+                        <button class="ns-primary-btn" @onclick="ExecuteImportAsync" disabled="@(_importRows.Count == 0)">
+                            Importar @_importRows.Count registro(s)
+                        </button>
+                    }
+                    else
+                    {
+                        <div style="display:flex;align-items:center;gap:10px;">
+                            <div class="ns-loader" style="width:20px;height:20px;border-width:2px;"></div>
+                            <span style="font-size:.875rem;color:#475569;">Importando @_importDone de @_importRows.Count...</span>
+                        </div>
+                    }
+
+                    @if (_importDone > 0 && !_importing)
+                    {
+                        <p style="margin:10px 0 0 0;font-size:.875rem;color:#16a34a;font-weight:600;">
+                            ✓ @_importOk de @_importRows.Count registros importados correctamente.
+                        </p>
+                    }
+                }
+            </div>
+        }
 
         <div class="ns-grid-shell">
             <div id="@_containerId" class="ns-grid-host"></div>
@@ -133,6 +210,16 @@
     private string _csvHref = "#";
     private string _jsonHref = "#";
     private string _printHref = "#";
+    private string _importTemplateHref = "#";
+
+    // Import state
+    private bool _showImport;
+    private List<string> _importHeaders = [];
+    private List<List<string>> _importRows = [];
+    private List<string> _importStatuses = [];
+    private bool _importing;
+    private int _importDone;
+    private int _importOk;
 
     protected override async Task OnInitializedAsync()
     {
@@ -449,7 +536,7 @@
     {
         if (_definition is null)
         {
-            _csvHref = _jsonHref = _printHref = "#";
+            _csvHref = _jsonHref = _printHref = _importTemplateHref = "#";
             return;
         }
 
@@ -467,6 +554,152 @@
         _csvHref = BuildDataUri("text/csv;charset=utf-8", csv.ToString());
         _jsonHref = BuildDataUri("application/json;charset=utf-8", json);
         _printHref = BuildDataUri("text/html;charset=utf-8", html);
+
+        if (_definition.AllowImport)
+            RebuildImportTemplate(visibleColumns);
+    }
+
+    private void RebuildImportTemplate(List<CatalogColumnDefinition> visibleColumns)
+    {
+        // Template: editable columns (skip the ID key column) with an example row
+        var importCols = visibleColumns
+            .Where(x => x.AllowEditing && x.DataField != _definition!.KeyExpr)
+            .ToList();
+
+        var sb = new StringBuilder();
+        sb.AppendLine(string.Join(",", importCols.Select(x => EscapeCsv(x.Caption))));
+
+        // Add an example row with hints
+        var exampleCells = importCols.Select(col =>
+        {
+            if (col.UseLookup && col.LookupItems.Count > 0)
+                return EscapeCsv(col.LookupItems[0].Name);
+            return col.DataType switch
+            {
+                "boolean" => "Sí",
+                "number"  => "0",
+                "date"    => DateTime.Today.ToString("dd/MM/yyyy"),
+                _         => EscapeCsv($"Ejemplo {col.Caption}")
+            };
+        });
+        sb.AppendLine(string.Join(",", exampleCells));
+        _importTemplateHref = BuildDataUri("text/csv;charset=utf-8", sb.ToString());
+    }
+
+    private async Task OnImportFileSelected(InputFileChangeEventArgs e)
+    {
+        _importRows.Clear();
+        _importHeaders.Clear();
+        _importStatuses.Clear();
+        _importDone = 0;
+        _importOk = 0;
+
+        var file = e.File;
+        if (file is null) return;
+
+        using var stream = file.OpenReadStream(maxAllowedSize: 5 * 1024 * 1024);
+        using var reader = new StreamReader(stream, Encoding.UTF8);
+        var content = await reader.ReadToEndAsync();
+
+        var lines = content.Split('\n', StringSplitOptions.RemoveEmptyEntries)
+                           .Select(l => l.TrimEnd('\r'))
+                           .Where(l => !string.IsNullOrWhiteSpace(l))
+                           .ToList();
+
+        if (lines.Count < 2) return;
+
+        _importHeaders = ParseCsvLine(lines[0]);
+        for (int i = 1; i < lines.Count; i++)
+        {
+            var cells = ParseCsvLine(lines[i]);
+            // Pad to header count
+            while (cells.Count < _importHeaders.Count) cells.Add("");
+            _importRows.Add(cells);
+        }
+    }
+
+    private async Task ExecuteImportAsync()
+    {
+        if (_definition is null || _importRows.Count == 0) return;
+
+        _importing = true;
+        _importDone = 0;
+        _importOk = 0;
+        _importStatuses = Enumerable.Repeat("", _importRows.Count).ToList();
+
+        var importCols = _definition.Columns
+            .Where(x => x.AllowEditing && x.DataField != _definition.KeyExpr && x.Visible)
+            .ToList();
+
+        for (int i = 0; i < _importRows.Count; i++)
+        {
+            var cells = _importRows[i];
+            var payload = new Dictionary<string, object?>();
+
+            for (int j = 0; j < Math.Min(importCols.Count, cells.Count); j++)
+            {
+                var col = importCols[j];
+                var raw = cells[j].Trim();
+
+                if (col.UseLookup && col.LookupItems.Count > 0)
+                {
+                    var match = col.LookupItems.FirstOrDefault(x =>
+                        string.Equals(x.Name, raw, StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(x.Id, raw, StringComparison.OrdinalIgnoreCase));
+                    payload[col.DataField] = match?.Id ?? raw;
+                }
+                else if (col.DataType == "boolean")
+                    payload[col.DataField] = raw is "Sí" or "Si" or "si" or "sí" or "true" or "True" or "1" or "yes" or "Yes";
+                else if (col.DataType == "number" && decimal.TryParse(raw, out var num))
+                    payload[col.DataField] = num;
+                else if (col.DataType == "date" && DateTime.TryParse(raw, out var dt))
+                    payload[col.DataField] = dt;
+                else
+                    payload[col.DataField] = raw;
+            }
+
+            try
+            {
+                var jsonElement = JsonSerializer.Deserialize<JsonElement>(JsonSerializer.Serialize(payload));
+                await ExecuteWriteAsync("insert", null, jsonElement);
+                _importStatuses[i] = "OK";
+                _importOk++;
+            }
+            catch (Exception ex)
+            {
+                _importStatuses[i] = $"Error: {ex.Message}";
+            }
+
+            _importDone = i + 1;
+            StateHasChanged();
+        }
+
+        _importing = false;
+        await RefreshCatalogAsync();
+    }
+
+    private static List<string> ParseCsvLine(string line)
+    {
+        var result = new List<string>();
+        var sb = new StringBuilder();
+        bool inQuote = false;
+
+        for (int i = 0; i < line.Length; i++)
+        {
+            var c = line[i];
+            if (c == '"')
+            {
+                if (inQuote && i + 1 < line.Length && line[i + 1] == '"')
+                { sb.Append('"'); i++; }
+                else inQuote = !inQuote;
+            }
+            else if ((c == ',' || c == ';') && !inQuote)
+            { result.Add(sb.ToString()); sb.Clear(); }
+            else
+                sb.Append(c);
+        }
+        result.Add(sb.ToString());
+        return result;
     }
 
     private static string GetDisplayValue(CatalogColumnDefinition column, Dictionary<string, object?> row)

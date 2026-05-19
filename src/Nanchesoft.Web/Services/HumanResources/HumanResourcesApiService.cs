@@ -146,7 +146,8 @@ public sealed class HumanResourcesApiService
                 ("Name", x.Name),
                 ("Description", x.Description),
                 ("IsActive", x.IsActive)))
-            .ToList());
+            .ToList(),
+            allowImport: true);
     }
 
     private async Task<CatalogViewDefinition> GetPositionsAsync()
@@ -1276,7 +1277,8 @@ public sealed class HumanResourcesApiService
         string subtitle,
         string keyExpr,
         List<CatalogColumnDefinition> columns,
-        List<Dictionary<string, object?>> rows)
+        List<Dictionary<string, object?>> rows,
+        bool allowImport = false)
         => new()
         {
             CatalogKey = catalogKey,
@@ -1286,6 +1288,7 @@ public sealed class HumanResourcesApiService
             AllowCreate = true,
             AllowUpdate = true,
             AllowDelete = true,
+            AllowImport = allowImport,
             TotalCount = rows.Count,
             ActiveCount = rows.Count(x => Convert.ToBoolean(x.GetValueOrDefault("IsActive") ?? false)),
             InactiveCount = rows.Count(x => !Convert.ToBoolean(x.GetValueOrDefault("IsActive") ?? false)),

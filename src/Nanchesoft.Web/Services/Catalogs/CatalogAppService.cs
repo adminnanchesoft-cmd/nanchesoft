@@ -726,6 +726,7 @@ public sealed class CatalogViewDefinition
     public bool AllowCreate { get; set; }
     public bool AllowUpdate { get; set; }
     public bool AllowDelete { get; set; }
+    public bool AllowImport { get; set; }
     public int TotalCount { get; set; }
     public int ActiveCount { get; set; }
     public int InactiveCount { get; set; }
