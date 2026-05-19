@@ -100,7 +100,7 @@ else
                             new GuideStep("02", "Define tus catálogos", "Monedas, impuestos, unidades y bancos.", "/catalogs/currencies", "CA"),
                             new GuideStep("03", "Da de alta tus terceros", "Clientes y proveedores con cuentas y contactos.", "/third-parties/customers", "TE"),
                             new GuideStep("04", "Construye tu producto", "Materiales, hormas, estilos y productos terminados.", "/products/orange-control-center", "PR"),
-                            new GuideStep("05", "Empieza a operar", "Compras, inventario, ventas y servicios.", "/sales/orders", "VE"),
+                            new GuideStep("05", "Empieza a operar", "Compras, inventario, ventas y servicios.", "/sales", "VE"),
                         };
                     }
                     @foreach (var (step, idx) in steps.Select((s, i) => (s, i)))
@@ -334,7 +334,7 @@ else
         QuickAccessTiles = new List<QuickTile>
         {
             new("Ventas", "Cotizaciones, pedidos, facturación",
-                "/sales/orders", "VE",
+                "/sales", "VE",
                 "#0078d4", "#3658ff",
                 "<svg width='22' height='22' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><path d='M3 3h2l.4 2M7 13h10l3-7H6.4M7 13l-1.5 4h12'/><circle cx='9' cy='20' r='1.5'/><circle cx='17' cy='20' r='1.5'/></svg>"),
 
