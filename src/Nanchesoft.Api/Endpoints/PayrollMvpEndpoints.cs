@@ -452,14 +452,17 @@ public static class PayrollMvpEndpoints
                         errors.Add($"Fila {rowNum}: fecha inválida '{fechaStr}'.");
                         continue;
                     }
-                    if (!string.IsNullOrWhiteSpace(entradaStr) && TimeSpan.TryParse(entradaStr, out var entrada))
+                    TimeSpan? entrada = !string.IsNullOrWhiteSpace(entradaStr) && TimeSpan.TryParse(entradaStr, out var et) ? et : null;
+                    TimeSpan? salida = !string.IsNullOrWhiteSpace(salidaStr) && TimeSpan.TryParse(salidaStr, out var st) ? st : null;
+
+                    if (entrada.HasValue)
                     {
-                        db.AttendancePunches.Add(BuildPunch(company, branchId, employee.Id, fecha.Date.Add(entrada), "entry"));
+                        db.AttendancePunches.Add(BuildPunch(company, branchId, employee.Id, fecha.Date.Add(entrada.Value), "entry"));
                         created++;
                     }
-                    if (!string.IsNullOrWhiteSpace(salidaStr) && TimeSpan.TryParse(salidaStr, out var salida))
+                    if (salida.HasValue && (!entrada.HasValue || salida.Value != entrada.Value))
                     {
-                        db.AttendancePunches.Add(BuildPunch(company, branchId, employee.Id, fecha.Date.Add(salida), "exit"));
+                        db.AttendancePunches.Add(BuildPunch(company, branchId, employee.Id, fecha.Date.Add(salida.Value), "exit"));
                         created++;
                     }
                 }
@@ -484,28 +487,37 @@ public static class PayrollMvpEndpoints
 
     private static async Task<(List<string>, List<List<string>>)> ReadDelimitedFileAsync(IFormFile file)
     {
-        var headers = new List<string>();
-        var rows = new List<List<string>>();
+        var parsedRows = new List<List<string>>();
         using var reader = new StreamReader(file.OpenReadStream(), System.Text.Encoding.UTF8, detectEncodingFromByteOrderMarks: true);
         string? line;
         char? delim = null;
-        bool first = true;
         while ((line = await reader.ReadLineAsync()) is not null)
         {
             if (line.Length == 0) continue;
             delim ??= DetectCsvDelimiter(line);
             var fields = ParseCsvLine(line, delim.Value);
-            if (first)
-            {
-                headers = fields.Select(x => x.Trim()).ToList();
-                first = false;
-            }
-            else
-            {
-                rows.Add(fields);
-            }
+            if (fields.Any(x => !string.IsNullOrWhiteSpace(x)))
+                parsedRows.Add(fields);
         }
+
+        if (parsedRows.Count == 0)
+            return ([], []);
+
+        var headerIndex = parsedRows.FindIndex(IsLikelyPunchHeader);
+        if (headerIndex < 0) headerIndex = 0;
+
+        var headers = parsedRows[headerIndex].Select(x => x.Trim()).ToList();
+        var rows = parsedRows.Skip(headerIndex + 1).ToList();
         return (headers, rows);
+    }
+
+    private static bool IsLikelyPunchHeader(List<string> fields)
+    {
+        var keys = fields.Select(NormalizePunchHeader).ToHashSet();
+        var hasEmployee = keys.Contains("noempleado") || keys.Contains("iddepersona") || keys.Contains("numeroempleado") || keys.Contains("empleado");
+        var hasDate = keys.Contains("fecha") || keys.Contains("fechahora");
+        var hasPunch = keys.Contains("horaentrada") || keys.Contains("horasalida") || keys.Contains("primeraperforacion") || keys.Contains("ultimaperforacion") || keys.Contains("tipo");
+        return hasEmployee && hasDate && hasPunch;
     }
 
     private static (List<string>, List<List<string>>) ReadExcelRows(IFormFile file)
@@ -574,11 +586,35 @@ public static class PayrollMvpEndpoints
         var map = new Dictionary<string, int>();
         for (int i = 0; i < headers.Count; i++)
         {
-            var key = (headers[i] ?? string.Empty).Trim().ToLowerInvariant().Replace(" ", "").Replace("_", "");
+            var key = NormalizePunchHeader(headers[i] ?? string.Empty);
             if (!map.ContainsKey(key)) map[key] = i;
+            foreach (var alias in PunchHeaderAliases(key))
+                if (!map.ContainsKey(alias)) map[alias] = i;
         }
         return map;
     }
+
+    private static string NormalizePunchHeader(string value)
+    {
+        var key = value.Trim().ToLowerInvariant()
+            .Replace("á", "a")
+            .Replace("é", "e")
+            .Replace("í", "i")
+            .Replace("ó", "o")
+            .Replace("ú", "u")
+            .Replace("ñ", "n");
+        return new string(key.Where(char.IsLetterOrDigit).ToArray());
+    }
+
+    private static IEnumerable<string> PunchHeaderAliases(string key)
+        => key switch
+        {
+            "iddepersona" or "idpersona" or "numeroempleado" or "claveempleado" or "codigoempleado" => ["noempleado"],
+            "primeraperforacion" or "primermarcaje" or "entrada" => ["horaentrada"],
+            "ultimaperforacion" or "ultimomarcaje" or "salida" => ["horasalida"],
+            "fechayhora" or "timestamp" => ["fechahora"],
+            _ => []
+        };
 
     private static string GetCsvField(List<string> row, Dictionary<string, int> headerMap, string key)
         => headerMap.TryGetValue(key, out var idx) && idx < row.Count ? row[idx] ?? string.Empty : string.Empty;
@@ -603,7 +639,13 @@ public static class PayrollMvpEndpoints
     // Procesa todos los empleados activos y agrupa sus checadas
     // Hora entrada programada por defecto: 09:00, salida: 18:00
     // ──────────────────────────────────────────────────────────────
-    private static async Task<IResult> GenerateAttendanceDailySummariesAsync(Guid periodId, NanchesoftDbContext db)
+    private static async Task<IResult> GenerateAttendanceDailySummariesAsync(
+        Guid periodId,
+        int? defaultToleranceMinutes,
+        int? earlyLeaveToleranceMinutes,
+        decimal? halfAbsenceUnderHours,
+        decimal? fullAbsenceUnderHours,
+        NanchesoftDbContext db)
     {
         var period = await db.PayrollPeriods.FirstOrDefaultAsync(x => x.Id == periodId);
         if (period is null)
@@ -641,6 +683,10 @@ public static class PayrollMvpEndpoints
 
         var defaultEntry = new TimeSpan(9, 0, 0);
         var defaultExit = new TimeSpan(18, 0, 0);
+        var fallbackToleranceMinutes = Math.Clamp(defaultToleranceMinutes ?? 5, 0, 240);
+        var exitToleranceMinutes = Math.Clamp(earlyLeaveToleranceMinutes ?? 5, 0, 240);
+        var fullAbsenceLimit = Math.Clamp(fullAbsenceUnderHours ?? 4m, 0m, 24m);
+        var halfAbsenceLimit = Math.Clamp(halfAbsenceUnderHours ?? 6m, fullAbsenceLimit, 24m);
         int created = 0;
 
         foreach (var employee in employees)
@@ -660,14 +706,14 @@ public static class PayrollMvpEndpoints
                     isRestDay = !isWork;
                     entryTs = e;
                     exitTs = x2;
-                    toleranceMin = tol > 0 ? tol : 5;
+                    toleranceMin = tol > 0 ? tol : fallbackToleranceMinutes;
                 }
                 else
                 {
                     isRestDay = date.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday;
                     entryTs = defaultEntry;
                     exitTs = defaultExit;
-                    toleranceMin = 5;
+                    toleranceMin = fallbackToleranceMinutes;
                 }
 
                 // Skip rest days with no punches — they are not absences
@@ -697,14 +743,14 @@ public static class PayrollMvpEndpoints
                         var totalHours = (exitPunch.PunchDateTime - actualEntry).TotalHours;
                         workedHours = (decimal)totalHours;
                         var scheduledHours = (scheduledExit - scheduledEntry).TotalHours;
-                        absenceUnits = workedHours < 4m ? 1m : workedHours < 6m ? 0.5m : 0m;
+                        absenceUnits = workedHours < fullAbsenceLimit ? 1m : workedHours < halfAbsenceLimit ? 0.5m : 0m;
                         overtimeHours = workedHours > (decimal)scheduledHours ? Math.Round(workedHours - (decimal)scheduledHours, 2) : 0m;
 
                         var delayTs = actualEntry - scheduledEntry;
                         if (delayTs.TotalMinutes > toleranceMin) delayMinutes = (int)delayTs.TotalMinutes;
 
                         var earlyTs = scheduledExit - actualExit;
-                        if (earlyTs.TotalMinutes > 5 && actualExit < scheduledExit) earlyLeaveMinutes = (int)earlyTs.TotalMinutes;
+                        if (earlyTs.TotalMinutes > exitToleranceMinutes && actualExit < scheduledExit) earlyLeaveMinutes = (int)earlyTs.TotalMinutes;
                     }
                     else
                     {
@@ -752,7 +798,7 @@ public static class PayrollMvpEndpoints
     // 4. GENERAR INCIDENCIAS AUTOMÁTICAS DESDE RESUMEN DIARIO
     // Genera: falta, retardo, hora_extra
     // ──────────────────────────────────────────────────────────────
-    private static async Task<IResult> GenerateIncidentsFromSummariesAsync(Guid periodId, NanchesoftDbContext db)
+    private static async Task<IResult> GenerateIncidentsFromSummariesAsync(Guid periodId, int? delayIncidentThresholdMinutes, decimal? overtimeMultiplier, NanchesoftDbContext db)
     {
         var period = await db.PayrollPeriods.FirstOrDefaultAsync(x => x.Id == periodId);
         if (period is null)
@@ -771,6 +817,8 @@ public static class PayrollMvpEndpoints
         db.EmployeeIncidents.RemoveRange(autoIncidents);
 
         int created = 0;
+        var delayThreshold = Math.Clamp(delayIncidentThresholdMinutes ?? 15, 0, 240);
+        var overtimeRate = Math.Clamp(overtimeMultiplier ?? 1.5m, 1m, 5m);
         var grouped = summaries
             .GroupBy(x => x.EmployeeId)
             .ToList();
@@ -805,7 +853,7 @@ public static class PayrollMvpEndpoints
                 created++;
             }
 
-            if (delaySum > 15)
+            if (delaySum > delayThreshold)
             {
                 var delayHours = delaySum / 60m;
                 db.EmployeeIncidents.Add(new EmployeeIncident
@@ -837,7 +885,7 @@ public static class PayrollMvpEndpoints
                     IncidentDate = period.StartDate,
                     IncidentType = "hora_extra",
                     Quantity = Math.Round(overtimeSum, 2),
-                    Amount = Math.Round(employee.DailySalary / 8m * 1.5m * overtimeSum, 2),
+                    Amount = Math.Round(employee.DailySalary / 8m * overtimeRate * overtimeSum, 2),
                     Status = "draft",
                     Notes = "auto-generado",
                     IsActive = true,

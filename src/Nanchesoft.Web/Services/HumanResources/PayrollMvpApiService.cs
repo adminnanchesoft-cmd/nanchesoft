@@ -1,4 +1,5 @@
 using System.Net.Http.Json;
+using System.Globalization;
 using System.Text.Json;
 
 namespace Nanchesoft.Web.Services.HumanResources;
@@ -27,23 +28,27 @@ public sealed class PayrollMvpApiService
         var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
         using var content = new MultipartFormDataContent();
         content.Add(new StreamContent(stream), "file", fileName);
-        var response = await client.PostAsync("/api/hr/time-clock/import", content);
+        var extension = Path.GetExtension(fileName ?? string.Empty).ToLowerInvariant();
+        var endpoint = extension is ".csv" or ".txt"
+            ? "/api/hr/time-clock/import/csv"
+            : "/api/hr/time-clock/import";
+        var response = await client.PostAsync(endpoint, content);
         await EnsureSuccessAsync(response);
         return await response.Content.ReadFromJsonAsync<PayrollMvpImportResult>() ?? new();
     }
 
-    public async Task<PayrollMvpOperationResult> GenerateAttendanceSummariesAsync(Guid periodId)
+    public async Task<PayrollMvpOperationResult> GenerateAttendanceSummariesAsync(Guid periodId, PayrollAttendanceOptions? options = null)
     {
         var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
-        var response = await client.PostAsync($"/api/payroll/periods/{periodId}/generate-summaries", null);
+        var response = await client.PostAsync($"/api/payroll/periods/{periodId}/generate-summaries{BuildSummaryQuery(options)}", null);
         await EnsureSuccessAsync(response);
         return await response.Content.ReadFromJsonAsync<PayrollMvpOperationResult>() ?? new();
     }
 
-    public async Task<PayrollMvpOperationResult> GenerateIncidentsAsync(Guid periodId)
+    public async Task<PayrollMvpOperationResult> GenerateIncidentsAsync(Guid periodId, PayrollIncidentOptions? options = null)
     {
         var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
-        var response = await client.PostAsync($"/api/payroll/periods/{periodId}/generate-incidents", null);
+        var response = await client.PostAsync($"/api/payroll/periods/{periodId}/generate-incidents{BuildIncidentQuery(options)}", null);
         await EnsureSuccessAsync(response);
         return await response.Content.ReadFromJsonAsync<PayrollMvpOperationResult>() ?? new();
     }
@@ -104,6 +109,44 @@ public sealed class PayrollMvpApiService
             throw new InvalidOperationException(message);
         }
     }
+
+    private static string BuildSummaryQuery(PayrollAttendanceOptions? options)
+    {
+        if (options is null) return string.Empty;
+        var query = new List<string>
+        {
+            $"defaultToleranceMinutes={options.DefaultToleranceMinutes}",
+            $"earlyLeaveToleranceMinutes={options.EarlyLeaveToleranceMinutes}",
+            $"halfAbsenceUnderHours={options.HalfAbsenceUnderHours.ToString(CultureInfo.InvariantCulture)}",
+            $"fullAbsenceUnderHours={options.FullAbsenceUnderHours.ToString(CultureInfo.InvariantCulture)}"
+        };
+        return "?" + string.Join("&", query);
+    }
+
+    private static string BuildIncidentQuery(PayrollIncidentOptions? options)
+    {
+        if (options is null) return string.Empty;
+        var query = new List<string>
+        {
+            $"delayIncidentThresholdMinutes={options.DelayIncidentThresholdMinutes}",
+            $"overtimeMultiplier={options.OvertimeMultiplier.ToString(CultureInfo.InvariantCulture)}"
+        };
+        return "?" + string.Join("&", query);
+    }
+}
+
+public sealed class PayrollAttendanceOptions
+{
+    public int DefaultToleranceMinutes { get; set; } = 5;
+    public int EarlyLeaveToleranceMinutes { get; set; } = 5;
+    public decimal FullAbsenceUnderHours { get; set; } = 4m;
+    public decimal HalfAbsenceUnderHours { get; set; } = 6m;
+}
+
+public sealed class PayrollIncidentOptions
+{
+    public int DelayIncidentThresholdMinutes { get; set; } = 15;
+    public decimal OvertimeMultiplier { get; set; } = 1.5m;
 }
 
 public sealed class PayrollMvpImportResult

@@ -109,13 +109,14 @@
             <div class="card-header fw-semibold">Paso 2 — Importar checadas / reloj checador</div>
             <div class="card-body">
                 <p class="text-secondary mb-3">
-                    Sube un archivo Excel (.xlsx) con las checadas del periodo.<br />
+                    Sube un archivo Excel (.xlsx) o CSV de checadas del periodo.<br />
                     <strong>Formato A (recomendado):</strong> columnas <code>NoEmpleado | Fecha | HoraEntrada | HoraSalida</code><br />
-                    <strong>Formato B:</strong> columnas <code>NoEmpleado | FechaHora | Tipo</code> (Tipo = entry / exit)
+                    <strong>Formato B:</strong> columnas <code>NoEmpleado | FechaHora | Tipo</code> (Tipo = entry / exit)<br />
+                    <strong>Silvasoft:</strong> <code>ID de persona | Fecha | Primera perforación | Última perforación</code>
                 </p>
                 <div class="mb-3" style="max-width:400px;">
-                    <label class="form-label fw-semibold">Archivo Excel de checadas</label>
-                    <InputFile OnChange="OnPunchFileSelected" accept=".xlsx" class="form-control" />
+                    <label class="form-label fw-semibold">Archivo de checadas</label>
+                    <InputFile OnChange="OnPunchFileSelected" accept=".xlsx,.csv,.txt" class="form-control" />
                 </div>
                 @if (_punchImportResult is not null)
                 {
@@ -169,6 +170,24 @@
                     El sistema procesará las checadas del periodo y calculará:<br />
                     horas trabajadas, retardos, horas extra y faltas por empleado.
                 </p>
+                <div class="row g-3 mb-3">
+                    <div class="col-sm-6 col-lg-3">
+                        <label class="form-label fw-semibold">Tolerancia entrada (min)</label>
+                        <input type="number" min="0" max="240" class="form-control" @bind="_attendanceOptions.DefaultToleranceMinutes" />
+                    </div>
+                    <div class="col-sm-6 col-lg-3">
+                        <label class="form-label fw-semibold">Tolerancia salida (min)</label>
+                        <input type="number" min="0" max="240" class="form-control" @bind="_attendanceOptions.EarlyLeaveToleranceMinutes" />
+                    </div>
+                    <div class="col-sm-6 col-lg-3">
+                        <label class="form-label fw-semibold">Falta completa si horas &lt;</label>
+                        <input type="number" min="0" max="24" step="0.5" class="form-control" @bind="_attendanceOptions.FullAbsenceUnderHours" />
+                    </div>
+                    <div class="col-sm-6 col-lg-3">
+                        <label class="form-label fw-semibold">Media falta si horas &lt;</label>
+                        <input type="number" min="0" max="24" step="0.5" class="form-control" @bind="_attendanceOptions.HalfAbsenceUnderHours" />
+                    </div>
+                </div>
                 @if (_summaryResult is null)
                 {
                     <button class="btn btn-outline-primary" @onclick="GenerateSummariesAsync" disabled="@_busy">
@@ -201,8 +220,18 @@
             <div class="card-body">
                 <p class="text-secondary mb-3">
                     A partir del resumen de asistencia se generarán incidencias de tipo:<br />
-                    <strong>falta</strong> (ausencias), <strong>retardo</strong> (llegadas tarde > 15 min) y <strong>hora_extra</strong> (tiempo adicional).
+                    <strong>falta</strong> (ausencias), <strong>retardo</strong> (llegadas tarde acumuladas) y <strong>hora_extra</strong> (tiempo adicional).
                 </p>
+                <div class="row g-3 mb-3">
+                    <div class="col-sm-6">
+                        <label class="form-label fw-semibold">Generar retardo si minutos acumulados &gt;</label>
+                        <input type="number" min="0" max="240" class="form-control" @bind="_incidentOptions.DelayIncidentThresholdMinutes" />
+                    </div>
+                    <div class="col-sm-6">
+                        <label class="form-label fw-semibold">Multiplicador hora extra</label>
+                        <input type="number" min="1" max="5" step="0.1" class="form-control" @bind="_incidentOptions.OvertimeMultiplier" />
+                    </div>
+                </div>
                 @if (_incidentResult is null)
                 {
                     <button class="btn btn-outline-primary" @onclick="GenerateIncidentsAsync" disabled="@_busy">
@@ -371,9 +400,11 @@
 
     // Paso 3
     private Nanchesoft.Web.Services.HumanResources.PayrollMvpOperationResult? _summaryResult;
+    private Nanchesoft.Web.Services.HumanResources.PayrollAttendanceOptions _attendanceOptions = new();
 
     // Paso 4
     private Nanchesoft.Web.Services.HumanResources.PayrollMvpOperationResult? _incidentResult;
+    private Nanchesoft.Web.Services.HumanResources.PayrollIncidentOptions _incidentOptions = new();
 
     // Paso 5
     private string _runFolio = string.Empty;
@@ -453,7 +484,7 @@
     {
         await RunAsync(async () =>
         {
-            _summaryResult = await PayrollMvpApiService.GenerateAttendanceSummariesAsync(_selectedPeriodId);
+            _summaryResult = await PayrollMvpApiService.GenerateAttendanceSummariesAsync(_selectedPeriodId, _attendanceOptions);
         });
     }
 
@@ -461,7 +492,7 @@
     {
         await RunAsync(async () =>
         {
-            _incidentResult = await PayrollMvpApiService.GenerateIncidentsAsync(_selectedPeriodId);
+            _incidentResult = await PayrollMvpApiService.GenerateIncidentsAsync(_selectedPeriodId, _incidentOptions);
         });
     }
 
@@ -505,7 +536,9 @@
         _punchFile = null;
         _punchImportResult = null;
         _summaryResult = null;
+        _attendanceOptions = new();
         _incidentResult = null;
+        _incidentOptions = new();
         _runFolio = string.Empty;
         _run = null;
         _calculateResult = null;
