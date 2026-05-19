@@ -290,7 +290,10 @@ public static class PayrollMvpEndpoints
 
         var branchId = await db.Branches.Where(x => x.CompanyId == company.Id).OrderBy(x => x.CreatedAt).Select(x => (Guid?)x.Id).FirstOrDefaultAsync();
 
-        var employees = await db.Employees.Where(x => x.CompanyId == company.Id && x.IsActive && x.Status == "active").ToListAsync();
+        var employees = await db.Employees
+            .Include(x => x.WorkSchedule)
+            .Where(x => x.CompanyId == company.Id && x.IsActive && x.Status == "active")
+            .ToListAsync();
 
         var startDate = period.StartDate.Date;
         var endDate = period.EndDate.Date;
@@ -321,6 +324,33 @@ public static class PayrollMvpEndpoints
             {
                 punchesByEmpDate.TryGetValue((employee.Id, date), out var dayPunches);
 
+                // Resolve scheduled times from WorkSchedule or defaults
+                TimeSpan entryTs, exitTs;
+                int toleranceMin;
+                bool isRestDay;
+
+                if (employee.WorkSchedule is { } sched)
+                {
+                    var (isWork, e, x2, tol) = GetScheduleForDay(sched, date.DayOfWeek);
+                    isRestDay = !isWork;
+                    entryTs = e;
+                    exitTs = x2;
+                    toleranceMin = tol > 0 ? tol : 5;
+                }
+                else
+                {
+                    isRestDay = date.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday;
+                    entryTs = defaultEntry;
+                    exitTs = defaultExit;
+                    toleranceMin = 5;
+                }
+
+                // Skip rest days with no punches — they are not absences
+                if (isRestDay && dayPunches is null) continue;
+
+                var scheduledEntry = date.Add(entryTs);
+                var scheduledExit = date.Add(exitTs);
+
                 var entryPunch = dayPunches?.Where(x => x.PunchType == "entry").OrderBy(x => x.PunchDateTime).FirstOrDefault()
                     ?? dayPunches?.OrderBy(x => x.PunchDateTime).FirstOrDefault();
                 var exitPunch = dayPunches?.Where(x => x.PunchType == "exit").OrderByDescending(x => x.PunchDateTime).FirstOrDefault()
@@ -332,9 +362,6 @@ public static class PayrollMvpEndpoints
                 decimal overtimeHours = 0m;
                 decimal absenceUnits = 0m;
 
-                var scheduledEntry = date.Add(defaultEntry);
-                var scheduledExit = date.Add(defaultExit);
-
                 if (entryPunch is not null)
                 {
                     var actualEntry = entryPunch.PunchDateTime;
@@ -342,18 +369,14 @@ public static class PayrollMvpEndpoints
 
                     if (exitPunch is not null && exitPunch.PunchDateTime > actualEntry)
                     {
-                        workedHours = (decimal)(exitPunch.PunchDateTime - actualEntry).TotalHours;
-                        if (workedHours < 4m)
-                            absenceUnits = 1m;
-                        else if (workedHours < 6m)
-                            absenceUnits = 0.5m;
-                        else
-                            absenceUnits = 0m;
-
-                        overtimeHours = workedHours > 8m ? workedHours - 8m : 0m;
+                        var totalHours = (exitPunch.PunchDateTime - actualEntry).TotalHours;
+                        workedHours = (decimal)totalHours;
+                        var scheduledHours = (scheduledExit - scheduledEntry).TotalHours;
+                        absenceUnits = workedHours < 4m ? 1m : workedHours < 6m ? 0.5m : 0m;
+                        overtimeHours = workedHours > (decimal)scheduledHours ? Math.Round(workedHours - (decimal)scheduledHours, 2) : 0m;
 
                         var delayTs = actualEntry - scheduledEntry;
-                        if (delayTs.TotalMinutes > 5) delayMinutes = (int)delayTs.TotalMinutes;
+                        if (delayTs.TotalMinutes > toleranceMin) delayMinutes = (int)delayTs.TotalMinutes;
 
                         var earlyTs = scheduledExit - actualExit;
                         if (earlyTs.TotalMinutes > 5 && actualExit < scheduledExit) earlyLeaveMinutes = (int)earlyTs.TotalMinutes;
@@ -361,13 +384,11 @@ public static class PayrollMvpEndpoints
                     else
                     {
                         absenceUnits = 0.5m;
-                        workedHours = 0m;
                     }
                 }
                 else
                 {
-                    absenceUnits = 1m;
-                    workedHours = 0m;
+                    absenceUnits = isRestDay ? 0m : 1m;
                 }
 
                 db.AttendanceDailySummaries.Add(new AttendanceDailySummary
@@ -387,10 +408,10 @@ public static class PayrollMvpEndpoints
                     EarlyLeaveMinutes = earlyLeaveMinutes,
                     OvertimeHours = Math.Round(overtimeHours, 2),
                     AbsenceUnits = absenceUnits,
-                    DayType = "workday",
+                    DayType = isRestDay ? "restday" : "workday",
                     Status = "calculated",
                     Source = dayPunches is not null ? "time-clock" : "no-punch",
-                    Notes = dayPunches is null ? "Sin checadas" : string.Empty,
+                    Notes = dayPunches is null && !isRestDay ? "Sin checadas" : string.Empty,
                     IsActive = true,
                     CreatedBy = "mvp-engine"
                 });
@@ -621,13 +642,28 @@ public static class PayrollMvpEndpoints
             .ToListAsync();
         var paidInstallmentSet = paidInstallmentKeys.ToHashSet();
 
+        // Load active recurring movements for this run date
+        var allRecurring = await db.PayrollRecurringMovements
+            .Where(x => x.CompanyId == run.CompanyId && x.IsActive && employeeIds.Contains(x.EmployeeId)
+                && x.EffectiveStartDate.Date <= run.RunDate.Date
+                && (x.EffectiveEndDate == null || x.EffectiveEndDate.Value.Date >= run.RunDate.Date))
+            .ToListAsync();
+        var recurringByEmployee = allRecurring.GroupBy(x => x.EmployeeId).ToDictionary(g => g.Key, g => g.ToList());
+        var recurringConceptIds = allRecurring.Select(x => x.PayrollConceptId).Distinct().ToList();
+        var recurringConceptsMap = recurringConceptIds.Count > 0
+            ? await db.PayrollConcepts.Where(x => recurringConceptIds.Contains(x.Id)).ToDictionaryAsync(x => x.Id)
+            : new Dictionary<Guid, PayrollConcept>();
+
         foreach (var employee in employees)
         {
             summaryByEmployee.TryGetValue(employee.Id, out var summary);
             var absenceDays = summary?.TotalAbsenceUnits ?? 0m;
             var daysPaid = Math.Max(0m, periodDays - absenceDays);
 
-            var baseSalary = Math.Round(employee.DailySalary * daysPaid, 2);
+            // PeriodSalary: fixed amount regardless of days (absences still deducted separately)
+            var baseSalary = employee.PeriodSalary > 0m
+                ? employee.PeriodSalary
+                : Math.Round(employee.DailySalary * daysPaid, 2);
 
             // ── Incidencias ──
             decimal extraPerceptions = 0m;
@@ -658,6 +694,25 @@ public static class PayrollMvpEndpoints
                             extraDeductions += Math.Round(inc.Amount > 0 ? inc.Amount : employee.DailySalary * inc.Quantity, 2);
                             break;
                     }
+                }
+            }
+
+            // ── Movimientos periódicos ──
+            var recurringDetails = new List<(PayrollConcept Concept, decimal Qty, decimal Amt, bool IsDeduction, int Sort)>();
+            recurringByEmployee.TryGetValue(employee.Id, out var employeeRecurring);
+            if (employeeRecurring is not null)
+            {
+                foreach (var mov in employeeRecurring)
+                {
+                    if (!recurringConceptsMap.TryGetValue(mov.PayrollConceptId, out var movConcept)) continue;
+                    var movAmt = mov.CalculationMode == "percent_of_salary"
+                        ? Math.Round(baseSalary * (mov.Percentage / 100m), 2)
+                        : Math.Round(mov.Amount * Math.Max(mov.Quantity, 1m), 2);
+                    if (movAmt <= 0m) continue;
+                    var isDeduction = mov.MovementType == "deduction";
+                    if (isDeduction) extraDeductions += movAmt;
+                    else extraPerceptions += movAmt;
+                    recurringDetails.Add((movConcept, mov.Quantity <= 0m ? 1m : mov.Quantity, movAmt, isDeduction, isDeduction ? 82 : 42));
                 }
             }
 
@@ -808,6 +863,10 @@ public static class PayrollMvpEndpoints
                         db.PayrollRunLineDetails.Add(BuildDetail(run, line, employee, loanConcept, 1m, installment, 100, isDeduction: true));
                 }
             }
+
+            // Movimientos periódicos (detalles por concepto individual)
+            foreach (var (mvConcept, mvQty, mvAmt, mvIsDeduction, mvSort) in recurringDetails)
+                db.PayrollRunLineDetails.Add(BuildDetail(run, line, employee, mvConcept, mvQty, mvAmt, mvSort, isDeduction: mvIsDeduction));
         }
 
         db.EmployeeLoanDeductions.AddRange(loanDeductionsToCreate);
@@ -1100,6 +1159,24 @@ public static class PayrollMvpEndpoints
             "mixed" => (Math.Round(amount * 0.5m, 2), Math.Round(amount * 0.5m, 2)),
             _ => (amount, 0m)
         };
+
+    private static (bool IsWorkDay, TimeSpan Entry, TimeSpan Exit, int Tolerance) GetScheduleForDay(WorkSchedule s, DayOfWeek dow)
+    {
+        static TimeSpan ParseTime(string t) =>
+            TimeSpan.TryParse(t, out var ts) && ts > TimeSpan.Zero ? ts : new TimeSpan(9, 0, 0);
+
+        return dow switch
+        {
+            DayOfWeek.Monday    => (s.Monday,    ParseTime(s.MonEntryTime), ParseTime(s.MonExitTime), s.MonToleranceMinutes),
+            DayOfWeek.Tuesday   => (s.Tuesday,   ParseTime(s.TueEntryTime), ParseTime(s.TueExitTime), s.TueToleranceMinutes),
+            DayOfWeek.Wednesday => (s.Wednesday, ParseTime(s.WedEntryTime), ParseTime(s.WedExitTime), s.WedToleranceMinutes),
+            DayOfWeek.Thursday  => (s.Thursday,  ParseTime(s.ThuEntryTime), ParseTime(s.ThuExitTime), s.ThuToleranceMinutes),
+            DayOfWeek.Friday    => (s.Friday,    ParseTime(s.FriEntryTime), ParseTime(s.FriExitTime), s.FriToleranceMinutes),
+            DayOfWeek.Saturday  => (s.Saturday,  ParseTime(s.SatEntryTime), ParseTime(s.SatExitTime), s.SatToleranceMinutes),
+            DayOfWeek.Sunday    => (s.Sunday,    ParseTime(s.SunEntryTime), ParseTime(s.SunExitTime), s.SunToleranceMinutes),
+            _ => (true, new TimeSpan(9, 0, 0), new TimeSpan(18, 0, 0), 5)
+        };
+    }
 
     private static string GetCell(IXLWorksheet ws, int row, Dictionary<string, int> headers, string name)
     {

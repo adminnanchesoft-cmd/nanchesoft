@@ -142,6 +142,26 @@ public sealed class PayrollOperationsApiService
         return await client.GetStringAsync($"/api/payroll/run-lines/{lineId}/receipt-html");
     }
 
+    public async Task<List<PayrollRunSummaryItem>> GetPayrollRunsListAsync()
+    {
+        var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
+        var rows = await client.GetFromJsonAsync<List<PayrollRunLookupDto>>("/api/payroll/runs") ?? [];
+        return rows.Select(x => new PayrollRunSummaryItem
+        {
+            PayrollRunId = x.PayrollRunId,
+            Folio = x.Folio,
+            PayrollPeriodName = x.PayrollPeriodName,
+            RunDate = x.RunDate,
+            IsActive = x.IsActive
+        }).ToList();
+    }
+
+    public async Task<PayrollRunReportData?> GetPayrollRunReportDataAsync(Guid runId)
+    {
+        var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
+        return await client.GetFromJsonAsync<PayrollRunReportData>($"/api/payroll/runs/{runId}/report-data");
+    }
+
     private async Task<CatalogViewDefinition> GetTimeClockAsync()
     {
         var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
@@ -1896,4 +1916,50 @@ public sealed class PayrollOperationsApiService
     private sealed class PayrollConceptLookupDto { public Guid PayrollConceptId { get; set; } public string Code { get; set; } = string.Empty; public string Name { get; set; } = string.Empty; public bool IsActive { get; set; } }
     private sealed class PayrollPeriodLookupDto { public Guid PayrollPeriodId { get; set; } public string Code { get; set; } = string.Empty; public string Name { get; set; } = string.Empty; public DateTime StartDate { get; set; } public bool IsActive { get; set; } }
     private sealed class PayrollRunLookupDto { public Guid PayrollRunId { get; set; } public string Folio { get; set; } = string.Empty; public string PayrollPeriodName { get; set; } = string.Empty; public DateTime RunDate { get; set; } public bool IsActive { get; set; } }
+}
+
+public sealed class PayrollRunSummaryItem
+{
+    public Guid PayrollRunId { get; set; }
+    public string Folio { get; set; } = string.Empty;
+    public string PayrollPeriodName { get; set; } = string.Empty;
+    public DateTime RunDate { get; set; }
+    public bool IsActive { get; set; }
+}
+
+public sealed class PayrollRunReportData
+{
+    public Guid PayrollRunId { get; set; }
+    public string Folio { get; set; } = string.Empty;
+    public string CompanyName { get; set; } = string.Empty;
+    public string BranchName { get; set; } = string.Empty;
+    public string PayrollPeriodName { get; set; } = string.Empty;
+    public DateTime RunDate { get; set; }
+    public string Status { get; set; } = string.Empty;
+    public int EmployeeCount { get; set; }
+    public decimal GrossAmount { get; set; }
+    public decimal DeductionsAmount { get; set; }
+    public decimal NetAmount { get; set; }
+    public List<PayrollReportDepartment> Departments { get; set; } = [];
+}
+
+public sealed class PayrollReportDepartment
+{
+    public string DepartmentName { get; set; } = string.Empty;
+    public List<PayrollReportLine> Lines { get; set; } = [];
+    public decimal TotalGross { get; set; }
+    public decimal TotalDeductions { get; set; }
+    public decimal TotalNet { get; set; }
+}
+
+public sealed class PayrollReportLine
+{
+    public Guid PayrollRunLineId { get; set; }
+    public string EmployeeNumber { get; set; } = string.Empty;
+    public string EmployeeName { get; set; } = string.Empty;
+    public string Position { get; set; } = string.Empty;
+    public decimal DaysPaid { get; set; }
+    public decimal GrossAmount { get; set; }
+    public decimal DeductionsAmount { get; set; }
+    public decimal NetAmount { get; set; }
 }

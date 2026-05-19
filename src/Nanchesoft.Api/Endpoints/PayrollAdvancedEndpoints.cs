@@ -48,6 +48,7 @@ public static class PayrollAdvancedEndpoints
         operations.MapPost("/runs/{runId:guid}/apply-advanced-sources", ApplyAdvancedSourcesAsync);
         operations.MapGet("/runs/{runId:guid}/receipt-lines", GetReceiptLinesAsync);
         operations.MapGet("/runs/{runId:guid}/print-html", GetPayrollRunPrintHtmlAsync);
+        operations.MapGet("/runs/{runId:guid}/report-data", GetPayrollRunReportDataAsync);
         operations.MapGet("/run-lines/{lineId:guid}/receipt-html", GetPayrollReceiptHtmlAsync);
 
         return app;
@@ -827,6 +828,65 @@ public static class PayrollAdvancedEndpoints
         await db.SaveChangesAsync();
     }
 
+    private static async Task<IResult> GetPayrollRunReportDataAsync(Guid runId, NanchesoftDbContext db)
+    {
+        var run = await db.PayrollRuns.AsNoTracking()
+            .Include(x => x.Company)
+            .Include(x => x.Branch)
+            .Include(x => x.PayrollPeriod)
+            .FirstOrDefaultAsync(x => x.Id == runId);
+        if (run is null)
+            return Results.NotFound();
+
+        var lines = await db.PayrollRunLines.AsNoTracking()
+            .Include(x => x.Employee)
+            .Include(x => x.Department)
+            .Include(x => x.Position)
+            .Where(x => x.PayrollRunId == runId)
+            .OrderBy(x => x.Department != null ? x.Department.Name : "ZZZ")
+            .ThenBy(x => x.Employee != null ? x.Employee.LastName : string.Empty)
+            .ToListAsync();
+
+        var departments = lines
+            .GroupBy(x => x.Department?.Name ?? "Sin departamento")
+            .Select(g => new PayrollReportDepartmentDto
+            {
+                DepartmentName = g.Key,
+                Lines = g.Select(l => new PayrollReportLineDto
+                {
+                    PayrollRunLineId = l.Id,
+                    EmployeeNumber = l.Employee?.EmployeeNumber ?? string.Empty,
+                    EmployeeName = l.Employee?.GetFullName() ?? string.Empty,
+                    Position = l.Position?.Name ?? string.Empty,
+                    DaysPaid = l.DaysPaid,
+                    GrossAmount = l.GrossAmount,
+                    DeductionsAmount = l.DeductionsAmount,
+                    NetAmount = l.NetAmount
+                }).ToList(),
+                TotalGross = g.Sum(x => x.GrossAmount),
+                TotalDeductions = g.Sum(x => x.DeductionsAmount),
+                TotalNet = g.Sum(x => x.NetAmount)
+            }).ToList();
+
+        var report = new PayrollRunReportDto
+        {
+            PayrollRunId = run.Id,
+            Folio = run.Folio,
+            CompanyName = run.Company?.Name ?? string.Empty,
+            BranchName = run.Branch?.Name ?? string.Empty,
+            PayrollPeriodName = run.PayrollPeriod?.Name ?? string.Empty,
+            RunDate = run.RunDate,
+            Status = run.Status,
+            EmployeeCount = run.EmployeeCount,
+            GrossAmount = run.GrossAmount,
+            DeductionsAmount = run.DeductionsAmount,
+            NetAmount = run.NetAmount,
+            Departments = departments
+        };
+
+        return Results.Ok(report);
+    }
+
     private static string BuildPayrollRunHtml(PayrollRun run, List<PayrollSummaryRow> rows)
     {
         var sb = new StringBuilder();
@@ -1130,3 +1190,40 @@ public sealed class PayrollReceiptLineDto
 
 public sealed record PayrollSummaryRow(string EmployeeNumber, string EmployeeName, decimal DaysPaid, decimal GrossAmount, decimal DeductionsAmount, decimal NetAmount, decimal IncidentsAmount);
 public sealed record PayrollReceiptDetailRow(string ConceptCode, string ConceptName, string ConceptType, decimal Quantity, decimal Amount, decimal TaxableAmount, decimal ExemptAmount);
+
+public sealed class PayrollRunReportDto
+{
+    public Guid PayrollRunId { get; set; }
+    public string Folio { get; set; } = string.Empty;
+    public string CompanyName { get; set; } = string.Empty;
+    public string BranchName { get; set; } = string.Empty;
+    public string PayrollPeriodName { get; set; } = string.Empty;
+    public DateTime RunDate { get; set; }
+    public string Status { get; set; } = string.Empty;
+    public int EmployeeCount { get; set; }
+    public decimal GrossAmount { get; set; }
+    public decimal DeductionsAmount { get; set; }
+    public decimal NetAmount { get; set; }
+    public List<PayrollReportDepartmentDto> Departments { get; set; } = [];
+}
+
+public sealed class PayrollReportDepartmentDto
+{
+    public string DepartmentName { get; set; } = string.Empty;
+    public List<PayrollReportLineDto> Lines { get; set; } = [];
+    public decimal TotalGross { get; set; }
+    public decimal TotalDeductions { get; set; }
+    public decimal TotalNet { get; set; }
+}
+
+public sealed class PayrollReportLineDto
+{
+    public Guid PayrollRunLineId { get; set; }
+    public string EmployeeNumber { get; set; } = string.Empty;
+    public string EmployeeName { get; set; } = string.Empty;
+    public string Position { get; set; } = string.Empty;
+    public decimal DaysPaid { get; set; }
+    public decimal GrossAmount { get; set; }
+    public decimal DeductionsAmount { get; set; }
+    public decimal NetAmount { get; set; }
+}

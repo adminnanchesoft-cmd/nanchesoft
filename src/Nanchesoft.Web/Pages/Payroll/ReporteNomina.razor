@@ -1,0 +1,266 @@
+@page "/payroll/reporte"
+@using Nanchesoft.Web.Services.HumanResources
+@inject PayrollOperationsApiService PayrollOperationsApiService
+@inject IJSRuntime JS
+
+<PageTitle>Reporte de nómina | Nanchesoft</PageTitle>
+
+<div class="container-fluid py-3">
+
+    @* ── Encabezado ────────────────────────────────────────────── *@
+    <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+        <div>
+            <h1 class="mb-0">Reporte de nómina</h1>
+            <p class="text-secondary mb-0">Consulta, imprime y exporta el desglose de cada proceso de nómina.</p>
+        </div>
+        @if (_report is not null)
+        {
+            <div class="d-flex gap-2">
+                <button class="btn btn-outline-secondary" @onclick="ExportCsvAsync">
+                    <i class="bi bi-filetype-csv me-1"></i>Exportar CSV
+                </button>
+                <a class="btn btn-outline-primary" target="_blank" href="/payroll/print/run/@_report.PayrollRunId">
+                    <i class="bi bi-printer me-1"></i>Lista de raya
+                </a>
+                <a class="btn btn-outline-secondary" href="/payroll/receipts/@_report.PayrollRunId">
+                    <i class="bi bi-receipt me-1"></i>Recibos
+                </a>
+            </div>
+        }
+    </div>
+
+    @* ── Selector de corrida ───────────────────────────────────── *@
+    <div class="card shadow-sm mb-3">
+        <div class="card-body">
+            <div class="row g-3 align-items-end">
+                <div class="col-md-5">
+                    <label class="form-label fw-semibold">Proceso de nómina</label>
+                    <select class="form-select" @onchange="OnRunChangedAsync">
+                        <option value="">-- Selecciona un proceso --</option>
+                        @foreach (var run in _runs)
+                        {
+                            <option value="@run.PayrollRunId">
+                                @run.Folio · @run.PayrollPeriodName (@run.RunDate.ToString("dd/MM/yyyy"))
+                            </option>
+                        }
+                    </select>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @if (_loading)
+    {
+        <div class="text-center py-5 text-secondary">Cargando reporte...</div>
+    }
+    else if (_report is null && _selectedRunId != Guid.Empty)
+    {
+        <div class="alert alert-warning">No se pudo cargar la información del proceso seleccionado.</div>
+    }
+    else if (_report is not null)
+    {
+        @* ── Resumen del encabezado ────────────────────────────── *@
+        <div class="card shadow-sm mb-3">
+            <div class="card-body">
+                <div class="row g-2 text-sm">
+                    <div class="col-6 col-md-3">
+                        <div class="text-secondary small">Empresa</div>
+                        <div class="fw-semibold">@_report.CompanyName</div>
+                    </div>
+                    @if (!string.IsNullOrWhiteSpace(_report.BranchName))
+                    {
+                        <div class="col-6 col-md-3">
+                            <div class="text-secondary small">Sucursal</div>
+                            <div class="fw-semibold">@_report.BranchName</div>
+                        </div>
+                    }
+                    <div class="col-6 col-md-3">
+                        <div class="text-secondary small">Periodo</div>
+                        <div class="fw-semibold">@_report.PayrollPeriodName</div>
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <div class="text-secondary small">Folio</div>
+                        <div class="fw-semibold">@_report.Folio</div>
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <div class="text-secondary small">Fecha de proceso</div>
+                        <div class="fw-semibold">@_report.RunDate.ToString("dd/MM/yyyy")</div>
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <div class="text-secondary small">Colaboradores</div>
+                        <div class="fw-semibold">@_report.EmployeeCount</div>
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <div class="text-secondary small">Percepciones totales</div>
+                        <div class="fw-semibold text-success">@_report.GrossAmount.ToString("C")</div>
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <div class="text-secondary small">Deducciones totales</div>
+                        <div class="fw-semibold text-danger">@_report.DeductionsAmount.ToString("C")</div>
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <div class="text-secondary small">Neto a pagar</div>
+                        <div class="fw-bold fs-5 text-primary">@_report.NetAmount.ToString("C")</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        @* ── Detalle por departamento ──────────────────────────── *@
+        @foreach (var dept in _report.Departments)
+        {
+            <div class="card shadow-sm mb-3">
+                <div class="card-header d-flex justify-content-between align-items-center py-2">
+                    <span class="fw-semibold">@dept.DepartmentName</span>
+                    <span class="text-secondary small">
+                        @dept.Lines.Count colaborador(es) &nbsp;|&nbsp;
+                        Neto: <strong>@dept.TotalNet.ToString("C")</strong>
+                    </span>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-sm table-hover mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th style="width:90px">No.</th>
+                                    <th>Colaborador</th>
+                                    <th>Puesto</th>
+                                    <th class="text-center" style="width:70px">Días</th>
+                                    <th class="text-end" style="width:130px">Percepciones</th>
+                                    <th class="text-end" style="width:130px">Deducciones</th>
+                                    <th class="text-end" style="width:130px">Neto</th>
+                                    <th style="width:80px"></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var line in dept.Lines)
+                                {
+                                    <tr>
+                                        <td class="text-secondary">@line.EmployeeNumber</td>
+                                        <td>@line.EmployeeName</td>
+                                        <td class="text-secondary">@line.Position</td>
+                                        <td class="text-center">@line.DaysPaid</td>
+                                        <td class="text-end">@line.GrossAmount.ToString("C")</td>
+                                        <td class="text-end text-danger">@line.DeductionsAmount.ToString("C")</td>
+                                        <td class="text-end fw-semibold text-primary">@line.NetAmount.ToString("C")</td>
+                                        <td class="text-end">
+                                            <a class="btn btn-xs btn-outline-secondary" target="_blank"
+                                               href="/payroll/print/receipt/@line.PayrollRunLineId"
+                                               title="Ver recibo">
+                                                <i class="bi bi-receipt"></i>
+                                            </a>
+                                        </td>
+                                    </tr>
+                                }
+                                <tr class="table-light fw-semibold">
+                                    <td colspan="4" class="text-end text-secondary small">Subtotal @dept.DepartmentName</td>
+                                    <td class="text-end">@dept.TotalGross.ToString("C")</td>
+                                    <td class="text-end text-danger">@dept.TotalDeductions.ToString("C")</td>
+                                    <td class="text-end text-primary">@dept.TotalNet.ToString("C")</td>
+                                    <td></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        }
+
+        @* ── Totales globales ──────────────────────────────────── *@
+        <div class="card shadow-sm border-primary">
+            <div class="card-body">
+                <div class="row text-center">
+                    <div class="col">
+                        <div class="text-secondary small">Total percepciones</div>
+                        <div class="fw-bold fs-5 text-success">@_report.GrossAmount.ToString("C")</div>
+                    </div>
+                    <div class="col">
+                        <div class="text-secondary small">Total deducciones</div>
+                        <div class="fw-bold fs-5 text-danger">@_report.DeductionsAmount.ToString("C")</div>
+                    </div>
+                    <div class="col">
+                        <div class="text-secondary small">Total neto</div>
+                        <div class="fw-bold fs-4 text-primary">@_report.NetAmount.ToString("C")</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private List<PayrollRunSummaryItem> _runs = [];
+    private PayrollRunReportData? _report;
+    private Guid _selectedRunId;
+    private bool _loading;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _runs = await PayrollOperationsApiService.GetPayrollRunsListAsync();
+    }
+
+    private async Task OnRunChangedAsync(ChangeEventArgs e)
+    {
+        if (!Guid.TryParse(e.Value?.ToString(), out var runId) || runId == Guid.Empty)
+        {
+            _selectedRunId = Guid.Empty;
+            _report = null;
+            return;
+        }
+
+        _selectedRunId = runId;
+        _loading = true;
+        _report = null;
+        StateHasChanged();
+
+        _report = await PayrollOperationsApiService.GetPayrollRunReportDataAsync(runId);
+        _loading = false;
+    }
+
+    private async Task ExportCsvAsync()
+    {
+        if (_report is null) return;
+
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine("Departamento,No. Empleado,Colaborador,Puesto,Días,Percepciones,Deducciones,Neto");
+
+        foreach (var dept in _report.Departments)
+        {
+            foreach (var line in dept.Lines)
+            {
+                sb.AppendLine(string.Join(",",
+                    CsvEscape(dept.DepartmentName),
+                    CsvEscape(line.EmployeeNumber),
+                    CsvEscape(line.EmployeeName),
+                    CsvEscape(line.Position),
+                    line.DaysPaid.ToString("F2"),
+                    line.GrossAmount.ToString("F2"),
+                    line.DeductionsAmount.ToString("F2"),
+                    line.NetAmount.ToString("F2")));
+            }
+            sb.AppendLine(string.Join(",",
+                CsvEscape(dept.DepartmentName + " (subtotal)"), "", "", "",
+                "",
+                dept.TotalGross.ToString("F2"),
+                dept.TotalDeductions.ToString("F2"),
+                dept.TotalNet.ToString("F2")));
+        }
+
+        sb.AppendLine(string.Join(",",
+            "TOTAL", "", "", "",
+            "",
+            _report.GrossAmount.ToString("F2"),
+            _report.DeductionsAmount.ToString("F2"),
+            _report.NetAmount.ToString("F2")));
+
+        var fileName = $"nomina_{_report.Folio}_{DateTime.Today:yyyyMMdd}.csv";
+        await JS.InvokeVoidAsync("downloadFile", fileName, "text/csv;charset=utf-8", "﻿" + sb.ToString());
+    }
+
+    private static string CsvEscape(string value)
+    {
+        if (value.Contains(',') || value.Contains('"') || value.Contains('\n'))
+            return $"\"{value.Replace("\"", "\"\"")}\"";
+        return value;
+    }
+}
