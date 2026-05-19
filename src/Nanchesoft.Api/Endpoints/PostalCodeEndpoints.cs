@@ -1,5 +1,4 @@
 using System.Text.Json;
-using System.Text.Json.Serialization;
 
 namespace Nanchesoft.Api.Endpoints;
 
@@ -17,41 +16,41 @@ public static class PostalCodeEndpoints
         if (cp.Length != 5 || !cp.All(char.IsDigit))
             return Results.BadRequest(new { message = "El código postal debe ser de 5 dígitos." });
 
+        // ── zippopotam.us — free, no token required ─────────────────
+        // Returns: { "post code":"37000", "places":[{"place name":"Centro","state":"Guanajuato",...}] }
         try
         {
             var client = httpFactory.CreateClient("Copomex");
-            var json = await client.GetStringAsync($"https://api.copomex.com/query/{cp}?type=CP&token=demo");
+            var json = await client.GetStringAsync($"https://api.zippopotam.us/MX/{cp}");
 
             using var doc = JsonDocument.Parse(json);
             var root = doc.RootElement;
 
-            // Error from copomex (cp not found)
-            if (root.TryGetProperty("error", out var errorProp) && errorProp.GetBoolean())
-                return Results.Ok(new PostalCodeResult(cp, [], string.Empty, string.Empty));
+            var colonias   = new List<string>();
+            string estado  = string.Empty;
 
-            var colonias = new List<string>();
-            string municipio = string.Empty;
-            string estado = string.Empty;
-
-            if (root.TryGetProperty("response", out var resp) && resp.ValueKind == JsonValueKind.Array)
+            if (root.TryGetProperty("places", out var places) && places.ValueKind == JsonValueKind.Array)
             {
-                foreach (var item in resp.EnumerateArray())
+                foreach (var place in places.EnumerateArray())
                 {
-                    if (item.TryGetProperty("asentamiento", out var col))
+                    if (place.TryGetProperty("place name", out var pn))
                     {
-                        var colName = col.GetString() ?? string.Empty;
-                        if (!string.IsNullOrWhiteSpace(colName) && !colonias.Contains(colName))
-                            colonias.Add(colName);
+                        var col = pn.GetString() ?? "";
+                        if (!string.IsNullOrWhiteSpace(col) && !colonias.Contains(col))
+                            colonias.Add(col);
                     }
-                    if (string.IsNullOrEmpty(municipio) && item.TryGetProperty("municipio", out var mun))
-                        municipio = mun.GetString() ?? string.Empty;
-                    if (string.IsNullOrEmpty(estado) && item.TryGetProperty("estado", out var est))
-                        estado = est.GetString() ?? string.Empty;
+
+                    if (string.IsNullOrEmpty(estado) && place.TryGetProperty("state", out var st))
+                        estado = st.GetString() ?? "";
                 }
             }
 
+            if (colonias.Count == 0 && string.IsNullOrEmpty(estado))
+                return Results.Ok(new PostalCodeResult(cp, [], string.Empty, string.Empty));
+
             colonias.Sort();
-            return Results.Ok(new PostalCodeResult(cp, colonias, municipio, estado));
+            // municipio: zippopotam.us no lo tiene — se deja vacío para que el usuario lo llene
+            return Results.Ok(new PostalCodeResult(cp, colonias, string.Empty, estado));
         }
         catch
         {

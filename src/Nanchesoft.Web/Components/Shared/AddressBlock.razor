@@ -126,7 +126,7 @@
         {
             var client = HttpClientFactory.CreateClient("Nanchesoft.Api");
             var result = await client.GetFromJsonAsync<PostalCodeResult>($"/api/organization/postal-code/{cp}");
-            if (result is null || (result.Colonias.Count == 0 && string.IsNullOrEmpty(result.Municipio)))
+            if (result is null || (result.Colonias.Count == 0 && string.IsNullOrEmpty(result.Estado)))
             {
                 _cpError = "CP no encontrado";
                 _colonias = [];
@@ -135,11 +135,15 @@
 
             _colonias = result.Colonias;
 
-            // Auto-fill ciudad y estado siempre
-            await CityChanged.InvokeAsync(result.Municipio);
-            await StateChanged.InvokeAsync(result.Estado);
+            // Auto-fill estado siempre que venga
+            if (!string.IsNullOrEmpty(result.Estado))
+                await StateChanged.InvokeAsync(result.Estado);
 
-            // Auto-fill colonia solo si hay exactamente 1
+            // Auto-fill ciudad solo si el API la devuelve (copomex la tiene; zippopotam.us no)
+            if (!string.IsNullOrEmpty(result.Municipio))
+                await CityChanged.InvokeAsync(result.Municipio);
+
+            // Auto-fill colonia
             if (result.Colonias.Count == 1)
                 await ColonyChanged.InvokeAsync(result.Colonias[0]);
             else if (result.Colonias.Count > 1 && string.IsNullOrWhiteSpace(Colony))
