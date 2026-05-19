@@ -185,6 +185,11 @@ public static class PayrollMvpEndpoints
 
         var employees = await db.Employees.Where(x => x.CompanyId == company.Id && x.IsActive)
             .ToDictionaryAsync(x => x.EmployeeNumber.ToUpperInvariant());
+        var existingPunches = await db.AttendancePunches
+            .Where(x => x.CompanyId == company.Id && x.IsActive)
+            .Select(x => new { x.EmployeeId, x.PunchDateTime, x.PunchType })
+            .ToListAsync();
+        var punchKeySet = existingPunches.Select(x => BuildPunchKey(x.EmployeeId, x.PunchDateTime, x.PunchType)).ToHashSet();
 
         using var stream = file.OpenReadStream();
         using var workbook = new XLWorkbook(stream);
@@ -220,8 +225,11 @@ public static class PayrollMvpEndpoints
                         errors.Add($"Fila {row}: fecha/hora inválida '{fechaHoraStr}'.");
                         continue;
                     }
-                    db.AttendancePunches.Add(BuildPunch(company, branchId, employee.Id, punchDt, tipo == "exit" ? "exit" : "entry"));
-                    created++;
+                    var punchType = tipo == "exit" ? "exit" : "entry";
+                    if (TryQueuePunch(company, branchId, employee.Id, punchDt, punchType, punchKeySet, db))
+                        created++;
+                    else
+                        skipped++;
                 }
                 else
                 {
@@ -238,15 +246,19 @@ public static class PayrollMvpEndpoints
                     if (!string.IsNullOrWhiteSpace(entradaStr) && TimeSpan.TryParse(entradaStr, out var entrada))
                     {
                         var entryDt = fecha.Date.Add(entrada);
-                        db.AttendancePunches.Add(BuildPunch(company, branchId, employee.Id, entryDt, "entry"));
-                        created++;
+                        if (TryQueuePunch(company, branchId, employee.Id, entryDt, "entry", punchKeySet, db))
+                            created++;
+                        else
+                            skipped++;
                     }
 
                     if (!string.IsNullOrWhiteSpace(salidaStr) && TimeSpan.TryParse(salidaStr, out var salida))
                     {
                         var exitDt = fecha.Date.Add(salida);
-                        db.AttendancePunches.Add(BuildPunch(company, branchId, employee.Id, exitDt, "exit"));
-                        created++;
+                        if (TryQueuePunch(company, branchId, employee.Id, exitDt, "exit", punchKeySet, db))
+                            created++;
+                        else
+                            skipped++;
                     }
                 }
             }
@@ -275,6 +287,26 @@ public static class PayrollMvpEndpoints
             IsActive = true,
             CreatedBy = "file-import"
         };
+
+    private static bool TryQueuePunch(
+        Company company,
+        Guid? branchId,
+        Guid employeeId,
+        DateTime punchDt,
+        string punchType,
+        HashSet<string> punchKeySet,
+        NanchesoftDbContext db)
+    {
+        var key = BuildPunchKey(employeeId, punchDt, punchType);
+        if (!punchKeySet.Add(key))
+            return false;
+
+        db.AttendancePunches.Add(BuildPunch(company, branchId, employeeId, punchDt, punchType));
+        return true;
+    }
+
+    private static string BuildPunchKey(Guid employeeId, DateTime punchDateTime, string punchType)
+        => employeeId.ToString("D") + "|" + punchDateTime.ToString("O") + "|" + punchType;
 
     // ──────────────────────────────────────────────────────────────
     // 2b. PREVIEW DE CHECADAS (Excel o CSV)
@@ -406,6 +438,11 @@ public static class PayrollMvpEndpoints
 
         var employees = await db.Employees.Where(x => x.CompanyId == company.Id && x.IsActive)
             .ToDictionaryAsync(x => x.EmployeeNumber.ToUpperInvariant());
+        var existingPunches = await db.AttendancePunches
+            .Where(x => x.CompanyId == company.Id && x.IsActive)
+            .Select(x => new { x.EmployeeId, x.PunchDateTime, x.PunchType })
+            .ToListAsync();
+        var punchKeySet = existingPunches.Select(x => BuildPunchKey(x.EmployeeId, x.PunchDateTime, x.PunchType)).ToHashSet();
 
         var (headers, dataRows) = await ReadPunchFileAsync(file);
         if (headers.Count == 0)
@@ -440,8 +477,10 @@ public static class PayrollMvpEndpoints
                         continue;
                     }
                     var punchType = tipo is "exit" or "salida" or "s" ? "exit" : "entry";
-                    db.AttendancePunches.Add(BuildPunch(company, branchId, employee.Id, punchDt, punchType));
-                    created++;
+                    if (TryQueuePunch(company, branchId, employee.Id, punchDt, punchType, punchKeySet, db))
+                        created++;
+                    else
+                        skipped++;
                 }
                 else
                 {
@@ -458,13 +497,17 @@ public static class PayrollMvpEndpoints
 
                     if (entrada.HasValue)
                     {
-                        db.AttendancePunches.Add(BuildPunch(company, branchId, employee.Id, fecha.Date.Add(entrada.Value), "entry"));
-                        created++;
+                        if (TryQueuePunch(company, branchId, employee.Id, fecha.Date.Add(entrada.Value), "entry", punchKeySet, db))
+                            created++;
+                        else
+                            skipped++;
                     }
                     if (salida.HasValue && (!entrada.HasValue || salida.Value != entrada.Value))
                     {
-                        db.AttendancePunches.Add(BuildPunch(company, branchId, employee.Id, fecha.Date.Add(salida.Value), "exit"));
-                        created++;
+                        if (TryQueuePunch(company, branchId, employee.Id, fecha.Date.Add(salida.Value), "exit", punchKeySet, db))
+                            created++;
+                        else
+                            skipped++;
                     }
                 }
             }
@@ -517,7 +560,11 @@ public static class PayrollMvpEndpoints
         var keys = fields.Select(NormalizePunchHeader).ToHashSet();
         var hasEmployee = keys.Contains("noempleado") || keys.Contains("iddepersona") || keys.Contains("numeroempleado") || keys.Contains("empleado");
         var hasDate = keys.Contains("fecha") || keys.Contains("fechahora");
-        var hasPunch = keys.Contains("horaentrada") || keys.Contains("horasalida") || keys.Contains("primeraperforacion") || keys.Contains("ultimaperforacion") || keys.Contains("tipo");
+        var hasPunch = keys.Contains("horaentrada") || keys.Contains("horasalida")
+            || keys.Contains("primeraperforacion") || keys.Contains("primeraperforacin")
+            || keys.Contains("ultimaperforacion") || keys.Contains("ultimaperforacin")
+            || keys.Contains("ltimaperforacion") || keys.Contains("ltimaperforacin")
+            || keys.Contains("tipo");
         return hasEmployee && hasDate && hasPunch;
     }
 
@@ -611,8 +658,8 @@ public static class PayrollMvpEndpoints
         => key switch
         {
             "iddepersona" or "idpersona" or "numeroempleado" or "claveempleado" or "codigoempleado" => ["noempleado"],
-            "primeraperforacion" or "primermarcaje" or "entrada" => ["horaentrada"],
-            "ultimaperforacion" or "ultimomarcaje" or "salida" => ["horasalida"],
+            "primeraperforacion" or "primeraperforacin" or "primermarcaje" or "entrada" => ["horaentrada"],
+            "ultimaperforacion" or "ultimaperforacin" or "ltimaperforacion" or "ltimaperforacin" or "ultimomarcaje" or "salida" => ["horasalida"],
             "fechayhora" or "timestamp" => ["fechahora"],
             _ => []
         };
