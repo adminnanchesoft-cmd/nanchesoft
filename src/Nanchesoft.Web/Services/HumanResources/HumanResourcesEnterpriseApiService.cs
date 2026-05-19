@@ -153,7 +153,8 @@ public sealed class HumanResourcesEnterpriseApiService
                 ("IsOvernight", x.IsOvernight),
                 ("Notes", x.Notes),
                 ("IsActive", x.IsActive)))
-            .ToList());
+            .ToList(),
+            allowImport: true);
     }
 
     private async Task<CatalogViewDefinition> GetWorkSchedulesAsync()
@@ -274,7 +275,8 @@ public sealed class HumanResourcesEnterpriseApiService
                 ("IsFlexible", x.IsFlexible),
                 ("Notes", x.Notes),
                 ("IsActive", x.IsActive)))
-            .ToList());
+            .ToList(),
+            allowImport: true);
     }
 
     private async Task<CatalogViewDefinition> GetTimeClockDevicesAsync()
@@ -322,7 +324,8 @@ public sealed class HumanResourcesEnterpriseApiService
                 ("LastSyncAt", x.LastSyncAt),
                 ("Notes", x.Notes),
                 ("IsActive", x.IsActive)))
-            .ToList());
+            .ToList(),
+            allowImport: true);
     }
 
     private async Task<CatalogViewDefinition> GetLeaveTypesAsync()
@@ -362,7 +365,8 @@ public sealed class HumanResourcesEnterpriseApiService
                 ("DefaultDays", x.DefaultDays),
                 ("Notes", x.Notes),
                 ("IsActive", x.IsActive)))
-            .ToList());
+            .ToList(),
+            allowImport: true);
     }
 
     private async Task<CatalogViewDefinition> GetVacationRequestsAsync()
@@ -1256,7 +1260,7 @@ private static OnboardingChecklistRecordRequest MapOnboardingChecklistRequest(Js
     IsActive = ReadBool(payload, "IsActive", true)
 };
 
-    private static CatalogViewDefinition BuildView(string catalogKey, string title, string subtitle, string keyExpr, List<CatalogColumnDefinition> columns, List<Dictionary<string, object?>> rows)
+    private static CatalogViewDefinition BuildView(string catalogKey, string title, string subtitle, string keyExpr, List<CatalogColumnDefinition> columns, List<Dictionary<string, object?>> rows, bool allowImport = false)
         => new()
         {
             CatalogKey = catalogKey,
@@ -1266,6 +1270,7 @@ private static OnboardingChecklistRecordRequest MapOnboardingChecklistRequest(Js
             AllowCreate = true,
             AllowUpdate = true,
             AllowDelete = true,
+            AllowImport = allowImport,
             TotalCount = rows.Count,
             ActiveCount = rows.Count(x => Convert.ToBoolean(x.GetValueOrDefault("IsActive") ?? false)),
             InactiveCount = rows.Count(x => !Convert.ToBoolean(x.GetValueOrDefault("IsActive") ?? false)),

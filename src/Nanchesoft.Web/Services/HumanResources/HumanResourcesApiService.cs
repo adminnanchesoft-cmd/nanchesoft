@@ -183,7 +183,8 @@ public sealed class HumanResourcesApiService
                 ("PayrollGroup", x.PayrollGroup),
                 ("BaseSalary", x.BaseSalary),
                 ("IsActive", x.IsActive)))
-            .ToList());
+            .ToList(),
+            allowImport: true);
     }
 
     private async Task<CatalogViewDefinition> GetEmployeesAsync()
@@ -660,7 +661,8 @@ public sealed class HumanResourcesApiService
                 ("PeriodsPerYear", x.PeriodsPerYear),
                 ("Notes", x.Notes),
                 ("IsActive", x.IsActive)))
-            .ToList());
+            .ToList(),
+            allowImport: true);
     }
 
     private async Task<CatalogViewDefinition> GetPayrollPeriodsAsync()
@@ -750,7 +752,8 @@ public sealed class HumanResourcesApiService
                 ("PrintOnReceipt", x.PrintOnReceipt),
                 ("SortOrder", x.SortOrder),
                 ("IsActive", x.IsActive)))
-            .ToList());
+            .ToList(),
+            allowImport: true);
     }
 
     private async Task<CatalogViewDefinition> GetPayrollRunsAsync()
