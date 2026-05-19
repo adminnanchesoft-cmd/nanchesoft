@@ -243,6 +243,7 @@ app.MapServiceBillingEndpoints();
 app.MapTenantEndpoints();
 app.MapPlanEndpoints();
 app.MapSubscriptionControlEndpoints();
+app.MapUniversalImportEndpoints();
 
 app.Run();
 

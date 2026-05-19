@@ -1,0 +1,477 @@
+@page "/administration/universal-import"
+@using System.Net.Http.Json
+@using System.Text.Json
+@inject IHttpClientFactory HttpClientFactory
+@inject NavigationManager NavManager
+
+<PageTitle>Importación universal | Nanchesoft</PageTitle>
+
+<div class="ns-page-header">
+    <div class="ns-page-header__left">
+        <div class="ns-page-header__breadcrumb">Administración / Importación universal</div>
+        <h1 class="ns-page-header__title">Importación universal</h1>
+        <p class="ns-page-header__subtitle">Sube cualquier CSV del ERP — el sistema detecta la entidad y mapea las columnas automáticamente.</p>
+    </div>
+</div>
+
+<div class="ns-section">
+
+    @* ── Stepper ───────────────────────────────────────────────── *@
+    <div class="ns-import-stepper">
+        <div class="ns-import-step @StepClass(1)"><span class="ns-import-step__num">1</span><span class="ns-import-step__label">Cargar archivo</span></div>
+        <div class="ns-import-step-sep"></div>
+        <div class="ns-import-step @StepClass(2)"><span class="ns-import-step__num">2</span><span class="ns-import-step__label">Revisar mapeo</span></div>
+        <div class="ns-import-step-sep"></div>
+        <div class="ns-import-step @StepClass(3)"><span class="ns-import-step__num">3</span><span class="ns-import-step__label">Resultados</span></div>
+    </div>
+
+    @* ══════ Step 1 — Upload ══════════════════════════════════════ *@
+    @if (_step == 1)
+    {
+        <div class="ns-import-upload-zone @(_dragging ? "ns-import-upload-zone--over" : "")"
+             @ondragover:preventDefault
+             @ondragover="() => _dragging = true"
+             @ondragleave="() => _dragging = false"
+             @ondrop:preventDefault
+             @ondrop="OnDropAsync">
+            <svg viewBox="0 0 48 48" width="42" height="42" fill="none"><path d="M24 34V14m0 0-8 8m8-8 8 8" stroke="#64748b" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><rect x="4" y="36" width="40" height="6" rx="3" fill="#e2e8f0"/></svg>
+            <div class="ns-import-upload-zone__text">Arrastra tu archivo CSV aquí</div>
+            <div class="ns-import-upload-zone__sub">o haz clic para seleccionar</div>
+            <label class="ns-import-upload-btn">
+                Seleccionar CSV
+                <InputFile OnChange="OnFileSelectedAsync" accept=".csv,.txt" style="display:none" />
+            </label>
+        </div>
+
+        @if (!string.IsNullOrEmpty(_uploadError))
+        {
+            <div class="alert alert-danger mt-3">@_uploadError</div>
+        }
+
+        @if (_analyzing)
+        {
+            <div class="text-muted mt-3"><span class="spinner-border spinner-border-sm me-2"></span>Analizando columnas…</div>
+        }
+    }
+
+    @* ══════ Step 2 — Mapping ══════════════════════════════════════ *@
+    @if (_step == 2 && _analysis is not null)
+    {
+        <div class="ns-import-analysis-header">
+            <div>
+                <strong>Entidad detectada:</strong>
+                <span class="badge bg-primary ms-2">@_analysis.EntityName</span>
+                <span class="text-muted ms-2 small">(puntuación @_analysis.Score)</span>
+            </div>
+
+            @* Entity override *@
+            <div class="d-flex align-items-center gap-2 mt-2">
+                <label class="ns-field-label mb-0">¿Incorrecta? Elige manualmente:</label>
+                <select class="form-select form-select-sm" style="width:220px" @onchange="OnEntityOverrideAsync">
+                    <option value="">— Automático —</option>
+                    @foreach (var e in _entities)
+                    {
+                        <option value="@e.Key" selected="@(_analysis.EntityKey == e.Key)">[@e.Group] @e.Name</option>
+                    }
+                </select>
+            </div>
+        </div>
+
+        <div class="table-responsive mt-3">
+            <table class="table table-sm table-bordered">
+                <thead class="table-light">
+                    <tr>
+                        <th>Columna CSV</th>
+                        <th>Campo Nanchesoft</th>
+                        <th>Tipo</th>
+                        <th>Requerido</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var m in _analysis.Mappings)
+                    {
+                        <tr class="@(m.FieldKey is null ? "table-warning" : "")">
+                            <td><code>@m.CsvColumn</code></td>
+                            <td>
+                                <select class="form-select form-select-sm"
+                                        value="@m.FieldKey"
+                                        @onchange="e => OnMappingChange(m, e.Value?.ToString())">
+                                    <option value="">— Ignorar —</option>
+                                    @foreach (var field in _currentEntityFields)
+                                    {
+                                        <option value="@field.Key" selected="@(m.FieldKey == field.Key)">@field.Name</option>
+                                    }
+                                </select>
+                            </td>
+                            <td><span class="badge bg-secondary">@(m.DataType ?? "—")</span></td>
+                            <td>@(m.IsRequired ? "✓" : "")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        @* Preview first 5 rows *@
+        @if (_previewRows.Count > 0)
+        {
+            <details class="mt-3">
+                <summary class="ns-field-label" style="cursor:pointer">Vista previa (primeras @_previewRows.Count filas)</summary>
+                <div class="table-responsive mt-2">
+                    <table class="table table-sm table-bordered" style="font-size:.8rem">
+                        <thead class="table-light">
+                            <tr>@foreach (var h in _csvHeaders) { <th>@h</th> }</tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var row in _previewRows)
+                            {
+                                <tr>@foreach (var cell in row) { <td>@cell</td> }</tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </details>
+        }
+
+        <div class="d-flex gap-2 mt-4">
+            <button class="btn btn-secondary" @onclick="ResetWizard">← Volver</button>
+            <button class="btn btn-primary" @onclick="ExecuteImportAsync" disabled="@_executing">
+                @if (_executing)
+                {
+                    <span class="spinner-border spinner-border-sm me-2"></span>
+                }
+                Importar @_allRows.Count filas
+            </button>
+        </div>
+
+        @if (!string.IsNullOrEmpty(_executeError))
+        {
+            <div class="alert alert-danger mt-3">@_executeError</div>
+        }
+    }
+
+    @* ══════ Step 3 — Results ══════════════════════════════════════ *@
+    @if (_step == 3 && _importResult is not null)
+    {
+        <div class="ns-import-result-summary">
+            <div class="ns-import-result-card ns-import-result-card--ok">
+                <div class="ns-import-result-card__num">@_importResult.Imported</div>
+                <div class="ns-import-result-card__label">Importados</div>
+            </div>
+            <div class="ns-import-result-card ns-import-result-card--dup">
+                <div class="ns-import-result-card__num">@_importResult.Duplicates</div>
+                <div class="ns-import-result-card__label">Duplicados</div>
+            </div>
+            <div class="ns-import-result-card ns-import-result-card--err">
+                <div class="ns-import-result-card__num">@_importResult.Failed</div>
+                <div class="ns-import-result-card__label">Con error</div>
+            </div>
+            <div class="ns-import-result-card">
+                <div class="ns-import-result-card__num">@_importResult.Total</div>
+                <div class="ns-import-result-card__label">Total</div>
+            </div>
+        </div>
+
+        @if (_importResult.Rows.Any(r => r.Status != "ok"))
+        {
+            <div class="table-responsive mt-4">
+                <table class="table table-sm table-bordered">
+                    <thead class="table-light">
+                        <tr><th>Fila</th><th>Estado</th><th>Mensaje</th></tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var r in _importResult.Rows.Where(x => x.Status != "ok"))
+                        {
+                            <tr class="@(r.Status == "error" ? "table-danger" : "table-warning")">
+                                <td>@r.Row</td>
+                                <td>@r.Status</td>
+                                <td>@r.Message</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+
+        <div class="d-flex gap-2 mt-4">
+            <button class="btn btn-primary" @onclick="ResetWizard">Nueva importación</button>
+        </div>
+    }
+
+</div>
+
+@code {
+    // ── State ──────────────────────────────────────────────────────
+    private int _step = 1;
+    private bool _dragging;
+    private bool _analyzing;
+    private bool _executing;
+    private string _uploadError = "";
+    private string _executeError = "";
+
+    private List<string> _csvHeaders = [];
+    private List<List<string?>> _previewRows = [];
+    private List<List<string?>> _allRows = [];
+
+    private List<EntityInfo> _entities = [];
+    private AnalysisResult? _analysis;
+    private List<FieldInfo> _currentEntityFields = [];
+    private ImportResult? _importResult;
+
+    // ── Lifecycle ─────────────────────────────────────────────────
+    protected override async Task OnInitializedAsync()
+    {
+        var client = HttpClientFactory.CreateClient("Nanchesoft.Api");
+        _entities = await client.GetFromJsonAsync<List<EntityInfo>>("/api/import/entities") ?? [];
+    }
+
+    // ── File handling ─────────────────────────────────────────────
+    private async Task OnFileSelectedAsync(InputFileChangeEventArgs e)
+    {
+        await LoadFileAsync(e.File);
+    }
+
+    private async Task OnDropAsync(DragEventArgs e)
+    {
+        _dragging = false;
+        // Drag-drop for files requires JS interop beyond what Blazor exposes by default.
+        // The InputFile above handles the fallback; show a hint.
+        _uploadError = "Por favor usa el botón 'Seleccionar CSV' para subir archivos arrastrados.";
+        await Task.CompletedTask;
+    }
+
+    private async Task LoadFileAsync(IBrowserFile file)
+    {
+        _uploadError = "";
+        if (!file.Name.EndsWith(".csv", StringComparison.OrdinalIgnoreCase) &&
+            !file.Name.EndsWith(".txt", StringComparison.OrdinalIgnoreCase))
+        {
+            _uploadError = "Solo se aceptan archivos .csv o .txt";
+            return;
+        }
+
+        try
+        {
+            using var stream = file.OpenReadStream(maxAllowedSize: 10 * 1024 * 1024);
+            using var reader = new System.IO.StreamReader(stream, System.Text.Encoding.UTF8, detectEncodingFromByteOrderMarks: true);
+
+            var lines = new List<string>();
+            while (!reader.EndOfStream)
+            {
+                var line = await reader.ReadLineAsync();
+                if (line is not null) lines.Add(line);
+            }
+
+            if (lines.Count < 2)
+            {
+                _uploadError = "El archivo está vacío o solo tiene encabezados.";
+                return;
+            }
+
+            // Detect separator (comma vs semicolon)
+            var firstLine = lines[0];
+            var sep = firstLine.Count(c => c == ';') > firstLine.Count(c => c == ',') ? ';' : ',';
+
+            _csvHeaders = ParseCsvLine(firstLine, sep);
+            _allRows = lines.Skip(1).Where(l => !string.IsNullOrWhiteSpace(l)).Select(l => (List<string?>)ParseCsvLine(l, sep).Cast<string?>().ToList()).ToList();
+            _previewRows = _allRows.Take(5).ToList();
+
+            _analyzing = true;
+            StateHasChanged();
+
+            await AnalyzeAsync();
+        }
+        catch (Exception ex)
+        {
+            _uploadError = $"Error al leer el archivo: {ex.Message}";
+        }
+        finally
+        {
+            _analyzing = false;
+        }
+    }
+
+    private static List<string> ParseCsvLine(string line, char sep)
+    {
+        var fields = new List<string>();
+        var sb = new System.Text.StringBuilder();
+        bool inQuotes = false;
+        for (int i = 0; i < line.Length; i++)
+        {
+            char c = line[i];
+            if (c == '"')
+            {
+                if (inQuotes && i + 1 < line.Length && line[i + 1] == '"')
+                { sb.Append('"'); i++; }
+                else inQuotes = !inQuotes;
+            }
+            else if (c == sep && !inQuotes)
+            { fields.Add(sb.ToString().Trim()); sb.Clear(); }
+            else sb.Append(c);
+        }
+        fields.Add(sb.ToString().Trim());
+        return fields;
+    }
+
+    // ── Analysis ──────────────────────────────────────────────────
+    private async Task AnalyzeAsync()
+    {
+        var client = HttpClientFactory.CreateClient("Nanchesoft.Api");
+        var req = new { Headers = _csvHeaders, FirstRows = _previewRows };
+        var resp = await client.PostAsJsonAsync("/api/import/analyze", req);
+        if (!resp.IsSuccessStatusCode) { _uploadError = "Error al analizar el archivo."; return; }
+
+        _analysis = await resp.Content.ReadFromJsonAsync<AnalysisResult>();
+        if (_analysis is not null)
+            UpdateFieldList(_analysis.EntityKey);
+
+        _step = 2;
+    }
+
+    private async Task OnEntityOverrideAsync(ChangeEventArgs e)
+    {
+        var key = e.Value?.ToString();
+        if (string.IsNullOrEmpty(key) || _analysis is null) return;
+
+        // Re-analyze with forced entity key by sending only matching headers
+        var client = HttpClientFactory.CreateClient("Nanchesoft.Api");
+        var req = new { Headers = _csvHeaders, FirstRows = _previewRows };
+        var resp = await client.PostAsJsonAsync("/api/import/analyze", req);
+        _analysis = await resp.Content.ReadFromJsonAsync<AnalysisResult>();
+
+        // Override entity key/name
+        var entity = _entities.FirstOrDefault(x => x.Key == key);
+        if (_analysis is not null && entity is not null)
+        {
+            _analysis.EntityKey = key;
+            _analysis.EntityName = entity.Name;
+        }
+        UpdateFieldList(key);
+    }
+
+    private void UpdateFieldList(string? entityKey)
+    {
+        // Build field list from the analysis mappings as authoritative source
+        // We reconstruct from all mapped fields + entity knowledge
+        // Since we don't have a separate /fields endpoint, derive from analysis
+        if (_analysis is null) return;
+
+        // Collect all fields seen in mappings plus any unmapped ones we know about
+        _currentEntityFields = _analysis.Mappings
+            .Where(m => m.FieldKey is not null)
+            .GroupBy(m => m.FieldKey!)
+            .Select(g => new FieldInfo(g.Key, g.First().FieldName ?? g.Key, g.First().DataType ?? "text", g.First().IsRequired))
+            .ToList();
+
+        // Add fields from entity that are not yet in the mapping list
+        // (so user can manually map ignored columns)
+        // We don't have full schema on the client, so just use what we've got.
+    }
+
+    private void OnMappingChange(ColumnMapping m, string? newFieldKey)
+    {
+        m.FieldKey = string.IsNullOrEmpty(newFieldKey) ? null : newFieldKey;
+        var field = _currentEntityFields.FirstOrDefault(f => f.Key == newFieldKey);
+        m.FieldName = field?.Name;
+        m.DataType = field?.DataType;
+        m.IsRequired = field?.IsRequired ?? false;
+    }
+
+    // ── Execution ─────────────────────────────────────────────────
+    private async Task ExecuteImportAsync()
+    {
+        if (_analysis is null) return;
+        _executeError = "";
+        _executing = true;
+        StateHasChanged();
+
+        try
+        {
+            var client = HttpClientFactory.CreateClient("Nanchesoft.Api");
+            var mappings = _analysis.Mappings
+                .Where(m => m.FieldKey is not null)
+                .Select(m => new { CsvColumn = m.CsvColumn, FieldKey = m.FieldKey! })
+                .ToList();
+
+            var req = new
+            {
+                EntityKey = _analysis.EntityKey,
+                Headers = _csvHeaders,
+                Rows = _allRows,
+                Mappings = mappings
+            };
+
+            var resp = await client.PostAsJsonAsync("/api/import/execute", req);
+            var body = await resp.Content.ReadAsStringAsync();
+
+            if (!resp.IsSuccessStatusCode)
+            {
+                _executeError = $"Error del servidor: {body}";
+                return;
+            }
+
+            _importResult = System.Text.Json.JsonSerializer.Deserialize<ImportResult>(body,
+                new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            _step = 3;
+        }
+        catch (Exception ex)
+        {
+            _executeError = $"Error: {ex.Message}";
+        }
+        finally
+        {
+            _executing = false;
+        }
+    }
+
+    // ── Reset ─────────────────────────────────────────────────────
+    private void ResetWizard()
+    {
+        _step = 1;
+        _csvHeaders = [];
+        _previewRows = [];
+        _allRows = [];
+        _analysis = null;
+        _importResult = null;
+        _uploadError = "";
+        _executeError = "";
+        _dragging = false;
+    }
+
+    private string StepClass(int n) =>
+        _step == n ? "ns-import-step--active" :
+        _step > n  ? "ns-import-step--done" : "";
+
+    // ── DTOs ──────────────────────────────────────────────────────
+    private sealed record EntityInfo(string Key, string Name, string Group);
+    private sealed record FieldInfo(string Key, string Name, string DataType, bool IsRequired);
+
+    private sealed class AnalysisResult
+    {
+        public string? EntityKey  { get; set; }
+        public string? EntityName { get; set; }
+        public List<ColumnMapping> Mappings { get; set; } = [];
+        public int Score { get; set; }
+    }
+
+    private sealed class ColumnMapping
+    {
+        public string CsvColumn  { get; set; } = "";
+        public string? FieldKey  { get; set; }
+        public string? FieldName { get; set; }
+        public string? DataType  { get; set; }
+        public bool IsFk         { get; set; }
+        public string? FkEntity  { get; set; }
+        public bool IsRequired   { get; set; }
+    }
+
+    private sealed class ImportResult
+    {
+        public int Total     { get; set; }
+        public int Imported  { get; set; }
+        public int Duplicates{ get; set; }
+        public int Failed    { get; set; }
+        public List<RowResult> Rows { get; set; } = [];
+    }
+
+    private sealed record RowResult(int Row, string Status, string Message);
+}
