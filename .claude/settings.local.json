@@ -115,7 +115,12 @@
       "Bash(PGPASSWORD=CambiaEstaClave123* psql -h localhost -U nancheadmin -d nanchesoftdb_test -c '\\\\dt')",
       "Bash(PGPASSWORD=CambiaEstaClave123* psql -h localhost -U nancheadmin -d nanchesoftdb1 -c \"\\\\dt\")",
       "Bash(PGPASSWORD=CambiaEstaClave123* psql *)",
-      "Bash(systemctl show *)"
+      "Bash(systemctl show *)",
+      "Bash(PGPASSWORD=nanche2024! psql *)",
+      "Bash(PGSSLMODE=require PGPASSWORD='Sandokan89240371' psql -h psql-nanchesoft-dev.postgres.database.azure.com -p 5432 -U nancheadmin -d nanchesoftdb -c \"\\\\l\")",
+      "Read(//etc/nginx/sites-enabled/**)",
+      "Read(//etc/nginx/conf.d/**)",
+      "Bash(apt-get install *)"
     ]
   }
 }

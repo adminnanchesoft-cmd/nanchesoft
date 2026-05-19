@@ -16,6 +16,8 @@ public static class PayrollMvpEndpoints
 
         var clock = app.MapGroup("/api/hr/time-clock").WithTags("PayrollTimeClock");
         clock.MapPost("/import", ImportPunchesFromExcelAsync).DisableAntiforgery();
+        clock.MapPost("/import/preview", PreviewPunchesFromFileAsync).DisableAntiforgery();
+        clock.MapPost("/import/csv", ImportPunchesFromCsvAsync).DisableAntiforgery();
 
         var periods = app.MapGroup("/api/payroll/periods").WithTags("PayrollPeriods");
         periods.MapPost("/{periodId:guid}/generate-summaries", GenerateAttendanceDailySummariesAsync);
@@ -267,11 +269,334 @@ public static class PayrollMvpEndpoints
             WorkDate = punchDt.Date,
             PunchDateTime = punchDt,
             PunchType = punchType,
-            Source = "excel-import",
+            Source = "file-import",
             Status = "captured",
             IsActive = true,
-            CreatedBy = "excel-import"
+            CreatedBy = "file-import"
         };
+
+    // ──────────────────────────────────────────────────────────────
+    // 2b. PREVIEW DE CHECADAS (Excel o CSV)
+    // Lee el archivo y devuelve filas con estado (new/error/skip)
+    // sin persistir nada en la base de datos.
+    // ──────────────────────────────────────────────────────────────
+    private static async Task<IResult> PreviewPunchesFromFileAsync(IFormFile file, NanchesoftDbContext db)
+    {
+        if (file is null || file.Length == 0)
+            return Results.BadRequest(new { message = "El archivo está vacío." });
+
+        var company = await db.Companies.OrderBy(x => x.CreatedAt).FirstOrDefaultAsync();
+        if (company is null)
+            return Results.BadRequest(new { message = "No existe empresa configurada." });
+
+        var employees = await db.Employees.Where(x => x.CompanyId == company.Id && x.IsActive)
+            .Select(x => new { x.Id, x.EmployeeNumber, x.FirstName, x.LastName, x.SecondLastName })
+            .ToListAsync();
+        var employeeMap = employees.ToDictionary(
+            x => x.EmployeeNumber.ToUpperInvariant(),
+            x => new PunchEmployeeRef(x.Id, $"{x.FirstName} {x.LastName} {x.SecondLastName}".Trim()));
+
+        var (headers, dataRows) = await ReadPunchFileAsync(file);
+        if (headers.Count == 0)
+            return Results.BadRequest(new { message = "El archivo no tiene encabezados válidos." });
+
+        var headerMap = BuildPunchHeaderMap(headers);
+        bool isSimpleFormat = headerMap.ContainsKey("fechahora");
+        var rows = new List<PunchImportPreviewRow>();
+
+        for (int i = 0; i < dataRows.Count; i++)
+        {
+            int rowNum = i + 2;
+            var raw = dataRows[i];
+            var empNum = GetCsvField(raw, headerMap, "noempleado").Trim().ToUpperInvariant();
+
+            if (string.IsNullOrWhiteSpace(empNum))
+            {
+                rows.Add(new PunchImportPreviewRow { RowNumber = rowNum, Status = "skip", Message = "Sin número de empleado" });
+                continue;
+            }
+            if (!employeeMap.TryGetValue(empNum, out var emp))
+            {
+                rows.Add(new PunchImportPreviewRow { RowNumber = rowNum, EmployeeNumber = empNum, Status = "error", Message = "Empleado no encontrado" });
+                continue;
+            }
+
+            if (isSimpleFormat)
+            {
+                var fechaHoraStr = GetCsvField(raw, headerMap, "fechahora").Trim();
+                var tipo = GetCsvField(raw, headerMap, "tipo").Trim().ToLowerInvariant();
+                if (!DateTime.TryParse(fechaHoraStr, out var punchDt))
+                {
+                    rows.Add(new PunchImportPreviewRow { RowNumber = rowNum, EmployeeNumber = empNum, EmployeeName = emp.FullName, Status = "error", Message = $"Fecha/hora inválida '{fechaHoraStr}'" });
+                    continue;
+                }
+                var punchType = tipo is "exit" or "salida" or "s" ? "exit" : "entry";
+                rows.Add(new PunchImportPreviewRow
+                {
+                    RowNumber = rowNum,
+                    EmployeeNumber = empNum,
+                    EmployeeName = emp.FullName,
+                    PunchDate = punchDt.Date,
+                    EntryTime = punchType == "entry" ? punchDt.TimeOfDay : null,
+                    ExitTime = punchType == "exit" ? punchDt.TimeOfDay : null,
+                    PunchType = punchType,
+                    Status = "new",
+                    Message = "Listo"
+                });
+            }
+            else
+            {
+                var fechaStr = GetCsvField(raw, headerMap, "fecha").Trim();
+                var entradaStr = GetCsvField(raw, headerMap, "horaentrada").Trim();
+                var salidaStr = GetCsvField(raw, headerMap, "horasalida").Trim();
+                if (!DateTime.TryParse(fechaStr, out var fecha))
+                {
+                    rows.Add(new PunchImportPreviewRow { RowNumber = rowNum, EmployeeNumber = empNum, EmployeeName = emp.FullName, Status = "error", Message = $"Fecha inválida '{fechaStr}'" });
+                    continue;
+                }
+                TimeSpan? entry = TimeSpan.TryParse(entradaStr, out var et) ? et : null;
+                TimeSpan? exit = TimeSpan.TryParse(salidaStr, out var st) ? st : null;
+                if (entry is null && exit is null)
+                {
+                    rows.Add(new PunchImportPreviewRow { RowNumber = rowNum, EmployeeNumber = empNum, EmployeeName = emp.FullName, PunchDate = fecha.Date, Status = "error", Message = "Sin hora de entrada ni salida" });
+                    continue;
+                }
+                rows.Add(new PunchImportPreviewRow
+                {
+                    RowNumber = rowNum,
+                    EmployeeNumber = empNum,
+                    EmployeeName = emp.FullName,
+                    PunchDate = fecha.Date,
+                    EntryTime = entry,
+                    ExitTime = exit,
+                    Status = "new",
+                    Message = "Listo"
+                });
+            }
+        }
+
+        var summary = new
+        {
+            total = rows.Count,
+            newCount = rows.Count(x => x.Status == "new"),
+            errorCount = rows.Count(x => x.Status == "error"),
+            skipCount = rows.Count(x => x.Status == "skip"),
+            rows
+        };
+        return Results.Ok(summary);
+    }
+
+    // ──────────────────────────────────────────────────────────────
+    // 2c. IMPORTAR CHECADAS DESDE CSV
+    // Mismas columnas que el importador Excel:
+    //   Formato simple: NoEmpleado, FechaHora, Tipo (entry/exit)
+    //   Formato matricial: NoEmpleado, Fecha, HoraEntrada, HoraSalida
+    // ──────────────────────────────────────────────────────────────
+    private static async Task<IResult> ImportPunchesFromCsvAsync(IFormFile file, NanchesoftDbContext db)
+    {
+        if (file is null || file.Length == 0)
+            return Results.BadRequest(new { message = "El archivo está vacío." });
+
+        var company = await db.Companies.OrderBy(x => x.CreatedAt).FirstOrDefaultAsync();
+        if (company is null)
+            return Results.BadRequest(new { message = "No existe empresa configurada." });
+
+        var branchId = await db.Branches.Where(x => x.CompanyId == company.Id).OrderBy(x => x.CreatedAt).Select(x => (Guid?)x.Id).FirstOrDefaultAsync();
+
+        var employees = await db.Employees.Where(x => x.CompanyId == company.Id && x.IsActive)
+            .ToDictionaryAsync(x => x.EmployeeNumber.ToUpperInvariant());
+
+        var (headers, dataRows) = await ReadPunchFileAsync(file);
+        if (headers.Count == 0)
+            return Results.BadRequest(new { message = "El archivo no tiene encabezados válidos." });
+
+        var headerMap = BuildPunchHeaderMap(headers);
+        bool isSimpleFormat = headerMap.ContainsKey("fechahora");
+
+        int created = 0, skipped = 0;
+        var errors = new List<string>();
+
+        for (int i = 0; i < dataRows.Count; i++)
+        {
+            int rowNum = i + 2;
+            try
+            {
+                var raw = dataRows[i];
+                var empNum = GetCsvField(raw, headerMap, "noempleado").Trim().ToUpperInvariant();
+                if (string.IsNullOrWhiteSpace(empNum) || !employees.TryGetValue(empNum, out var employee))
+                {
+                    skipped++;
+                    continue;
+                }
+
+                if (isSimpleFormat)
+                {
+                    var fechaHoraStr = GetCsvField(raw, headerMap, "fechahora").Trim();
+                    var tipo = GetCsvField(raw, headerMap, "tipo").Trim().ToLowerInvariant();
+                    if (!DateTime.TryParse(fechaHoraStr, out var punchDt))
+                    {
+                        errors.Add($"Fila {rowNum}: fecha/hora inválida '{fechaHoraStr}'.");
+                        continue;
+                    }
+                    var punchType = tipo is "exit" or "salida" or "s" ? "exit" : "entry";
+                    db.AttendancePunches.Add(BuildPunch(company, branchId, employee.Id, punchDt, punchType));
+                    created++;
+                }
+                else
+                {
+                    var fechaStr = GetCsvField(raw, headerMap, "fecha").Trim();
+                    var entradaStr = GetCsvField(raw, headerMap, "horaentrada").Trim();
+                    var salidaStr = GetCsvField(raw, headerMap, "horasalida").Trim();
+                    if (!DateTime.TryParse(fechaStr, out var fecha))
+                    {
+                        errors.Add($"Fila {rowNum}: fecha inválida '{fechaStr}'.");
+                        continue;
+                    }
+                    if (!string.IsNullOrWhiteSpace(entradaStr) && TimeSpan.TryParse(entradaStr, out var entrada))
+                    {
+                        db.AttendancePunches.Add(BuildPunch(company, branchId, employee.Id, fecha.Date.Add(entrada), "entry"));
+                        created++;
+                    }
+                    if (!string.IsNullOrWhiteSpace(salidaStr) && TimeSpan.TryParse(salidaStr, out var salida))
+                    {
+                        db.AttendancePunches.Add(BuildPunch(company, branchId, employee.Id, fecha.Date.Add(salida), "exit"));
+                        created++;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                errors.Add($"Fila {rowNum}: {ex.Message}");
+            }
+        }
+
+        await db.SaveChangesAsync();
+        return Results.Ok(new { success = true, created, skipped, errors });
+    }
+
+    private static async Task<(List<string> headers, List<List<string>> rows)> ReadPunchFileAsync(IFormFile file)
+    {
+        var ext = Path.GetExtension(file.FileName ?? string.Empty).ToLowerInvariant();
+        if (ext is ".csv" or ".txt")
+            return await ReadDelimitedFileAsync(file);
+        return ReadExcelRows(file);
+    }
+
+    private static async Task<(List<string>, List<List<string>>)> ReadDelimitedFileAsync(IFormFile file)
+    {
+        var headers = new List<string>();
+        var rows = new List<List<string>>();
+        using var reader = new StreamReader(file.OpenReadStream(), System.Text.Encoding.UTF8, detectEncodingFromByteOrderMarks: true);
+        string? line;
+        char? delim = null;
+        bool first = true;
+        while ((line = await reader.ReadLineAsync()) is not null)
+        {
+            if (line.Length == 0) continue;
+            delim ??= DetectCsvDelimiter(line);
+            var fields = ParseCsvLine(line, delim.Value);
+            if (first)
+            {
+                headers = fields.Select(x => x.Trim()).ToList();
+                first = false;
+            }
+            else
+            {
+                rows.Add(fields);
+            }
+        }
+        return (headers, rows);
+    }
+
+    private static (List<string>, List<List<string>>) ReadExcelRows(IFormFile file)
+    {
+        using var stream = file.OpenReadStream();
+        using var wb = new XLWorkbook(stream);
+        var ws = wb.Worksheet(1);
+        var headers = new List<string>();
+        foreach (var cell in ws.Row(1).CellsUsed())
+            headers.Add(cell.GetString().Trim());
+        var rows = new List<List<string>>();
+        var lastRow = ws.LastRowUsed()?.RowNumber() ?? 1;
+        for (int r = 2; r <= lastRow; r++)
+        {
+            var rowData = new List<string>();
+            for (int c = 1; c <= headers.Count; c++)
+            {
+                var cell = ws.Cell(r, c);
+                rowData.Add(cell.IsEmpty() ? string.Empty : cell.GetString());
+            }
+            rows.Add(rowData);
+        }
+        return (headers, rows);
+    }
+
+    private static char DetectCsvDelimiter(string headerLine)
+    {
+        int commas = headerLine.Count(c => c == ',');
+        int semis = headerLine.Count(c => c == ';');
+        int tabs = headerLine.Count(c => c == '\t');
+        if (tabs > 0 && tabs >= semis && tabs >= commas) return '\t';
+        if (semis > commas) return ';';
+        return ',';
+    }
+
+    private static List<string> ParseCsvLine(string line, char delim)
+    {
+        var fields = new List<string>();
+        var sb = new System.Text.StringBuilder();
+        bool inQuotes = false;
+        for (int i = 0; i < line.Length; i++)
+        {
+            var c = line[i];
+            if (inQuotes)
+            {
+                if (c == '"')
+                {
+                    if (i + 1 < line.Length && line[i + 1] == '"') { sb.Append('"'); i++; }
+                    else inQuotes = false;
+                }
+                else sb.Append(c);
+            }
+            else
+            {
+                if (c == '"') inQuotes = true;
+                else if (c == delim) { fields.Add(sb.ToString()); sb.Clear(); }
+                else sb.Append(c);
+            }
+        }
+        fields.Add(sb.ToString());
+        return fields;
+    }
+
+    private static Dictionary<string, int> BuildPunchHeaderMap(List<string> headers)
+    {
+        var map = new Dictionary<string, int>();
+        for (int i = 0; i < headers.Count; i++)
+        {
+            var key = (headers[i] ?? string.Empty).Trim().ToLowerInvariant().Replace(" ", "").Replace("_", "");
+            if (!map.ContainsKey(key)) map[key] = i;
+        }
+        return map;
+    }
+
+    private static string GetCsvField(List<string> row, Dictionary<string, int> headerMap, string key)
+        => headerMap.TryGetValue(key, out var idx) && idx < row.Count ? row[idx] ?? string.Empty : string.Empty;
+
+    private sealed record PunchEmployeeRef(Guid Id, string FullName);
+
+    public sealed class PunchImportPreviewRow
+    {
+        public int RowNumber { get; set; }
+        public string EmployeeNumber { get; set; } = string.Empty;
+        public string EmployeeName { get; set; } = string.Empty;
+        public DateTime? PunchDate { get; set; }
+        public TimeSpan? EntryTime { get; set; }
+        public TimeSpan? ExitTime { get; set; }
+        public string PunchType { get; set; } = string.Empty;
+        public string Status { get; set; } = string.Empty;
+        public string Message { get; set; } = string.Empty;
+    }
 
     // ──────────────────────────────────────────────────────────────
     // 3. GENERAR RESUMEN DIARIO DE ASISTENCIA POR PERIODO
