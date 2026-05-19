@@ -231,6 +231,10 @@ public sealed class NanchesoftDbContext : DbContext
     public DbSet<BankStatement> BankStatements => Set<BankStatement>();
     public DbSet<BankStatementEntry> BankStatementEntries => Set<BankStatementEntry>();
     public DbSet<InternalTransfer> InternalTransfers => Set<InternalTransfer>();
+    public DbSet<CheckBook> CheckBooks => Set<CheckBook>();
+    public DbSet<Check> Checks => Set<Check>();
+    public DbSet<FinanceMovementType> FinanceMovementTypes => Set<FinanceMovementType>();
+    public DbSet<FinanceConcept> FinanceConcepts => Set<FinanceConcept>();
 
     public DbSet<AccountsReceivableAccount> AccountsReceivableAccounts => Set<AccountsReceivableAccount>();
     public DbSet<AccountsReceivableMovement> AccountsReceivableMovements => Set<AccountsReceivableMovement>();

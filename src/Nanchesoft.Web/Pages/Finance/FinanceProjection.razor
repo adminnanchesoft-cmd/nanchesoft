@@ -1,0 +1,125 @@
+@page "/finance/financial-projection"
+@using Nanchesoft.Web.Services.Finance
+@inject FinancePhase2ApiService Api
+
+<PageTitle>Proyección financiera | Nanchesoft</PageTitle>
+
+<div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-3">
+    <div>
+        <div class="text-muted small">Nanchesoft ERP · Finanzas</div>
+        <h1 class="h3 mb-1">Proyección financiera</h1>
+        <div class="text-muted">Pronóstico semanal de flujo de efectivo considerando cobranza, pagos y cheques pendientes.</div>
+    </div>
+    <div class="d-flex gap-2 align-items-end">
+        <div>
+            <label class="form-label">Horizonte (semanas)</label>
+            <select class="form-select" @bind="_weeks" @bind:after="ReloadAsync">
+                <option value="4">4 semanas</option>
+                <option value="8">8 semanas</option>
+                <option value="12">12 semanas</option>
+                <option value="26">26 semanas</option>
+                <option value="52">52 semanas</option>
+            </select>
+        </div>
+        <button class="btn btn-outline-primary" @onclick="ReloadAsync">Actualizar</button>
+    </div>
+</div>
+
+@if (_loading)
+{
+    <div class="alert alert-info">Calculando proyección...</div>
+}
+else if (_error is not null)
+{
+    <div class="alert alert-danger">@_error</div>
+}
+else if (_data is not null)
+{
+    <div class="row g-3 mb-3">
+        <div class="col-md-3"><div class="card border-primary shadow-sm h-100"><div class="card-body"><div class="text-muted small">Saldo inicial</div><div class="fs-4 fw-bold text-primary">@_data.OpeningBalance.ToString("C")</div></div></div></div>
+        <div class="col-md-3"><div class="card border-success shadow-sm h-100"><div class="card-body"><div class="text-muted small">Cobranza esperada</div><div class="fs-4 fw-bold text-success">@_data.PendingReceivable.ToString("C")</div></div></div></div>
+        <div class="col-md-3"><div class="card border-warning shadow-sm h-100"><div class="card-body"><div class="text-muted small">Pagos comprometidos</div><div class="fs-4 fw-bold text-warning">@_data.PendingPayable.ToString("C")</div></div></div></div>
+        <div class="col-md-3"><div class="card border-danger shadow-sm h-100"><div class="card-body"><div class="text-muted small">Cheques pendientes</div><div class="fs-4 fw-bold text-danger">@_data.PendingChecksAmount.ToString("C")</div></div></div></div>
+    </div>
+
+    <div class="card shadow-sm mb-3">
+        <div class="card-body">
+            <div class="d-flex justify-content-between flex-wrap gap-2">
+                <div>
+                    <div class="text-muted small">Saldo proyectado al final del horizonte</div>
+                    <div class="fs-3 fw-bold @(_data.ClosingBalance >= 0 ? "text-success" : "text-danger")">@_data.ClosingBalance.ToString("C")</div>
+                </div>
+                <div class="text-end">
+                    <div class="text-muted small">Variación neta del periodo</div>
+                    @{ var delta = _data.ClosingBalance - _data.OpeningBalance; }
+                    <div class="fs-4 fw-bold @(delta >= 0 ? "text-success" : "text-danger")">@delta.ToString("C")</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card shadow-sm">
+        <div class="table-responsive">
+            <table class="table table-striped align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th>Semana</th>
+                        <th>Inicio</th>
+                        <th>Fin</th>
+                        <th class="text-end">Cobranza esperada</th>
+                        <th class="text-end">Pagos / cheques</th>
+                        <th class="text-end">Flujo neto</th>
+                        <th class="text-end">Saldo acumulado</th>
+                        <th>Semáforo</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var week in _data.Weeks)
+                    {
+                        <tr>
+                            <td>W@(week.WeekIndex)</td>
+                            <td>@week.StartDate.ToString("dd/MM/yyyy")</td>
+                            <td>@week.EndDate.ToString("dd/MM/yyyy")</td>
+                            <td class="text-end text-success">@week.ExpectedInflow.ToString("N2")</td>
+                            <td class="text-end text-danger">@week.ExpectedOutflow.ToString("N2")</td>
+                            <td class="text-end fw-bold @(week.NetFlow >= 0 ? "text-success" : "text-danger")">@week.NetFlow.ToString("N2")</td>
+                            <td class="text-end fw-bold @(week.CumulativeBalance >= 0 ? "" : "text-danger")">@week.CumulativeBalance.ToString("C")</td>
+                            <td>
+                                @if (week.CumulativeBalance < 0)
+                                {
+                                    <span class="badge bg-danger">Riesgo</span>
+                                }
+                                else if (week.CumulativeBalance < (_data.OpeningBalance * 0.20m))
+                                {
+                                    <span class="badge bg-warning text-dark">Atención</span>
+                                }
+                                else
+                                {
+                                    <span class="badge bg-success">Saludable</span>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+}
+
+@code {
+    private bool _loading = true;
+    private string? _error;
+    private FinancialProjection? _data;
+    private int _weeks = 8;
+
+    protected override async Task OnInitializedAsync() => await ReloadAsync();
+
+    private async Task ReloadAsync()
+    {
+        _loading = true;
+        _error = null;
+        try { _data = await Api.GetProjectionAsync(_weeks); }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _loading = false; }
+    }
+}

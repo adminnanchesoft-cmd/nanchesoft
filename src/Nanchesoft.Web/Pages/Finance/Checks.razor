@@ -1,0 +1,434 @@
+@page "/finance/checks"
+@using System.Net.Http.Json
+@using Nanchesoft.Web.Services.Finance
+@using Nanchesoft.Web.Services.Treasury
+@inject FinancePhase2ApiService Api
+@inject TreasuryApiService TreasuryApi
+@inject IHttpClientFactory HttpFactory
+@inject IJSRuntime JS
+
+<PageTitle>Cheques | Nanchesoft</PageTitle>
+
+<div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-3">
+    <div>
+        <div class="text-muted small">Nanchesoft ERP · Finanzas · Bancos</div>
+        <h1 class="h3 mb-1">Cheques</h1>
+        <div class="text-muted">Emisión, cancelación, impresión y seguimiento de cheques por cuenta bancaria.</div>
+    </div>
+    <div class="d-flex gap-2">
+        <a class="btn btn-outline-secondary" href="/finance/check-books">Chequeras</a>
+        <button class="btn btn-primary" @onclick="OpenNew">+ Nuevo cheque</button>
+    </div>
+</div>
+
+@if (_summary is not null)
+{
+    <div class="row g-3 mb-3">
+        <div class="col-md-3"><div class="card border-warning shadow-sm h-100"><div class="card-body"><div class="text-muted small">Pendientes</div><div class="fs-4 fw-bold">@_summary.PendingCount</div><div class="text-muted small">@_summary.PendingAmount.ToString("C")</div></div></div></div>
+        <div class="col-md-3"><div class="card border-primary shadow-sm h-100"><div class="card-body"><div class="text-muted small">Emitidos</div><div class="fs-4 fw-bold">@_summary.IssuedCount</div><div class="text-muted small">@_summary.IssuedAmount.ToString("C")</div></div></div></div>
+        <div class="col-md-3"><div class="card border-success shadow-sm h-100"><div class="card-body"><div class="text-muted small">Cobrados</div><div class="fs-4 fw-bold">@_summary.CashedCount</div><div class="text-muted small">@_summary.CashedAmount.ToString("C")</div></div></div></div>
+        <div class="col-md-3"><div class="card border-danger shadow-sm h-100"><div class="card-body"><div class="text-muted small">Cancelados</div><div class="fs-4 fw-bold">@_summary.CancelledCount</div></div></div></div>
+    </div>
+}
+
+@if (!string.IsNullOrWhiteSpace(_message))
+{
+    <div class="alert alert-success">@_message</div>
+}
+@if (!string.IsNullOrWhiteSpace(_error))
+{
+    <div class="alert alert-danger">@_error</div>
+}
+
+<div class="card shadow-sm mb-3">
+    <div class="card-body">
+        <div class="row g-3 align-items-end">
+            <div class="col-md-4">
+                <label class="form-label">Cuenta bancaria</label>
+                <select class="form-select" @bind="_selectedAccountIdText" @bind:after="ReloadAsync">
+                    <option value="">Todas las cuentas</option>
+                    @foreach (var account in _accounts)
+                    {
+                        <option value="@account.IdGuid">@account.Name</option>
+                    }
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Estatus</label>
+                <select class="form-select" @bind="_statusFilter" @bind:after="ReloadAsync">
+                    <option value="">Todos</option>
+                    <option value="pending">Pendientes</option>
+                    <option value="printed">Impresos</option>
+                    <option value="issued">Emitidos</option>
+                    <option value="cashed">Cobrados</option>
+                    <option value="cancelled">Cancelados</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">Desde</label>
+                <input type="date" class="form-control" @bind="_fromDate" @bind:after="ReloadAsync" />
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">Hasta</label>
+                <input type="date" class="form-control" @bind="_toDate" @bind:after="ReloadAsync" />
+            </div>
+            <div class="col-md-1 d-grid">
+                <button class="btn btn-outline-secondary" @onclick="ReloadAsync">Filtrar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@if (_loading)
+{
+    <div class="alert alert-info">Cargando cheques...</div>
+}
+else
+{
+    <div class="card shadow-sm">
+        <div class="table-responsive">
+            <table class="table table-striped align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th>Folio</th>
+                        <th>Fecha</th>
+                        <th>Beneficiario</th>
+                        <th>Concepto</th>
+                        <th class="text-end">Importe</th>
+                        <th>Estatus</th>
+                        <th>Impreso</th>
+                        <th class="text-end">Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (_rows.Count == 0)
+                    {
+                        <tr><td colspan="8" class="text-center text-muted py-4">Sin cheques en el filtro seleccionado.</td></tr>
+                    }
+                    else
+                    {
+                        @foreach (var row in _rows)
+                        {
+                            <tr>
+                                <td><code>@row.Folio</code></td>
+                                <td>@row.IssueDate.ToString("dd/MM/yyyy")</td>
+                                <td>
+                                    @row.BeneficiaryName
+                                    <div class="text-muted small">@BeneficiaryLabel(row.BeneficiaryType)</div>
+                                </td>
+                                <td>@row.Concept</td>
+                                <td class="text-end fw-bold">@row.Amount.ToString("C")</td>
+                                <td>@StatusBadge(row.Status)</td>
+                                <td>@(row.IsPrinted ? "Sí" : "No")</td>
+                                <td class="text-end">
+                                    @if (row.Status == "pending" || row.Status == "printed")
+                                    {
+                                        <button class="btn btn-sm btn-outline-primary me-1" @onclick="() => Edit(row)">Editar</button>
+                                        <button class="btn btn-sm btn-outline-info me-1" @onclick="() => PrintAsync(row.Id)">Imprimir</button>
+                                        <button class="btn btn-sm btn-outline-success me-1" @onclick="() => IssueAsync(row.Id)">Emitir</button>
+                                    }
+                                    @if (row.Status == "issued")
+                                    {
+                                        <button class="btn btn-sm btn-outline-success me-1" @onclick="() => CashAsync(row.Id)">Marcar cobrado</button>
+                                    }
+                                    @if (row.Status != "cancelled" && row.Status != "cashed")
+                                    {
+                                        <button class="btn btn-sm btn-outline-danger" @onclick="() => CancelAsync(row.Id)">Cancelar</button>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+}
+
+@if (_editing is not null)
+{
+    <div class="modal d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">@(_editing.Id.HasValue ? "Editar cheque" : "Nuevo cheque")</h5>
+                    <button class="btn-close" @onclick="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Cuenta bancaria</label>
+                            <select class="form-select" @bind="_editAccountIdText" disabled="@_editing.Id.HasValue">
+                                <option value="">Selecciona...</option>
+                                @foreach (var account in _accounts)
+                                {
+                                    <option value="@account.IdGuid">@account.Name</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Chequera (opcional)</label>
+                            <select class="form-select" @bind="_editCheckBookIdText">
+                                <option value="">Sin chequera (folio manual)</option>
+                                @foreach (var book in FilteredCheckBooks)
+                                {
+                                    <option value="@book.Id">@book.Code · folio @book.NextFolio</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Folio (si no usa chequera)</label>
+                            <input class="form-control" @bind="_editing.Folio" placeholder="Auto si chequera" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Fecha de emisión</label>
+                            <input type="date" class="form-control" @bind="_editing.IssueDate" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Importe</label>
+                            <input type="number" step="0.01" class="form-control text-end" @bind="_editing.Amount" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Tipo beneficiario</label>
+                            <select class="form-select" @bind="_editing.BeneficiaryType">
+                                <option value="supplier">Proveedor</option>
+                                <option value="employee">Empleado</option>
+                                <option value="other">Otro</option>
+                            </select>
+                        </div>
+                        <div class="col-md-8">
+                            <label class="form-label">Beneficiario</label>
+                            @if (_editing.BeneficiaryType == "supplier")
+                            {
+                                <select class="form-select" @bind="_editSupplierIdText">
+                                    <option value="">Selecciona proveedor...</option>
+                                    @foreach (var s in _suppliers)
+                                    {
+                                        <option value="@s.Id">@s.Name</option>
+                                    }
+                                </select>
+                            }
+                            else
+                            {
+                                <input class="form-control" @bind="_editing.BeneficiaryName" placeholder="Nombre del beneficiario" />
+                            }
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">Concepto</label>
+                            <input class="form-control" @bind="_editing.Concept" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Referencia</label>
+                            <input class="form-control" @bind="_editing.Reference" />
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">Notas</label>
+                            <textarea class="form-control" rows="2" @bind="_editing.Notes"></textarea>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" @onclick="Close">Cancelar</button>
+                    <button class="btn btn-primary" @onclick="SaveAsync">Guardar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private bool _loading = true;
+    private string? _message;
+    private string? _error;
+    private List<CheckListRow> _rows = new();
+    private List<BankAccountLookup> _accounts = new();
+    private List<CheckBookRow> _checkBooks = new();
+    private List<ThirdPartyOption> _suppliers = new();
+    private CheckSummary? _summary;
+    private string _selectedAccountIdText = string.Empty;
+    private string _statusFilter = string.Empty;
+    private DateTime? _fromDate = DateTime.Today.AddMonths(-3);
+    private DateTime? _toDate = DateTime.Today;
+    private CheckSaveRequest? _editing;
+    private string _editAccountIdText = string.Empty;
+    private string _editCheckBookIdText = string.Empty;
+    private string _editSupplierIdText = string.Empty;
+
+    private IEnumerable<CheckBookRow> FilteredCheckBooks
+        => Guid.TryParse(_editAccountIdText, out var accountId)
+            ? _checkBooks.Where(x => x.BankAccountId == accountId && x.IsActive)
+            : Enumerable.Empty<CheckBookRow>();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadLookupsAsync();
+        await ReloadAsync();
+    }
+
+    private async Task LoadLookupsAsync()
+    {
+        try
+        {
+            var lookups = await TreasuryApi.GetLookupsAsync();
+            _accounts = lookups.BankAccounts.Select(x => new BankAccountLookup(Guid.Parse(x.Id), x.Name)).ToList();
+            _checkBooks = await Api.GetCheckBooksAsync();
+            var client = HttpFactory.CreateClient("Nanchesoft.Api");
+            var suppliers = await client.GetFromJsonAsync<List<SupplierLookupDto>>("/api/third-parties/suppliers") ?? new();
+            _suppliers = suppliers.Where(x => x.IsActive).Select(x => new ThirdPartyOption(x.SupplierId, x.Name)).ToList();
+        }
+        catch (Exception ex) { _error = ex.Message; }
+    }
+
+    private async Task ReloadAsync()
+    {
+        _loading = true;
+        try
+        {
+            Guid? accountId = Guid.TryParse(_selectedAccountIdText, out var a) ? a : null;
+            _rows = await Api.GetChecksAsync(accountId, string.IsNullOrWhiteSpace(_statusFilter) ? null : _statusFilter, _fromDate, _toDate);
+            _summary = await Api.GetCheckSummaryAsync(accountId);
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _loading = false; }
+    }
+
+    private void OpenNew()
+    {
+        _editing = new CheckSaveRequest
+        {
+            BankAccountId = Guid.TryParse(_selectedAccountIdText, out var a) ? a : (_accounts.FirstOrDefault()?.IdGuid ?? Guid.Empty),
+            IssueDate = DateTime.Today,
+            BeneficiaryType = "supplier"
+        };
+        _editAccountIdText = _editing.BankAccountId.ToString();
+        _editCheckBookIdText = string.Empty;
+        _editSupplierIdText = string.Empty;
+    }
+
+    private void Edit(CheckListRow row)
+    {
+        _editing = new CheckSaveRequest
+        {
+            Id = row.Id,
+            BankAccountId = row.BankAccountId,
+            CheckBookId = row.CheckBookId,
+            SupplierId = row.SupplierId,
+            EmployeeId = row.EmployeeId,
+            Folio = row.Folio,
+            IssueDate = row.IssueDate,
+            BeneficiaryType = string.IsNullOrWhiteSpace(row.BeneficiaryType) ? "other" : row.BeneficiaryType,
+            BeneficiaryName = row.BeneficiaryName,
+            Amount = row.Amount,
+            Concept = row.Concept,
+            Reference = row.Reference,
+            Notes = row.Notes
+        };
+        _editAccountIdText = row.BankAccountId.ToString();
+        _editCheckBookIdText = row.CheckBookId?.ToString() ?? string.Empty;
+        _editSupplierIdText = row.SupplierId?.ToString() ?? string.Empty;
+    }
+
+    private void Close() => _editing = null;
+
+    private async Task SaveAsync()
+    {
+        if (_editing is null) return;
+        _message = null; _error = null;
+        if (Guid.TryParse(_editAccountIdText, out var accountId)) _editing.BankAccountId = accountId;
+        _editing.CheckBookId = Guid.TryParse(_editCheckBookIdText, out var bookId) ? bookId : null;
+        if (_editing.BeneficiaryType == "supplier" && Guid.TryParse(_editSupplierIdText, out var supId))
+            _editing.SupplierId = supId;
+        else
+            _editing.SupplierId = null;
+        if (_editing.BankAccountId == Guid.Empty)
+        {
+            _error = "Selecciona una cuenta bancaria.";
+            return;
+        }
+        try
+        {
+            var response = await Api.SaveCheckAsync(_editing);
+            if (!response.IsSuccessStatusCode)
+            {
+                _error = await response.Content.ReadAsStringAsync();
+                return;
+            }
+            _message = "Cheque guardado.";
+            _editing = null;
+            await ReloadAsync();
+        }
+        catch (Exception ex) { _error = ex.Message; }
+    }
+
+    private async Task IssueAsync(Guid id)
+    {
+        if (!await JS.InvokeAsync<bool>("confirm", "¿Emitir el cheque? Esto afectará el saldo de la cuenta bancaria.")) return;
+        await HandleAsync(() => Api.IssueCheckAsync(id), "Cheque emitido.");
+    }
+
+    private async Task CashAsync(Guid id)
+    {
+        if (!await JS.InvokeAsync<bool>("confirm", "¿Marcar el cheque como cobrado?")) return;
+        await HandleAsync(() => Api.CashCheckAsync(id), "Cheque marcado como cobrado.");
+    }
+
+    private async Task CancelAsync(Guid id)
+    {
+        var reason = await JS.InvokeAsync<string>("prompt", "Motivo de cancelación:");
+        if (string.IsNullOrWhiteSpace(reason)) return;
+        await HandleAsync(() => Api.CancelCheckAsync(id, reason), "Cheque cancelado.");
+    }
+
+    private async Task PrintAsync(Guid id)
+    {
+        await HandleAsync(() => Api.PrintCheckAsync(id), "Cheque marcado como impreso.");
+    }
+
+    private async Task HandleAsync(Func<Task<HttpResponseMessage>> action, string success)
+    {
+        _message = null; _error = null;
+        try
+        {
+            var response = await action();
+            if (!response.IsSuccessStatusCode)
+            {
+                _error = await response.Content.ReadAsStringAsync();
+                return;
+            }
+            _message = success;
+            await ReloadAsync();
+        }
+        catch (Exception ex) { _error = ex.Message; }
+    }
+
+    private static string BeneficiaryLabel(string t) => t switch
+    {
+        "supplier" => "Proveedor",
+        "employee" => "Empleado",
+        _ => "Otro"
+    };
+
+    private static MarkupString StatusBadge(string status)
+    {
+        var (cls, label) = status switch
+        {
+            "pending" => ("bg-warning text-dark", "Pendiente"),
+            "printed" => ("bg-info text-dark", "Impreso"),
+            "issued" => ("bg-primary", "Emitido"),
+            "cashed" => ("bg-success", "Cobrado"),
+            "cancelled" => ("bg-danger", "Cancelado"),
+            "bounced" => ("bg-secondary", "Devuelto"),
+            _ => ("bg-light text-dark", status)
+        };
+        return new MarkupString($"<span class=\"badge {cls}\">{label}</span>");
+    }
+
+    private sealed record BankAccountLookup(Guid IdGuid, string Name);
+    private sealed record ThirdPartyOption(Guid Id, string Name);
+    private sealed class SupplierLookupDto
+    {
+        public Guid SupplierId { get; set; }
+        public string Name { get; set; } = string.Empty;
+        public bool IsActive { get; set; }
+    }
+}

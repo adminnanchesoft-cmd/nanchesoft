@@ -1,0 +1,35 @@
+@code {
+    [Parameter] public string Label { get; set; } = string.Empty;
+    [Parameter] public decimal Value { get; set; }
+    [Parameter] public string Reference { get; set; } = string.Empty;
+    [Parameter] public decimal? GoodAbove { get; set; }
+    [Parameter] public decimal? GoodBelow { get; set; }
+
+    private string BorderClass
+    {
+        get
+        {
+            if (GoodAbove.HasValue) return Value >= GoodAbove.Value ? "border-success" : "border-warning";
+            if (GoodBelow.HasValue) return Value <= GoodBelow.Value ? "border-success" : "border-warning";
+            return string.Empty;
+        }
+    }
+
+    private string ValueClass
+    {
+        get
+        {
+            if (GoodAbove.HasValue) return Value >= GoodAbove.Value ? "text-success" : "text-warning";
+            if (GoodBelow.HasValue) return Value <= GoodBelow.Value ? "text-success" : "text-warning";
+            return string.Empty;
+        }
+    }
+}
+
+<div class="card shadow-sm h-100 @BorderClass">
+    <div class="card-body">
+        <div class="text-muted small">@Label</div>
+        <div class="fs-3 fw-bold @ValueClass">@Value.ToString("0.00")</div>
+        <div class="text-muted small mt-2">Referencia: @Reference</div>
+    </div>
+</div>

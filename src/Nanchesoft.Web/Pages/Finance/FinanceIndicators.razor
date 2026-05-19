@@ -1,0 +1,151 @@
+@page "/finance/financial-indicators"
+@using Nanchesoft.Web.Services.Finance
+@inject FinancePhase2ApiService Api
+
+<PageTitle>Indicadores financieros | Nanchesoft</PageTitle>
+
+<div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-3">
+    <div>
+        <div class="text-muted small">Nanchesoft ERP · Finanzas</div>
+        <h1 class="h3 mb-1">Indicadores financieros</h1>
+        <div class="text-muted">Liquidez, razón circulante, endeudamiento, capital de trabajo y flujo operativo en tiempo real.</div>
+    </div>
+    <button class="btn btn-outline-primary" @onclick="ReloadAsync">Actualizar</button>
+</div>
+
+@if (_loading)
+{
+    <div class="alert alert-info">Calculando indicadores...</div>
+}
+else if (_error is not null)
+{
+    <div class="alert alert-danger">@_error</div>
+}
+else if (_data is not null)
+{
+    <div class="row g-3 mb-3">
+        <div class="col-md-3">
+            <div class="card border-primary shadow-sm h-100">
+                <div class="card-body">
+                    <div class="text-muted small">Saldo en bancos</div>
+                    <div class="fs-4 fw-bold text-primary">@_data.BankBalance.ToString("C")</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-info shadow-sm h-100">
+                <div class="card-body">
+                    <div class="text-muted small">Saldo en caja</div>
+                    <div class="fs-4 fw-bold text-info">@_data.CashBalance.ToString("C")</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-success shadow-sm h-100">
+                <div class="card-body">
+                    <div class="text-muted small">Cuentas por cobrar</div>
+                    <div class="fs-4 fw-bold text-success">@_data.ReceivableBalance.ToString("C")</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-danger shadow-sm h-100">
+                <div class="card-body">
+                    <div class="text-muted small">Cuentas por pagar</div>
+                    <div class="fs-4 fw-bold text-danger">@_data.PayableBalance.ToString("C")</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-3 mb-3">
+        <div class="col-md-4">
+            <div class="card shadow-sm h-100">
+                <div class="card-body">
+                    <div class="text-muted small">Activo circulante</div>
+                    <div class="fs-3 fw-bold">@_data.CurrentAssets.ToString("C")</div>
+                    <div class="text-muted small mt-2">Bancos + caja + cobrar + inventario</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card shadow-sm h-100">
+                <div class="card-body">
+                    <div class="text-muted small">Pasivo circulante</div>
+                    <div class="fs-3 fw-bold">@_data.CurrentLiabilities.ToString("C")</div>
+                    <div class="text-muted small mt-2">Cuentas por pagar</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card shadow-sm h-100 @(_data.WorkingCapital >= 0 ? "border-success" : "border-danger")">
+                <div class="card-body">
+                    <div class="text-muted small">Capital de trabajo</div>
+                    <div class="fs-3 fw-bold @(_data.WorkingCapital >= 0 ? "text-success" : "text-danger")">@_data.WorkingCapital.ToString("C")</div>
+                    <div class="text-muted small mt-2">Activo circulante − pasivo</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <h5 class="mt-4">Razones financieras</h5>
+    <div class="row g-3 mb-3">
+        <div class="col-md-3">
+            <RatioCard Label="Razón circulante" Value="@_data.CurrentRatio" Reference="≥ 1.5" GoodAbove="1.5m" />
+        </div>
+        <div class="col-md-3">
+            <RatioCard Label="Prueba ácida" Value="@_data.QuickRatio" Reference="≥ 1.0" GoodAbove="1.0m" />
+        </div>
+        <div class="col-md-3">
+            <RatioCard Label="Razón de efectivo" Value="@_data.CashRatio" Reference="≥ 0.3" GoodAbove="0.3m" />
+        </div>
+        <div class="col-md-3">
+            <RatioCard Label="Endeudamiento" Value="@_data.DebtIndex" Reference="≤ 0.6" GoodBelow="0.6m" />
+        </div>
+    </div>
+
+    <h5 class="mt-4">Flujo operativo (últimos 30 días)</h5>
+    <div class="row g-3 mb-3">
+        <div class="col-md-4">
+            <div class="card shadow-sm h-100">
+                <div class="card-body">
+                    <div class="text-muted small">Entradas</div>
+                    <div class="fs-4 fw-bold text-success">+ @_data.OperationalInflow30d.ToString("C")</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card shadow-sm h-100">
+                <div class="card-body">
+                    <div class="text-muted small">Salidas</div>
+                    <div class="fs-4 fw-bold text-danger">− @_data.OperationalOutflow30d.ToString("C")</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card shadow-sm h-100 @(_data.NetOperationalCashFlow30d >= 0 ? "border-success" : "border-danger")">
+                <div class="card-body">
+                    <div class="text-muted small">Flujo neto operativo</div>
+                    <div class="fs-4 fw-bold @(_data.NetOperationalCashFlow30d >= 0 ? "text-success" : "text-danger")">@_data.NetOperationalCashFlow30d.ToString("C")</div>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private bool _loading = true;
+    private string? _error;
+    private FinancialIndicators? _data;
+
+    protected override async Task OnInitializedAsync() => await ReloadAsync();
+
+    private async Task ReloadAsync()
+    {
+        _loading = true;
+        _error = null;
+        try { _data = await Api.GetIndicatorsAsync(); }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _loading = false; }
+    }
+}

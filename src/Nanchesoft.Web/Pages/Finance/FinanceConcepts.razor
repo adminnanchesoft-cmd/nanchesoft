@@ -1,0 +1,229 @@
+@page "/finance/concepts"
+@using Nanchesoft.Web.Services.Finance
+@inject FinancePhase2ApiService Api
+@inject IJSRuntime JS
+
+<PageTitle>Conceptos financieros | Nanchesoft</PageTitle>
+
+<div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-3">
+    <div>
+        <div class="text-muted small">Nanchesoft ERP · Finanzas · Catálogos</div>
+        <h1 class="h3 mb-1">Conceptos financieros</h1>
+        <div class="text-muted">Nómina, Compras, Ventas, Impuestos, Servicios, Transferencias, Préstamos y otros.</div>
+    </div>
+    <button class="btn btn-primary" @onclick="OpenNew">+ Nuevo concepto</button>
+</div>
+
+@if (_loading)
+{
+    <div class="alert alert-info">Cargando conceptos...</div>
+}
+else
+{
+    @if (!string.IsNullOrWhiteSpace(_message))
+    {
+        <div class="alert alert-success">@_message</div>
+    }
+    @if (!string.IsNullOrWhiteSpace(_error))
+    {
+        <div class="alert alert-danger">@_error</div>
+    }
+
+    <div class="card shadow-sm">
+        <div class="table-responsive">
+            <table class="table table-striped align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th>Código</th>
+                        <th>Categoría</th>
+                        <th>Nombre</th>
+                        <th>Dirección</th>
+                        <th>Sistema</th>
+                        <th>Activo</th>
+                        <th class="text-end">Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (_rows.Count == 0)
+                    {
+                        <tr><td colspan="7" class="text-center text-muted py-4">Sin registros.</td></tr>
+                    }
+                    else
+                    {
+                        @foreach (var row in _rows)
+                        {
+                            <tr>
+                                <td><code>@row.Code</code></td>
+                                <td><span class="badge bg-info text-dark">@CategoryLabel(row.Category)</span></td>
+                                <td>@row.Name</td>
+                                <td>@DirectionLabel(row.Direction)</td>
+                                <td>@(row.IsSystem ? "Sí" : "No")</td>
+                                <td>@(row.IsActive ? "Sí" : "No")</td>
+                                <td class="text-end">
+                                    <button class="btn btn-sm btn-outline-primary me-1" @onclick="() => Edit(row)">Editar</button>
+                                    @if (!row.IsSystem)
+                                    {
+                                        <button class="btn btn-sm btn-outline-danger" @onclick="() => DeleteAsync(row.Id)">Eliminar</button>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+}
+
+@if (_editing is not null)
+{
+    <div class="modal d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">@(_editing.Id == Guid.Empty ? "Nuevo concepto" : "Editar concepto")</h5>
+                    <button class="btn-close" @onclick="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label class="form-label">Código</label>
+                            <input class="form-control" @bind="_editing.Code" />
+                        </div>
+                        <div class="col-md-8">
+                            <label class="form-label">Nombre</label>
+                            <input class="form-control" @bind="_editing.Name" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Categoría</label>
+                            <select class="form-select" @bind="_editing.Category">
+                                <option value="payroll">Nómina</option>
+                                <option value="purchase">Compras</option>
+                                <option value="sales">Ventas</option>
+                                <option value="tax">Impuestos</option>
+                                <option value="service">Servicios</option>
+                                <option value="transfer">Transferencia</option>
+                                <option value="loan">Préstamo</option>
+                                <option value="other">Otros</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Dirección</label>
+                            <select class="form-select" @bind="_editing.Direction">
+                                <option value="in">Entrada</option>
+                                <option value="out">Salida</option>
+                                <option value="neutral">Neutral</option>
+                            </select>
+                        </div>
+                        <div class="col-12">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" id="ic" @bind="_editing.IsActive" />
+                                <label class="form-check-label" for="ic">Activo</label>
+                            </div>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">Notas</label>
+                            <textarea class="form-control" rows="2" @bind="_editing.Notes"></textarea>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" @onclick="Close">Cancelar</button>
+                    <button class="btn btn-primary" @onclick="SaveAsync">Guardar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private bool _loading = true;
+    private string? _message;
+    private string? _error;
+    private List<FinanceConceptRow> _rows = new();
+    private FinanceConceptRow? _editing;
+
+    protected override async Task OnInitializedAsync() => await ReloadAsync();
+
+    private async Task ReloadAsync()
+    {
+        _loading = true;
+        try { _rows = await Api.GetConceptsAsync(); }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _loading = false; }
+    }
+
+    private void OpenNew() => _editing = new FinanceConceptRow { Id = Guid.Empty, Category = "other", Direction = "neutral", IsActive = true };
+
+    private void Edit(FinanceConceptRow row) => _editing = new FinanceConceptRow
+    {
+        Id = row.Id,
+        TenantId = row.TenantId,
+        CompanyId = row.CompanyId,
+        Code = row.Code,
+        Name = row.Name,
+        Category = row.Category,
+        Direction = row.Direction,
+        AccountingAccountId = row.AccountingAccountId,
+        IsSystem = row.IsSystem,
+        Notes = row.Notes,
+        IsActive = row.IsActive
+    };
+
+    private void Close() => _editing = null;
+
+    private async Task SaveAsync()
+    {
+        if (_editing is null) return;
+        _message = null; _error = null;
+        try
+        {
+            var response = await Api.SaveConceptAsync(_editing);
+            if (!response.IsSuccessStatusCode)
+            {
+                _error = await response.Content.ReadAsStringAsync();
+                return;
+            }
+            _message = "Concepto guardado.";
+            _editing = null;
+            await ReloadAsync();
+        }
+        catch (Exception ex) { _error = ex.Message; }
+    }
+
+    private async Task DeleteAsync(Guid id)
+    {
+        if (!await JS.InvokeAsync<bool>("confirm", "¿Eliminar este concepto?")) return;
+        try
+        {
+            var response = await Api.DeleteConceptAsync(id);
+            if (!response.IsSuccessStatusCode)
+            {
+                _error = await response.Content.ReadAsStringAsync();
+                return;
+            }
+            _message = "Eliminado.";
+            await ReloadAsync();
+        }
+        catch (Exception ex) { _error = ex.Message; }
+    }
+
+    private static string CategoryLabel(string c) => c switch
+    {
+        "payroll" => "Nómina",
+        "purchase" => "Compras",
+        "sales" => "Ventas",
+        "tax" => "Impuestos",
+        "service" => "Servicios",
+        "transfer" => "Transferencia",
+        "loan" => "Préstamo",
+        _ => "Otros"
+    };
+
+    private static string DirectionLabel(string d) => d switch
+    {
+        "in" => "Entrada",
+        "out" => "Salida",
+        _ => "Neutral"
+    };
+}
