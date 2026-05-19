@@ -123,7 +123,8 @@
       "Bash(apt-get install *)",
       "Bash(iconv -f ISO-8859-1 -t UTF-8 \"/opt/nanchesoft/Nanchesoft/Silvasoft/Primero y último\\(20260501-20260516\\).csv\")",
       "Bash(awk -F',' '{print $1}')",
-      "Bash(systemctl cat *)"
+      "Bash(systemctl cat *)",
+      "Bash(pdfinfo /opt/nanchesoft/Nanchesoft/docs/NOMINAS_Elemental.pdf)"
     ]
   }
 }
