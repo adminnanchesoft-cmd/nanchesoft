@@ -70,6 +70,33 @@
                     </details>
                 </div>
             </div>
+            <div class="border-top mt-3 pt-3">
+                <div class="d-flex flex-wrap gap-2 align-items-end">
+                    <div style="min-width:280px;">
+                        <label class="form-label fw-semibold mb-1">Importar movimientos CSV</label>
+                        <InputFile OnChange="OnImportFileSelected" accept=".csv,.txt" class="form-control form-control-sm" disabled="@(_selectedPeriodId == Guid.Empty)" />
+                    </div>
+                    <button class="btn btn-sm btn-outline-primary" @onclick="ImportMatrixAsync" disabled="@(_busy || _selectedPeriodId == Guid.Empty || _importFile is null)">
+                        @(_busy ? "Importando..." : "Importar")
+                    </button>
+                    <span class="small text-secondary">Columnas: NoEmpleado, Concepto, Importe, Cantidad, Notas</span>
+                </div>
+                @if (_importResult is not null)
+                {
+                    <div class="alert @(_importResult.Errors.Count > 0 ? "alert-warning" : "alert-success") py-2 px-3 mt-2 mb-0 small">
+                        Importados: @_importResult.Imported · Guardados: @_importResult.Saved · Eliminados: @_importResult.Deleted · Omitidos: @(_importResult.Skipped + _importResult.SaveSkipped)
+                        @if (_importResult.Errors.Count > 0)
+                        {
+                            <ul class="mb-0 mt-1">
+                                @foreach (var error in _importResult.Errors.Take(5))
+                                {
+                                    <li>@error</li>
+                                }
+                            </ul>
+                        }
+                    </div>
+                }
+            </div>
         </div>
     </div>
 
@@ -162,6 +189,8 @@
     private bool _isError;
     private Guid _copyConceptId;
     private decimal _copyAmount;
+    private Microsoft.AspNetCore.Components.Forms.IBrowserFile? _importFile;
+    private PrePayrollMatrixImportResult? _importResult;
 
     protected override async Task OnInitializedAsync()
     {
@@ -183,6 +212,8 @@
     {
         _selectedPeriodId = Guid.TryParse(e.Value?.ToString(), out var id) ? id : Guid.Empty;
         _changes.Clear();
+        _importFile = null;
+        _importResult = null;
         await LoadAsync();
     }
 
@@ -219,6 +250,35 @@
         if (_matrix is null || _copyConceptId == Guid.Empty) return;
         foreach (var employee in _matrix.Employees)
             _changes[(employee.EmployeeId, _copyConceptId)] = Math.Max(0m, _copyAmount);
+    }
+
+    private void OnImportFileSelected(Microsoft.AspNetCore.Components.Forms.InputFileChangeEventArgs e)
+    {
+        _importFile = e.File;
+        _importResult = null;
+    }
+
+    private async Task ImportMatrixAsync()
+    {
+        if (_selectedPeriodId == Guid.Empty || _importFile is null) return;
+        _busy = true;
+        _message = null;
+        try
+        {
+            using var stream = _importFile.OpenReadStream(maxAllowedSize: 5 * 1024 * 1024);
+            _importResult = await PayrollOperationsApiService.ImportPrePayrollMatrixAsync(_selectedPeriodId, stream, _importFile.Name);
+            _changes.Clear();
+            await LoadAsync();
+            Show("Movimientos de prenómina importados.", _importResult.Errors.Count > 0);
+        }
+        catch (Exception ex)
+        {
+            Show(ex.Message, true);
+        }
+        finally
+        {
+            _busy = false;
+        }
     }
 
     private decimal RowTotal(PrePayrollMatrixEmployee employee, string conceptType)

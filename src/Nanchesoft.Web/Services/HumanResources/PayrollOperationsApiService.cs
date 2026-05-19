@@ -232,6 +232,21 @@ public sealed class PayrollOperationsApiService
         }
     }
 
+    public async Task<PrePayrollMatrixImportResult> ImportPrePayrollMatrixAsync(Guid periodId, Stream stream, string fileName)
+    {
+        var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
+        using var content = new MultipartFormDataContent();
+        content.Add(new StreamContent(stream), "file", fileName);
+        var response = await client.PostAsync($"/api/payroll/periods/{periodId}/prepayroll-matrix-import", content);
+        if (!response.IsSuccessStatusCode)
+        {
+            var err = await response.Content.ReadAsStringAsync();
+            throw new InvalidOperationException(err);
+        }
+
+        return await response.Content.ReadFromJsonAsync<PrePayrollMatrixImportResult>() ?? new();
+    }
+
     // ── Captura matricial ───────────────────────────────────────────────────────
 
     public async Task<PayrollRunMatrixData?> GetPayrollRunMatrixDataAsync(Guid runId)
@@ -2184,4 +2199,15 @@ public sealed class PrePayrollMatrixSaveCell
     public decimal Quantity { get; set; } = 1m;
     public decimal Amount { get; set; }
     public string? Notes { get; set; }
+}
+
+public sealed class PrePayrollMatrixImportResult
+{
+    public bool Success { get; set; }
+    public int Imported { get; set; }
+    public int Skipped { get; set; }
+    public int Saved { get; set; }
+    public int Deleted { get; set; }
+    public int SaveSkipped { get; set; }
+    public List<string> Errors { get; set; } = [];
 }

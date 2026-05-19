@@ -23,6 +23,7 @@ public static class PayrollPrePayrollEndpoints
         var periods = app.MapGroup("/api/payroll/periods").WithTags("PrePayrollWorksheet");
         periods.MapGet("/{periodId:guid}/prepayroll-matrix", GetPrePayrollMatrixAsync);
         periods.MapPost("/{periodId:guid}/prepayroll-matrix-save", SavePrePayrollMatrixAsync);
+        periods.MapPost("/{periodId:guid}/prepayroll-matrix-import", ImportPrePayrollMatrixAsync).DisableAntiforgery();
 
         var cutoffs = app.MapGroup("/api/payroll/prepayroll-cutoffs").WithTags("PrePayrollCutoffs");
         cutoffs.MapGet("/", GetPrePayrollCutoffsAsync);
@@ -450,12 +451,129 @@ public static class PayrollPrePayrollEndpoints
 
     private static async Task<IResult> SavePrePayrollMatrixAsync(Guid periodId, PrePayrollMatrixSaveRequest request, NanchesoftDbContext db)
     {
-        var period = await db.PayrollPeriods.FirstOrDefaultAsync(x => x.Id == periodId);
+        var result = await SavePrePayrollCellsAsync(periodId, request, db);
+        return result;
+    }
+
+    private static async Task<IResult> ImportPrePayrollMatrixAsync(Guid periodId, IFormFile file, NanchesoftDbContext db)
+    {
+        if (file is null || file.Length == 0)
+            return Results.BadRequest(new { message = "El archivo está vacío." });
+
+        var period = await db.PayrollPeriods.AsNoTracking().FirstOrDefaultAsync(x => x.Id == periodId);
         if (period is null)
             return Results.NotFound(new { message = "No se encontró el periodo." });
 
-        if (request.Cells.Count == 0)
+        var employees = await db.Employees.AsNoTracking()
+            .Where(x => x.CompanyId == period.CompanyId && x.IsActive)
+            .ToDictionaryAsync(x => NormalizeUpper(x.EmployeeNumber), x => x.Id);
+        var concepts = await db.PayrollConcepts.AsNoTracking()
+            .Where(x => x.CompanyId == period.CompanyId && x.IsActive && x.ConceptType != "obligation")
+            .ToDictionaryAsync(x => NormalizeUpper(x.Code), x => x.Id);
+
+        using var reader = new StreamReader(file.OpenReadStream(), System.Text.Encoding.UTF8, detectEncodingFromByteOrderMarks: true);
+        var headerLine = await reader.ReadLineAsync();
+        if (string.IsNullOrWhiteSpace(headerLine))
+            return Results.BadRequest(new { message = "El archivo no tiene encabezados." });
+
+        var delimiter = DetectDelimiter(headerLine);
+        var headers = ParseDelimitedLine(headerLine, delimiter).Select(NormalizeHeader).ToList();
+        var headerMap = headers.Select((x, i) => new { x, i }).GroupBy(x => x.x).ToDictionary(g => g.Key, g => g.First().i);
+
+        if (!headerMap.ContainsKey("noempleado") || !headerMap.ContainsKey("concepto") || !headerMap.ContainsKey("importe"))
+            return Results.BadRequest(new { message = "El CSV debe incluir NoEmpleado, Concepto e Importe." });
+
+        var cells = new List<PrePayrollMatrixSaveCell>();
+        var errors = new List<string>();
+        var skipped = 0;
+        string? line;
+        var rowNumber = 1;
+
+        while ((line = await reader.ReadLineAsync()) is not null)
+        {
+            rowNumber++;
+            if (string.IsNullOrWhiteSpace(line))
+            {
+                skipped++;
+                continue;
+            }
+
+            var row = ParseDelimitedLine(line, delimiter);
+            var employeeNumber = NormalizeUpper(GetField(row, headerMap, "noempleado"));
+            var conceptCode = NormalizeUpper(GetField(row, headerMap, "concepto"));
+            var amountText = GetField(row, headerMap, "importe");
+            var quantityText = GetField(row, headerMap, "cantidad");
+            var notes = GetField(row, headerMap, "notas");
+
+            if (string.IsNullOrWhiteSpace(employeeNumber) || string.IsNullOrWhiteSpace(conceptCode))
+            {
+                skipped++;
+                continue;
+            }
+
+            if (!employees.TryGetValue(employeeNumber, out var employeeId))
+            {
+                errors.Add($"Fila {rowNumber}: colaborador '{employeeNumber}' no encontrado.");
+                continue;
+            }
+
+            if (!concepts.TryGetValue(conceptCode, out var conceptId))
+            {
+                errors.Add($"Fila {rowNumber}: concepto '{conceptCode}' no encontrado.");
+                continue;
+            }
+
+            if (!TryParseDecimal(amountText, out var amount))
+            {
+                errors.Add($"Fila {rowNumber}: importe inválido '{amountText}'.");
+                continue;
+            }
+
+            var quantity = TryParseDecimal(quantityText, out var parsedQuantity) && parsedQuantity > 0m ? parsedQuantity : 1m;
+            cells.Add(new PrePayrollMatrixSaveCell
+            {
+                EmployeeId = employeeId,
+                PayrollConceptId = conceptId,
+                Quantity = quantity,
+                Amount = Math.Max(0m, amount),
+                Notes = notes
+            });
+        }
+
+        if (cells.Count == 0)
+            return Results.BadRequest(new { message = "No se encontraron movimientos válidos para importar.", errors });
+
+        var saveResult = await SavePrePayrollCellsCoreAsync(periodId, new PrePayrollMatrixSaveRequest { Cells = cells }, db);
+        return Results.Ok(new
+        {
+            success = true,
+            imported = cells.Count,
+            skipped,
+            errors,
+            saveResult.saved,
+            saveResult.deleted,
+            saveSkipped = saveResult.skipped
+        });
+    }
+
+    private static async Task<IResult> SavePrePayrollCellsAsync(Guid periodId, PrePayrollMatrixSaveRequest request, NanchesoftDbContext db)
+    {
+        var result = await SavePrePayrollCellsCoreAsync(periodId, request, db);
+        if (result.notFound)
+            return Results.NotFound(new { message = "No se encontró el periodo." });
+        if (result.empty)
             return Results.BadRequest(new { message = "No hay movimientos para guardar." });
+        return Results.Ok(new { success = true, result.saved, result.deleted, result.skipped });
+    }
+
+    private static async Task<(bool notFound, bool empty, int saved, int deleted, int skipped)> SavePrePayrollCellsCoreAsync(Guid periodId, PrePayrollMatrixSaveRequest request, NanchesoftDbContext db)
+    {
+        var period = await db.PayrollPeriods.FirstOrDefaultAsync(x => x.Id == periodId);
+        if (period is null)
+            return (true, false, 0, 0, 0);
+
+        if (request.Cells.Count == 0)
+            return (false, true, 0, 0, 0);
 
         var employeeIds = request.Cells.Select(x => x.EmployeeId).Distinct().ToList();
         var conceptIds = request.Cells.Select(x => x.PayrollConceptId).Distinct().ToList();
@@ -546,8 +664,91 @@ public static class PayrollPrePayrollEndpoints
         }
 
         await db.SaveChangesAsync();
-        return Results.Ok(new { success = true, saved, deleted, skipped });
+        return (false, false, saved, deleted, skipped);
     }
+
+    private static char DetectDelimiter(string line)
+    {
+        var semis = line.Count(x => x == ';');
+        var tabs = line.Count(x => x == '\t');
+        var commas = line.Count(x => x == ',');
+        if (tabs > 0 && tabs >= semis && tabs >= commas) return '\t';
+        if (semis > commas) return ';';
+        return ',';
+    }
+
+    private static List<string> ParseDelimitedLine(string line, char delimiter)
+    {
+        var fields = new List<string>();
+        var current = new System.Text.StringBuilder();
+        var quoted = false;
+        for (var i = 0; i < line.Length; i++)
+        {
+            var c = line[i];
+            if (quoted)
+            {
+                if (c == '"')
+                {
+                    if (i + 1 < line.Length && line[i + 1] == '"')
+                    {
+                        current.Append('"');
+                        i++;
+                    }
+                    else
+                    {
+                        quoted = false;
+                    }
+                }
+                else
+                {
+                    current.Append(c);
+                }
+            }
+            else if (c == '"')
+            {
+                quoted = true;
+            }
+            else if (c == delimiter)
+            {
+                fields.Add(current.ToString());
+                current.Clear();
+            }
+            else
+            {
+                current.Append(c);
+            }
+        }
+        fields.Add(current.ToString());
+        return fields;
+    }
+
+    private static string NormalizeHeader(string value)
+    {
+        var text = NormalizeLower(value)
+            .Replace("á", "a")
+            .Replace("é", "e")
+            .Replace("í", "i")
+            .Replace("ó", "o")
+            .Replace("ú", "u")
+            .Replace("ñ", "n");
+        var key = new string(text.Where(char.IsLetterOrDigit).ToArray());
+        return key switch
+        {
+            "empleado" or "numeroempleado" or "claveempleado" => "noempleado",
+            "conceptocode" or "codigoconcepto" or "claveconcepto" => "concepto",
+            "monto" or "amount" => "importe",
+            "qty" or "quantity" => "cantidad",
+            "nota" or "notes" => "notas",
+            _ => key
+        };
+    }
+
+    private static string GetField(List<string> row, Dictionary<string, int> headerMap, string key)
+        => headerMap.TryGetValue(key, out var index) && index >= 0 && index < row.Count ? row[index].Trim() : string.Empty;
+
+    private static bool TryParseDecimal(string value, out decimal amount)
+        => decimal.TryParse(value, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out amount)
+            || decimal.TryParse(value, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.GetCultureInfo("es-MX"), out amount);
 
     private static async Task<IResult> GetPrePayrollCutoffsAsync(NanchesoftDbContext db)
     {
