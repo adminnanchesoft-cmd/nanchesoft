@@ -295,9 +295,8 @@
             using var stream = file.OpenReadStream(maxAllowedSize: 10 * 1024 * 1024);
             using var ms = new System.IO.MemoryStream();
             await stream.CopyToAsync(ms);
-            ms.Position = 0;
-            using var reader = new System.IO.StreamReader(ms, System.Text.Encoding.UTF8, detectEncodingFromByteOrderMarks: true);
-            var text = await reader.ReadToEndAsync();
+            var bytes = ms.ToArray();
+            var text = DecodeWithFallback(bytes);
             await ProcessCsvText(text);
         }
         catch (Exception ex)
@@ -307,6 +306,20 @@
         finally
         {
             _analyzing = false;
+        }
+    }
+
+    private static string DecodeWithFallback(byte[] bytes)
+    {
+        // Try UTF-8 strictly; on failure (invalid byte sequence) fall back to Latin-1.
+        try
+        {
+            var utf8 = new System.Text.UTF8Encoding(false, throwOnInvalidBytes: true);
+            return utf8.GetString(bytes);
+        }
+        catch
+        {
+            return System.Text.Encoding.Latin1.GetString(bytes);
         }
     }
 
@@ -323,12 +336,28 @@
             return;
         }
 
-        // Detect separator (comma vs semicolon)
-        var firstLine = lines[0];
-        var sep = firstLine.Count(c => c == ';') > firstLine.Count(c => c == ',') ? ';' : ',';
+        // Detect separator (comma, semicolon o tab) usando la línea con más delimitadores en las primeras 5
+        var sampleLine = lines.Take(5).OrderByDescending(l => l.Count(c => c == ',' || c == ';' || c == '\t')).First();
+        var sep = sampleLine.Count(c => c == '\t') > sampleLine.Count(c => c == ';') && sampleLine.Count(c => c == '\t') > sampleLine.Count(c => c == ',')
+            ? '\t'
+            : sampleLine.Count(c => c == ';') > sampleLine.Count(c => c == ',') ? ';' : ',';
 
-        _csvHeaders = ParseCsvLine(firstLine, sep);
-        _allRows = lines.Skip(1).Where(l => !string.IsNullOrWhiteSpace(l)).Select(l => (List<string?>)ParseCsvLine(l, sep).Cast<string?>().ToList()).ToList();
+        // Saltar filas de preámbulo: el verdadero header es la primera fila con ≥3 celdas no vacías
+        int headerIdx = 0;
+        for (int i = 0; i < Math.Min(lines.Count, 10); i++)
+        {
+            var fields = ParseCsvLine(lines[i], sep);
+            var nonEmpty = fields.Count(f => !string.IsNullOrWhiteSpace(f));
+            if (nonEmpty >= 3) { headerIdx = i; break; }
+        }
+
+        _csvHeaders = ParseCsvLine(lines[headerIdx], sep);
+        _allRows = lines.Skip(headerIdx + 1)
+            .Where(l => !string.IsNullOrWhiteSpace(l))
+            .Select(l => (List<string?>)ParseCsvLine(l, sep).Cast<string?>().ToList())
+            // Filtrar filas que son todas vacías (después de saltar preámbulo puede haber otras)
+            .Where(r => r.Any(c => !string.IsNullOrWhiteSpace(c)))
+            .ToList();
         _previewRows = _allRows.Take(5).ToList();
 
         _analyzing = true;

@@ -417,7 +417,17 @@ window.nsImport = {
             const file = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
             if (!file) return;
             try {
-                const text = await file.text();
+                const buf = await file.arrayBuffer();
+                // Intentar UTF-8 estricto; si trae caracteres de reemplazo (mojibake), reintentar Latin-1.
+                let text;
+                try {
+                    text = new TextDecoder('utf-8', { fatal: true }).decode(buf);
+                } catch (_) {
+                    text = new TextDecoder('iso-8859-1').decode(buf);
+                }
+                if (text.indexOf('�') >= 0) {
+                    text = new TextDecoder('iso-8859-1').decode(buf);
+                }
                 await dotNetRef.invokeMethodAsync('HandleDroppedCsv', text);
             } catch (err) {
                 console.error('nsImport drop error:', err);

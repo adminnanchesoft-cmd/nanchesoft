@@ -330,6 +330,23 @@ public static class UniversalImportEndpoints
                     result[v] = created.Id;
                 }
                 break;
+
+            case "hr-employees":
+                // No auto-create — employees deben existir antes. Buscar por Code, EmployeeNumber o ClockKey.
+                var employeesList = await db.Employees
+                    .Where(x => x.CompanyId == companyId && x.IsActive)
+                    .Select(x => new { x.Id, x.Code, x.EmployeeNumber, x.ClockKey })
+                    .ToListAsync();
+                foreach (var v in rawValues)
+                {
+                    var vTrim = v.Trim();
+                    var existing = employeesList.FirstOrDefault(e =>
+                        string.Equals(e.Code, vTrim, StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(e.EmployeeNumber, vTrim, StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(e.ClockKey, vTrim, StringComparison.OrdinalIgnoreCase));
+                    if (existing is not null) result[v] = existing.Id;
+                }
+                break;
         }
 
         return result;
@@ -728,6 +745,97 @@ file static class Schema
                 bool Bl(string k) => v.TryGetValue(k, out var x) && x is true;
                 var e = new LeaveType { TenantId=(Guid)v["TenantId"]!, CompanyId=(Guid)v["CompanyId"]!, Code=Str("Code")??Slug(Str("Name")??""), Name=Str("Name")??"", Category=Str("Category"), WithPay=Bl("WithPay"), DefaultDays=(int)Dec("DefaultDays"), ImpactsPayroll=false, IsActive=true, CreatedBy="import" };
                 db.LeaveTypes.Add(e);
+                await db.SaveChangesAsync();
+                return true;
+            }
+        },
+
+        // ── Checadas (Reloj checador) ─────────────────────────────
+        // Transaccional: cada fila genera 1 o 2 AttendancePunch.
+        // Soporta formato "primera/última perforación" (Silvasoft) y
+        // formato matricial (Fecha + HoraEntrada/HoraSalida) y simple (FechaHora + Tipo).
+        new EntityDef
+        {
+            Key = "hr-time-clock", Name = "Checadas", Group = "RH",
+            DetectKeywords = ["perforacion","checada","punch","primeraperforacion","ultimaperforacion","horasreales","horareal"],
+            Fields =
+            [
+                new() { Key="EmployeeId",  Name="Empleado",     DataType="fk",   Required=true,  FkEntity="hr-employees", Aliases=A("iddepersona","id de persona","clave reloj","clavereloj","reloj","clockkey","clave empleado","claveempleado","codigo","empleado","noempleado","numeroempleado","numero empleado","employee","employee id","id empleado") },
+                new() { Key="WorkDate",    Name="Fecha",        DataType="date", Required=true,  Aliases=A("fecha","dia","date","workdate","work date","fecha checada") },
+                new() { Key="EntryTime",   Name="Entrada",      DataType="text", Required=false, Aliases=A("horaentrada","hora entrada","entrada","primeraperforacion","primera perforacion","first punch","entry","check in","checkin","horaentry") },
+                new() { Key="ExitTime",    Name="Salida",       DataType="text", Required=false, Aliases=A("horasalida","hora salida","salida","ultimaperforacion","ultima perforacion","last punch","exit","check out","checkout","horaexit") },
+                new() { Key="FechaHora",   Name="Fecha y hora", DataType="text", Required=false, Aliases=A("fechahora","fecha y hora","fecha hora","datetime","timestamp","punchdatetime","fechachecada") },
+                new() { Key="PunchType",   Name="Tipo",         DataType="text", Required=false, Aliases=A("tipo","punchtype","punch type","type","entradasalida") },
+            ],
+            GetExistingCodesAsync = (_, _) => Task.FromResult(new HashSet<string>()),
+            GetExistingNamesAsync = (_, _) => Task.FromResult(new HashSet<string>()),
+            InsertAsync = async (db, v) =>
+            {
+                Guid? Fk(string k) => v.TryGetValue(k, out var x) && x is Guid g ? g : null;
+                string? Str(string k) => v.TryGetValue(k, out var x) ? x?.ToString() : null;
+                DateTime? Dt(string k) => v.TryGetValue(k, out var x) && x is DateTime dt ? dt : null;
+
+                var employeeId = Fk("EmployeeId");
+                if (employeeId is null)
+                    throw new InvalidOperationException("Empleado no encontrado para esa clave");
+
+                var companyId = (Guid)v["CompanyId"]!;
+                var tenantId  = (Guid)v["TenantId"]!;
+
+                var employee = await db.Employees.FirstOrDefaultAsync(e => e.Id == employeeId.Value);
+                if (employee is null)
+                    throw new InvalidOperationException("Empleado no existe");
+
+                var branchId = await db.Branches.Where(x => x.CompanyId == companyId)
+                    .OrderBy(x => x.CreatedAt).Select(x => (Guid?)x.Id).FirstOrDefaultAsync();
+
+                var fechaHoraStr = Str("FechaHora");
+                var entryStr     = Str("EntryTime");
+                var exitStr      = Str("ExitTime");
+                var workDate     = Dt("WorkDate");
+                var punchType    = (Str("PunchType") ?? "").Trim().ToLowerInvariant();
+
+                AttendancePunch BuildOne(DateTime dt, string type) => new()
+                {
+                    TenantId = tenantId,
+                    CompanyId = companyId,
+                    BranchId = branchId,
+                    EmployeeId = employee.Id,
+                    WorkDate = dt.Date,
+                    PunchDateTime = dt,
+                    PunchType = type,
+                    Source = "universal-import",
+                    Status = "captured",
+                    IsActive = true,
+                    CreatedBy = "import"
+                };
+
+                int added = 0;
+
+                if (!string.IsNullOrWhiteSpace(fechaHoraStr) && DateTime.TryParse(fechaHoraStr, out var fh))
+                {
+                    var t = punchType is "exit" or "salida" or "s" ? "exit" : "entry";
+                    db.AttendancePunches.Add(BuildOne(fh, t));
+                    added++;
+                }
+                else if (workDate is not null)
+                {
+                    if (!string.IsNullOrWhiteSpace(entryStr) && TimeSpan.TryParse(entryStr, out var entryTs))
+                    {
+                        db.AttendancePunches.Add(BuildOne(workDate.Value.Date.Add(entryTs), "entry"));
+                        added++;
+                    }
+                    if (!string.IsNullOrWhiteSpace(exitStr) && TimeSpan.TryParse(exitStr, out var exitTs)
+                        && (!TimeSpan.TryParse(entryStr ?? "", out var entryCheck) || exitTs != entryCheck))
+                    {
+                        db.AttendancePunches.Add(BuildOne(workDate.Value.Date.Add(exitTs), "exit"));
+                        added++;
+                    }
+                }
+
+                if (added == 0)
+                    throw new InvalidOperationException("Fila sin fecha/hora válida");
+
                 await db.SaveChangesAsync();
                 return true;
             }

@@ -120,7 +120,10 @@
       "Bash(PGSSLMODE=require PGPASSWORD='Sandokan89240371' psql -h psql-nanchesoft-dev.postgres.database.azure.com -p 5432 -U nancheadmin -d nanchesoftdb -c \"\\\\l\")",
       "Read(//etc/nginx/sites-enabled/**)",
       "Read(//etc/nginx/conf.d/**)",
-      "Bash(apt-get install *)"
+      "Bash(apt-get install *)",
+      "Bash(iconv -f ISO-8859-1 -t UTF-8 \"/opt/nanchesoft/Nanchesoft/Silvasoft/Primero y último\\(20260501-20260516\\).csv\")",
+      "Bash(awk -F',' '{print $1}')",
+      "Bash(systemctl cat *)"
     ]
   }
 }
