@@ -395,21 +395,33 @@ window.downloadFileBase64 = function (filename, base64Data) {
 window.nsImport = {
     initDropZone: function (elementId, dotNetRef) {
         const zone = document.getElementById(elementId);
-        if (!zone) return;
+        if (!zone || zone._nsImportInit) return;
+        zone._nsImportInit = true;
+
+        // Capture phase ensures we get the event before any child element
+        zone.addEventListener('dragenter', e => { e.preventDefault(); }, true);
         zone.addEventListener('dragover', e => {
             e.preventDefault();
-            zone.style.background = '#dbeafe';
-        });
-        zone.addEventListener('dragleave', () => {
-            zone.style.background = '#fff';
-        });
+            zone.classList.add('ns-import-dz-over');
+        }, true);
+        zone.addEventListener('dragleave', e => {
+            // Only clear when pointer leaves the zone itself, not a child
+            if (!zone.contains(e.relatedTarget)) {
+                zone.classList.remove('ns-import-dz-over');
+            }
+        }, true);
         zone.addEventListener('drop', async e => {
             e.preventDefault();
-            zone.style.background = '#fff';
-            const file = e.dataTransfer && e.dataTransfer.files[0];
+            e.stopPropagation();
+            zone.classList.remove('ns-import-dz-over');
+            const file = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
             if (!file) return;
-            const text = await file.text();
-            await dotNetRef.invokeMethodAsync('HandleDroppedCsv', text);
-        });
+            try {
+                const text = await file.text();
+                await dotNetRef.invokeMethodAsync('HandleDroppedCsv', text);
+            } catch (err) {
+                console.error('nsImport drop error:', err);
+            }
+        }, true);
     }
 };
