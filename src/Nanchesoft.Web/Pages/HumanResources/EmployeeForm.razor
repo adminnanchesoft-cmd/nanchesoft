@@ -274,16 +274,16 @@
                 <div class="ns-section-body">
                     <div class="row g-3">
                         <div class="col-12 col-md-3">
-                            <label class="ns-field-label">Apellido paterno <span class="text-danger">*</span></label>
-                            <input class="form-control ns-form-input" @bind="_form.LastName" placeholder="García" />
+                            <label class="ns-field-label">Apellido paterno</label>
+                            <input class="form-control ns-form-input" @bind="_form.LastName" @bind:after="AutoGenerateCode" placeholder="García" />
                         </div>
                         <div class="col-12 col-md-3">
                             <label class="ns-field-label">Apellido materno</label>
-                            <input class="form-control ns-form-input" @bind="_form.SecondLastName" placeholder="López" />
+                            <input class="form-control ns-form-input" @bind="_form.SecondLastName" @bind:after="AutoGenerateCode" placeholder="López" />
                         </div>
                         <div class="col-12 col-md-3">
                             <label class="ns-field-label">Nombre(s) <span class="text-danger">*</span></label>
-                            <input class="form-control ns-form-input" @bind="_form.FirstName" placeholder="Juan" />
+                            <input class="form-control ns-form-input" @bind="_form.FirstName" @bind:after="AutoGenerateCode" placeholder="Juan" />
                         </div>
                         <div class="col-12 col-md-3">
                             <label class="ns-field-label">Segundo nombre</label>
@@ -1126,6 +1126,34 @@
             _showBankModal = false;
         }
         finally { _savingModal = false; }
+    }
+
+    private void AutoGenerateCode()
+    {
+        if (!_isNew && !string.IsNullOrWhiteSpace(_form.Code)) return;
+
+        var p = Normalize(_form.LastName);
+        var m = Normalize(_form.SecondLastName);
+        var n = Normalize(_form.FirstName);
+
+        if (string.IsNullOrEmpty(p) && string.IsNullOrEmpty(m) && string.IsNullOrEmpty(n)) return;
+
+        var part1 = p.Length > 0 ? p[..Math.Min(4, p.Length)] : "_";
+        var part2 = m.Length > 0 ? m[..Math.Min(2, m.Length)] : "";
+        var part3 = n.Length > 0 ? n[..Math.Min(2, n.Length)] : "";
+
+        _form.Code = (part1 + part2 + part3).ToUpper();
+    }
+
+    private static string Normalize(string? s)
+    {
+        if (string.IsNullOrWhiteSpace(s)) return "";
+        var normalized = s.Trim().Normalize(System.Text.NormalizationForm.FormD);
+        var sb = new System.Text.StringBuilder();
+        foreach (var c in normalized)
+            if (System.Globalization.CharUnicodeInfo.GetUnicodeCategory(c) != System.Globalization.UnicodeCategory.NonSpacingMark)
+                sb.Append(c);
+        return sb.ToString().Normalize(System.Text.NormalizationForm.FormC);
     }
 
     // ─────────── Inner types ───────────

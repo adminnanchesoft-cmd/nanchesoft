@@ -554,19 +554,27 @@ file static class Schema
                 Guid? FkGuid(string k) => v.TryGetValue(k, out var x) && x is Guid g ? g : null;
                 decimal Dec(string k) => v.TryGetValue(k, out var x) && x is decimal d ? d : 0;
                 DateTime? Dt(string k) => v.TryGetValue(k, out var x) && x is DateTime dt ? dt : null;
-                bool Bl(string k) => v.TryGetValue(k, out var x) && x is true;
+
+                var firstName    = Str("FirstName")?.Trim() ?? "";
+                var lastName     = Str("LastName")?.Trim() ?? "";
+                var secondLast   = Str("SecondLastName")?.Trim() ?? "";
+
+                if (string.IsNullOrEmpty(firstName) && string.IsNullOrEmpty(lastName) && string.IsNullOrEmpty(secondLast))
+                    throw new InvalidOperationException("Sin nombre ni apellidos — fila omitida");
+
+                var autoCode = EmployeeCodeFromName(lastName, secondLast, firstName);
 
                 var e = new Employee
                 {
                     TenantId     = (Guid)v["TenantId"]!,
                     CompanyId    = (Guid)v["CompanyId"]!,
-                    Code         = Str("Code") ?? Slug(Str("FirstName") + Str("LastName") ?? ""),
+                    Code         = Str("Code") is { Length: > 0 } c ? c : autoCode,
                     EmployeeNumber = Str("EmployeeNumber") ?? Str("Code") ?? "",
                     ClockKey     = Str("ClockKey"),
                     NoiKey       = Str("NoiKey"),
-                    FirstName    = Str("FirstName") ?? "",
-                    LastName     = Str("LastName") ?? "",
-                    SecondLastName = Str("SecondLastName"),
+                    FirstName    = firstName,
+                    LastName     = lastName,
+                    SecondLastName = secondLast.Length > 0 ? secondLast : null,
                     MiddleName   = Str("MiddleName") ?? "",
                     Email        = Str("Email") ?? "",
                     Phone        = Str("Phone") ?? "",
@@ -732,6 +740,23 @@ file static class Schema
         s = s.Replace("Á","A").Replace("É","E").Replace("Í","I").Replace("Ó","O").Replace("Ú","U").Replace("Ñ","N");
         s = new string(s.Where(c => char.IsLetterOrDigit(c) || c == '-').ToArray());
         return s.Length > 20 ? s[..20] : s;
+    }
+
+    private static string EmployeeCodeFromName(string paterno, string materno, string nombre)
+    {
+        static string Clean(string s)
+        {
+            s = s.ToUpperInvariant().Trim();
+            s = s.Replace("Á","A").Replace("É","E").Replace("Í","I").Replace("Ó","O").Replace("Ú","U").Replace("Ñ","N");
+            return new string(s.Where(char.IsLetter).ToArray());
+        }
+        var p = Clean(paterno);
+        var m = Clean(materno);
+        var n = Clean(nombre);
+        var part1 = p.Length > 0 ? p[..Math.Min(4, p.Length)] : "_";
+        var part2 = m.Length > 0 ? m[..Math.Min(2, m.Length)] : "";
+        var part3 = n.Length > 0 ? n[..Math.Min(2, n.Length)] : "";
+        return part1 + part2 + part3;
     }
 }
 
