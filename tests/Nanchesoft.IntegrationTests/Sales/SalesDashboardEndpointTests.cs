@@ -29,6 +29,8 @@ public class SalesDashboardEndpointTests
         json.Should().NotBeNull();
         json!.OpenOrders.Should().BeGreaterThanOrEqualTo(0);
         json.OpenQuotes.Should().BeGreaterThanOrEqualTo(0);
+        json.NetSales.Should().Be(json.PeriodSales - json.ReturnsAmount - json.CreditNotesAmount);
+        json.AverageInvoiceTicket.Should().BeGreaterThanOrEqualTo(0);
     }
 
     [Fact]
@@ -87,5 +89,12 @@ public class SalesDashboardEndpointTests
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
-    private sealed record SalesDashboardShape(int OpenOrders, int OpenQuotes, decimal PeriodSales, decimal ReturnsAmount);
+    private sealed record SalesDashboardShape(
+        int OpenOrders,
+        int OpenQuotes,
+        decimal PeriodSales,
+        decimal ReturnsAmount,
+        decimal CreditNotesAmount,
+        decimal NetSales,
+        decimal AverageInvoiceTicket);
 }

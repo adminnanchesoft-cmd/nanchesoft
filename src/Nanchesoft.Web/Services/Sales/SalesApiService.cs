@@ -894,6 +894,12 @@ public sealed class SalesDashboardSummaryDto
     public decimal PeriodSales { get; set; }
     public decimal ReturnsAmount { get; set; }
     public decimal CreditNotesAmount { get; set; }
+    public decimal NetSales { get; set; }
+    public decimal OpenQuoteAmount { get; set; }
+    public decimal OpenOrderAmount { get; set; }
+    public int ExpiredQuotes { get; set; }
+    public int ApprovedOrders { get; set; }
+    public decimal AverageInvoiceTicket { get; set; }
 }
 
 public sealed class SalesLineRequest

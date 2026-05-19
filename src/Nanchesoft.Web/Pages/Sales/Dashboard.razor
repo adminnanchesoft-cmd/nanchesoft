@@ -9,7 +9,7 @@
         <div>
             <div class="ns-catalog-eyebrow">Nanchesoft ERP · Ventas</div>
             <h1 class="ns-catalog-title">Dashboard comercial</h1>
-            <p class="ns-catalog-subtitle">Indicadores base de cotizaciones, pedidos, remisiones, facturas, devoluciones y notas de crédito.</p>
+            <p class="ns-catalog-subtitle">Indicadores de embudo comercial, cartera abierta, surtido y venta neta de los últimos 30 días.</p>
         </div>
         <div class="ns-catalog-badge">DevExtreme 25.1.6</div>
     </div>
@@ -21,11 +21,15 @@
     else
     {
         <div class="ns-kpi-grid">
-            <div class="ns-kpi-card"><div class="ns-kpi-label">Cotizaciones abiertas</div><div class="ns-kpi-value">@_summary.OpenQuotes</div></div>
-            <div class="ns-kpi-card ns-kpi-card-success"><div class="ns-kpi-label">Pedidos abiertos</div><div class="ns-kpi-value">@_summary.OpenOrders</div></div>
+            <div class="ns-kpi-card"><div class="ns-kpi-label">Cotizaciones abiertas</div><div class="ns-kpi-value">@_summary.OpenQuotes</div><div class="text-secondary small">@_summary.OpenQuoteAmount.ToString("C")</div></div>
+            <div class="ns-kpi-card ns-kpi-card-success"><div class="ns-kpi-label">Pedidos abiertos</div><div class="ns-kpi-value">@_summary.OpenOrders</div><div class="text-secondary small">@_summary.OpenOrderAmount.ToString("C")</div></div>
+            <div class="ns-kpi-card ns-kpi-card-muted"><div class="ns-kpi-label">Cotizaciones vencidas</div><div class="ns-kpi-value">@_summary.ExpiredQuotes</div></div>
+            <div class="ns-kpi-card"><div class="ns-kpi-label">Pedidos aprobados</div><div class="ns-kpi-value">@_summary.ApprovedOrders</div></div>
             <div class="ns-kpi-card"><div class="ns-kpi-label">Remisiones recientes</div><div class="ns-kpi-value">@_summary.RecentShipments</div></div>
             <div class="ns-kpi-card"><div class="ns-kpi-label">Facturas recientes</div><div class="ns-kpi-value">@_summary.RecentInvoices</div></div>
             <div class="ns-kpi-card ns-kpi-card-success"><div class="ns-kpi-label">Ventas 30 días</div><div class="ns-kpi-value ns-kpi-value-small">@_summary.PeriodSales.ToString("C")</div></div>
+            <div class="ns-kpi-card ns-kpi-card-success"><div class="ns-kpi-label">Venta neta 30 días</div><div class="ns-kpi-value ns-kpi-value-small">@_summary.NetSales.ToString("C")</div></div>
+            <div class="ns-kpi-card"><div class="ns-kpi-label">Ticket promedio</div><div class="ns-kpi-value ns-kpi-value-small">@_summary.AverageInvoiceTicket.ToString("C")</div></div>
             <div class="ns-kpi-card ns-kpi-card-muted"><div class="ns-kpi-label">Devoluciones 30 días</div><div class="ns-kpi-value ns-kpi-value-small">@_summary.ReturnsAmount.ToString("C")</div></div>
             <div class="ns-kpi-card"><div class="ns-kpi-label">Notas crédito 30 días</div><div class="ns-kpi-value ns-kpi-value-small">@_summary.CreditNotesAmount.ToString("C")</div></div>
         </div>

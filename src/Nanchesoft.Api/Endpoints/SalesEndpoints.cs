@@ -821,16 +821,44 @@ public static class SalesEndpoints
             Taxes = await LookupAsync(db.Taxes.OrderBy(x => x.Name).Select(x => new LookupRow(x.Id, x.Name)).ToListAsync())
         }));
 
-        app.MapGet("/api/sales/dashboard/summary", async (NanchesoftDbContext db) => Results.Ok(new
+        app.MapGet("/api/sales/dashboard/summary", async (NanchesoftDbContext db) =>
         {
-            OpenQuotes = await db.SalesQuotes.CountAsync(x => x.Status == "draft" || x.Status == "pending_approval" || x.Status == "approved"),
-            OpenOrders = await db.SalesOrders.CountAsync(x => x.Status == "draft" || x.Status == "pending_approval" || x.Status == "approved"),
-            RecentShipments = await db.SalesShipments.CountAsync(x => x.ShipmentDate >= DateTime.UtcNow.Date.AddDays(-30)),
-            RecentInvoices = await db.SalesInvoices.CountAsync(x => x.InvoiceDate >= DateTime.UtcNow.Date.AddDays(-30)),
-            PeriodSales = await db.SalesInvoices.Where(x => x.InvoiceDate >= DateTime.UtcNow.Date.AddDays(-30)).SumAsync(x => (decimal?)x.Total) ?? 0m,
-            ReturnsAmount = await db.SalesReturns.Where(x => x.ReturnDate >= DateTime.UtcNow.Date.AddDays(-30)).SumAsync(x => (decimal?)x.Total) ?? 0m,
-            CreditNotesAmount = await db.CreditNotes.Where(x => x.CreditNoteDate >= DateTime.UtcNow.Date.AddDays(-30)).SumAsync(x => (decimal?)x.Total) ?? 0m
-        }));
+            var today = DateTime.UtcNow.Date;
+            var since = today.AddDays(-30);
+            string[] openStatuses = ["draft", "pending_approval", "approved"];
+
+            var recentInvoices = await db.SalesInvoices.CountAsync(x => x.InvoiceDate >= since);
+            var periodSales = await db.SalesInvoices
+                .Where(x => x.InvoiceDate >= since)
+                .SumAsync(x => (decimal?)x.Total) ?? 0m;
+            var returnsAmount = await db.SalesReturns
+                .Where(x => x.ReturnDate >= since)
+                .SumAsync(x => (decimal?)x.Total) ?? 0m;
+            var creditNotesAmount = await db.CreditNotes
+                .Where(x => x.CreditNoteDate >= since)
+                .SumAsync(x => (decimal?)x.Total) ?? 0m;
+
+            return Results.Ok(new
+            {
+                OpenQuotes = await db.SalesQuotes.CountAsync(x => openStatuses.Contains(x.Status)),
+                OpenOrders = await db.SalesOrders.CountAsync(x => openStatuses.Contains(x.Status)),
+                RecentShipments = await db.SalesShipments.CountAsync(x => x.ShipmentDate >= since),
+                RecentInvoices = recentInvoices,
+                PeriodSales = periodSales,
+                ReturnsAmount = returnsAmount,
+                CreditNotesAmount = creditNotesAmount,
+                NetSales = periodSales - returnsAmount - creditNotesAmount,
+                OpenQuoteAmount = await db.SalesQuotes
+                    .Where(x => openStatuses.Contains(x.Status))
+                    .SumAsync(x => (decimal?)x.Total) ?? 0m,
+                OpenOrderAmount = await db.SalesOrders
+                    .Where(x => openStatuses.Contains(x.Status))
+                    .SumAsync(x => (decimal?)x.Total) ?? 0m,
+                ExpiredQuotes = await db.SalesQuotes.CountAsync(x => x.ValidUntil.HasValue && x.ValidUntil.Value.Date < today && openStatuses.Contains(x.Status)),
+                ApprovedOrders = await db.SalesOrders.CountAsync(x => x.Status == "approved"),
+                AverageInvoiceTicket = recentInvoices == 0 ? 0m : Math.Round(periodSales / recentInvoices, 2)
+            });
+        });
 
         return app;
     }
