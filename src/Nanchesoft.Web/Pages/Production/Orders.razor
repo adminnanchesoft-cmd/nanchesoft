@@ -35,7 +35,8 @@
                 <option value="cancelled">Cancelada</option>
             </select>
             <button class="btn btn-outline-secondary btn-sm" @onclick="LoadOrdersAsync">Actualizar</button>
-            <a class="btn btn-primary btn-sm" href="/produccion/dashboard">Dashboard</a>
+            <button class="btn btn-primary btn-sm" @onclick="OpenCreateModal">+ Nueva orden</button>
+            <a class="btn btn-outline-secondary btn-sm" href="/produccion/dashboard">Dashboard</a>
         </div>
     </div>
 
@@ -140,6 +141,141 @@
         </div>
     }
 </div>
+
+@* ── Modal: nueva orden de producción ──────────────────────────────────── *@
+@if (_showCreateModal)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background:rgba(0,0,0,0.5)">
+        <div class="modal-dialog modal-lg modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Nueva orden de producción</h5>
+                    <button type="button" class="btn-close" @onclick="CloseCreateModal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row g-3 mb-2">
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Empresa</label>
+                            <select class="form-select" @bind="_createCompanyId" @bind:after="OnCreateCompanyChanged">
+                                @foreach (var c in _companies)
+                                {
+                                    <option value="@c.CompanyId">@c.Name</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Sucursal</label>
+                            <select class="form-select" @bind="_createBranchId">
+                                @if (_createBranches.Count == 0)
+                                {
+                                    <option value="">— Sin sucursales —</option>
+                                }
+                                @foreach (var b in _createBranches)
+                                {
+                                    <option value="@b.BranchId">@b.Name</option>
+                                }
+                            </select>
+                        </div>
+                    </div>
+                    <div class="row g-3 mb-2">
+                        <div class="col-md-4">
+                            <label class="form-label fw-semibold">Semana</label>
+                            <input class="form-control" @bind="_createWeekCode" placeholder="2026-W22" />
+                            <div class="form-text">Formato: AAAA-Wnn</div>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-semibold">Prioridad</label>
+                            <select class="form-select" @bind="_createPriority">
+                                <option value="1">1 — Normal</option>
+                                <option value="2">2 — Alta</option>
+                                <option value="3">3 — Urgente</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-4">
+                            <label class="form-label fw-semibold">Fecha inicio</label>
+                            <input type="date" class="form-control" @bind="_createStartDate" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-semibold">Fecha fin</label>
+                            <input type="date" class="form-control" @bind="_createEndDate" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-semibold">Fecha entrega</label>
+                            <input type="date" class="form-control" @bind="_createDeliveryDate" />
+                        </div>
+                    </div>
+
+                    <div class="card mb-3">
+                        <div class="card-header d-flex justify-content-between align-items-center py-2">
+                            <span class="fw-semibold">Líneas de producción</span>
+                            <button class="btn btn-sm btn-outline-primary" @onclick="AddOrderLine">+ Agregar línea</button>
+                        </div>
+                        <div class="card-body p-0">
+                            @if (_createLines.Count == 0)
+                            {
+                                <div class="text-center text-secondary py-3 small">Sin líneas — agrega al menos un producto.</div>
+                            }
+                            else
+                            {
+                                <table class="table table-sm mb-0">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th>Producto terminado</th>
+                                            <th style="width:150px;">Cantidad</th>
+                                            <th style="width:120px;">Talla/clave</th>
+                                            <th style="width:50px;"></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var line in _createLines)
+                                        {
+                                            <tr>
+                                                <td>
+                                                    <select class="form-select form-select-sm" @bind="line.FinishedProductId">
+                                                        <option value="">— selecciona —</option>
+                                                        @foreach (var p in _finishedProducts)
+                                                        {
+                                                            <option value="@p.FinishedProductId">@p.Code — @p.Name</option>
+                                                        }
+                                                    </select>
+                                                </td>
+                                                <td>
+                                                    <input type="number" class="form-control form-control-sm" min="1" @bind="line.Quantity" />
+                                                </td>
+                                                <td>
+                                                    <input class="form-control form-control-sm" @bind="line.SizeKey" placeholder="UNICA" />
+                                                </td>
+                                                <td>
+                                                    <button class="btn btn-sm btn-outline-danger" @onclick="() => RemoveOrderLine(line)">✕</button>
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            }
+                        </div>
+                    </div>
+
+                    <div class="mb-2">
+                        <label class="form-label fw-semibold">Notas</label>
+                        <textarea class="form-control" rows="2" @bind="_createNotes"></textarea>
+                    </div>
+
+                    @if (!string.IsNullOrWhiteSpace(_createError))
+                    {
+                        <div class="alert alert-danger py-2">@_createError</div>
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" @onclick="CloseCreateModal">Cancelar</button>
+                    <button class="btn btn-primary" disabled="@_busy" @onclick="SubmitCreateOrderAsync">Crear orden</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
 
 @* ── Panel de explosión de materiales ─────────────────────────────────── *@
 @if (_showRequirement)
@@ -257,6 +393,21 @@
     private Guid _cancelId;
     private string _cancelFolio = string.Empty;
     private string _cancelReason = string.Empty;
+
+    // Create order modal
+    private bool _showCreateModal;
+    private Guid _createCompanyId;
+    private Guid _createBranchId;
+    private string _createWeekCode = string.Empty;
+    private DateOnly _createStartDate;
+    private DateOnly _createEndDate;
+    private DateOnly _createDeliveryDate;
+    private int _createPriority = 1;
+    private string _createNotes = string.Empty;
+    private string _createError = string.Empty;
+    private List<BranchRow> _createBranches = [];
+    private List<FinishedProductOption> _finishedProducts = [];
+    private List<OrderLineEntry> _createLines = [];
 
     protected override async Task OnInitializedAsync()
     {
@@ -427,6 +578,100 @@
         _                => s
     };
 
+    private async Task OpenCreateModal()
+    {
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        var dayOfWeek = (int)DateTime.Today.DayOfWeek;
+        var mondayOffset = dayOfWeek == 0 ? -6 : 1 - dayOfWeek;
+        var monday = today.AddDays(mondayOffset);
+        var weekNum = System.Globalization.ISOWeek.GetWeekOfYear(monday.ToDateTime(TimeOnly.MinValue));
+
+        _createCompanyId = _selectedCompanyId;
+        _createWeekCode = $"{today.Year}-W{weekNum:D2}";
+        _createStartDate = monday;
+        _createEndDate = monday.AddDays(4);
+        _createDeliveryDate = monday.AddDays(7);
+        _createPriority = 1;
+        _createNotes = string.Empty;
+        _createError = string.Empty;
+        _createLines = [new OrderLineEntry()];
+
+        var client = HttpClientFactory.CreateClient("Nanchesoft.Api");
+
+        var branchTask = client.GetFromJsonAsync<List<BranchRow>>($"/api/organization/branches?companyId={_createCompanyId}");
+        var productTask = client.GetFromJsonAsync<List<FinishedProductOption>>("/api/products/finished-products/options");
+        await Task.WhenAll(branchTask, productTask);
+
+        _createBranches = branchTask.Result ?? [];
+        _finishedProducts = productTask.Result ?? [];
+        if (_createBranches.Count > 0) _createBranchId = _createBranches[0].BranchId;
+
+        _showCreateModal = true;
+    }
+
+    private async Task OnCreateCompanyChanged()
+    {
+        var client = HttpClientFactory.CreateClient("Nanchesoft.Api");
+        _createBranches = await client.GetFromJsonAsync<List<BranchRow>>($"/api/organization/branches?companyId={_createCompanyId}") ?? [];
+        _createBranchId = _createBranches.Count > 0 ? _createBranches[0].BranchId : Guid.Empty;
+    }
+
+    private void AddOrderLine() => _createLines.Add(new OrderLineEntry());
+    private void RemoveOrderLine(OrderLineEntry line) => _createLines.Remove(line);
+    private void CloseCreateModal() => _showCreateModal = false;
+
+    private async Task SubmitCreateOrderAsync()
+    {
+        _createError = string.Empty;
+        if (_createCompanyId == Guid.Empty) { _createError = "Selecciona una empresa."; return; }
+        if (_createBranchId == Guid.Empty) { _createError = "Selecciona una sucursal."; return; }
+        if (_createLines.Count == 0) { _createError = "Agrega al menos una línea de producto."; return; }
+        if (_createLines.Any(l => l.FinishedProductId == Guid.Empty)) { _createError = "Todas las líneas deben tener un producto seleccionado."; return; }
+        if (_createLines.Any(l => l.Quantity < 1)) { _createError = "La cantidad de cada línea debe ser mayor a 0."; return; }
+
+        _busy = true;
+        try
+        {
+            var client = HttpClientFactory.CreateClient("Nanchesoft.Api");
+            var payload = new
+            {
+                companyId = _createCompanyId,
+                branchId = _createBranchId,
+                weekCode = _createWeekCode,
+                startDate = _createStartDate,
+                endDate = _createEndDate,
+                deliveryDate = _createDeliveryDate,
+                priority = _createPriority,
+                notes = _createNotes,
+                userId = "web",
+                lines = _createLines.Select(l => new
+                {
+                    finishedProductId = l.FinishedProductId,
+                    quantitiesPerSize = new Dictionary<string, int>
+                    {
+                        [string.IsNullOrWhiteSpace(l.SizeKey) ? "UNICA" : l.SizeKey.Trim().ToUpper()] = l.Quantity
+                    },
+                    priority = 1
+                }).ToList()
+            };
+
+            var resp = await client.PostAsJsonAsync("/api/production/orders", payload);
+            if (resp.IsSuccessStatusCode)
+            {
+                _showCreateModal = false;
+                _message = "Orden de producción creada correctamente.";
+                await LoadOrdersAsync();
+            }
+            else
+            {
+                var body = await resp.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+                _createError = body.TryGetProperty("message", out var m) ? m.GetString() ?? "Error al crear." : "Error al crear.";
+            }
+        }
+        catch (Exception ex) { _createError = ex.Message; }
+        finally { _busy = false; }
+    }
+
     private static string CoverageColor(string s) => s switch
     {
         "covered"  => "#10b981",
@@ -444,7 +689,16 @@
     };
 
     private sealed record CompanyRow(Guid CompanyId, string Name);
+    private sealed record BranchRow(Guid BranchId, string Name);
+    private sealed record FinishedProductOption(Guid FinishedProductId, string Code, string Name);
     private sealed record OrderListResult(int Total, int Page, int PageSize, List<OrderRow> Items);
+
+    private sealed class OrderLineEntry
+    {
+        public Guid FinishedProductId { get; set; }
+        public int Quantity { get; set; } = 1;
+        public string SizeKey { get; set; } = string.Empty;
+    }
 
     private sealed record OrderRow(
         Guid ProductionOrderId, Guid CompanyId, Guid BranchId,

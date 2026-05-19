@@ -15,9 +15,9 @@ public static class ProductionOrderEndpoints
             Guid? companyId,
             string? status,
             string? weekCode,
-            int page,
-            int pageSize,
-            NanchesoftDbContext db) =>
+            int page = 1,
+            int pageSize = 20,
+            NanchesoftDbContext db = default!) =>
         {
             page = page < 1 ? 1 : page;
             pageSize = pageSize < 1 ? 20 : Math.Min(pageSize, 100);

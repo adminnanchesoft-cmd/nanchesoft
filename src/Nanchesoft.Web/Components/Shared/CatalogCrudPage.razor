@@ -122,24 +122,67 @@
 
         @if (_definition.AllowImport && _showImport)
         {
+            var _importableCols = _definition.Columns
+                .Where(x => x.AllowEditing && x.DataField != _definition.KeyExpr && x.Visible
+                         && !_importAutoExcludeFields.Contains(x.DataField))
+                .ToList();
+
             <div style="margin:0 0 18px 0;padding:20px;border-radius:14px;border:1px solid #dbeafe;background:#f0f7ff;">
                 <h3 style="margin:0 0 12px 0;font-size:1rem;font-weight:600;color:#1d4ed8;">Importar desde CSV</h3>
+
+                @* Campos del catálogo *@
+                <details style="margin-bottom:14px;">
+                    <summary style="cursor:pointer;font-size:.85rem;font-weight:600;color:#1e40af;user-select:none;">
+                        Campos del catálogo (@_importableCols.Count campo(s))
+                    </summary>
+                    <div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:6px;">
+                        @foreach (var fc in _importableCols)
+                        {
+                            var fcBg = fc.Required ? "#dbeafe" : "#f1f5f9";
+                            var fcColor = fc.Required ? "#1e40af" : "#475569";
+                            <span style="font-size:.78rem;padding:3px 8px;border-radius:6px;background:@fcBg;color:@fcColor;border:1px solid @(fc.Required ? "#93c5fd" : "#e2e8f0");">
+                                @fc.Caption
+                                @if (fc.Required) { <strong> *</strong> }
+                                @if (fc.UseLookup) { <span style="font-size:.7rem;opacity:.75;"> (lista)</span> }
+                            </span>
+                        }
+                    </div>
+                    <p style="margin:8px 0 0 0;font-size:.75rem;color:#64748b;">
+                        * Requerido · Si falta un campo FK requerido se creará automáticamente "POR IDENTIFICAR" · Si falta Código, se usará el Nombre.
+                    </p>
+                </details>
+
                 <p style="margin:0 0 14px 0;font-size:.875rem;color:#475569;">
-                    Descarga la plantilla, llena los datos y sube el archivo. Las columnas deben mantenerse en el mismo orden.
+                    Sube un CSV con las columnas que necesites. El sistema reconoce los encabezados por nombre — no necesitas todas las columnas ni en orden específico.
                 </p>
 
-                <InputFile OnChange="OnImportFileSelected" accept=".csv" style="display:block;margin-bottom:12px;" />
+                <div style="position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;min-height:80px;border:2px dashed #93c5fd;border-radius:10px;background:#fff;cursor:pointer;margin-bottom:14px;transition:background .15s;padding:14px;"
+                     onmouseover="this.style.background='#eff6ff'" onmouseout="this.style.background='#fff'"
+                     ondragover="this.style.background='#dbeafe';event.preventDefault();" ondragleave="this.style.background='#fff'">
+                    <span style="font-size:1.5rem;pointer-events:none;">📂</span>
+                    <span style="font-size:.875rem;font-weight:600;color:#1d4ed8;pointer-events:none;">Arrastra tu CSV aquí o haz clic para seleccionar</span>
+                    <span style="font-size:.75rem;color:#64748b;pointer-events:none;">Formatos admitidos: .csv · separador coma o punto y coma</span>
+                    <InputFile OnChange="OnImportFileSelected" accept=".csv"
+                               style="position:absolute;top:0;left:0;width:100%;height:100%;opacity:0;cursor:pointer;" />
+                </div>
 
                 @if (_importRows.Count > 0)
                 {
-                    <div style="margin:12px 0;overflow-x:auto;max-height:260px;border:1px solid #bfdbfe;border-radius:8px;">
+                    <div style="margin:12px 0;overflow-x:auto;max-height:300px;border:1px solid #bfdbfe;border-radius:8px;">
                         <table style="border-collapse:collapse;font-size:.8rem;width:100%;">
                             <thead>
                                 <tr style="background:#eff6ff;position:sticky;top:0;">
                                     <th style="padding:6px 10px;border-bottom:1px solid #bfdbfe;">#</th>
-                                    @foreach (var h in _importHeaders)
+                                    @for (int hIdx = 0; hIdx < _importHeaders.Count; hIdx++)
                                     {
-                                        <th style="padding:6px 10px;border-bottom:1px solid #bfdbfe;white-space:nowrap;">@h</th>
+                                        var isAutoHdr = hIdx == _importCodeDisplayIdx && !_importHasCodeCol;
+                                        <th style="padding:6px 10px;border-bottom:1px solid #bfdbfe;white-space:nowrap;@(isAutoHdr ? "background:#fffbeb;" : "")">
+                                            @_importHeaders[hIdx]
+                                            @if (isAutoHdr)
+                                            {
+                                                <span style="font-size:.65rem;background:#fef08a;color:#92400e;border-radius:3px;padding:1px 5px;margin-left:4px;vertical-align:middle;">generado</span>
+                                            }
+                                        </th>
                                     }
                                     <th style="padding:6px 10px;border-bottom:1px solid #bfdbfe;">Estado</th>
                                 </tr>
@@ -149,14 +192,33 @@
                                 {
                                     var row = _importRows[i];
                                     var status = i < _importStatuses.Count ? _importStatuses[i] : "";
-                                    var bg = status == "OK" ? "#f0fdf4" : status.StartsWith("Error") ? "#fff1f2" : "white";
+                                    var bg = status == "OK" ? "#f0fdf4"
+                                           : status.StartsWith("Error") ? "#fff1f2"
+                                           : status.StartsWith("Duplicado") ? "#fffbeb"
+                                           : "white";
                                     <tr style="background:@bg;">
                                         <td style="padding:5px 10px;border-bottom:1px solid #e2e8f0;color:#64748b;">@(i + 1)</td>
-                                        @foreach (var cell in row)
+                                        @for (int j = 0; j < row.Count && j < _importHeaders.Count; j++)
                                         {
-                                            <td style="padding:5px 10px;border-bottom:1px solid #e2e8f0;">@cell</td>
+                                            var isAutoCode = j == _importCodeDisplayIdx && i < _importAutoCode.Count && _importAutoCode[i];
+                                            <td style="padding:5px 10px;border-bottom:1px solid #e2e8f0;@(isAutoCode ? "background:#fefce8;" : "")">
+                                                @if (isAutoCode)
+                                                {
+                                                    var ci = i;
+                                                    <div style="display:flex;align-items:center;gap:4px;">
+                                                        <input style="border:1px solid #fbbf24;border-radius:4px;padding:2px 6px;font-size:.8rem;flex:1;min-width:70px;background:#fff;"
+                                                               value="@_importEditCodes[ci]"
+                                                               @oninput="(e) => _importEditCodes[ci] = e.Value?.ToString() ?? string.Empty" />
+                                                        <span style="font-size:.65rem;background:#fef08a;color:#92400e;border-radius:3px;padding:1px 4px;white-space:nowrap;">auto</span>
+                                                    </div>
+                                                }
+                                                else
+                                                {
+                                                    @row[j]
+                                                }
+                                            </td>
                                         }
-                                        <td style="padding:5px 10px;border-bottom:1px solid #e2e8f0;font-size:.75rem;color:@(status == "OK" ? "#16a34a" : status.StartsWith("Error") ? "#dc2626" : "#94a3b8");">
+                                        <td style="padding:5px 10px;border-bottom:1px solid #e2e8f0;font-size:.75rem;color:@(status == "OK" ? "#16a34a" : status.StartsWith("Error") ? "#dc2626" : status.StartsWith("Duplicado") ? "#d97706" : "#94a3b8");">
                                             @status
                                         </td>
                                     </tr>
@@ -164,7 +226,15 @@
                             </tbody>
                         </table>
                     </div>
-                    <p style="margin:8px 0 14px 0;font-size:.8rem;color:#64748b;">@_importRows.Count fila(s) detectada(s)</p>
+                    <p style="margin:8px 0 14px 0;font-size:.8rem;color:#64748b;">
+                        @_importRows.Count fila(s) detectada(s)
+                        @if (_importAutoCode.Count(x => x) > 0)
+                        {
+                            <span style="margin-left:8px;background:#fef08a;color:#92400e;border-radius:4px;padding:1px 7px;font-size:.75rem;">
+                                @_importAutoCode.Count(x => x) código(s) auto-generado(s) — puedes editarlos antes de importar
+                            </span>
+                        }
+                    </p>
 
                     @if (!_importing)
                     {
@@ -183,7 +253,7 @@
                     @if (_importDone > 0 && !_importing)
                     {
                         <p style="margin:10px 0 0 0;font-size:.875rem;color:#16a34a;font-weight:600;">
-                            ✓ @_importOk de @_importRows.Count registros importados correctamente.
+                            ✓ @_importOk importado(s) · @(_importStatuses.Count(s => s.StartsWith("Duplicado"))) omitido(s) por duplicado · @(_importStatuses.Count(s => s.StartsWith("Error"))) error(es).
                         </p>
                     }
                 }
@@ -220,6 +290,12 @@
     private bool _importing;
     private int _importDone;
     private int _importOk;
+    private bool _importHasCodeCol;
+    private int _importCsvCodeIdx = -1;
+    private int _importCsvNameIdx = -1;
+    private int _importCodeDisplayIdx = -1;
+    private List<bool> _importAutoCode = [];
+    private List<string> _importEditCodes = [];
 
     protected override async Task OnInitializedAsync()
     {
@@ -561,9 +637,10 @@
 
     private void RebuildImportTemplate(List<CatalogColumnDefinition> visibleColumns)
     {
-        // Template: editable columns (skip the ID key column) with an example row
+        // Template: editable columns (skip ID key, company and IsActive — auto-handled)
         var importCols = visibleColumns
-            .Where(x => x.AllowEditing && x.DataField != _definition!.KeyExpr)
+            .Where(x => x.AllowEditing && x.DataField != _definition!.KeyExpr
+                     && !_importAutoExcludeFields.Contains(x.DataField))
             .ToList();
 
         var sb = new StringBuilder();
@@ -591,11 +668,17 @@
         _importRows.Clear();
         _importHeaders.Clear();
         _importStatuses.Clear();
+        _importAutoCode.Clear();
+        _importEditCodes.Clear();
+        _importHasCodeCol = false;
+        _importCsvCodeIdx = -1;
+        _importCsvNameIdx = -1;
+        _importCodeDisplayIdx = -1;
         _importDone = 0;
         _importOk = 0;
 
         var file = e.File;
-        if (file is null) return;
+        if (file is null || _definition is null) return;
 
         using var stream = file.OpenReadStream(maxAllowedSize: 5 * 1024 * 1024);
         using var reader = new StreamReader(stream, Encoding.UTF8);
@@ -608,13 +691,72 @@
 
         if (lines.Count < 2) return;
 
-        _importHeaders = ParseCsvLine(lines[0]);
+        var rawHeaders = ParseCsvLine(lines[0]);
+
+        var importCols = _definition.Columns
+            .Where(x => x.AllowEditing && x.DataField != _definition.KeyExpr && x.Visible
+                     && !_importAutoExcludeFields.Contains(x.DataField))
+            .ToList();
+
+        var codeColDef = importCols.FirstOrDefault(x => x.DataField == "Code");
+        var nameColDef = importCols.FirstOrDefault(x => x.DataField == "Name");
+
+        // Match each CSV header to a column definition by name/alias
+        for (int h = 0; h < rawHeaders.Count; h++)
+        {
+            var col = FindImportColDef(rawHeaders[h], importCols);
+            if (col?.DataField == "Code") _importCsvCodeIdx = h;
+            if (col?.DataField == "Name") _importCsvNameIdx = h;
+        }
+
+        _importHasCodeCol = _importCsvCodeIdx >= 0;
+
+        // Build display headers — prepend "Código (auto)" when Code is not in CSV
+        if (!_importHasCodeCol && codeColDef is not null)
+        {
+            _importHeaders = new List<string> { $"{codeColDef.Caption} (auto)" }.Concat(rawHeaders).ToList();
+            _importCodeDisplayIdx = 0;
+        }
+        else
+        {
+            _importHeaders = new List<string>(rawHeaders);
+            _importCodeDisplayIdx = _importCsvCodeIdx;
+        }
+
+        // Parse data rows
         for (int i = 1; i < lines.Count; i++)
         {
-            var cells = ParseCsvLine(lines[i]);
-            // Pad to header count
-            while (cells.Count < _importHeaders.Count) cells.Add("");
-            _importRows.Add(cells);
+            var rawCells = ParseCsvLine(lines[i]);
+            while (rawCells.Count < rawHeaders.Count) rawCells.Add("");
+
+            var nameValue = _importCsvNameIdx >= 0 && _importCsvNameIdx < rawCells.Count
+                ? rawCells[_importCsvNameIdx].Trim()
+                : "";
+
+            var codeFromCsv = _importHasCodeCol && _importCsvCodeIdx < rawCells.Count
+                ? rawCells[_importCsvCodeIdx].Trim()
+                : "";
+
+            var isAutoCode = string.IsNullOrWhiteSpace(codeFromCsv);
+            var effectiveCode = isAutoCode ? nameValue : codeFromCsv;
+
+            _importAutoCode.Add(isAutoCode);
+            _importEditCodes.Add(effectiveCode);
+
+            List<string> displayRow;
+            if (!_importHasCodeCol && codeColDef is not null)
+            {
+                displayRow = new List<string> { effectiveCode };
+                displayRow.AddRange(rawCells.Take(rawHeaders.Count));
+            }
+            else
+            {
+                displayRow = rawCells.Take(rawHeaders.Count).ToList();
+                if (_importCsvCodeIdx >= 0 && isAutoCode && _importCsvCodeIdx < displayRow.Count)
+                    displayRow[_importCsvCodeIdx] = effectiveCode;
+            }
+
+            _importRows.Add(displayRow);
         }
     }
 
@@ -628,17 +770,37 @@
         _importStatuses = Enumerable.Repeat("", _importRows.Count).ToList();
 
         var importCols = _definition.Columns
-            .Where(x => x.AllowEditing && x.DataField != _definition.KeyExpr && x.Visible)
+            .Where(x => x.AllowEditing && x.DataField != _definition.KeyExpr
+                     && !_importAutoExcludeFields.Contains(x.DataField))
             .ToList();
+
+        var codeColDef = importCols.FirstOrDefault(x => x.DataField == "Code");
+
+        // Pre-build duplicate sets from catalog's current state
+        var existingCodes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var existingNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var r in _definition.Rows)
+        {
+            var c = GetRowString(r, "Code"); if (c is not null) existingCodes.Add(c.Trim());
+            var n = GetRowString(r, "Name");  if (n is not null) existingNames.Add(n.Trim());
+        }
+
+        // Cache of quickCreateKey → ID for "POR IDENTIFICAR" records already created this session
+        var porIdentificarCache = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
         for (int i = 0; i < _importRows.Count; i++)
         {
             var cells = _importRows[i];
             var payload = new Dictionary<string, object?>();
 
-            for (int j = 0; j < Math.Min(importCols.Count, cells.Count); j++)
+            // Map cells by header name (not position)
+            for (int j = 0; j < Math.Min(_importHeaders.Count, cells.Count); j++)
             {
-                var col = importCols[j];
+                var col = FindImportColDef(_importHeaders[j], importCols);
+
+                // Skip unrecognized headers (incl. "Código (auto)" virtual col) and Code (set separately)
+                if (col is null || col.DataField == "Code") continue;
+
                 var raw = cells[j].Trim();
 
                 if (col.UseLookup && col.LookupItems.Count > 0)
@@ -646,7 +808,17 @@
                     var match = col.LookupItems.FirstOrDefault(x =>
                         string.Equals(x.Name, raw, StringComparison.OrdinalIgnoreCase) ||
                         string.Equals(x.Id, raw, StringComparison.OrdinalIgnoreCase));
-                    payload[col.DataField] = match?.Id ?? raw;
+
+                    if (match is null && !string.IsNullOrWhiteSpace(col.QuickCreateKey))
+                    {
+                        // FK missing — create "POR IDENTIFICAR" in the referenced catalog
+                        var porId = await GetOrCreatePorIdentificarAsync(col.QuickCreateKey, col.LookupItems, porIdentificarCache);
+                        payload[col.DataField] = porId;
+                    }
+                    else
+                    {
+                        payload[col.DataField] = match?.Id ?? (string.IsNullOrEmpty(raw) ? null : raw);
+                    }
                 }
                 else if (col.DataType == "boolean")
                     payload[col.DataField] = raw is "Sí" or "Si" or "si" or "sí" or "true" or "True" or "1" or "yes" or "Yes";
@@ -658,12 +830,36 @@
                     payload[col.DataField] = raw;
             }
 
+            // Set Code from editable codes (auto-generated or user-edited)
+            if (codeColDef is not null)
+                payload["Code"] = i < _importEditCodes.Count ? _importEditCodes[i].Trim() : "";
+
+            // Always active on import; company auto-resolved by API from session context
+            payload["IsActive"] = true;
+            payload.Remove("CompanyId");
+
+            // Duplicate check
+            var codeVal = payload.TryGetValue("Code", out var cvObj) ? cvObj?.ToString()?.Trim() ?? "" : "";
+            var nameVal = payload.TryGetValue("Name", out var nvObj) ? nvObj?.ToString()?.Trim() ?? "" : "";
+
+            var isDuplicate = (!string.IsNullOrEmpty(codeVal) && codeColDef is not null && existingCodes.Contains(codeVal))
+                           || (!string.IsNullOrEmpty(nameVal) && existingNames.Contains(nameVal));
+            if (isDuplicate)
+            {
+                _importStatuses[i] = "Duplicado — omitido";
+                _importDone = i + 1;
+                StateHasChanged();
+                continue;
+            }
+
             try
             {
                 var jsonElement = JsonSerializer.Deserialize<JsonElement>(JsonSerializer.Serialize(payload));
                 await ExecuteWriteAsync("insert", null, jsonElement);
                 _importStatuses[i] = "OK";
                 _importOk++;
+                if (!string.IsNullOrEmpty(codeVal)) existingCodes.Add(codeVal);
+                if (!string.IsNullOrEmpty(nameVal)) existingNames.Add(nameVal);
             }
             catch (Exception ex)
             {
@@ -676,6 +872,73 @@
 
         _importing = false;
         await RefreshCatalogAsync();
+    }
+
+    private async Task<string?> GetOrCreatePorIdentificarAsync(
+        string quickCreateKey,
+        List<CatalogLookupItem> currentItems,
+        Dictionary<string, string> cache)
+    {
+        const string porNombre = "POR IDENTIFICAR";
+        const string porCodigo = "POR-IDENTIFICAR";
+
+        // Return from cache if already created this session
+        if (cache.TryGetValue(quickCreateKey, out var cached)) return cached;
+
+        // Check if already exists in current lookup items
+        var existing = currentItems.FirstOrDefault(x =>
+            x.Name.Equals(porNombre, StringComparison.OrdinalIgnoreCase) ||
+            x.Name.Contains("POR IDENTIFICAR", StringComparison.OrdinalIgnoreCase));
+        if (existing is not null)
+        {
+            cache[quickCreateKey] = existing.Id;
+            return existing.Id;
+        }
+
+        // Create it
+        try
+        {
+            var result = await HandleQuickCreate(quickCreateKey, porCodigo, porNombre);
+            if (result.Success && !string.IsNullOrEmpty(result.NewId))
+            {
+                cache[quickCreateKey] = result.NewId;
+                return result.NewId;
+            }
+        }
+        catch { }
+
+        return null;
+    }
+
+    // Fields always excluded from import: company is auto-resolved by API; IsActive always set to true
+    private static readonly HashSet<string> _importAutoExcludeFields = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "CompanyId", "IsActive",
+    };
+
+    private static readonly Dictionary<string, string> _importColumnAliases = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["Nombre"] = "Name",
+        ["Código"] = "Code",
+        ["Codigo"] = "Code",
+        ["Clave"] = "Code",
+        ["Descripción"] = "Description",
+        ["Descripcion"] = "Description",
+        ["Activo"] = "IsActive",
+        ["Active"] = "IsActive",
+        ["Department"] = "DepartmentId",
+        ["Departamento"] = "DepartmentId",
+    };
+
+    private static CatalogColumnDefinition? FindImportColDef(string header, List<CatalogColumnDefinition> importCols)
+    {
+        var h = header.Trim();
+        if (string.IsNullOrEmpty(h)) return null;
+        var canonical = _importColumnAliases.TryGetValue(h, out var alias) ? alias : h;
+        return importCols.FirstOrDefault(c =>
+            string.Equals(c.Caption, h, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(c.DataField, h, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(c.DataField, canonical, StringComparison.OrdinalIgnoreCase));
     }
 
     private static List<string> ParseCsvLine(string line)

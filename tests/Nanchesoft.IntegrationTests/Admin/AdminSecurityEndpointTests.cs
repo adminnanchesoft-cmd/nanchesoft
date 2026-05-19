@@ -12,6 +12,7 @@ public class AdminSecurityEndpointTests
     public AdminSecurityEndpointTests(NanchesoftWebFactory factory)
     {
         _client = factory.CreateClient();
+        _client.DefaultRequestHeaders.Add("X-Is-Platform-Owner", "true");
     }
 
     // ── Users ──────────────────────────────────────────────────────────────────

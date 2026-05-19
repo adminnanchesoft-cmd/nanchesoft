@@ -243,7 +243,7 @@ public static class ThirdPartiesAndProductsEndpoints
         if (entity is null)
             return Results.NotFound(new { message = "No se encontró el cliente." });
         if (IsOutOfScope(httpContext, entity.TenantId))
-            return Results.Forbid();
+            return Results.StatusCode(403);
 
         var code = NormalizeUpper(request.Code, entity.Code);
         if (await db.Customers.AnyAsync(x => x.Id != id && x.CompanyId == entity.CompanyId && x.Code == code))
@@ -273,7 +273,7 @@ public static class ThirdPartiesAndProductsEndpoints
         if (entity is null)
             return Results.NotFound(new { message = "No se encontró el cliente." });
         if (IsOutOfScope(httpContext, entity.TenantId))
-            return Results.Forbid();
+            return Results.StatusCode(403);
 
         if (await db.ThirdPartyContacts.AnyAsync(x => x.ThirdPartyType == "customer" && x.ThirdPartyId == id) ||
             await db.ThirdPartyAddresses.AnyAsync(x => x.ThirdPartyType == "customer" && x.ThirdPartyId == id))
@@ -356,7 +356,7 @@ public static class ThirdPartiesAndProductsEndpoints
         if (entity is null)
             return Results.NotFound(new { message = "No se encontró el proveedor." });
         if (IsOutOfScope(httpContext, entity.TenantId))
-            return Results.Forbid();
+            return Results.StatusCode(403);
 
         var code = NormalizeUpper(request.Code, entity.Code);
         if (await db.Suppliers.AnyAsync(x => x.Id != id && x.CompanyId == entity.CompanyId && x.Code == code))
@@ -384,7 +384,7 @@ public static class ThirdPartiesAndProductsEndpoints
         if (entity is null)
             return Results.NotFound(new { message = "No se encontró el proveedor." });
         if (IsOutOfScope(httpContext, entity.TenantId))
-            return Results.Forbid();
+            return Results.StatusCode(403);
 
         if (await db.ThirdPartyContacts.AnyAsync(x => x.ThirdPartyType == "supplier" && x.ThirdPartyId == id) ||
             await db.ThirdPartyBankAccounts.AnyAsync(x => x.ThirdPartyType == "supplier" && x.ThirdPartyId == id))
@@ -482,7 +482,7 @@ public static class ThirdPartiesAndProductsEndpoints
         if (entity is null)
             return Results.NotFound(new { message = "No se encontró el contacto." });
         if (IsOutOfScope(httpContext, entity.TenantId))
-            return Results.Forbid();
+            return Results.StatusCode(403);
 
         var partyType = NormalizePartyType(request.ThirdPartyType, entity.ThirdPartyType);
         var thirdPartyId = request.ThirdPartyId ?? entity.ThirdPartyId;
@@ -522,7 +522,7 @@ public static class ThirdPartiesAndProductsEndpoints
         if (entity is null)
             return Results.NotFound(new { message = "No se encontró el contacto." });
         if (IsOutOfScope(httpContext, entity.TenantId))
-            return Results.Forbid();
+            return Results.StatusCode(403);
 
         db.ThirdPartyContacts.Remove(entity);
         await db.SaveChangesAsync();
@@ -631,7 +631,7 @@ public static class ThirdPartiesAndProductsEndpoints
         if (entity is null)
             return Results.NotFound(new { message = "No se encontró la dirección." });
         if (IsOutOfScope(httpContext, entity.TenantId))
-            return Results.Forbid();
+            return Results.StatusCode(403);
 
         var partyType = NormalizePartyType(request.ThirdPartyType, entity.ThirdPartyType);
         var thirdPartyId = request.ThirdPartyId ?? entity.ThirdPartyId;
@@ -676,7 +676,7 @@ public static class ThirdPartiesAndProductsEndpoints
         if (entity is null)
             return Results.NotFound(new { message = "No se encontró la dirección." });
         if (IsOutOfScope(httpContext, entity.TenantId))
-            return Results.Forbid();
+            return Results.StatusCode(403);
 
         db.ThirdPartyAddresses.Remove(entity);
         await db.SaveChangesAsync();
@@ -776,7 +776,7 @@ public static class ThirdPartiesAndProductsEndpoints
         if (entity is null)
             return Results.NotFound(new { message = "No se encontró la cuenta bancaria del tercero." });
         if (IsOutOfScope(httpContext, entity.TenantId))
-            return Results.Forbid();
+            return Results.StatusCode(403);
 
         var partyType = NormalizePartyType(request.ThirdPartyType, entity.ThirdPartyType);
         var thirdPartyId = request.ThirdPartyId ?? entity.ThirdPartyId;
@@ -816,7 +816,7 @@ public static class ThirdPartiesAndProductsEndpoints
         if (entity is null)
             return Results.NotFound(new { message = "No se encontró la cuenta bancaria del tercero." });
         if (IsOutOfScope(httpContext, entity.TenantId))
-            return Results.Forbid();
+            return Results.StatusCode(403);
 
         db.ThirdPartyBankAccounts.Remove(entity);
         await db.SaveChangesAsync();
@@ -885,7 +885,7 @@ public static class ThirdPartiesAndProductsEndpoints
         if (entity is null)
             return Results.NotFound(new { message = "No se encontró la categoría." });
         if (IsOutOfScope(httpContext, entity.TenantId))
-            return Results.Forbid();
+            return Results.StatusCode(403);
 
         var code = NormalizeUpper(request.Code, entity.Code);
         if (await db.ItemCategories.AnyAsync(x => x.Id != id && x.CompanyId == entity.CompanyId && x.Code == code))
@@ -908,7 +908,7 @@ public static class ThirdPartiesAndProductsEndpoints
         if (entity is null)
             return Results.NotFound(new { message = "No se encontró la categoría." });
         if (IsOutOfScope(httpContext, entity.TenantId))
-            return Results.Forbid();
+            return Results.StatusCode(403);
 
         if (await db.Items.AnyAsync(x => x.CategoryId == id))
             return Results.BadRequest(new { message = "No puedes eliminar una categoría en uso por productos." });
@@ -976,7 +976,7 @@ public static class ThirdPartiesAndProductsEndpoints
         if (entity is null)
             return Results.NotFound(new { message = "No se encontró la marca." });
         if (IsOutOfScope(httpContext, entity.TenantId))
-            return Results.Forbid();
+            return Results.StatusCode(403);
 
         var code = NormalizeUpper(request.Code, entity.Code);
         if (await db.ItemBrands.AnyAsync(x => x.Id != id && x.CompanyId == entity.CompanyId && x.Code == code))
@@ -998,7 +998,7 @@ public static class ThirdPartiesAndProductsEndpoints
         if (entity is null)
             return Results.NotFound(new { message = "No se encontró la marca." });
         if (IsOutOfScope(httpContext, entity.TenantId))
-            return Results.Forbid();
+            return Results.StatusCode(403);
 
         if (await db.Items.AnyAsync(x => x.BrandId == id))
             return Results.BadRequest(new { message = "No puedes eliminar una marca en uso." });
@@ -1066,7 +1066,7 @@ public static class ThirdPartiesAndProductsEndpoints
         if (entity is null)
             return Results.NotFound(new { message = "No se encontró el modelo." });
         if (IsOutOfScope(httpContext, entity.TenantId))
-            return Results.Forbid();
+            return Results.StatusCode(403);
 
         var code = NormalizeUpper(request.Code, entity.Code);
         if (await db.ItemModels.AnyAsync(x => x.Id != id && x.CompanyId == entity.CompanyId && x.Code == code))
@@ -1088,7 +1088,7 @@ public static class ThirdPartiesAndProductsEndpoints
         if (entity is null)
             return Results.NotFound(new { message = "No se encontró el modelo." });
         if (IsOutOfScope(httpContext, entity.TenantId))
-            return Results.Forbid();
+            return Results.StatusCode(403);
 
         if (await db.Items.AnyAsync(x => x.ModelId == id))
             return Results.BadRequest(new { message = "No puedes eliminar un modelo en uso por productos." });
@@ -1200,7 +1200,7 @@ public static class ThirdPartiesAndProductsEndpoints
         if (entity is null)
             return Results.NotFound(new { message = "No se encontró el producto/servicio." });
         if (IsOutOfScope(httpContext, entity.TenantId))
-            return Results.Forbid();
+            return Results.StatusCode(403);
 
         var code = NormalizeUpper(request.Code, entity.Code);
         if (await db.Items.AnyAsync(x => x.Id != id && x.CompanyId == entity.CompanyId && x.Code == code))
@@ -1238,7 +1238,7 @@ public static class ThirdPartiesAndProductsEndpoints
         if (entity is null)
             return Results.NotFound(new { message = "No se encontró el producto/servicio." });
         if (IsOutOfScope(httpContext, entity.TenantId))
-            return Results.Forbid();
+            return Results.StatusCode(403);
 
         if (await db.ItemBarcodes.AnyAsync(x => x.ItemId == id) || await db.ItemPriceListDetails.AnyAsync(x => x.ItemId == id))
             return Results.BadRequest(new { message = "No puedes eliminar un producto con códigos de barras o precios asignados." });
@@ -1319,7 +1319,7 @@ public static class ThirdPartiesAndProductsEndpoints
         if (entity is null)
             return Results.NotFound(new { message = "No se encontró la lista de precios." });
         if (IsOutOfScope(httpContext, entity.TenantId))
-            return Results.Forbid();
+            return Results.StatusCode(403);
 
         var code = NormalizeUpper(request.Code, entity.Code);
         if (await db.ItemPriceLists.AnyAsync(x => x.Id != id && x.CompanyId == entity.CompanyId && x.Code == code))
@@ -1350,7 +1350,7 @@ public static class ThirdPartiesAndProductsEndpoints
         if (entity is null)
             return Results.NotFound(new { message = "No se encontró la lista de precios." });
         if (IsOutOfScope(httpContext, entity.TenantId))
-            return Results.Forbid();
+            return Results.StatusCode(403);
 
         if (await db.Customers.AnyAsync(x => x.PriceListId == id) || await db.ItemPriceListDetails.AnyAsync(x => x.PriceListId == id))
             return Results.BadRequest(new { message = "No puedes eliminar una lista de precios en uso." });
@@ -1392,7 +1392,7 @@ public static class ThirdPartiesAndProductsEndpoints
         if (scopedItem is null)
             return Results.BadRequest(new { message = "No se encontró el producto relacionado." });
         if (IsOutOfScope(httpContext, scopedItem.TenantId))
-            return Results.Forbid();
+            return Results.StatusCode(403);
 
         var barcode = NormalizeText(request.Barcode);
         if (await db.ItemBarcodes.AnyAsync(x => x.Barcode == barcode))
@@ -1425,7 +1425,7 @@ public static class ThirdPartiesAndProductsEndpoints
         if (entity is null)
             return Results.NotFound(new { message = "No se encontró el código de barras." });
         if (entity.Item is not null && IsOutOfScope(httpContext, entity.Item.TenantId))
-            return Results.Forbid();
+            return Results.StatusCode(403);
 
         var itemId = request.ItemId ?? entity.ItemId;
         if (!await db.Items.AnyAsync(x => x.Id == itemId))
@@ -1459,7 +1459,7 @@ public static class ThirdPartiesAndProductsEndpoints
         if (entity is null)
             return Results.NotFound(new { message = "No se encontró el código de barras." });
         if (entity.Item is not null && IsOutOfScope(httpContext, entity.Item.TenantId))
-            return Results.Forbid();
+            return Results.StatusCode(403);
 
         db.ItemBarcodes.Remove(entity);
         await db.SaveChangesAsync();

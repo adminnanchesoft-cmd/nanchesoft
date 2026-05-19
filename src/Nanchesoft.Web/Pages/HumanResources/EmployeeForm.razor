@@ -6,39 +6,6 @@
 
 <PageTitle>@(_isNew ? "Nuevo colaborador" : "Editar colaborador") | Nanchesoft</PageTitle>
 
-<style>
-    .ns-section { background:#fff; border-radius:8px; border:1px solid #e2e8f0; box-shadow:0 1px 3px rgba(0,0,0,.06); overflow:hidden; margin-bottom:16px; }
-    .ns-section-header { display:flex; align-items:center; gap:8px; padding:10px 16px; border-bottom:1px solid #e2e8f0; font-weight:600; font-size:13px; letter-spacing:.3px; }
-    .ns-section-body { padding:16px; }
-    .ns-field-label { font-size:12px; font-weight:600; color:#475569; text-transform:uppercase; letter-spacing:.4px; margin-bottom:4px; display:block; }
-    .ns-form-input { border-color:#d1d5db; border-radius:6px; font-size:14px; }
-    .ns-form-input:focus { border-color:#1D4ED8; box-shadow:0 0 0 3px rgba(29,78,216,.1); }
-    .ns-tab-nav .nav-link { border:none; border-radius:8px; padding:8px 16px; font-size:13px; font-weight:500; color:#64748b; display:flex; align-items:center; gap:6px; transition:all .15s; }
-    .ns-tab-nav .nav-link.active { background:#1D4ED8; color:#fff; }
-    .ns-tab-nav .nav-link:not(.active):hover { background:#f1f5f9; color:#1e40af; }
-    .ns-header { background:#fff; border-bottom:1px solid #e2e8f0; padding:12px 20px; position:sticky; top:0; z-index:100; display:flex; align-items:center; gap:12px; box-shadow:0 1px 4px rgba(0,0,0,.06); }
-    .ns-badge-active { background:#dcfce7; color:#166534; border-radius:20px; font-size:11px; padding:2px 10px; font-weight:600; }
-    .ns-badge-inactive { background:#fee2e2; color:#991b1b; border-radius:20px; font-size:11px; padding:2px 10px; font-weight:600; }
-    .ns-plus-btn { width:34px; height:34px; border-radius:6px; border:1px solid #d1d5db; background:#f8fafc; display:inline-flex; align-items:center; justify-content:center; cursor:pointer; font-size:18px; font-weight:700; color:#475569; flex-shrink:0; transition:all .15s; line-height:1; }
-    .ns-plus-btn:hover { background:#1D4ED8; color:#fff; border-color:#1D4ED8; }
-    .ns-fk-group { display:flex; gap:6px; align-items:stretch; }
-    .ns-fk-group select, .ns-fk-group .form-select { flex:1; min-width:0; }
-    /* Color variants */
-    .ns-blue .ns-section-header { background:#EFF6FF; border-left:4px solid #1D4ED8; color:#1e40af; }
-    .ns-green .ns-section-header { background:#F0FDF4; border-left:4px solid #15803D; color:#166534; }
-    .ns-orange .ns-section-header { background:#FFF7ED; border-left:4px solid #C2410C; color:#9a3412; }
-    .ns-purple .ns-section-header { background:#F5F3FF; border-left:4px solid #6D28D9; color:#5b21b6; }
-    .ns-amber .ns-section-header { background:#FFFBEB; border-left:4px solid #D97706; color:#92400e; }
-    .ns-cyan .ns-section-header { background:#F0F9FF; border-left:4px solid #0369A1; color:#075985; }
-    .ns-slate .ns-section-header { background:#F8FAFC; border-left:4px solid #475569; color:#334155; }
-    .ns-rose .ns-section-header { background:#FFF1F2; border-left:4px solid #BE123C; color:#9f1239; }
-    .ns-tab-nav { gap:4px; flex-wrap:wrap; }
-    .ns-breadcrumb { font-size:12px; color:#94a3b8; }
-    .ns-breadcrumb a { color:#94a3b8; text-decoration:none; }
-    .ns-breadcrumb a:hover { color:#1D4ED8; }
-    .ns-breadcrumb .sep { margin:0 4px; }
-</style>
-
 <!-- ══════════ HEADER STICKY ══════════ -->
 <div class="ns-header">
     <button class="btn btn-link p-0 text-secondary" @onclick='() => Nav.NavigateTo("/human-resources/employees")' title="Volver">

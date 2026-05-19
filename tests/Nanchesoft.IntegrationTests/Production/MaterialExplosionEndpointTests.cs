@@ -51,7 +51,7 @@ public class MaterialExplosionEndpointTests
         var payload = new
         {
             finishedProductId = Guid.NewGuid(),
-            quantitiesPerSize = new Dictionary<string, int> { ["size-1"] = 10 }
+            quantitiesPerSize = new Dictionary<Guid, int> { [Guid.NewGuid()] = 10 }
         };
         var response = await _client.PostAsJsonAsync("/api/products/material-explosion/calculate", payload);
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);

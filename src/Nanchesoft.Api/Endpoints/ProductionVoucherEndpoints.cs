@@ -14,7 +14,7 @@ public static class ProductionVoucherEndpoints
         var g = app.MapGroup("/api/production/vouchers").WithTags("ProductionVouchers");
 
         // ─── List ────────────────────────────────────────────────────────────
-        g.MapGet("/", async (Guid? orderId, Guid? phaseId, string? status, int page, int pageSize, NanchesoftDbContext db) =>
+        g.MapGet("/", async (Guid? orderId, Guid? phaseId, string? status, int page = 1, int pageSize = 20, NanchesoftDbContext db = default!) =>
         {
             page = page < 1 ? 1 : page;
             pageSize = pageSize < 1 ? 20 : Math.Min(pageSize, 100);

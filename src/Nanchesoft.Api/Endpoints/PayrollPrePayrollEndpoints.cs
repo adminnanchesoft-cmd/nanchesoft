@@ -29,14 +29,36 @@ public static class PayrollPrePayrollEndpoints
         return app;
     }
 
-    private static async Task<(Guid? TenantId, Guid? CompanyId, Guid? BranchId)> ResolveDefaultContextAsync(NanchesoftDbContext db)
+    private static async Task<(Guid? TenantId, Guid? CompanyId, Guid? BranchId)> ResolveDefaultContextAsync(HttpContext httpContext, NanchesoftDbContext db)
     {
-        var company = await db.Companies.OrderBy(x => x.CreatedAt).Select(x => new { x.Id, x.TenantId }).FirstOrDefaultAsync();
-        if (company is null)
-            return (null, null, null);
+        var tenantId = ApiTenantScope.ResolveTenantId(httpContext);
+        var companyId = ApiTenantScope.ResolveCompanyId(httpContext);
+        var branchId = ApiTenantScope.ResolveBranchId(httpContext);
 
-        var branchId = await db.Branches.Where(x => x.CompanyId == company.Id).OrderBy(x => x.CreatedAt).Select(x => (Guid?)x.Id).FirstOrDefaultAsync();
-        return (company.TenantId, company.Id, branchId);
+        if (companyId.HasValue)
+        {
+            if (!tenantId.HasValue)
+                tenantId = await db.Companies.Where(x => x.Id == companyId.Value).Select(x => (Guid?)x.TenantId).FirstOrDefaultAsync();
+            if (!branchId.HasValue)
+                branchId = await db.Branches.Where(x => x.CompanyId == companyId.Value).OrderBy(x => x.CreatedAt).Select(x => (Guid?)x.Id).FirstOrDefaultAsync();
+            return (tenantId, companyId, branchId);
+        }
+
+        if (tenantId.HasValue)
+        {
+            var comp = await db.Companies.Where(x => x.TenantId == tenantId.Value).OrderBy(x => x.CreatedAt).Select(x => new { x.Id, x.TenantId }).FirstOrDefaultAsync();
+            if (comp is not null)
+            {
+                if (!branchId.HasValue)
+                    branchId = await db.Branches.Where(x => x.CompanyId == comp.Id).OrderBy(x => x.CreatedAt).Select(x => (Guid?)x.Id).FirstOrDefaultAsync();
+                return (tenantId, comp.Id, branchId);
+            }
+        }
+
+        var company = await db.Companies.OrderBy(x => x.CreatedAt).Select(x => new { x.Id, x.TenantId }).FirstOrDefaultAsync();
+        if (company is null) return (null, null, null);
+        var fallbackBranch = await db.Branches.Where(x => x.CompanyId == company.Id).OrderBy(x => x.CreatedAt).Select(x => (Guid?)x.Id).FirstOrDefaultAsync();
+        return (company.TenantId, company.Id, fallbackBranch);
     }
 
     private static string NormalizeText(string? value, string fallback = "")
@@ -97,9 +119,9 @@ public static class PayrollPrePayrollEndpoints
         return Results.Ok(rows);
     }
 
-    private static async Task<IResult> CreateAttendanceDailySummaryAsync(AttendanceDailySummaryRequest request, NanchesoftDbContext db)
+    private static async Task<IResult> CreateAttendanceDailySummaryAsync(HttpContext httpContext, AttendanceDailySummaryRequest request, NanchesoftDbContext db)
     {
-        var context = await ResolveDefaultContextAsync(db);
+        var context = await ResolveDefaultContextAsync(httpContext, db);
         var tenantId = request.TenantId ?? context.TenantId;
         var companyId = request.CompanyId ?? context.CompanyId;
         if (!tenantId.HasValue || !companyId.HasValue || !request.EmployeeId.HasValue)
@@ -221,9 +243,9 @@ public static class PayrollPrePayrollEndpoints
         return Results.Ok(rows);
     }
 
-    private static async Task<IResult> CreatePrePayrollAdjustmentAsync(PrePayrollAdjustmentRequest request, NanchesoftDbContext db)
+    private static async Task<IResult> CreatePrePayrollAdjustmentAsync(HttpContext httpContext, PrePayrollAdjustmentRequest request, NanchesoftDbContext db)
     {
-        var context = await ResolveDefaultContextAsync(db);
+        var context = await ResolveDefaultContextAsync(httpContext, db);
         var tenantId = request.TenantId ?? context.TenantId;
         var companyId = request.CompanyId ?? context.CompanyId;
         if (!tenantId.HasValue || !companyId.HasValue || !request.EmployeeId.HasValue || !request.PayrollPeriodId.HasValue)
@@ -343,9 +365,9 @@ public static class PayrollPrePayrollEndpoints
         return Results.Ok(rows);
     }
 
-    private static async Task<IResult> CreatePrePayrollCutoffAsync(PrePayrollCutoffRequest request, NanchesoftDbContext db)
+    private static async Task<IResult> CreatePrePayrollCutoffAsync(HttpContext httpContext, PrePayrollCutoffRequest request, NanchesoftDbContext db)
     {
-        var context = await ResolveDefaultContextAsync(db);
+        var context = await ResolveDefaultContextAsync(httpContext, db);
         var tenantId = request.TenantId ?? context.TenantId;
         var companyId = request.CompanyId ?? context.CompanyId;
         if (!tenantId.HasValue || !companyId.HasValue || !request.PayrollPeriodId.HasValue)

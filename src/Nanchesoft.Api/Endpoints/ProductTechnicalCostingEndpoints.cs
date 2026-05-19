@@ -14,23 +14,10 @@ public static class ProductTechnicalCostingEndpoints
     {
         var group = app.MapGroup("/api/products").WithTags("Product Technical Costing");
 
-        group.MapGet("/technical-center/overview", async (NanchesoftDbContext db) =>
-        {
-            var items = await BuildTechnicalCenterOverviewAsync(db);
-            return Results.Ok(items);
-        });
-
         group.MapGet("/engineering-readiness", async (NanchesoftDbContext db) =>
         {
             var rows = await BuildEngineeringReadinessAsync(db);
             return Results.Ok(rows);
-        });
-
-        group.MapGet("/technical-center/overview/{finishedProductId:guid}", async (Guid finishedProductId, NanchesoftDbContext db) =>
-        {
-            var items = await BuildTechnicalCenterOverviewAsync(db, finishedProductId);
-            var row = items.FirstOrDefault();
-            return row is null ? Results.NotFound() : Results.Ok(row);
         });
 
         group.MapPost("/technical-sheets/generate-from-product/{finishedProductId:guid}", async (Guid finishedProductId, NanchesoftDbContext db) =>

@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
+using Microsoft.EntityFrameworkCore;
 using Nanchesoft.IntegrationTests.Infrastructure;
 using Nanchesoft.Persistence.Context;
 
@@ -57,9 +58,9 @@ public class ProductionOrderEndpointTests
     {
         using var db = _factory.CreateDbContext();
 
-        var company = await GetFirstAsync(db, d => d.Companies);
-        var branch = await GetFirstAsync(db, d => d.Branches);
-        var product = await GetFirstAsync(db, d => d.FinishedProducts);
+        var company = await db.Companies.FirstOrDefaultAsync(x => x.Id == NanchesoftWebFactory.SeedCompanyId);
+        var branch = await db.Branches.FirstOrDefaultAsync(x => x.CompanyId == NanchesoftWebFactory.SeedCompanyId);
+        var product = await db.FinishedProducts.FirstOrDefaultAsync(x => x.CompanyId == NanchesoftWebFactory.SeedCompanyId);
 
         if (company is null || branch is null || product is null)
         {

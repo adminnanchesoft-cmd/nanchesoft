@@ -24,6 +24,16 @@ public static class PayrollAdvancedEndpoints
 
         var loans = app.MapGroup("/api/payroll/loans").WithTags("PayrollLoans");
         loans.MapGet("/", GetLoansAsync);
+        loans.MapGet("/{id:guid}", async (Guid id, NanchesoftDbContext db) =>
+        {
+            var row = await db.EmployeeLoans.AsNoTracking()
+                .Include(x => x.Company).Include(x => x.Employee).Include(x => x.PayrollConcept)
+                .Where(x => x.Id == id)
+                .Select(x => new EmployeeLoanDto { EmployeeLoanId = x.Id, TenantId = x.TenantId, CompanyId = x.CompanyId, CompanyName = x.Company != null ? x.Company.Name : string.Empty, EmployeeId = x.EmployeeId, EmployeeName = x.Employee != null ? (x.Employee.FirstName + " " + x.Employee.LastName).Trim() : string.Empty, PayrollConceptId = x.PayrollConceptId, PayrollConceptName = x.PayrollConcept != null ? x.PayrollConcept.Name : string.Empty, LoanNumber = x.LoanNumber, LoanDate = x.LoanDate, StartDate = x.StartDate, EndDate = x.EndDate, PrincipalAmount = x.PrincipalAmount, BalanceAmount = x.BalanceAmount, InstallmentAmount = x.InstallmentAmount, Installments = x.Installments, InstallmentsPaid = x.InstallmentsPaid, Status = x.Status, Notes = x.Notes, IsActive = x.IsActive })
+                .FirstOrDefaultAsync();
+            if (row is null) return Results.NotFound(new { message = "No se encontró el préstamo." });
+            return Results.Ok(row);
+        });
         loans.MapPost("/", CreateLoanAsync);
         loans.MapPut("/{id:guid}", UpdateLoanAsync);
         loans.MapDelete("/{id:guid}", DeleteLoanAsync);
@@ -43,10 +53,28 @@ public static class PayrollAdvancedEndpoints
         return app;
     }
 
-    private static async Task<(Guid? TenantId, Guid? CompanyId)> ResolveDefaultContextAsync(NanchesoftDbContext db)
+    private static async Task<(Guid? TenantId, Guid? CompanyId)> ResolveDefaultContextAsync(HttpContext httpContext, NanchesoftDbContext db)
     {
+        var tenantId = ApiTenantScope.ResolveTenantId(httpContext);
+        var companyId = ApiTenantScope.ResolveCompanyId(httpContext);
+
+        if (companyId.HasValue)
+        {
+            if (!tenantId.HasValue)
+                tenantId = await db.Companies.Where(x => x.Id == companyId.Value).Select(x => (Guid?)x.TenantId).FirstOrDefaultAsync();
+            return (tenantId, companyId);
+        }
+
+        if (tenantId.HasValue)
+        {
+            var comp = await db.Companies.Where(x => x.TenantId == tenantId.Value).OrderBy(x => x.CreatedAt).Select(x => new { x.Id, x.TenantId }).FirstOrDefaultAsync();
+            if (comp is not null)
+                return (tenantId, comp.Id);
+        }
+
         var company = await db.Companies.OrderBy(x => x.CreatedAt).Select(x => new { x.Id, x.TenantId }).FirstOrDefaultAsync();
-        return company is null ? (null, null) : (company.TenantId, company.Id);
+        if (company is null) return (null, null);
+        return (company.TenantId, company.Id);
     }
 
     private static DateTime NormalizeUtc(DateTime? value, DateTime fallback)
@@ -112,9 +140,9 @@ public static class PayrollAdvancedEndpoints
         return Results.Ok(rows);
     }
 
-    private static async Task<IResult> CreateAttendancePunchAsync(AttendancePunchRequest request, NanchesoftDbContext db)
+    private static async Task<IResult> CreateAttendancePunchAsync(HttpContext httpContext, AttendancePunchRequest request, NanchesoftDbContext db)
     {
-        var context = await ResolveDefaultContextAsync(db);
+        var context = await ResolveDefaultContextAsync(httpContext, db);
         var tenantId = request.TenantId ?? context.TenantId;
         var companyId = request.CompanyId ?? context.CompanyId;
         if (!tenantId.HasValue || !companyId.HasValue || !request.EmployeeId.HasValue)
@@ -216,9 +244,9 @@ public static class PayrollAdvancedEndpoints
         return Results.Ok(rows);
     }
 
-    private static async Task<IResult> CreateRecurringMovementAsync(PayrollRecurringMovementRequest request, NanchesoftDbContext db)
+    private static async Task<IResult> CreateRecurringMovementAsync(HttpContext httpContext, PayrollRecurringMovementRequest request, NanchesoftDbContext db)
     {
-        var context = await ResolveDefaultContextAsync(db);
+        var context = await ResolveDefaultContextAsync(httpContext, db);
         var tenantId = request.TenantId ?? context.TenantId;
         var companyId = request.CompanyId ?? context.CompanyId;
         if (!tenantId.HasValue || !companyId.HasValue || !request.EmployeeId.HasValue || !request.PayrollConceptId.HasValue)
@@ -326,9 +354,9 @@ public static class PayrollAdvancedEndpoints
         return Results.Ok(rows);
     }
 
-    private static async Task<IResult> CreateLoanAsync(EmployeeLoanRequest request, NanchesoftDbContext db)
+    private static async Task<IResult> CreateLoanAsync(HttpContext httpContext, EmployeeLoanRequest request, NanchesoftDbContext db)
     {
-        var context = await ResolveDefaultContextAsync(db);
+        var context = await ResolveDefaultContextAsync(httpContext, db);
         var tenantId = request.TenantId ?? context.TenantId;
         var companyId = request.CompanyId ?? context.CompanyId;
         if (!tenantId.HasValue || !companyId.HasValue || !request.EmployeeId.HasValue || !request.PayrollConceptId.HasValue)
@@ -433,9 +461,9 @@ public static class PayrollAdvancedEndpoints
         return Results.Ok(rows);
     }
 
-    private static async Task<IResult> CreateLoanDeductionAsync(EmployeeLoanDeductionRequest request, NanchesoftDbContext db)
+    private static async Task<IResult> CreateLoanDeductionAsync(HttpContext httpContext, EmployeeLoanDeductionRequest request, NanchesoftDbContext db)
     {
-        var context = await ResolveDefaultContextAsync(db);
+        var context = await ResolveDefaultContextAsync(httpContext, db);
         var tenantId = request.TenantId ?? context.TenantId;
         var companyId = request.CompanyId ?? context.CompanyId;
         if (!tenantId.HasValue || !companyId.HasValue || !request.EmployeeLoanId.HasValue || !request.EmployeeId.HasValue)
@@ -663,6 +691,9 @@ public static class PayrollAdvancedEndpoints
 
     private static async Task<IResult> GetReceiptLinesAsync(Guid runId, NanchesoftDbContext db)
     {
+        if (!await db.PayrollRuns.AnyAsync(x => x.Id == runId))
+            return Results.NotFound(new { message = "No se encontró la corrida de nómina." });
+
         var rows = await db.PayrollRunLines.AsNoTracking()
             .Include(x => x.Employee)
             .Include(x => x.PayrollRun)

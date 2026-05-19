@@ -201,7 +201,7 @@ public static class UserEndpoints
         if (!ApiTenantScope.IsPlatformOwner(httpContext) && tenantScopeId.HasValue)
         {
             if (user.TenantId != tenantScopeId.Value)
-                return Results.Forbid();
+                return Results.StatusCode(403);
             request.TenantId = tenantScopeId;
         }
 
@@ -288,7 +288,7 @@ public static class UserEndpoints
 
         var tenantId = ApiTenantScope.ResolveTenantId(httpContext);
         if (!ApiTenantScope.IsPlatformOwner(httpContext) && tenantId.HasValue && user.TenantId != tenantId.Value)
-            return Results.Forbid();
+            return Results.StatusCode(403);
 
         var sessions = await db.UserSessions.Where(x => x.UserId == user.Id).ToListAsync();
         var accessLogs = await db.AccessLogs.Where(x => x.UserId == user.Id).ToListAsync();

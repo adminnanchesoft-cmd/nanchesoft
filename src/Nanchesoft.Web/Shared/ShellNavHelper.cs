@@ -74,12 +74,16 @@ public static class ShellNavHelper
             ("Inicio", "dashboard")
         };
 
-        if (group is not null)
+        // Skip the group when it IS the home group (route resolves to "dashboard")
+        // This avoids "Inicio > Inicio > ..." duplication caused by the NavigationService fallback
+        var groupRoute = group is not null ? GetGroupRoute(group) : null;
+        if (group is not null && groupRoute != "dashboard")
         {
-            parts.Add((group.Title, GetGroupRoute(group)));
+            parts.Add((group.Title, groupRoute!));
         }
 
-        if (item is not null && item.Title != group?.Title)
+        // Add item only when it has a title distinct from the last breadcrumb already added
+        if (item is not null && item.Title != parts[^1].Title)
         {
             parts.Add((item.Title, normalized));
         }

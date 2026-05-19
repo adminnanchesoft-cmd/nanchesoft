@@ -23,7 +23,7 @@ public static class SubscriptionControlEndpoints
     {
         if (!IsPlatformOwner(httpContext))
         {
-            return Results.Forbid();
+            return Results.StatusCode(403);
         }
         var today = DateTime.UtcNow.Date;
         var selectedYear = year.GetValueOrDefault(today.Year);
@@ -86,7 +86,7 @@ public static class SubscriptionControlEndpoints
     {
         if (!IsPlatformOwner(httpContext))
         {
-            return Results.Forbid();
+            return Results.StatusCode(403);
         }
         var today = DateTime.UtcNow.Date;
         var selectedYear = request.Year.GetValueOrDefault(today.Year);
@@ -171,7 +171,7 @@ public static class SubscriptionControlEndpoints
     {
         if (!IsPlatformOwner(httpContext))
         {
-            return Results.Forbid();
+            return Results.StatusCode(403);
         }
         var entity = await db.SubscriptionCharges.FirstOrDefaultAsync(x => x.Id == id && x.IsActive);
         if (entity is null)
@@ -200,7 +200,7 @@ public static class SubscriptionControlEndpoints
     {
         if (!IsPlatformOwner(httpContext))
         {
-            return Results.Forbid();
+            return Results.StatusCode(403);
         }
         var entity = await db.SubscriptionCharges.FirstOrDefaultAsync(x => x.Id == id && x.IsActive);
         if (entity is null)

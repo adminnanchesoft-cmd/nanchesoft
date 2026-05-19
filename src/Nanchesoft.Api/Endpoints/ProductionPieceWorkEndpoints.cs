@@ -18,9 +18,9 @@ public static class ProductionPieceWorkEndpoints
             string? status,
             DateOnly? from,
             DateOnly? to,
-            int page,
-            int pageSize,
-            NanchesoftDbContext db) =>
+            int page = 1,
+            int pageSize = 20,
+            NanchesoftDbContext db = default!) =>
         {
             page = page < 1 ? 1 : page;
             pageSize = pageSize < 1 ? 20 : Math.Min(pageSize, 200);
@@ -175,15 +175,17 @@ public static class ProductionPieceWorkEndpoints
             return Results.Ok(new { message = $"{records.Count} registros aprobados.", count = records.Count });
         });
 
-        // ─── Summary by employee for a date range ─────────────────────────────
+        // ─── Summary by employee for a month ─────────────────────────────────
         g.MapGet("/summary", async (
-            Guid companyId,
-            DateOnly from,
-            DateOnly to,
+            int year,
+            int month,
+            Guid? companyId,
             NanchesoftDbContext db) =>
         {
+            var from = new DateOnly(year, month, 1);
+            var to = from.AddMonths(1).AddDays(-1);
             var records = await db.PieceWorkRecords.AsNoTracking()
-                .Where(x => x.CompanyId == companyId
+                .Where(x => (companyId == null || companyId == Guid.Empty || x.CompanyId == companyId)
                     && x.WorkDate >= from && x.WorkDate <= to
                     && x.Status != "cancelled")
                 .GroupBy(x => x.EmployeeId)

@@ -63,9 +63,10 @@ public class TreasuryEndpointTests
     [Fact]
     public async Task CreateCashAccount_WithMinimalData_ReturnsOkWithId()
     {
+        var uniqueCode = $"INT-CX-{DateTime.UtcNow:yyyyMMddHHmmssfff}";
         var payload = new
         {
-            code = "INT-CX-01",
+            code = uniqueCode,
             name = "Caja integración test",
             initialBalance = 0m,
             isActive = true
@@ -77,6 +78,9 @@ public class TreasuryEndpointTests
         var created = await response.Content.ReadFromJsonAsync<CreatedResponse>();
         created.Should().NotBeNull();
         created!.Id.Should().NotBe(Guid.Empty);
+
+        // Cleanup
+        await _client.DeleteAsync($"/api/treasury/cash-accounts/{created.Id}");
     }
 
     // ── Bank Accounts ────────────────────────────────────────────────────────

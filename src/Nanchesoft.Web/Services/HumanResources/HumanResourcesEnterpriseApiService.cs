@@ -928,11 +928,19 @@ private async Task<CatalogViewDefinition> GetSuccessionPlansAsync()
 
     private async Task<List<CatalogLookupItem>> GetCompanyLookupsAsync()
     {
+        var tenantId = _appState.CurrentTenantId ?? _authState.TenantId;
+        var companyId = _appState.CurrentCompanyId ?? _authState.CompanyId;
+
+        if (!tenantId.HasValue && !companyId.HasValue)
+            return [];
+
         var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
         var rows = await client.GetFromJsonAsync<List<CompanyLookupDto>>("/api/organization/companies") ?? [];
 
-        if (!_authState.IsPlatformOwner && _appState.CurrentTenantId.HasValue)
-            rows = rows.Where(x => x.TenantId == _appState.CurrentTenantId.Value).ToList();
+        if (tenantId.HasValue)
+            rows = rows.Where(x => x.TenantId == tenantId.Value).ToList();
+        else if (companyId.HasValue)
+            rows = rows.Where(x => x.CompanyId == companyId.Value).ToList();
 
         return rows.Where(x => x.IsActive).OrderBy(x => x.Name).Select(x => new CatalogLookupItem { Id = x.CompanyId.ToString("D"), Name = x.Name }).ToList();
     }
@@ -1303,7 +1311,7 @@ private static OnboardingChecklistRecordRequest MapOnboardingChecklistRequest(Js
 
     private static CatalogColumnDefinition SmartLookupColumn(string field, string caption, List<CatalogLookupItem> lookupItems, bool required = false, int width = 180)
         => lookupItems.Count <= 1
-            ? new() { DataField = field, Caption = caption, DataType = "string", Visible = false, AllowEditing = false, Width = width, UseLookup = true, LookupItems = lookupItems }
+            ? new() { DataField = field, Caption = caption, DataType = "string", Visible = false, ShowInGrid = false, AllowEditing = false, Width = width, UseLookup = true, LookupItems = lookupItems }
             : LookupColumn(field, caption, lookupItems, required, width);
 
 

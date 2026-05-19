@@ -26,7 +26,7 @@ public static class TenantEndpoints
     {
         if (!IsPlatformOwner(httpContext))
         {
-            return Results.Forbid();
+            return Results.StatusCode(403);
         }
         var tenants = await db.Tenants
             .AsNoTracking()
@@ -54,7 +54,7 @@ public static class TenantEndpoints
     {
         if (!IsPlatformOwner(httpContext))
         {
-            return Results.Forbid();
+            return Results.StatusCode(403);
         }
         var plans = await db.Plans
             .AsNoTracking()
@@ -74,7 +74,7 @@ public static class TenantEndpoints
     {
         if (!IsPlatformOwner(httpContext))
         {
-            return Results.Forbid();
+            return Results.StatusCode(403);
         }
         var tenants = await db.Tenants
             .AsNoTracking()
@@ -108,7 +108,7 @@ public static class TenantEndpoints
     {
         if (!IsPlatformOwner(httpContext))
         {
-            return Results.Forbid();
+            return Results.StatusCode(403);
         }
         var code = NormalizeCode(request.Code);
         var name = (request.Name ?? string.Empty).Trim();
@@ -162,7 +162,7 @@ public static class TenantEndpoints
     {
         if (!IsPlatformOwner(httpContext))
         {
-            return Results.Forbid();
+            return Results.StatusCode(403);
         }
 
         var tenant = await db.Tenants.FirstOrDefaultAsync(x => x.Id == id);
@@ -219,7 +219,7 @@ public static class TenantEndpoints
     {
         if (!IsPlatformOwner(httpContext))
         {
-            return Results.Forbid();
+            return Results.StatusCode(403);
         }
         var tenant = await db.Tenants.FirstOrDefaultAsync(x => x.Id == id);
         if (tenant is null)
@@ -265,7 +265,7 @@ public static class TenantEndpoints
     {
         if (!IsPlatformOwner(httpContext))
         {
-            return Results.Forbid();
+            return Results.StatusCode(403);
         }
         var tenant = await db.Tenants.FirstOrDefaultAsync(x => x.Id == id);
         if (tenant is null)

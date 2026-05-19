@@ -95,9 +95,9 @@ public static class WarehouseEndpoints
         if (!ApiTenantScope.IsPlatformOwner(httpContext))
         {
             if (tenantId.HasValue && branch.TenantId != tenantId.Value)
-                return Results.Forbid();
+                return Results.StatusCode(403);
             if (companyId.HasValue && branch.CompanyId != companyId.Value)
-                return Results.Forbid();
+                return Results.StatusCode(403);
         }
 
         var code = (request.Code ?? string.Empty).Trim().ToUpperInvariant();
@@ -146,7 +146,7 @@ public static class WarehouseEndpoints
         var tenantScopeId = ApiTenantScope.ResolveTenantId(httpContext);
         var companyScopeId = ApiTenantScope.ResolveCompanyId(httpContext);
         if (!ApiTenantScope.IsPlatformOwner(httpContext) && tenantScopeId.HasValue && warehouse.TenantId != tenantScopeId.Value)
-            return Results.Forbid();
+            return Results.StatusCode(403);
 
         Branch? branch = null;
         if (request.BranchId.HasValue && request.BranchId.Value != Guid.Empty)
@@ -157,9 +157,9 @@ public static class WarehouseEndpoints
         if (!ApiTenantScope.IsPlatformOwner(httpContext))
         {
             if (tenantScopeId.HasValue && branch.TenantId != tenantScopeId.Value)
-                return Results.Forbid();
+                return Results.StatusCode(403);
             if (companyScopeId.HasValue && branch.CompanyId != companyScopeId.Value)
-                return Results.Forbid();
+                return Results.StatusCode(403);
         }
 
         var code = string.IsNullOrWhiteSpace(request.Code) ? warehouse.Code : request.Code.Trim().ToUpperInvariant();
@@ -206,9 +206,9 @@ public static class WarehouseEndpoints
         if (!ApiTenantScope.IsPlatformOwner(httpContext))
         {
             if (tenantId.HasValue && warehouse.TenantId != tenantId.Value)
-                return Results.Forbid();
+                return Results.StatusCode(403);
             if (companyId.HasValue && warehouse.Branch is not null && warehouse.Branch.CompanyId != companyId.Value)
-                return Results.Forbid();
+                return Results.StatusCode(403);
         }
 
         db.Warehouses.Remove(warehouse);

@@ -133,7 +133,7 @@
                         <select class="form-select" @bind="_newBranchId">
                             @foreach (var b in _branches)
                             {
-                                <option value="@b.Id">@b.Name</option>
+                                <option value="@b.BranchId">@b.Name</option>
                             }
                         </select>
                     </div>
@@ -373,7 +373,7 @@
         {
             var result = await _http!.GetFromJsonAsync<List<BranchRow>>($"/api/organization/branches?companyId={_selectedCompanyId}");
             _branches = result ?? new();
-            if (_branches.Count > 0) _newBranchId = _branches[0].Id;
+            if (_branches.Count > 0) _newBranchId = _branches[0].BranchId;
         }
         catch { }
     }
@@ -406,7 +406,7 @@
     private void OpenNewScheduleModal()
     {
         _newCompanyId = _selectedCompanyId;
-        if (_branches.Count > 0) _newBranchId = _branches[0].Id;
+        if (_branches.Count > 0) _newBranchId = _branches[0].BranchId;
         _newWeekCode = $"{_yearFilter}-W{ISOWeekNumber(DateTime.Today):D2}";
         _newNotes = string.Empty;
         _modalError = string.Empty;
@@ -613,7 +613,7 @@
     // ── Records ──────────────────────────────────────────────────────────────
 
     private sealed record CompanyRow(Guid Id, string Name);
-    private sealed record BranchRow(Guid Id, string Name);
+    private sealed record BranchRow(Guid BranchId, string Name);
     private sealed record ErrorBody(string Message);
 
     private sealed class ScheduleSummaryRow

@@ -11,7 +11,7 @@ public static class ProductionScheduleEndpoints
         var g = app.MapGroup("/api/production/schedules").WithTags("ProductionSchedules");
 
         // ─── List schedules ──────────────────────────────────────────────────
-        g.MapGet("/", async (Guid? companyId, Guid? branchId, string? status, int year, NanchesoftDbContext db) =>
+        g.MapGet("/", async (Guid? companyId, Guid? branchId, string? status, int year = 0, NanchesoftDbContext db = default!) =>
         {
             var query = db.ProductionSchedules.AsNoTracking().Include(x => x.Lines).AsQueryable();
 

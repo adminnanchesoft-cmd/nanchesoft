@@ -37,6 +37,7 @@
             </select>
             <button class="btn btn-outline-secondary btn-sm" @onclick="LoadRecordsAsync">Actualizar</button>
             <button class="btn btn-primary btn-sm" @onclick="OpenNewModal">+ Nueva inspección</button>
+
             <a class="btn btn-outline-secondary btn-sm" href="/produccion/ordenes">Órdenes</a>
         </div>
     </div>
@@ -177,9 +178,21 @@
                 </div>
                 <div class="modal-body">
                     <div class="mb-3">
-                        <label class="form-label fw-semibold">Orden de producción (ID)</label>
-                        <input class="form-control" @bind="_newOrderId" placeholder="GUID de la orden" />
-                        <div class="form-text">Ingresa el ID de la orden de producción a inspeccionar.</div>
+                        <label class="form-label fw-semibold">Orden de producción</label>
+                        @if (_ordersForQc.Count == 0)
+                        {
+                            <div class="alert alert-warning py-2">No hay órdenes en proceso o completadas disponibles para inspeccionar.</div>
+                        }
+                        else
+                        {
+                            <select class="form-select" @bind="_newOrderId">
+                                <option value="">— Selecciona una orden —</option>
+                                @foreach (var o in _ordersForQc)
+                                {
+                                    <option value="@o.Id">@o.Folio — @o.StatusLabel (@o.TotalUnitsPlanned u.)</option>
+                                }
+                            </select>
+                        }
                     </div>
                     <div class="mb-3">
                         <label class="form-label fw-semibold">Fecha de inspección</label>
@@ -383,6 +396,9 @@
     private string _message = string.Empty;
     private string _error = string.Empty;
 
+    // Orders available for QC
+    private List<QcOrderOption> _ordersForQc = new();
+
     // New record modal
     private bool _showNewModal;
     private string _newOrderId = string.Empty;
@@ -451,7 +467,7 @@
         await Task.WhenAll(LoadRecordsAsync(), LoadDashboardAsync());
     }
 
-    private void OpenNewModal()
+    private async Task OpenNewModal()
     {
         _newOrderId = string.Empty;
         _newDate = DateOnly.FromDateTime(DateTime.Today);
@@ -459,7 +475,38 @@
         _newInspected = _newApproved = _newRejected = 0;
         _newNotes = string.Empty;
         _modalError = string.Empty;
+        await LoadOrdersForQcAsync();
         _showNewModal = true;
+    }
+
+    private async Task LoadOrdersForQcAsync()
+    {
+        try
+        {
+            var result = await _http!.GetFromJsonAsync<OrderListForQc>(
+                $"/api/production/orders?companyId={_selectedCompanyId}&pageSize=200");
+            _ordersForQc = (result?.Items ?? [])
+                .Where(o => o.Status is "in_progress" or "completed" or "reserved" or "exploded" or "planned")
+                .Select(o => new QcOrderOption
+                {
+                    Id = o.ProductionOrderId,
+                    Folio = o.Folio,
+                    Status = o.Status,
+                    StatusLabel = o.Status switch
+                    {
+                        "in_progress" => "En proceso",
+                        "completed"   => "Completada",
+                        "reserved"    => "Reservada",
+                        "exploded"    => "Explosionada",
+                        "planned"     => "Planeada",
+                        _             => o.Status
+                    },
+                    TotalUnitsPlanned = o.TotalUnitsPlanned
+                })
+                .ToList();
+            if (_ordersForQc.Count > 0) _newOrderId = _ordersForQc[0].Id.ToString();
+        }
+        catch { }
     }
 
     private void CloseNewModal() => _showNewModal = false;
@@ -467,7 +514,7 @@
     private async Task CreateRecordAsync()
     {
         _modalError = string.Empty;
-        if (!Guid.TryParse(_newOrderId, out var orderId)) { _modalError = "ID de orden inválido."; return; }
+        if (!Guid.TryParse(_newOrderId, out var orderId)) { _modalError = "Selecciona una orden de producción."; return; }
         if (string.IsNullOrWhiteSpace(_newInspector)) { _modalError = "El inspector es obligatorio."; return; }
 
         _busy = true;
@@ -647,6 +694,28 @@
 
     private sealed record CompanyRow(Guid Id, string Name);
     private sealed record ErrorBody(string Message);
+
+    private sealed class QcOrderOption
+    {
+        public Guid Id { get; set; }
+        public string Folio { get; set; } = string.Empty;
+        public string Status { get; set; } = string.Empty;
+        public string StatusLabel { get; set; } = string.Empty;
+        public int TotalUnitsPlanned { get; set; }
+    }
+
+    private sealed class OrderListForQc
+    {
+        public List<OrderForQcRow> Items { get; set; } = [];
+    }
+
+    private sealed class OrderForQcRow
+    {
+        public Guid ProductionOrderId { get; set; }
+        public string Folio { get; set; } = string.Empty;
+        public string Status { get; set; } = string.Empty;
+        public int TotalUnitsPlanned { get; set; }
+    }
 
     private sealed class QcRecordRow
     {

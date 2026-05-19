@@ -96,7 +96,7 @@ public class ProductEngineeringEndpointTests
     [Fact]
     public async Task UpdateProductFamily_UnknownId_Returns404()
     {
-        var response = await _client.PutAsJsonAsync($"/api/products/families/{Guid.NewGuid()}", new { name = "Test" });
+        var response = await _client.PutAsJsonAsync($"/api/products/families/{Guid.NewGuid()}", new { code = "ZZ-NOTFOUND", name = "Test" });
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
@@ -127,7 +127,7 @@ public class ProductEngineeringEndpointTests
     [Fact]
     public async Task UpdateProductLast_UnknownId_Returns404()
     {
-        var response = await _client.PutAsJsonAsync($"/api/products/lasts/{Guid.NewGuid()}", new { name = "Test" });
+        var response = await _client.PutAsJsonAsync($"/api/products/lasts/{Guid.NewGuid()}", new { code = "ZZ-NOTFOUND", name = "Test" });
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
@@ -158,7 +158,7 @@ public class ProductEngineeringEndpointTests
     [Fact]
     public async Task UpdateProductLine_UnknownId_Returns404()
     {
-        var response = await _client.PutAsJsonAsync($"/api/products/lines/{Guid.NewGuid()}", new { name = "Test" });
+        var response = await _client.PutAsJsonAsync($"/api/products/lines/{Guid.NewGuid()}", new { code = "ZZ-NOTFOUND", name = "Test" });
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 

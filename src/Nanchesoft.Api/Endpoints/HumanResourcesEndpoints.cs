@@ -141,14 +141,39 @@ public static class HumanResourcesEndpoints
         return app;
     }
 
-    private static async Task<(Guid? TenantId, Guid? CompanyId, Guid? BranchId)> ResolveDefaultContextAsync(NanchesoftDbContext db)
+    private static async Task<(Guid? TenantId, Guid? CompanyId, Guid? BranchId)> ResolveDefaultContextAsync(HttpContext httpContext, NanchesoftDbContext db)
     {
+        // Headers sent by ApiTenantScopeHandler always take priority
+        var tenantId = ApiTenantScope.ResolveTenantId(httpContext);
+        var companyId = ApiTenantScope.ResolveCompanyId(httpContext);
+        var branchId = ApiTenantScope.ResolveBranchId(httpContext);
+
+        if (companyId.HasValue)
+        {
+            if (!tenantId.HasValue)
+                tenantId = await db.Companies.Where(x => x.Id == companyId.Value).Select(x => (Guid?)x.TenantId).FirstOrDefaultAsync();
+            if (!branchId.HasValue)
+                branchId = await db.Branches.Where(x => x.CompanyId == companyId.Value).OrderBy(x => x.CreatedAt).Select(x => (Guid?)x.Id).FirstOrDefaultAsync();
+            return (tenantId, companyId, branchId);
+        }
+
+        if (tenantId.HasValue)
+        {
+            var comp = await db.Companies.Where(x => x.TenantId == tenantId.Value).OrderBy(x => x.CreatedAt).Select(x => new { x.Id, x.TenantId }).FirstOrDefaultAsync();
+            if (comp is not null)
+            {
+                if (!branchId.HasValue)
+                    branchId = await db.Branches.Where(x => x.CompanyId == comp.Id).OrderBy(x => x.CreatedAt).Select(x => (Guid?)x.Id).FirstOrDefaultAsync();
+                return (tenantId, comp.Id, branchId);
+            }
+        }
+
+        // Last resort: first company in DB (legacy behaviour for seedless setups)
         var company = await db.Companies.OrderBy(x => x.CreatedAt).Select(x => new { x.Id, x.TenantId }).FirstOrDefaultAsync();
         if (company is null)
             return (null, null, null);
-
-        var branchId = await db.Branches.Where(x => x.CompanyId == company.Id).OrderBy(x => x.CreatedAt).Select(x => (Guid?)x.Id).FirstOrDefaultAsync();
-        return (company.TenantId, company.Id, branchId);
+        var fallbackBranch = await db.Branches.Where(x => x.CompanyId == company.Id).OrderBy(x => x.CreatedAt).Select(x => (Guid?)x.Id).FirstOrDefaultAsync();
+        return (company.TenantId, company.Id, fallbackBranch);
     }
 
     private static string NormalizeUpper(string? value, string fallback = "")
@@ -160,9 +185,15 @@ public static class HumanResourcesEndpoints
     private static string NormalizeStatus(string? value, string fallback)
         => string.IsNullOrWhiteSpace(value) ? fallback : value.Trim().ToLowerInvariant();
 
-    private static async Task<IResult> GetDepartmentsAsync(NanchesoftDbContext db)
+    private static async Task<IResult> GetDepartmentsAsync(HttpContext httpContext, NanchesoftDbContext db)
     {
+        var tenantId = ApiTenantScope.ResolveTenantId(httpContext);
+        var companyId = ApiTenantScope.ResolveCompanyId(httpContext);
+
         var rows = await db.Departments.AsNoTracking()
+            .Where(x => (!tenantId.HasValue && !companyId.HasValue)
+                     || (x.TenantId == tenantId)
+                     || (!tenantId.HasValue && x.CompanyId == companyId))
             .Include(x => x.Company)
             .OrderBy(x => x.Code)
             .Select(x => new DepartmentDto
@@ -181,9 +212,9 @@ public static class HumanResourcesEndpoints
         return Results.Ok(rows);
     }
 
-    private static async Task<IResult> CreateDepartmentAsync(DepartmentRequest request, NanchesoftDbContext db)
+    private static async Task<IResult> CreateDepartmentAsync(HttpContext httpContext, DepartmentRequest request, NanchesoftDbContext db)
     {
-        var context = await ResolveDefaultContextAsync(db);
+        var context = await ResolveDefaultContextAsync(httpContext, db);
         var tenantId = request.TenantId ?? context.TenantId;
         var companyId = request.CompanyId ?? context.CompanyId;
 
@@ -250,9 +281,15 @@ public static class HumanResourcesEndpoints
         return Results.Ok(new { success = true });
     }
 
-    private static async Task<IResult> GetPositionsAsync(NanchesoftDbContext db)
+    private static async Task<IResult> GetPositionsAsync(HttpContext httpContext, NanchesoftDbContext db)
     {
+        var tenantId = ApiTenantScope.ResolveTenantId(httpContext);
+        var companyId = ApiTenantScope.ResolveCompanyId(httpContext);
+
         var rows = await db.Positions.AsNoTracking()
+            .Where(x => (!tenantId.HasValue && !companyId.HasValue)
+                     || (x.TenantId == tenantId)
+                     || (!tenantId.HasValue && x.CompanyId == companyId))
             .Include(x => x.Company)
             .Include(x => x.Department)
             .OrderBy(x => x.Code)
@@ -276,9 +313,9 @@ public static class HumanResourcesEndpoints
         return Results.Ok(rows);
     }
 
-    private static async Task<IResult> CreatePositionAsync(PositionRequest request, NanchesoftDbContext db)
+    private static async Task<IResult> CreatePositionAsync(HttpContext httpContext, PositionRequest request, NanchesoftDbContext db)
     {
-        var context = await ResolveDefaultContextAsync(db);
+        var context = await ResolveDefaultContextAsync(httpContext, db);
         var tenantId = request.TenantId ?? context.TenantId;
         var companyId = request.CompanyId ?? context.CompanyId;
 
@@ -357,9 +394,15 @@ public static class HumanResourcesEndpoints
         return Results.Ok(new { success = true });
     }
 
-    private static async Task<IResult> GetEmployeesAsync(NanchesoftDbContext db)
+    private static async Task<IResult> GetEmployeesAsync(HttpContext httpContext, NanchesoftDbContext db)
     {
+        var tenantId = ApiTenantScope.ResolveTenantId(httpContext);
+        var companyId = ApiTenantScope.ResolveCompanyId(httpContext);
+
         var rows = await db.Employees.AsNoTracking()
+            .Where(x => (!tenantId.HasValue && !companyId.HasValue)
+                     || (x.TenantId == tenantId)
+                     || (!tenantId.HasValue && x.CompanyId == companyId))
             .Include(x => x.Company)
             .Include(x => x.Branch)
             .Include(x => x.Department)
@@ -448,9 +491,9 @@ public static class HumanResourcesEndpoints
         return Results.Ok(rows);
     }
 
-    private static async Task<IResult> CreateEmployeeAsync(EmployeeRequest request, NanchesoftDbContext db)
+    private static async Task<IResult> CreateEmployeeAsync(HttpContext httpContext, EmployeeRequest request, NanchesoftDbContext db)
     {
-        var context = await ResolveDefaultContextAsync(db);
+        var context = await ResolveDefaultContextAsync(httpContext, db);
         var tenantId = request.TenantId ?? context.TenantId;
         var companyId = request.CompanyId ?? context.CompanyId;
         var branchId = request.BranchId ?? context.BranchId;
@@ -757,9 +800,15 @@ public static class HumanResourcesEndpoints
         return Results.File(bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", fileName);
     }
 
-    private static async Task<IResult> GetEmployeeContractsAsync(NanchesoftDbContext db)
+    private static async Task<IResult> GetEmployeeContractsAsync(HttpContext httpContext, NanchesoftDbContext db)
     {
+        var tenantId = ApiTenantScope.ResolveTenantId(httpContext);
+        var companyId = ApiTenantScope.ResolveCompanyId(httpContext);
+
         var rows = await db.EmployeeContracts.AsNoTracking()
+            .Where(x => (!tenantId.HasValue && !companyId.HasValue)
+                     || (x.TenantId == tenantId)
+                     || (!tenantId.HasValue && x.CompanyId == companyId))
             .Include(x => x.Company)
             .Include(x => x.Branch)
             .Include(x => x.Employee)
@@ -790,9 +839,9 @@ public static class HumanResourcesEndpoints
         return Results.Ok(rows);
     }
 
-    private static async Task<IResult> CreateEmployeeContractAsync(EmployeeContractRequest request, NanchesoftDbContext db)
+    private static async Task<IResult> CreateEmployeeContractAsync(HttpContext httpContext, EmployeeContractRequest request, NanchesoftDbContext db)
     {
-        var context = await ResolveDefaultContextAsync(db);
+        var context = await ResolveDefaultContextAsync(httpContext, db);
         var tenantId = request.TenantId ?? context.TenantId;
         var companyId = request.CompanyId ?? context.CompanyId;
         var branchId = request.BranchId ?? context.BranchId;
@@ -877,9 +926,15 @@ public static class HumanResourcesEndpoints
         return Results.Ok(new { success = true });
     }
 
-    private static async Task<IResult> GetEmployeeIncidentsAsync(NanchesoftDbContext db)
+    private static async Task<IResult> GetEmployeeIncidentsAsync(HttpContext httpContext, NanchesoftDbContext db)
     {
+        var tenantId = ApiTenantScope.ResolveTenantId(httpContext);
+        var companyId = ApiTenantScope.ResolveCompanyId(httpContext);
+
         var rows = await db.EmployeeIncidents.AsNoTracking()
+            .Where(x => (!tenantId.HasValue && !companyId.HasValue)
+                     || (x.TenantId == tenantId)
+                     || (!tenantId.HasValue && x.CompanyId == companyId))
             .Include(x => x.Company)
             .Include(x => x.Employee)
             .Include(x => x.PayrollPeriod)
@@ -907,9 +962,9 @@ public static class HumanResourcesEndpoints
         return Results.Ok(rows);
     }
 
-    private static async Task<IResult> CreateEmployeeIncidentAsync(EmployeeIncidentRequest request, NanchesoftDbContext db)
+    private static async Task<IResult> CreateEmployeeIncidentAsync(HttpContext httpContext, EmployeeIncidentRequest request, NanchesoftDbContext db)
     {
-        var context = await ResolveDefaultContextAsync(db);
+        var context = await ResolveDefaultContextAsync(httpContext, db);
         var tenantId = request.TenantId ?? context.TenantId;
         var companyId = request.CompanyId ?? context.CompanyId;
 
@@ -985,9 +1040,15 @@ public static class HumanResourcesEndpoints
         return Results.Ok(new { success = true });
     }
 
-    private static async Task<IResult> GetPayrollPeriodsAsync(NanchesoftDbContext db)
+    private static async Task<IResult> GetPayrollPeriodsAsync(HttpContext httpContext, NanchesoftDbContext db)
     {
+        var tenantId = ApiTenantScope.ResolveTenantId(httpContext);
+        var companyId = ApiTenantScope.ResolveCompanyId(httpContext);
+
         var rows = await db.PayrollPeriods.AsNoTracking()
+            .Where(x => (!tenantId.HasValue && !companyId.HasValue)
+                     || (x.TenantId == tenantId)
+                     || (!tenantId.HasValue && x.CompanyId == companyId))
             .Include(x => x.Company)
             .OrderByDescending(x => x.StartDate)
             .Select(x => new PayrollPeriodDto
@@ -1011,9 +1072,9 @@ public static class HumanResourcesEndpoints
         return Results.Ok(rows);
     }
 
-    private static async Task<IResult> CreatePayrollPeriodAsync(PayrollPeriodRequest request, NanchesoftDbContext db)
+    private static async Task<IResult> CreatePayrollPeriodAsync(HttpContext httpContext, PayrollPeriodRequest request, NanchesoftDbContext db)
     {
-        var context = await ResolveDefaultContextAsync(db);
+        var context = await ResolveDefaultContextAsync(httpContext, db);
         var tenantId = request.TenantId ?? context.TenantId;
         var companyId = request.CompanyId ?? context.CompanyId;
 
@@ -1090,9 +1151,15 @@ public static class HumanResourcesEndpoints
         return Results.Ok(new { success = true });
     }
 
-    private static async Task<IResult> GetPayrollPeriodTypesAsync(NanchesoftDbContext db)
+    private static async Task<IResult> GetPayrollPeriodTypesAsync(HttpContext httpContext, NanchesoftDbContext db)
     {
+        var tenantId = ApiTenantScope.ResolveTenantId(httpContext);
+        var companyId = ApiTenantScope.ResolveCompanyId(httpContext);
+
         var rows = await db.PayrollPeriodTypes.AsNoTracking()
+            .Where(x => (!tenantId.HasValue && !companyId.HasValue)
+                     || (x.TenantId == tenantId)
+                     || (!tenantId.HasValue && x.CompanyId == companyId))
             .Include(x => x.Company)
             .OrderBy(x => x.Code)
             .Select(x => new PayrollPeriodTypeDto
@@ -1113,9 +1180,9 @@ public static class HumanResourcesEndpoints
         return Results.Ok(rows);
     }
 
-    private static async Task<IResult> CreatePayrollPeriodTypeAsync(PayrollPeriodTypeRequest request, NanchesoftDbContext db)
+    private static async Task<IResult> CreatePayrollPeriodTypeAsync(HttpContext httpContext, PayrollPeriodTypeRequest request, NanchesoftDbContext db)
     {
-        var context = await ResolveDefaultContextAsync(db);
+        var context = await ResolveDefaultContextAsync(httpContext, db);
         var tenantId = request.TenantId ?? context.TenantId;
         var companyId = request.CompanyId ?? context.CompanyId;
 
@@ -1183,9 +1250,15 @@ public static class HumanResourcesEndpoints
         return Results.Ok(new { success = true });
     }
 
-    private static async Task<IResult> GetPayrollConceptsAsync(NanchesoftDbContext db)
+    private static async Task<IResult> GetPayrollConceptsAsync(HttpContext httpContext, NanchesoftDbContext db)
     {
+        var tenantId = ApiTenantScope.ResolveTenantId(httpContext);
+        var companyId = ApiTenantScope.ResolveCompanyId(httpContext);
+
         var rows = await db.PayrollConcepts.AsNoTracking()
+            .Where(x => (!tenantId.HasValue && !companyId.HasValue)
+                     || (x.TenantId == tenantId)
+                     || (!tenantId.HasValue && x.CompanyId == companyId))
             .Include(x => x.Company)
             .OrderBy(x => x.Code)
             .Select(x => new PayrollConceptDto
@@ -1214,9 +1287,9 @@ public static class HumanResourcesEndpoints
         return Results.Ok(rows);
     }
 
-    private static async Task<IResult> CreatePayrollConceptAsync(PayrollConceptRequest request, NanchesoftDbContext db)
+    private static async Task<IResult> CreatePayrollConceptAsync(HttpContext httpContext, PayrollConceptRequest request, NanchesoftDbContext db)
     {
-        var context = await ResolveDefaultContextAsync(db);
+        var context = await ResolveDefaultContextAsync(httpContext, db);
         var tenantId = request.TenantId ?? context.TenantId;
         var companyId = request.CompanyId ?? context.CompanyId;
 
@@ -1300,9 +1373,15 @@ public static class HumanResourcesEndpoints
         return Results.Ok(new { success = true });
     }
 
-    private static async Task<IResult> GetPayrollRunsAsync(NanchesoftDbContext db)
+    private static async Task<IResult> GetPayrollRunsAsync(HttpContext httpContext, NanchesoftDbContext db)
     {
+        var tenantId = ApiTenantScope.ResolveTenantId(httpContext);
+        var companyId = ApiTenantScope.ResolveCompanyId(httpContext);
+
         var rows = await db.PayrollRuns.AsNoTracking()
+            .Where(x => (!tenantId.HasValue && !companyId.HasValue)
+                     || (x.TenantId == tenantId)
+                     || (!tenantId.HasValue && x.CompanyId == companyId))
             .Include(x => x.Company)
             .Include(x => x.Branch)
             .Include(x => x.PayrollPeriod)
@@ -1332,9 +1411,9 @@ public static class HumanResourcesEndpoints
         return Results.Ok(rows);
     }
 
-    private static async Task<IResult> CreatePayrollRunAsync(PayrollRunRequest request, NanchesoftDbContext db)
+    private static async Task<IResult> CreatePayrollRunAsync(HttpContext httpContext, PayrollRunRequest request, NanchesoftDbContext db)
     {
-        var context = await ResolveDefaultContextAsync(db);
+        var context = await ResolveDefaultContextAsync(httpContext, db);
         var tenantId = request.TenantId ?? context.TenantId;
         var companyId = request.CompanyId ?? context.CompanyId;
         var branchId = request.BranchId ?? context.BranchId;
@@ -1420,9 +1499,15 @@ public static class HumanResourcesEndpoints
         return Results.Ok(new { success = true });
     }
 
-    private static async Task<IResult> GetPayrollRunLinesAsync(NanchesoftDbContext db)
+    private static async Task<IResult> GetPayrollRunLinesAsync(HttpContext httpContext, NanchesoftDbContext db)
     {
+        var tenantId = ApiTenantScope.ResolveTenantId(httpContext);
+        var companyId = ApiTenantScope.ResolveCompanyId(httpContext);
+
         var rows = await db.PayrollRunLines.AsNoTracking()
+            .Where(x => (!tenantId.HasValue && !companyId.HasValue)
+                     || (x.TenantId == tenantId)
+                     || (!tenantId.HasValue && x.CompanyId == companyId))
             .Include(x => x.Company)
             .Include(x => x.PayrollRun)
             .Include(x => x.Employee)
@@ -1456,9 +1541,9 @@ public static class HumanResourcesEndpoints
         return Results.Ok(rows);
     }
 
-    private static async Task<IResult> CreatePayrollRunLineAsync(PayrollRunLineRequest request, NanchesoftDbContext db)
+    private static async Task<IResult> CreatePayrollRunLineAsync(HttpContext httpContext, PayrollRunLineRequest request, NanchesoftDbContext db)
     {
-        var context = await ResolveDefaultContextAsync(db);
+        var context = await ResolveDefaultContextAsync(httpContext, db);
         var tenantId = request.TenantId ?? context.TenantId;
         var companyId = request.CompanyId ?? context.CompanyId;
 

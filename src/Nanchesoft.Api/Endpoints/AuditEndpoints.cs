@@ -11,6 +11,14 @@ public static class AuditEndpoints
     {
         var group = app.MapGroup("/api/audit").WithTags("Audit");
 
+        group.MapGet("/", async (NanchesoftDbContext db) =>
+            Results.Ok(await db.AuditLogs
+                .AsNoTracking()
+                .OrderByDescending(x => x.CreatedAt)
+                .Take(100)
+                .Select(x => new { x.Id, x.CreatedAt, x.Module, x.EntityName, x.Action })
+                .ToListAsync()));
+
         group.MapGet("/change-log", async (NanchesoftDbContext db) =>
             Results.Ok(await db.AuditLogs
                 .AsNoTracking()

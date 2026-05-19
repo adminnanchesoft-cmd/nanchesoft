@@ -41,14 +41,36 @@ public static class HumanResourcesEnterpriseEndpoints
         return app;
     }
 
-    private static async Task<(Guid? TenantId, Guid? CompanyId, Guid? BranchId)> ResolveDefaultContextAsync(NanchesoftDbContext db)
+    private static async Task<(Guid? TenantId, Guid? CompanyId, Guid? BranchId)> ResolveDefaultContextAsync(HttpContext httpContext, NanchesoftDbContext db)
     {
-        var company = await db.Companies.OrderBy(x => x.CreatedAt).Select(x => new { x.Id, x.TenantId }).FirstOrDefaultAsync();
-        if (company is null)
-            return (null, null, null);
+        var tenantId = ApiTenantScope.ResolveTenantId(httpContext);
+        var companyId = ApiTenantScope.ResolveCompanyId(httpContext);
+        var branchId = ApiTenantScope.ResolveBranchId(httpContext);
 
-        var branchId = await db.Branches.Where(x => x.CompanyId == company.Id).OrderBy(x => x.CreatedAt).Select(x => (Guid?)x.Id).FirstOrDefaultAsync();
-        return (company.TenantId, company.Id, branchId);
+        if (companyId.HasValue)
+        {
+            if (!tenantId.HasValue)
+                tenantId = await db.Companies.Where(x => x.Id == companyId.Value).Select(x => (Guid?)x.TenantId).FirstOrDefaultAsync();
+            if (!branchId.HasValue)
+                branchId = await db.Branches.Where(x => x.CompanyId == companyId.Value).OrderBy(x => x.CreatedAt).Select(x => (Guid?)x.Id).FirstOrDefaultAsync();
+            return (tenantId, companyId, branchId);
+        }
+
+        if (tenantId.HasValue)
+        {
+            var comp = await db.Companies.Where(x => x.TenantId == tenantId.Value).OrderBy(x => x.CreatedAt).Select(x => new { x.Id, x.TenantId }).FirstOrDefaultAsync();
+            if (comp is not null)
+            {
+                if (!branchId.HasValue)
+                    branchId = await db.Branches.Where(x => x.CompanyId == comp.Id).OrderBy(x => x.CreatedAt).Select(x => (Guid?)x.Id).FirstOrDefaultAsync();
+                return (tenantId, comp.Id, branchId);
+            }
+        }
+
+        var company = await db.Companies.OrderBy(x => x.CreatedAt).Select(x => new { x.Id, x.TenantId }).FirstOrDefaultAsync();
+        if (company is null) return (null, null, null);
+        var fallbackBranch = await db.Branches.Where(x => x.CompanyId == company.Id).OrderBy(x => x.CreatedAt).Select(x => (Guid?)x.Id).FirstOrDefaultAsync();
+        return (company.TenantId, company.Id, fallbackBranch);
     }
 
     private static string NormalizeUpper(string? value, string fallback = "")
@@ -101,9 +123,9 @@ public static class HumanResourcesEnterpriseEndpoints
         return Results.Ok(rows);
     }
 
-    private static async Task<IResult> CreateWorkShiftAsync(WorkShiftRequest request, NanchesoftDbContext db)
+    private static async Task<IResult> CreateWorkShiftAsync(HttpContext httpContext, WorkShiftRequest request, NanchesoftDbContext db)
     {
-        var context = await ResolveDefaultContextAsync(db);
+        var context = await ResolveDefaultContextAsync(httpContext, db);
         var tenantId = request.TenantId ?? context.TenantId;
         var companyId = request.CompanyId ?? context.CompanyId;
         if (!tenantId.HasValue || !companyId.HasValue)
@@ -178,9 +200,15 @@ public static class HumanResourcesEnterpriseEndpoints
         return Results.Ok(new { success = true });
     }
 
-    private static async Task<IResult> GetWorkSchedulesAsync(NanchesoftDbContext db)
+    private static async Task<IResult> GetWorkSchedulesAsync(HttpContext httpContext, NanchesoftDbContext db)
     {
+        var tenantId = ApiTenantScope.ResolveTenantId(httpContext);
+        var companyId = ApiTenantScope.ResolveCompanyId(httpContext);
+
         var rows = await db.WorkSchedules.AsNoTracking()
+            .Where(x => (!tenantId.HasValue && !companyId.HasValue)
+                     || (x.TenantId == tenantId)
+                     || (!tenantId.HasValue && x.CompanyId == companyId))
             .Include(x => x.Company)
             .Include(x => x.WorkShift)
             .OrderBy(x => x.Code)
@@ -246,9 +274,9 @@ public static class HumanResourcesEnterpriseEndpoints
         return Results.Ok(rows);
     }
 
-    private static async Task<IResult> CreateWorkScheduleAsync(WorkScheduleRequest request, NanchesoftDbContext db)
+    private static async Task<IResult> CreateWorkScheduleAsync(HttpContext httpContext, WorkScheduleRequest request, NanchesoftDbContext db)
     {
-        var context = await ResolveDefaultContextAsync(db);
+        var context = await ResolveDefaultContextAsync(httpContext, db);
         var tenantId = request.TenantId ?? context.TenantId;
         var companyId = request.CompanyId ?? context.CompanyId;
         if (!tenantId.HasValue || !companyId.HasValue)
@@ -400,9 +428,15 @@ public static class HumanResourcesEnterpriseEndpoints
         return Results.Ok(new { success = true });
     }
 
-    private static async Task<IResult> GetTimeClockDevicesAsync(NanchesoftDbContext db)
+    private static async Task<IResult> GetTimeClockDevicesAsync(HttpContext httpContext, NanchesoftDbContext db)
     {
+        var tenantId = ApiTenantScope.ResolveTenantId(httpContext);
+        var companyId = ApiTenantScope.ResolveCompanyId(httpContext);
+
         var rows = await db.TimeClockDevices.AsNoTracking()
+            .Where(x => (!tenantId.HasValue && !companyId.HasValue)
+                     || (x.TenantId == tenantId)
+                     || (!tenantId.HasValue && x.CompanyId == companyId))
             .Include(x => x.Company)
             .Include(x => x.Branch)
             .OrderBy(x => x.Code)
@@ -432,9 +466,9 @@ public static class HumanResourcesEnterpriseEndpoints
         return Results.Ok(rows);
     }
 
-    private static async Task<IResult> CreateTimeClockDeviceAsync(TimeClockDeviceRequest request, NanchesoftDbContext db)
+    private static async Task<IResult> CreateTimeClockDeviceAsync(HttpContext httpContext, TimeClockDeviceRequest request, NanchesoftDbContext db)
     {
-        var context = await ResolveDefaultContextAsync(db);
+        var context = await ResolveDefaultContextAsync(httpContext, db);
         var tenantId = request.TenantId ?? context.TenantId;
         var companyId = request.CompanyId ?? context.CompanyId;
         if (!tenantId.HasValue || !companyId.HasValue)
@@ -514,9 +548,15 @@ public static class HumanResourcesEnterpriseEndpoints
         return Results.Ok(new { success = true });
     }
 
-    private static async Task<IResult> GetLeaveTypesAsync(NanchesoftDbContext db)
+    private static async Task<IResult> GetLeaveTypesAsync(HttpContext httpContext, NanchesoftDbContext db)
     {
+        var tenantId = ApiTenantScope.ResolveTenantId(httpContext);
+        var companyId = ApiTenantScope.ResolveCompanyId(httpContext);
+
         var rows = await db.LeaveTypes.AsNoTracking()
+            .Where(x => (!tenantId.HasValue && !companyId.HasValue)
+                     || (x.TenantId == tenantId)
+                     || (!tenantId.HasValue && x.CompanyId == companyId))
             .Include(x => x.Company)
             .Include(x => x.PayrollConcept)
             .OrderBy(x => x.Code)
@@ -542,9 +582,9 @@ public static class HumanResourcesEnterpriseEndpoints
         return Results.Ok(rows);
     }
 
-    private static async Task<IResult> CreateLeaveTypeAsync(LeaveTypeRequest request, NanchesoftDbContext db)
+    private static async Task<IResult> CreateLeaveTypeAsync(HttpContext httpContext, LeaveTypeRequest request, NanchesoftDbContext db)
     {
-        var context = await ResolveDefaultContextAsync(db);
+        var context = await ResolveDefaultContextAsync(httpContext, db);
         var tenantId = request.TenantId ?? context.TenantId;
         var companyId = request.CompanyId ?? context.CompanyId;
         if (!tenantId.HasValue || !companyId.HasValue)
@@ -619,9 +659,15 @@ public static class HumanResourcesEnterpriseEndpoints
         return Results.Ok(new { success = true });
     }
 
-    private static async Task<IResult> GetVacationRequestsAsync(NanchesoftDbContext db)
+    private static async Task<IResult> GetVacationRequestsAsync(HttpContext httpContext, NanchesoftDbContext db)
     {
+        var tenantId = ApiTenantScope.ResolveTenantId(httpContext);
+        var companyId = ApiTenantScope.ResolveCompanyId(httpContext);
+
         var rows = await db.VacationRequests.AsNoTracking()
+            .Where(x => (!tenantId.HasValue && !companyId.HasValue)
+                     || (x.TenantId == tenantId)
+                     || (!tenantId.HasValue && x.CompanyId == companyId))
             .Include(x => x.Company)
             .Include(x => x.Branch)
             .Include(x => x.Employee)
@@ -659,9 +705,9 @@ public static class HumanResourcesEnterpriseEndpoints
         return Results.Ok(rows);
     }
 
-    private static async Task<IResult> CreateVacationRequestAsync(VacationRequestRequest request, NanchesoftDbContext db)
+    private static async Task<IResult> CreateVacationRequestAsync(HttpContext httpContext, VacationRequestRequest request, NanchesoftDbContext db)
     {
-        var context = await ResolveDefaultContextAsync(db);
+        var context = await ResolveDefaultContextAsync(httpContext, db);
         var tenantId = request.TenantId ?? context.TenantId;
         var companyId = request.CompanyId ?? context.CompanyId;
         var branchId = request.BranchId ?? context.BranchId;

@@ -22,7 +22,7 @@ public static class PlanEndpoints
     {
         if (!IsPlatformOwner(httpContext))
         {
-            return Results.Forbid();
+            return Results.StatusCode(403);
         }
         var plans = await db.Plans
             .AsNoTracking()
@@ -48,7 +48,7 @@ public static class PlanEndpoints
     {
         if (!IsPlatformOwner(httpContext))
         {
-            return Results.Forbid();
+            return Results.StatusCode(403);
         }
         var code = NormalizeCode(request.Code);
         var name = (request.Name ?? string.Empty).Trim();
@@ -95,7 +95,7 @@ public static class PlanEndpoints
     {
         if (!IsPlatformOwner(httpContext))
         {
-            return Results.Forbid();
+            return Results.StatusCode(403);
         }
         var plan = await db.Plans.FirstOrDefaultAsync(x => x.Id == id);
         if (plan is null)
@@ -144,7 +144,7 @@ public static class PlanEndpoints
     {
         if (!IsPlatformOwner(httpContext))
         {
-            return Results.Forbid();
+            return Results.StatusCode(403);
         }
         var plan = await db.Plans.FirstOrDefaultAsync(x => x.Id == id);
         if (plan is null)

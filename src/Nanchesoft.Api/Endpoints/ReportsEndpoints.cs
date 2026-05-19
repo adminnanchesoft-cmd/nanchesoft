@@ -289,10 +289,13 @@ public static class ReportsEndpoints
 
         group.MapGet("/production/piecework-by-employee", async (Guid companyId, NanchesoftDbContext db) =>
         {
-            var records = await db.PieceWorkRecords
+            var raw = await db.PieceWorkRecords
                 .AsNoTracking()
+                .Include(x => x.Employee)
                 .Where(x => x.IsActive && x.CompanyId == companyId)
-                .GroupBy(x => new { x.EmployeeId, x.Employee!.FirstName, x.Employee.LastName })
+                .ToListAsync();
+            var records = raw
+                .GroupBy(x => new { x.EmployeeId, FirstName = x.Employee?.FirstName ?? "", LastName = x.Employee?.LastName ?? "" })
                 .Select(g => new PieceWorkByEmployeeDto(
                     g.Key.EmployeeId,
                     g.Key.FirstName + " " + g.Key.LastName,
@@ -303,16 +306,20 @@ public static class ReportsEndpoints
                     g.Sum(r => r.QualityDeduction),
                     g.Sum(r => r.NetAmount)))
                 .OrderByDescending(x => x.NetAmount)
-                .ToListAsync();
+                .ToList();
             return Results.Ok(records);
         });
 
         group.MapGet("/production/phase-efficiency", async (Guid companyId, NanchesoftDbContext db) =>
         {
-            var progress = await db.ProductionPhaseProgress
+            var raw = await db.ProductionPhaseProgress
                 .AsNoTracking()
+                .Include(x => x.ProductionOrderLine!.ProductionOrder)
+                .Include(x => x.ProductionPhase)
                 .Where(x => x.IsActive && x.ProductionOrderLine!.ProductionOrder!.CompanyId == companyId)
-                .GroupBy(x => new { x.ProductionPhase!.Code, x.ProductionPhase.Name })
+                .ToListAsync();
+            var progress = raw
+                .GroupBy(x => new { Code = x.ProductionPhase?.Code ?? "", Name = x.ProductionPhase?.Name ?? "" })
                 .Select(g => new PhaseEfficiencyDto(
                     g.Key.Code,
                     g.Key.Name,
@@ -323,7 +330,7 @@ public static class ReportsEndpoints
                         ? Math.Round((decimal)g.Sum(r => r.UnitsRejected) / g.Sum(r => r.UnitsCompleted) * 100, 2)
                         : 0m))
                 .OrderBy(x => x.PhaseCode)
-                .ToListAsync();
+                .ToList();
             return Results.Ok(progress);
         });
 
@@ -346,18 +353,21 @@ public static class ReportsEndpoints
 
         group.MapGet("/production/surplus-summary", async (Guid companyId, NanchesoftDbContext db) =>
         {
-            var surplus = await db.SurplusRecords
+            var raw = await db.SurplusRecords
                 .AsNoTracking()
+                .Include(x => x.ProductionOrder)
                 .Where(x => x.IsActive && x.CompanyId == companyId)
+                .ToListAsync();
+            var surplus = raw
                 .Select(x => new SurplusSummaryDto(
                     x.Id,
-                    x.ProductionOrder != null ? x.ProductionOrder.Folio : string.Empty,
+                    x.ProductionOrder?.Folio ?? string.Empty,
                     x.UnitsSurplus,
                     x.Disposition,
                     x.Notes,
                     x.CreatedAt))
                 .OrderByDescending(x => x.CreatedAt)
-                .ToListAsync();
+                .ToList();
             return Results.Ok(surplus);
         });
 

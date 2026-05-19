@@ -32,10 +32,28 @@ public static class PayrollFiscalEndpoints
         return app;
     }
 
-    private static async Task<(Guid? TenantId, Guid? CompanyId)> ResolveDefaultContextAsync(NanchesoftDbContext db)
+    private static async Task<(Guid? TenantId, Guid? CompanyId)> ResolveDefaultContextAsync(HttpContext httpContext, NanchesoftDbContext db)
     {
+        var tenantId = ApiTenantScope.ResolveTenantId(httpContext);
+        var companyId = ApiTenantScope.ResolveCompanyId(httpContext);
+
+        if (companyId.HasValue)
+        {
+            if (!tenantId.HasValue)
+                tenantId = await db.Companies.Where(x => x.Id == companyId.Value).Select(x => (Guid?)x.TenantId).FirstOrDefaultAsync();
+            return (tenantId, companyId);
+        }
+
+        if (tenantId.HasValue)
+        {
+            var comp = await db.Companies.Where(x => x.TenantId == tenantId.Value).OrderBy(x => x.CreatedAt).Select(x => new { x.Id, x.TenantId }).FirstOrDefaultAsync();
+            if (comp is not null)
+                return (tenantId, comp.Id);
+        }
+
         var company = await db.Companies.OrderBy(x => x.CreatedAt).Select(x => new { x.Id, x.TenantId }).FirstOrDefaultAsync();
-        return company is null ? (null, null) : (company.TenantId, company.Id);
+        if (company is null) return (null, null);
+        return (company.TenantId, company.Id);
     }
 
     private static string NormalizeText(string? value, string fallback = "")
@@ -84,9 +102,9 @@ public static class PayrollFiscalEndpoints
         return Results.Ok(rows);
     }
 
-    private static async Task<IResult> CreatePayrollTaxAccumulatorAsync(PayrollTaxAccumulatorRequest request, NanchesoftDbContext db)
+    private static async Task<IResult> CreatePayrollTaxAccumulatorAsync(HttpContext httpContext, PayrollTaxAccumulatorRequest request, NanchesoftDbContext db)
     {
-        var context = await ResolveDefaultContextAsync(db);
+        var context = await ResolveDefaultContextAsync(httpContext, db);
         var tenantId = request.TenantId ?? context.TenantId;
         var companyId = request.CompanyId ?? context.CompanyId;
 
@@ -259,9 +277,9 @@ public static class PayrollFiscalEndpoints
         return Results.Ok(rows);
     }
 
-    private static async Task<IResult> CreatePayrollEmployerObligationAsync(PayrollEmployerObligationRequest request, NanchesoftDbContext db)
+    private static async Task<IResult> CreatePayrollEmployerObligationAsync(HttpContext httpContext, PayrollEmployerObligationRequest request, NanchesoftDbContext db)
     {
-        var context = await ResolveDefaultContextAsync(db);
+        var context = await ResolveDefaultContextAsync(httpContext, db);
         var tenantId = request.TenantId ?? context.TenantId;
         var companyId = request.CompanyId ?? context.CompanyId;
 
@@ -429,9 +447,9 @@ public static class PayrollFiscalEndpoints
         return Results.Ok(rows);
     }
 
-    private static async Task<IResult> CreatePayrollFiscalReconciliationAsync(PayrollFiscalReconciliationRequest request, NanchesoftDbContext db)
+    private static async Task<IResult> CreatePayrollFiscalReconciliationAsync(HttpContext httpContext, PayrollFiscalReconciliationRequest request, NanchesoftDbContext db)
     {
-        var context = await ResolveDefaultContextAsync(db);
+        var context = await ResolveDefaultContextAsync(httpContext, db);
         var tenantId = request.TenantId ?? context.TenantId;
         var companyId = request.CompanyId ?? context.CompanyId;
 

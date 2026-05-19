@@ -29,7 +29,9 @@ public static class CompanyEndpoints
             .Include(x => x.Tenant)
             .AsQueryable();
 
-        if (!isPlatformOwner && tenantId.HasValue)
+        // Always filter by tenant when context is specified, even for platform owners
+        // (mirrors ApiTenantScopeHandler which sends the header regardless of role)
+        if (tenantId.HasValue)
         {
             query = query.Where(x => x.TenantId == tenantId.Value);
         }

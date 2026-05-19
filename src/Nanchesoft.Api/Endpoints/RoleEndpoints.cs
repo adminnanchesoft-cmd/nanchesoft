@@ -121,7 +121,7 @@ public static class RoleEndpoints
         if (!ApiTenantScope.IsPlatformOwner(httpContext) && tenantScopeId.HasValue)
         {
             if (role.TenantId != tenantScopeId.Value)
-                return Results.Forbid();
+                return Results.StatusCode(403);
             request.TenantId = tenantScopeId;
         }
 
@@ -171,7 +171,7 @@ public static class RoleEndpoints
 
         var tenantId = ApiTenantScope.ResolveTenantId(httpContext);
         if (!ApiTenantScope.IsPlatformOwner(httpContext) && tenantId.HasValue && role.TenantId != tenantId.Value)
-            return Results.Forbid();
+            return Results.StatusCode(403);
 
         if (role.IsSystemRole)
             return Results.BadRequest(new { message = "No puedes eliminar un rol de sistema." });

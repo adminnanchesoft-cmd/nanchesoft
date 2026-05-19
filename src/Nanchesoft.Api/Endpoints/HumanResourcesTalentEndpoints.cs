@@ -29,14 +29,36 @@ public static class HumanResourcesTalentEndpoints
         return app;
     }
 
-    private static async Task<(Guid? TenantId, Guid? CompanyId, Guid? BranchId)> ResolveDefaultContextAsync(NanchesoftDbContext db)
+    private static async Task<(Guid? TenantId, Guid? CompanyId, Guid? BranchId)> ResolveDefaultContextAsync(HttpContext httpContext, NanchesoftDbContext db)
     {
-        var company = await db.Companies.OrderBy(x => x.CreatedAt).Select(x => new { x.Id, x.TenantId }).FirstOrDefaultAsync();
-        if (company is null)
-            return (null, null, null);
+        var tenantId = ApiTenantScope.ResolveTenantId(httpContext);
+        var companyId = ApiTenantScope.ResolveCompanyId(httpContext);
+        var branchId = ApiTenantScope.ResolveBranchId(httpContext);
 
-        var branchId = await db.Branches.Where(x => x.CompanyId == company.Id).OrderBy(x => x.CreatedAt).Select(x => (Guid?)x.Id).FirstOrDefaultAsync();
-        return (company.TenantId, company.Id, branchId);
+        if (companyId.HasValue)
+        {
+            if (!tenantId.HasValue)
+                tenantId = await db.Companies.Where(x => x.Id == companyId.Value).Select(x => (Guid?)x.TenantId).FirstOrDefaultAsync();
+            if (!branchId.HasValue)
+                branchId = await db.Branches.Where(x => x.CompanyId == companyId.Value).OrderBy(x => x.CreatedAt).Select(x => (Guid?)x.Id).FirstOrDefaultAsync();
+            return (tenantId, companyId, branchId);
+        }
+
+        if (tenantId.HasValue)
+        {
+            var comp = await db.Companies.Where(x => x.TenantId == tenantId.Value).OrderBy(x => x.CreatedAt).Select(x => new { x.Id, x.TenantId }).FirstOrDefaultAsync();
+            if (comp is not null)
+            {
+                if (!branchId.HasValue)
+                    branchId = await db.Branches.Where(x => x.CompanyId == comp.Id).OrderBy(x => x.CreatedAt).Select(x => (Guid?)x.Id).FirstOrDefaultAsync();
+                return (tenantId, comp.Id, branchId);
+            }
+        }
+
+        var company = await db.Companies.OrderBy(x => x.CreatedAt).Select(x => new { x.Id, x.TenantId }).FirstOrDefaultAsync();
+        if (company is null) return (null, null, null);
+        var fallbackBranch = await db.Branches.Where(x => x.CompanyId == company.Id).OrderBy(x => x.CreatedAt).Select(x => (Guid?)x.Id).FirstOrDefaultAsync();
+        return (company.TenantId, company.Id, fallbackBranch);
     }
 
     private static string NormalizeText(string? value, string fallback = "")
@@ -54,9 +76,15 @@ public static class HumanResourcesTalentEndpoints
         return source.Kind == DateTimeKind.Utc ? source : DateTime.SpecifyKind(source, DateTimeKind.Utc);
     }
 
-    private static async Task<IResult> GetRecruitmentVacanciesAsync(NanchesoftDbContext db)
+    private static async Task<IResult> GetRecruitmentVacanciesAsync(HttpContext httpContext, NanchesoftDbContext db)
     {
+        var tenantId = ApiTenantScope.ResolveTenantId(httpContext);
+        var companyId = ApiTenantScope.ResolveCompanyId(httpContext);
+
         var rows = await db.RecruitmentVacancies.AsNoTracking()
+            .Where(x => (!tenantId.HasValue && !companyId.HasValue)
+                     || (x.TenantId == tenantId)
+                     || (!tenantId.HasValue && x.CompanyId == companyId))
             .Include(x => x.Company)
             .Include(x => x.Branch)
             .Include(x => x.Department)
@@ -93,9 +121,9 @@ public static class HumanResourcesTalentEndpoints
         return Results.Ok(rows);
     }
 
-    private static async Task<IResult> CreateRecruitmentVacancyAsync(RecruitmentVacancyRequest request, NanchesoftDbContext db)
+    private static async Task<IResult> CreateRecruitmentVacancyAsync(HttpContext httpContext, RecruitmentVacancyRequest request, NanchesoftDbContext db)
     {
-        var context = await ResolveDefaultContextAsync(db);
+        var context = await ResolveDefaultContextAsync(httpContext, db);
         var tenantId = request.TenantId ?? context.TenantId;
         var companyId = request.CompanyId ?? context.CompanyId;
         var branchId = request.BranchId ?? context.BranchId;
@@ -182,9 +210,15 @@ public static class HumanResourcesTalentEndpoints
         return Results.Ok(new { success = true });
     }
 
-    private static async Task<IResult> GetCandidateApplicationsAsync(NanchesoftDbContext db)
+    private static async Task<IResult> GetCandidateApplicationsAsync(HttpContext httpContext, NanchesoftDbContext db)
     {
+        var tenantId = ApiTenantScope.ResolveTenantId(httpContext);
+        var companyId = ApiTenantScope.ResolveCompanyId(httpContext);
+
         var rows = await db.CandidateApplications.AsNoTracking()
+            .Where(x => (!tenantId.HasValue && !companyId.HasValue)
+                     || (x.TenantId == tenantId)
+                     || (!tenantId.HasValue && x.CompanyId == companyId))
             .Include(x => x.Company)
             .Include(x => x.Branch)
             .Include(x => x.RecruitmentVacancy)
@@ -222,9 +256,9 @@ public static class HumanResourcesTalentEndpoints
         return Results.Ok(rows);
     }
 
-    private static async Task<IResult> CreateCandidateApplicationAsync(CandidateApplicationRequest request, NanchesoftDbContext db)
+    private static async Task<IResult> CreateCandidateApplicationAsync(HttpContext httpContext, CandidateApplicationRequest request, NanchesoftDbContext db)
     {
-        var context = await ResolveDefaultContextAsync(db);
+        var context = await ResolveDefaultContextAsync(httpContext, db);
         var tenantId = request.TenantId ?? context.TenantId;
         var companyId = request.CompanyId ?? context.CompanyId;
         var branchId = request.BranchId ?? context.BranchId;
@@ -351,9 +385,9 @@ public static class HumanResourcesTalentEndpoints
         return Results.Ok(rows);
     }
 
-    private static async Task<IResult> CreateOnboardingChecklistAsync(OnboardingChecklistRecordRequest request, NanchesoftDbContext db)
+    private static async Task<IResult> CreateOnboardingChecklistAsync(HttpContext httpContext, OnboardingChecklistRecordRequest request, NanchesoftDbContext db)
     {
-        var context = await ResolveDefaultContextAsync(db);
+        var context = await ResolveDefaultContextAsync(httpContext, db);
         var tenantId = request.TenantId ?? context.TenantId;
         var companyId = request.CompanyId ?? context.CompanyId;
         var branchId = request.BranchId ?? context.BranchId;

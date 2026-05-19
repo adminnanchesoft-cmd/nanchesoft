@@ -32,10 +32,28 @@ public static class PayrollDisbursementEndpoints
         return app;
     }
 
-    private static async Task<(Guid? TenantId, Guid? CompanyId)> ResolveDefaultContextAsync(NanchesoftDbContext db)
+    private static async Task<(Guid? TenantId, Guid? CompanyId)> ResolveDefaultContextAsync(HttpContext httpContext, NanchesoftDbContext db)
     {
+        var tenantId = ApiTenantScope.ResolveTenantId(httpContext);
+        var companyId = ApiTenantScope.ResolveCompanyId(httpContext);
+
+        if (companyId.HasValue)
+        {
+            if (!tenantId.HasValue)
+                tenantId = await db.Companies.Where(x => x.Id == companyId.Value).Select(x => (Guid?)x.TenantId).FirstOrDefaultAsync();
+            return (tenantId, companyId);
+        }
+
+        if (tenantId.HasValue)
+        {
+            var comp = await db.Companies.Where(x => x.TenantId == tenantId.Value).OrderBy(x => x.CreatedAt).Select(x => new { x.Id, x.TenantId }).FirstOrDefaultAsync();
+            if (comp is not null)
+                return (tenantId, comp.Id);
+        }
+
         var company = await db.Companies.OrderBy(x => x.CreatedAt).Select(x => new { x.Id, x.TenantId }).FirstOrDefaultAsync();
-        return company is null ? (null, null) : (company.TenantId, company.Id);
+        if (company is null) return (null, null);
+        return (company.TenantId, company.Id);
     }
 
     private static string NormalizeText(string? value, string fallback = "")
@@ -77,9 +95,9 @@ public static class PayrollDisbursementEndpoints
         return Results.Ok(rows);
     }
 
-    private static async Task<IResult> CreatePayrollDispersionBatchAsync(PayrollDispersionBatchRequest request, NanchesoftDbContext db)
+    private static async Task<IResult> CreatePayrollDispersionBatchAsync(HttpContext httpContext, PayrollDispersionBatchRequest request, NanchesoftDbContext db)
     {
-        var context = await ResolveDefaultContextAsync(db);
+        var context = await ResolveDefaultContextAsync(httpContext, db);
         var tenantId = request.TenantId ?? context.TenantId;
         var companyId = request.CompanyId ?? context.CompanyId;
         if (!tenantId.HasValue || !companyId.HasValue || !request.PayrollRunId.HasValue)
@@ -229,9 +247,9 @@ public static class PayrollDisbursementEndpoints
         return Results.Ok(rows);
     }
 
-    private static async Task<IResult> CreatePayrollDispersionLineAsync(PayrollDispersionLineRequest request, NanchesoftDbContext db)
+    private static async Task<IResult> CreatePayrollDispersionLineAsync(HttpContext httpContext, PayrollDispersionLineRequest request, NanchesoftDbContext db)
     {
-        var context = await ResolveDefaultContextAsync(db);
+        var context = await ResolveDefaultContextAsync(httpContext, db);
         var tenantId = request.TenantId ?? context.TenantId;
         var companyId = request.CompanyId ?? context.CompanyId;
         if (!tenantId.HasValue || !companyId.HasValue || !request.PayrollDispersionBatchId.HasValue || !request.PayrollRunId.HasValue || !request.PayrollRunLineId.HasValue || !request.EmployeeId.HasValue)
@@ -396,9 +414,9 @@ public static class PayrollDisbursementEndpoints
         return Results.Ok(rows);
     }
 
-    private static async Task<IResult> CreatePayrollAccountingPostingAsync(PayrollAccountingPostingRequest request, NanchesoftDbContext db)
+    private static async Task<IResult> CreatePayrollAccountingPostingAsync(HttpContext httpContext, PayrollAccountingPostingRequest request, NanchesoftDbContext db)
     {
-        var context = await ResolveDefaultContextAsync(db);
+        var context = await ResolveDefaultContextAsync(httpContext, db);
         var tenantId = request.TenantId ?? context.TenantId;
         var companyId = request.CompanyId ?? context.CompanyId;
         if (!tenantId.HasValue || !companyId.HasValue || !request.PayrollRunId.HasValue)

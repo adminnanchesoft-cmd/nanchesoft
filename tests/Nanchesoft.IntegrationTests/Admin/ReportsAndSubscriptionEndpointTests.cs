@@ -12,6 +12,8 @@ public class ReportsAndSubscriptionEndpointTests
     public ReportsAndSubscriptionEndpointTests(NanchesoftWebFactory factory)
     {
         _client = factory.CreateClient();
+        _client.DefaultRequestHeaders.Add("X-Is-Platform-Owner", "true");
+        _client.DefaultRequestHeaders.Add("X-Nanchesoft-Platform-Owner", "true");
     }
 
     // ── Reports ────────────────────────────────────────────────────────────────

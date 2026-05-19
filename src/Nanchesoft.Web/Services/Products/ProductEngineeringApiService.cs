@@ -176,8 +176,8 @@ public sealed class ProductEngineeringApiService
         var units = await GetUnitLookupsAsync();
         return BuildView("unit-conversions", "Unit Conversions", "Legacy Orange uses explicit unit conversions for purchasing, inventory and explosion.", "UnitConversionId", [
             TextColumn("UnitConversionId", "ID", allowEditing: false, width: 220),
-            LookupColumn("FromUnitId", "From Unit", units, required: true, width: 180),
-            LookupColumn("ToUnitId", "To Unit", units, required: true, width: 180),
+            LookupColumn("FromUnitId", "From Unit", units, required: true, width: 180, quickCreateKey: "units"),
+            LookupColumn("ToUnitId", "To Unit", units, required: true, width: 180, quickCreateKey: "units"),
             NumberColumn("ConversionFactor", "Factor", width: 120),
             BoolColumn("IsBidirectional", "Bidirectional", width: 110),
             TextColumn("Notes", "Notes", width: 220),
@@ -236,7 +236,7 @@ public sealed class ProductEngineeringApiService
         var families = await GetProductFamilyLookupsAsync();
         return BuildView("lines", "Product Lines", "Catálogo de líneas de producto.", "ProductLineId", [
             TextColumn("ProductLineId", "ID", allowEditing: false, width: 220),
-            LookupColumn("ProductFamilyId", "Family", families, width: 180),
+            LookupColumn("ProductFamilyId", "Family", families, width: 180, quickCreateKey: "families"),
             TextColumn("Code", "Code", required: true, width: 120),
             TextColumn("Name", "Name", required: true, width: 220),
             TextColumn("ShortName", "Short Name", width: 120),
@@ -252,7 +252,7 @@ public sealed class ProductEngineeringApiService
         var lines = await GetProductLineLookupsAsync();
         return BuildView("styles", "Product Styles", "Legacy Estilo translated to standardized product style catalog.", "ProductStyleId", [
             TextColumn("ProductStyleId", "ID", allowEditing: false, width: 220),
-            LookupColumn("ProductLineId", "Line", lines, width: 180),
+            LookupColumn("ProductLineId", "Line", lines, width: 180, quickCreateKey: "lines"),
             TextColumn("Code", "Code", required: true, width: 120),
             TextColumn("Name", "Name", required: true, width: 220),
             TextColumn("CustomerLabel1", "Customer Label 1", width: 160),
@@ -292,9 +292,9 @@ public sealed class ProductEngineeringApiService
         return BuildView("item-engineering-profiles", "Item Engineering Profiles", "Bridge between item master and Orange engineering attributes.", "ItemEngineeringProfileId", [
             TextColumn("ItemEngineeringProfileId", "ID", allowEditing: false, width: 220),
             LookupColumn("ItemId", "Item", items, required: true, width: 220),
-            LookupColumn("ProductStyleId", "Style", styles, width: 180),
+            LookupColumn("ProductStyleId", "Style", styles, width: 180, quickCreateKey: "styles"),
             LookupColumn("ProductSizeRunId", "Size Run", runs, width: 180),
-            LookupColumn("EmbroideryPatternId", "Embroidery", embroideries, width: 180),
+            LookupColumn("EmbroideryPatternId", "Embroidery", embroideries, width: 180, quickCreateKey: "embroidery-patterns"),
             LookupColumn("PrimaryMaterialItemId", "Primary Material", items, width: 220),
             TextColumn("FolioPattern", "Folio Pattern", width: 140),
             TextColumn("TechnicalSheetMode", "Technical Sheet Mode", width: 140),
@@ -369,7 +369,7 @@ public sealed class ProductEngineeringApiService
         var families = await GetMaterialFamilyLookupsAsync();
         return BuildView("material-subfamilies", "Material Subfamilies", "Legacy subfamilies used for direct and indirect material grouping.", "MaterialSubfamilyId", [
             TextColumn("MaterialSubfamilyId", "ID", allowEditing: false, width: 220),
-            LookupColumn("MaterialFamilyId", "Material Family", families, required: true, width: 200),
+            LookupColumn("MaterialFamilyId", "Material Family", families, required: true, width: 200, quickCreateKey: "material-families"),
             TextColumn("Code", "Code", required: true, width: 120),
             TextColumn("Name", "Name", required: true, width: 220),
             TextColumn("MaterialType", "Type", width: 120),
@@ -390,12 +390,12 @@ public sealed class ProductEngineeringApiService
         var suppliers = await GetSupplierLookupsAsync();
         return BuildView("material-items", "Catálogo de materiales", "Materiales con generación automática de nombre a partir de característica + talla.", "MaterialItemId", [
             TextColumn("MaterialItemId", "ID", allowEditing: false, width: 220),
-            LookupColumn("MaterialSubfamilyId", "Subfamilia", subfamilies, required: true, width: 180),
-            LookupColumn("MaterialCharacteristicId", "Característica", characteristics, width: 220),
-            LookupColumn("MaterialSizeId", "Talla", sizes, width: 160),
+            LookupColumn("MaterialSubfamilyId", "Subfamilia", subfamilies, required: true, width: 180, quickCreateKey: "material-subfamilies"),
+            LookupColumn("MaterialCharacteristicId", "Característica", characteristics, width: 220, quickCreateKey: "material-characteristics"),
+            LookupColumn("MaterialSizeId", "Talla", sizes, width: 160, quickCreateKey: "material-sizes"),
             TextColumn("Name", "Nombre (generado)", allowEditing: false, width: 260),
-            LookupColumn("PurchaseUnitId", "Unidad compra", units, width: 160),
-            LookupColumn("IssueUnitId", "Unidad consumo", units, width: 160),
+            LookupColumn("PurchaseUnitId", "Unidad compra", units, width: 160, quickCreateKey: "units"),
+            LookupColumn("IssueUnitId", "Unidad consumo", units, width: 160, quickCreateKey: "units"),
             LookupColumn("SupplierId", "Proveedor", suppliers, width: 220),
             TextColumn("Code", "Clave", required: true, width: 120),
             TextColumn("Description", "Descripción", width: 220),
@@ -437,8 +437,8 @@ public sealed class ProductEngineeringApiService
             TextColumn("MaterialSupplierAssignmentId", "ID", allowEditing: false, width: 220),
             LookupColumn("MaterialItemId", "Material", materials, required: true, width: 220),
             LookupColumn("SupplierId", "Proveedor", suppliers, required: true, width: 220),
-            LookupColumn("PurchaseUnitId", "Unidad compra", units, width: 150),
-            LookupColumn("CurrencyId", "Moneda", currencies, width: 140),
+            LookupColumn("PurchaseUnitId", "Unidad compra", units, width: 150, quickCreateKey: "units"),
+            LookupColumn("CurrencyId", "Moneda", currencies, width: 140, quickCreateKey: "currencies"),
             TextColumn("SupplierItemCode", "Código proveedor", width: 140),
             TextColumn("SupplierItemName", "Nombre proveedor", width: 220),
             NumberColumn("ConversionFactor", "Factor conv.", width: 110),
@@ -463,7 +463,7 @@ public sealed class ProductEngineeringApiService
         return BuildView("material-supplier-cost-history", "Histórico de costos material-proveedor", "Histórico manual o documental del costo por proveedor para cada material.", "MaterialSupplierCostHistoryId", [
             TextColumn("MaterialSupplierCostHistoryId", "ID", allowEditing: false, width: 220),
             LookupColumn("MaterialSupplierAssignmentId", "Matriz material/proveedor", assignments, required: true, width: 260),
-            LookupColumn("CurrencyId", "Moneda", currencies, width: 140),
+            LookupColumn("CurrencyId", "Moneda", currencies, width: 140, quickCreateKey: "currencies"),
             DateColumn("CostDate", "Fecha costo", required: true, width: 120),
             NumberColumn("Cost", "Costo", required: true, width: 120),
             NumberColumn("ExchangeRate", "Tipo cambio", width: 120),
@@ -492,17 +492,17 @@ public sealed class ProductEngineeringApiService
         var materials = await GetMaterialItemLookupsAsync();
         return BuildView("finished-products", "Productos terminados", "Catálogo base de productos terminados para ingeniería, ficha técnica y costeo.", "FinishedProductId", [
             TextColumn("FinishedProductId", "ID", allowEditing: false, width: 220),
-            LookupColumn("ProductStyleId", "Estilo", styles, width: 180),
-            LookupColumn("ItemModelId", "Modelo", models, width: 180),
-            LookupColumn("ItemBrandId", "Marca", brands, width: 160),
-            LookupColumn("ProductColorId", "Color", colors, width: 160),
-            LookupColumn("ProductToeCapId", "Casco", toeCaps, width: 160),
-            LookupColumn("ProductSoleId", "Suela", soles, width: 160),
-            LookupColumn("ProductSoleColorId", "Color suela", soleColors, width: 160),
-            LookupColumn("ProductFolioPatternId", "Foliado", folioPatterns, width: 160),
+            LookupColumn("ProductStyleId", "Estilo", styles, width: 180, quickCreateKey: "styles"),
+            LookupColumn("ItemModelId", "Modelo", models, width: 180, quickCreateKey: "models"),
+            LookupColumn("ItemBrandId", "Marca", brands, width: 160, quickCreateKey: "brands"),
+            LookupColumn("ProductColorId", "Color", colors, width: 160, quickCreateKey: "colors"),
+            LookupColumn("ProductToeCapId", "Casco", toeCaps, width: 160, quickCreateKey: "toe-caps"),
+            LookupColumn("ProductSoleId", "Suela", soles, width: 160, quickCreateKey: "soles"),
+            LookupColumn("ProductSoleColorId", "Color suela", soleColors, width: 160, quickCreateKey: "sole-colors"),
+            LookupColumn("ProductFolioPatternId", "Foliado", folioPatterns, width: 160, quickCreateKey: "folio-patterns"),
             LookupColumn("ProductSizeRunId", "Corrida", runs, width: 180),
-            LookupColumn("ProductLineId", "Línea", lines, width: 160),
-            LookupColumn("ProductLastId", "Horma", lasts, width: 160),
+            LookupColumn("ProductLineId", "Línea", lines, width: 160, quickCreateKey: "lines"),
+            LookupColumn("ProductLastId", "Horma", lasts, width: 160, quickCreateKey: "lasts"),
             LookupColumn("MainMaterialItemId", "Mat. principal", materials, width: 200),
             TextColumn("Code", "Clave", required: true, width: 120),
             TextColumn("Name", "Nombre", width: 260),
@@ -544,10 +544,10 @@ public sealed class ProductEngineeringApiService
         var phases = await GetProductionPhaseLookupsAsync();
         return BuildView("product-components", "Componentes del producto", "Catálogo universal de componentes por fase de producción.", "ProductComponentId", [
             TextColumn("ProductComponentId", "ID", allowEditing: false, width: 220),
-            LookupColumn("ConsumptionUnitId", "Unidad consumo", units, width: 160),
+            LookupColumn("ConsumptionUnitId", "Unidad consumo", units, width: 160, quickCreateKey: "units"),
             TextColumn("Code", "Código", required: true, width: 120),
             TextColumn("Name", "Nombre", required: true, width: 200),
-            LookupColumn("ProductionPhaseId", "Fase", phases, width: 180),
+            LookupColumn("ProductionPhaseId", "Fase", phases, width: 180, quickCreateKey: "production-phases"),
             NumberColumn("DefaultConsumption", "Consumo base", width: 130),
             BoolColumn("ActivateForAllProducts", "Activar para todos", width: 130),
             BoolColumn("ShowOnProductionCard", "Ver en tarjeta", width: 115),
@@ -704,7 +704,7 @@ public sealed class ProductEngineeringApiService
     private static CatalogColumnDefinition NumberColumn(string dataField, string caption, bool required = false, int width = 110) => new() { DataField = dataField, Caption = caption, DataType = "number", Required = required, Width = width };
     private static CatalogColumnDefinition BoolColumn(string dataField, string caption, int width = 90) => new() { DataField = dataField, Caption = caption, DataType = "boolean", Width = width };
     private static CatalogColumnDefinition DateColumn(string dataField, string caption, bool required = false, int width = 120) => new() { DataField = dataField, Caption = caption, DataType = "date", Required = required, Width = width };
-    private static CatalogColumnDefinition LookupColumn(string dataField, string caption, List<CatalogLookupItem> lookup, bool required = false, int width = 160) => new() { DataField = dataField, Caption = caption, DataType = "string", UseLookup = true, LookupItems = lookup, Required = required, Width = width };
+    private static CatalogColumnDefinition LookupColumn(string dataField, string caption, List<CatalogLookupItem> lookup, bool required = false, int width = 160, string? quickCreateKey = null) => new() { DataField = dataField, Caption = caption, DataType = "string", UseLookup = true, LookupItems = lookup, Required = required, Width = width, QuickCreateKey = quickCreateKey };
 
     private static string TranslateUiText(string value)
         => value switch

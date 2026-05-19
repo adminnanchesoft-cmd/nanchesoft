@@ -24,9 +24,9 @@ public class ServiceBillingEndpointTests
     }
 
     [Fact]
-    public async Task CreateServiceNote_MissingRequired_Returns400()
+    public async Task CreateServiceNote_UnknownCustomer_Returns400()
     {
-        var payload = new { code = "", customerId = (Guid?)null };
+        var payload = new { customerId = Guid.NewGuid() };
         var response = await _client.PostAsJsonAsync("/api/services/service-notes", payload);
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }

@@ -93,7 +93,7 @@ public static class BranchEndpoints
 
         var tenantId = ApiTenantScope.ResolveTenantId(httpContext);
         if (!ApiTenantScope.IsPlatformOwner(httpContext) && tenantId.HasValue && company.TenantId != tenantId.Value)
-            return Results.Forbid();
+            return Results.StatusCode(403);
 
         var code = (request.Code ?? string.Empty).Trim().ToUpperInvariant();
         var name = (request.Name ?? string.Empty).Trim();
@@ -149,7 +149,7 @@ public static class BranchEndpoints
 
         var tenantScopeId = ApiTenantScope.ResolveTenantId(httpContext);
         if (!ApiTenantScope.IsPlatformOwner(httpContext) && tenantScopeId.HasValue && branch.TenantId != tenantScopeId.Value)
-            return Results.Forbid();
+            return Results.StatusCode(403);
 
         Company? company = null;
         if (request.CompanyId.HasValue && request.CompanyId.Value != Guid.Empty)
@@ -158,7 +158,7 @@ public static class BranchEndpoints
         if (company is null)
             return Results.BadRequest(new { message = "No se encontró la empresa de la sucursal." });
         if (!ApiTenantScope.IsPlatformOwner(httpContext) && tenantScopeId.HasValue && company.TenantId != tenantScopeId.Value)
-            return Results.Forbid();
+            return Results.StatusCode(403);
 
         var code = string.IsNullOrWhiteSpace(request.Code) ? branch.Code : request.Code.Trim().ToUpperInvariant();
         var name = string.IsNullOrWhiteSpace(request.Name) ? branch.Name : request.Name.Trim();
@@ -210,7 +210,7 @@ public static class BranchEndpoints
 
         var tenantId = ApiTenantScope.ResolveTenantId(httpContext);
         if (!ApiTenantScope.IsPlatformOwner(httpContext) && tenantId.HasValue && branch.TenantId != tenantId.Value)
-            return Results.Forbid();
+            return Results.StatusCode(403);
 
         if (branch.Warehouses.Any())
             return Results.BadRequest(new { message = "No puedes eliminar una sucursal que ya tiene almacenes relacionados." });

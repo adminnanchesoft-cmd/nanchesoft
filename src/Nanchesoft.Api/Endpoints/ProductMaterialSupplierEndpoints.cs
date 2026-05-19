@@ -165,6 +165,14 @@ public static class ProductMaterialSupplierEndpoints
 
     private static async Task<IResult> UpsertAssignmentAsync(Guid? id, MaterialSupplierAssignmentRequest request, NanchesoftDbContext db)
     {
+        // Check entity existence first (404 before payload validation)
+        MaterialSupplierAssignment? entity = null;
+        if (id.HasValue)
+        {
+            entity = await db.MaterialSupplierAssignments.FirstOrDefaultAsync(x => x.Id == id.Value);
+            if (entity is null) return Results.NotFound();
+        }
+
         var ctx = await ResolveDefaultContextAsync(db);
         if (!ctx.TenantId.HasValue || !ctx.CompanyId.HasValue)
             return Results.BadRequest(new { message = "No se encontró el contexto base de tenant/empresa." });
@@ -180,16 +188,7 @@ public static class ProductMaterialSupplierEndpoints
         if (duplicate)
             return Results.BadRequest(new { message = "Ya existe esa relación material-proveedor." });
 
-        var entity = id.HasValue ? await db.MaterialSupplierAssignments.FirstOrDefaultAsync(x => x.Id == id.Value) : null;
-        if (id.HasValue && entity is null)
-            return Results.NotFound();
-
-        entity ??= new MaterialSupplierAssignment
-        {
-            TenantId = ctx.TenantId.Value,
-            CompanyId = ctx.CompanyId.Value,
-            CreatedBy = "web-api"
-        };
+        entity ??= new MaterialSupplierAssignment { TenantId = ctx.TenantId.Value, CompanyId = ctx.CompanyId.Value, CreatedBy = "web-api" };
 
         entity.MaterialItemId = request.MaterialItemId;
         entity.SupplierId = request.SupplierId;
@@ -228,6 +227,14 @@ public static class ProductMaterialSupplierEndpoints
 
     private static async Task<IResult> UpsertHistoryAsync(Guid? id, MaterialSupplierCostHistoryRequest request, NanchesoftDbContext db)
     {
+        // Check entity existence first (404 before payload validation)
+        MaterialSupplierCostHistory? entity = null;
+        if (id.HasValue)
+        {
+            entity = await db.MaterialSupplierCostHistory.FirstOrDefaultAsync(x => x.Id == id.Value);
+            if (entity is null) return Results.NotFound();
+        }
+
         var ctx = await ResolveDefaultContextAsync(db);
         if (!ctx.TenantId.HasValue || !ctx.CompanyId.HasValue)
             return Results.BadRequest(new { message = "No se encontró el contexto base de tenant/empresa." });
@@ -239,16 +246,7 @@ public static class ProductMaterialSupplierEndpoints
         if (assignment is null)
             return Results.BadRequest(new { message = "La relación material-proveedor no existe." });
 
-        var entity = id.HasValue ? await db.MaterialSupplierCostHistory.FirstOrDefaultAsync(x => x.Id == id.Value) : null;
-        if (id.HasValue && entity is null)
-            return Results.NotFound();
-
-        entity ??= new MaterialSupplierCostHistory
-        {
-            TenantId = ctx.TenantId.Value,
-            CompanyId = ctx.CompanyId.Value,
-            CreatedBy = "web-api"
-        };
+        entity ??= new MaterialSupplierCostHistory { TenantId = ctx.TenantId.Value, CompanyId = ctx.CompanyId.Value, CreatedBy = "web-api" };
 
         entity.MaterialSupplierAssignmentId = request.MaterialSupplierAssignmentId;
         entity.CurrencyId = request.CurrencyId ?? assignment.CurrencyId;
