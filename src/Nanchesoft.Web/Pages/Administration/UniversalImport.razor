@@ -3,6 +3,8 @@
 @using System.Text.Json
 @inject IHttpClientFactory HttpClientFactory
 @inject NavigationManager NavManager
+@inject IJSRuntime JS
+@implements IAsyncDisposable
 
 <PageTitle>Importación universal | Nanchesoft</PageTitle>
 
@@ -28,12 +30,8 @@
     @* ══════ Step 1 — Upload ══════════════════════════════════════ *@
     @if (_step == 1)
     {
-        <div class="ns-import-upload-zone @(_dragging ? "ns-import-upload-zone--over" : "")"
-             @ondragover:preventDefault
-             @ondragover="() => _dragging = true"
-             @ondragleave="() => _dragging = false"
-             @ondrop:preventDefault
-             @ondrop="OnDropAsync">
+        <div id="ns-universal-import-dz"
+             class="ns-import-upload-zone">
             <svg viewBox="0 0 48 48" width="42" height="42" fill="none"><path d="M24 34V14m0 0-8 8m8-8 8 8" stroke="#64748b" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><rect x="4" y="36" width="40" height="6" rx="3" fill="#e2e8f0"/></svg>
             <div class="ns-import-upload-zone__text">Arrastra tu archivo CSV aquí</div>
             <div class="ns-import-upload-zone__sub">o haz clic para seleccionar</div>
@@ -77,7 +75,40 @@
             </div>
         </div>
 
-        <div class="table-responsive mt-3">
+        @* Row count banner *@
+        <div class="alert alert-success d-flex align-items-center gap-2 mt-3 py-2" style="font-size:.9rem;">
+            <span class="bi bi-check-circle-fill"></span>
+            <span>Archivo cargado — <strong>@_allRows.Count</strong> @(_allRows.Count == 1 ? "registro listo" : "registros listos") para importar</span>
+        </div>
+
+        @* Data preview — all rows (scrollable) *@
+        @if (_allRows.Count > 0)
+        {
+            <div style="overflow-x:auto;max-height:280px;border:1px solid #bfdbfe;border-radius:8px;margin-bottom:16px;">
+                <table class="table table-sm table-bordered mb-0" style="font-size:.8rem;white-space:nowrap;">
+                    <thead class="table-light" style="position:sticky;top:0;z-index:1;">
+                        <tr>
+                            <th style="min-width:36px;">#</th>
+                            @foreach (var h in _csvHeaders) { <th>@h</th> }
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @{ int rowNum = 1; }
+                        @foreach (var row in _allRows)
+                        {
+                            <tr>
+                                <td class="text-muted">@(rowNum++)</td>
+                                @foreach (var cell in row) { <td>@cell</td> }
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+
+        @* Column mapping *@
+        <p class="ns-field-label mb-1">Mapeo de columnas</p>
+        <div class="table-responsive">
             <table class="table table-sm table-bordered">
                 <thead class="table-light">
                     <tr>
@@ -111,27 +142,6 @@
             </table>
         </div>
 
-        @* Preview first 5 rows *@
-        @if (_previewRows.Count > 0)
-        {
-            <details class="mt-3">
-                <summary class="ns-field-label" style="cursor:pointer">Vista previa (primeras @_previewRows.Count filas)</summary>
-                <div class="table-responsive mt-2">
-                    <table class="table table-sm table-bordered" style="font-size:.8rem">
-                        <thead class="table-light">
-                            <tr>@foreach (var h in _csvHeaders) { <th>@h</th> }</tr>
-                        </thead>
-                        <tbody>
-                            @foreach (var row in _previewRows)
-                            {
-                                <tr>@foreach (var cell in row) { <td>@cell</td> }</tr>
-                            }
-                        </tbody>
-                    </table>
-                </div>
-            </details>
-        }
-
         <div class="d-flex gap-2 mt-4">
             <button class="btn btn-secondary" @onclick="ResetWizard">← Volver</button>
             <button class="btn btn-primary" @onclick="ExecuteImportAsync" disabled="@_executing">
@@ -139,7 +149,7 @@
                 {
                     <span class="spinner-border spinner-border-sm me-2"></span>
                 }
-                Importar @_allRows.Count filas
+                Importar @_allRows.Count @(_allRows.Count == 1 ? "registro" : "registros")
             </button>
         </div>
 
@@ -202,8 +212,9 @@
 @code {
     // ── State ──────────────────────────────────────────────────────
     private int _step = 1;
-    private bool _dragging;
     private bool _analyzing;
+    private bool _dropZoneReady;
+    private DotNetObjectReference<UniversalImport>? _dotNetRef;
     private bool _executing;
     private string _uploadError = "";
     private string _executeError = "";
@@ -224,19 +235,49 @@
         _entities = await client.GetFromJsonAsync<List<EntityInfo>>("/api/import/entities") ?? [];
     }
 
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender || !_dropZoneReady)
+        {
+            _dotNetRef ??= DotNetObjectReference.Create(this);
+            try
+            {
+                await JS.InvokeVoidAsync("nsImport.initDropZone", "ns-universal-import-dz", _dotNetRef);
+                _dropZoneReady = true;
+            }
+            catch { }
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        _dotNetRef?.Dispose();
+        await Task.CompletedTask;
+    }
+
     // ── File handling ─────────────────────────────────────────────
     private async Task OnFileSelectedAsync(InputFileChangeEventArgs e)
     {
         await LoadFileAsync(e.File);
     }
 
-    private async Task OnDropAsync(DragEventArgs e)
+    [JSInvokable]
+    public async Task HandleDroppedCsv(string csvText)
     {
-        _dragging = false;
-        // Drag-drop for files requires JS interop beyond what Blazor exposes by default.
-        // The InputFile above handles the fallback; show a hint.
-        _uploadError = "Por favor usa el botón 'Seleccionar CSV' para subir archivos arrastrados.";
-        await Task.CompletedTask;
+        _uploadError = "";
+        try
+        {
+            await ProcessCsvText(csvText);
+        }
+        catch (Exception ex)
+        {
+            _uploadError = $"Error al leer el archivo: {ex.Message}";
+        }
+        finally
+        {
+            _analyzing = false;
+            await InvokeAsync(StateHasChanged);
+        }
     }
 
     private async Task LoadFileAsync(IBrowserFile file)
@@ -252,33 +293,12 @@
         try
         {
             using var stream = file.OpenReadStream(maxAllowedSize: 10 * 1024 * 1024);
-            using var reader = new System.IO.StreamReader(stream, System.Text.Encoding.UTF8, detectEncodingFromByteOrderMarks: true);
-
-            var lines = new List<string>();
-            while (!reader.EndOfStream)
-            {
-                var line = await reader.ReadLineAsync();
-                if (line is not null) lines.Add(line);
-            }
-
-            if (lines.Count < 2)
-            {
-                _uploadError = "El archivo está vacío o solo tiene encabezados.";
-                return;
-            }
-
-            // Detect separator (comma vs semicolon)
-            var firstLine = lines[0];
-            var sep = firstLine.Count(c => c == ';') > firstLine.Count(c => c == ',') ? ';' : ',';
-
-            _csvHeaders = ParseCsvLine(firstLine, sep);
-            _allRows = lines.Skip(1).Where(l => !string.IsNullOrWhiteSpace(l)).Select(l => (List<string?>)ParseCsvLine(l, sep).Cast<string?>().ToList()).ToList();
-            _previewRows = _allRows.Take(5).ToList();
-
-            _analyzing = true;
-            StateHasChanged();
-
-            await AnalyzeAsync();
+            using var ms = new System.IO.MemoryStream();
+            await stream.CopyToAsync(ms);
+            ms.Position = 0;
+            using var reader = new System.IO.StreamReader(ms, System.Text.Encoding.UTF8, detectEncodingFromByteOrderMarks: true);
+            var text = await reader.ReadToEndAsync();
+            await ProcessCsvText(text);
         }
         catch (Exception ex)
         {
@@ -288,6 +308,33 @@
         {
             _analyzing = false;
         }
+    }
+
+    private async Task ProcessCsvText(string text)
+    {
+        var lines = text.Split('\n', StringSplitOptions.RemoveEmptyEntries)
+                        .Select(l => l.TrimEnd('\r'))
+                        .Where(l => !string.IsNullOrWhiteSpace(l))
+                        .ToList();
+
+        if (lines.Count < 2)
+        {
+            _uploadError = "El archivo está vacío o solo tiene encabezados.";
+            return;
+        }
+
+        // Detect separator (comma vs semicolon)
+        var firstLine = lines[0];
+        var sep = firstLine.Count(c => c == ';') > firstLine.Count(c => c == ',') ? ';' : ',';
+
+        _csvHeaders = ParseCsvLine(firstLine, sep);
+        _allRows = lines.Skip(1).Where(l => !string.IsNullOrWhiteSpace(l)).Select(l => (List<string?>)ParseCsvLine(l, sep).Cast<string?>().ToList()).ToList();
+        _previewRows = _allRows.Take(5).ToList();
+
+        _analyzing = true;
+        StateHasChanged();
+
+        await AnalyzeAsync();
     }
 
     private static List<string> ParseCsvLine(string line, char sep)
@@ -434,7 +481,7 @@
         _importResult = null;
         _uploadError = "";
         _executeError = "";
-        _dragging = false;
+        _dropZoneReady = false;
     }
 
     private string StepClass(int n) =>
