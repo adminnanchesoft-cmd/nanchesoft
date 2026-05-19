@@ -20,6 +20,7 @@ public static class PayrollMvpEndpoints
         clock.MapPost("/import/csv", ImportPunchesFromCsvAsync).DisableAntiforgery();
 
         var periods = app.MapGroup("/api/payroll/periods").WithTags("PayrollPeriods");
+        periods.MapGet("/{periodId:guid}/generation-preview", GetPayrollGenerationPreviewAsync);
         periods.MapPost("/{periodId:guid}/generate-summaries", GenerateAttendanceDailySummariesAsync);
         periods.MapPost("/{periodId:guid}/generate-incidents", GenerateIncidentsFromSummariesAsync);
 
@@ -634,6 +635,85 @@ public static class PayrollMvpEndpoints
         public string Message { get; set; } = string.Empty;
     }
 
+    public sealed class PayrollGenerationPreviewDto
+    {
+        public Guid PayrollPeriodId { get; set; }
+        public string PeriodName { get; set; } = string.Empty;
+        public int ActiveEmployees { get; set; }
+        public int EmployeesWithoutSalary { get; set; }
+        public int AttendanceSummaries { get; set; }
+        public int Incidents { get; set; }
+        public int PrePayrollAdjustments { get; set; }
+        public int RecurringMovements { get; set; }
+        public int ActiveLoans { get; set; }
+        public List<string> MissingConceptCodes { get; set; } = [];
+        public List<string> Warnings { get; set; } = [];
+    }
+
+    private static async Task<IResult> GetPayrollGenerationPreviewAsync(Guid periodId, NanchesoftDbContext db)
+    {
+        var period = await db.PayrollPeriods.AsNoTracking().FirstOrDefaultAsync(x => x.Id == periodId);
+        if (period is null)
+            return Results.NotFound(new { message = "No se encontró el periodo." });
+
+        var employeeIds = await db.Employees.AsNoTracking()
+            .Where(x => x.CompanyId == period.CompanyId && x.IsActive && x.Status == "active")
+            .Select(x => x.Id)
+            .ToListAsync();
+
+        var activeEmployees = employeeIds.Count;
+        var employeesWithoutSalary = await db.Employees.AsNoTracking()
+            .CountAsync(x => x.CompanyId == period.CompanyId && x.IsActive && x.Status == "active" && x.DailySalary <= 0m && x.PeriodSalary <= 0m);
+        var attendanceSummaries = await db.AttendanceDailySummaries.AsNoTracking()
+            .CountAsync(x => x.CompanyId == period.CompanyId && x.PayrollPeriodId == period.Id && x.IsActive);
+        var incidents = await db.EmployeeIncidents.AsNoTracking()
+            .CountAsync(x => x.CompanyId == period.CompanyId && x.PayrollPeriodId == period.Id && x.IsActive);
+        var prePayrollAdjustments = await db.PrePayrollAdjustments.AsNoTracking()
+            .CountAsync(x => x.CompanyId == period.CompanyId && x.PayrollPeriodId == period.Id && x.IsActive && x.Status != "cancelled");
+        var activeLoans = employeeIds.Count == 0
+            ? 0
+            : await db.EmployeeLoans.AsNoTracking()
+                .CountAsync(x => x.CompanyId == period.CompanyId && employeeIds.Contains(x.EmployeeId) && x.Status == "active" && x.IsActive && x.BalanceAmount > 0m);
+        var recurringMovements = employeeIds.Count == 0
+            ? 0
+            : await db.PayrollRecurringMovements.AsNoTracking()
+                .CountAsync(x => x.CompanyId == period.CompanyId && x.IsActive && employeeIds.Contains(x.EmployeeId)
+                    && x.EffectiveStartDate.Date <= period.PaymentDate.Date
+                    && (x.EffectiveEndDate == null || x.EffectiveEndDate.Value.Date >= period.PaymentDate.Date));
+
+        var requiredConcepts = new[] { "SAL", "ISR", "IMSS", "DESCTO", "SUBSE" };
+        var existingConceptCodes = await db.PayrollConcepts.AsNoTracking()
+            .Where(x => x.CompanyId == period.CompanyId && x.IsActive && requiredConcepts.Contains(x.Code))
+            .Select(x => x.Code)
+            .ToListAsync();
+        var missingConcepts = requiredConcepts.Except(existingConceptCodes).ToList();
+
+        var warnings = new List<string>();
+        if (activeEmployees == 0)
+            warnings.Add("No hay colaboradores activos para generar nómina.");
+        if (employeesWithoutSalary > 0)
+            warnings.Add($"{employeesWithoutSalary} colaboradores no tienen salario diario ni salario por periodo.");
+        if (attendanceSummaries == 0)
+            warnings.Add("No hay resumen diario de asistencia para el periodo.");
+        if (missingConcepts.Count > 0)
+            warnings.Add("Faltan conceptos base; se crearán automáticamente al calcular: " + string.Join(", ", missingConcepts) + ".");
+
+        return Results.Ok(new PayrollGenerationPreviewDto
+        {
+            PayrollPeriodId = period.Id,
+            PeriodName = period.Name,
+            ActiveEmployees = activeEmployees,
+            EmployeesWithoutSalary = employeesWithoutSalary,
+            AttendanceSummaries = attendanceSummaries,
+            Incidents = incidents,
+            PrePayrollAdjustments = prePayrollAdjustments,
+            RecurringMovements = recurringMovements,
+            ActiveLoans = activeLoans,
+            MissingConceptCodes = missingConcepts,
+            Warnings = warnings
+        });
+    }
+
     // ──────────────────────────────────────────────────────────────
     // 3. GENERAR RESUMEN DIARIO DE ASISTENCIA POR PERIODO
     // Procesa todos los empleados activos y agrupa sus checadas
@@ -924,6 +1004,8 @@ public static class PayrollMvpEndpoints
         if (employees.Count == 0)
             return Results.BadRequest(new { message = "No hay empleados activos para calcular." });
 
+        await EnsureDefaultConceptsAsync(db, run.CompanyId);
+
         var concepts = await db.PayrollConcepts.Where(x => x.CompanyId == run.CompanyId && x.IsActive).ToListAsync();
         var conceptSal   = concepts.FirstOrDefault(x => x.Code == "SAL")
                         ?? concepts.FirstOrDefault(x => x.SatCode == "P-001" && x.ConceptType == "perception")
@@ -942,7 +1024,7 @@ public static class PayrollMvpEndpoints
                          ?? conceptIsr;
 
         if (conceptSal is null)
-            return Results.BadRequest(new { message = "No existe concepto de percepción (SAL) configurado. Use POST /api/payroll/concepts/seed-defaults para crearlos." });
+            return Results.BadRequest(new { message = "No existe concepto de percepción (SAL) configurado." });
 
         // Step 1: Delete auto-generated details — safe, no external FK references point to details
         var oldDetails = await db.PayrollRunLineDetails
@@ -1410,6 +1492,16 @@ public static class PayrollMvpEndpoints
         if (company is null)
             return Results.BadRequest(new { message = "No existe empresa configurada." });
 
+        var (created, skipped) = await EnsureDefaultConceptsAsync(db, company.Id);
+        return Results.Ok(new { success = true, created, skipped });
+    }
+
+    private static async Task<(int Created, int Skipped)> EnsureDefaultConceptsAsync(NanchesoftDbContext db, Guid companyId)
+    {
+        var company = await db.Companies.FirstOrDefaultAsync(x => x.Id == companyId);
+        if (company is null)
+            return (0, 0);
+
         var seed = new[]
         {
             new { Code = "SAL",   Name = "Sueldo",               ConceptType = "perception", CalculationType = "days_salary",   SatCode = "P-001", SatAgrupador = "HorasExtra",  TaxableType = "taxable",     TaxablePercent = 100m, ExemptPercent = 0m,   IsRecurring = true,  IsAutomatic = true,  SortOrder = 10 },
@@ -1455,7 +1547,7 @@ public static class PayrollMvpEndpoints
             created++;
         }
         await db.SaveChangesAsync();
-        return Results.Ok(new { success = true, created, skipped });
+        return (created, skipped);
     }
 
     // ── ISR 2024 tarifa Art. 96 LISR (importes mensuales) ──

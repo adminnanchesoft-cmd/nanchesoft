@@ -89,6 +89,43 @@
                                 </table>
                             </div>
                         }
+                        <div class="d-flex flex-wrap gap-2 align-items-center mb-3">
+                            <button class="btn btn-outline-primary btn-sm" @onclick="ValidatePeriodAsync" disabled="@_busy">
+                                @(_busy ? "Validando…" : "Validar generación")
+                            </button>
+                            @if (_preview is not null)
+                            {
+                                <span class="badge text-bg-light border">Colaboradores: @_preview.ActiveEmployees</span>
+                                <span class="badge text-bg-light border">Asistencia: @_preview.AttendanceSummaries</span>
+                                <span class="badge text-bg-light border">Incidencias: @_preview.Incidents</span>
+                                <span class="badge text-bg-light border">Prenómina: @_preview.PrePayrollAdjustments</span>
+                            }
+                        </div>
+                        @if (_preview is not null)
+                        {
+                            <div class="border rounded p-3 mb-3 bg-light">
+                                <div class="row g-2 small">
+                                    <div class="col-6 col-md-4"><span class="text-secondary">Periódicos</span><div class="fw-semibold">@_preview.RecurringMovements</div></div>
+                                    <div class="col-6 col-md-4"><span class="text-secondary">Préstamos activos</span><div class="fw-semibold">@_preview.ActiveLoans</div></div>
+                                    <div class="col-6 col-md-4"><span class="text-secondary">Sin salario</span><div class="fw-semibold">@_preview.EmployeesWithoutSalary</div></div>
+                                </div>
+                                @if (_preview.MissingConceptCodes.Count > 0)
+                                {
+                                    <div class="alert alert-info py-2 px-3 mt-3 mb-0 small">
+                                        Conceptos base por crear automáticamente al calcular: @string.Join(", ", _preview.MissingConceptCodes)
+                                    </div>
+                                }
+                                @if (_preview.Warnings.Count > 0)
+                                {
+                                    <ul class="mt-3 mb-0 small text-secondary">
+                                        @foreach (var warning in _preview.Warnings)
+                                        {
+                                            <li>@warning</li>
+                                        }
+                                    </ul>
+                                }
+                            </div>
+                        }
                     }
                 }
             </div>
@@ -393,6 +430,7 @@
     // Paso 1
     private List<Nanchesoft.Web.Services.HumanResources.PayrollPeriodSimple> _periods = [];
     private Guid _selectedPeriodId;
+    private Nanchesoft.Web.Services.HumanResources.PayrollGenerationPreview? _preview;
 
     // Paso 2
     private Microsoft.AspNetCore.Components.Forms.IBrowserFile? _punchFile;
@@ -438,9 +476,10 @@
         _step = step;
     }
 
-    private void GoToStep2()
+    private async Task GoToStep2()
     {
         if (_selectedPeriodId == Guid.Empty) return;
+        await ValidatePeriodAsync();
         var sel = _periods.FirstOrDefault(x => x.PayrollPeriodId == _selectedPeriodId);
         _runFolio = sel is not null
             ? $"NOM-{sel.StartDate:yyyyMMdd}"
@@ -485,6 +524,7 @@
         await RunAsync(async () =>
         {
             _summaryResult = await PayrollMvpApiService.GenerateAttendanceSummariesAsync(_selectedPeriodId, _attendanceOptions);
+            _preview = await PayrollMvpApiService.GetGenerationPreviewAsync(_selectedPeriodId);
         });
     }
 
@@ -493,6 +533,16 @@
         await RunAsync(async () =>
         {
             _incidentResult = await PayrollMvpApiService.GenerateIncidentsAsync(_selectedPeriodId, _incidentOptions);
+            _preview = await PayrollMvpApiService.GetGenerationPreviewAsync(_selectedPeriodId);
+        });
+    }
+
+    private async Task ValidatePeriodAsync()
+    {
+        if (_selectedPeriodId == Guid.Empty) return;
+        await RunAsync(async () =>
+        {
+            _preview = await PayrollMvpApiService.GetGenerationPreviewAsync(_selectedPeriodId);
         });
     }
 
@@ -504,6 +554,7 @@
             _run = await PayrollMvpApiService.CreateRunAsync(_selectedPeriodId, _runFolio.Trim().ToUpperInvariant());
             if (_run is null) throw new InvalidOperationException("No se pudo crear la corrida.");
             _calculateResult = await PayrollMvpApiService.CalculatePayrollRunAsync(_run.PayrollRunId);
+            _preview = await PayrollMvpApiService.GetGenerationPreviewAsync(_selectedPeriodId);
             // Reload to get updated totals
             var runs = await PayrollMvpApiService.GetRunsAsync();
             _run = runs.FirstOrDefault(x => x.PayrollRunId == _run.PayrollRunId) ?? _run;
@@ -533,6 +584,7 @@
     {
         _step = 1;
         _selectedPeriodId = Guid.Empty;
+        _preview = null;
         _punchFile = null;
         _punchImportResult = null;
         _summaryResult = null;

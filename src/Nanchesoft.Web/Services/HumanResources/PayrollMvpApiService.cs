@@ -53,6 +53,12 @@ public sealed class PayrollMvpApiService
         return await response.Content.ReadFromJsonAsync<PayrollMvpOperationResult>() ?? new();
     }
 
+    public async Task<PayrollGenerationPreview> GetGenerationPreviewAsync(Guid periodId)
+    {
+        var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
+        return await client.GetFromJsonAsync<PayrollGenerationPreview>($"/api/payroll/periods/{periodId}/generation-preview") ?? new();
+    }
+
     public async Task<PayrollMvpCalculateResult> CalculatePayrollRunAsync(Guid runId)
     {
         var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
@@ -164,6 +170,21 @@ public sealed class PayrollMvpOperationResult
     public int Created { get; set; }
     public int Employees { get; set; }
     public int Days { get; set; }
+}
+
+public sealed class PayrollGenerationPreview
+{
+    public Guid PayrollPeriodId { get; set; }
+    public string PeriodName { get; set; } = string.Empty;
+    public int ActiveEmployees { get; set; }
+    public int EmployeesWithoutSalary { get; set; }
+    public int AttendanceSummaries { get; set; }
+    public int Incidents { get; set; }
+    public int PrePayrollAdjustments { get; set; }
+    public int RecurringMovements { get; set; }
+    public int ActiveLoans { get; set; }
+    public List<string> MissingConceptCodes { get; set; } = [];
+    public List<string> Warnings { get; set; } = [];
 }
 
 public sealed class PayrollMvpCalculateResult
