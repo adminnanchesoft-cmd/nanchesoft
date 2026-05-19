@@ -398,28 +398,19 @@
                     <span class="bi bi-geo-alt"></span> Domicilio
                 </div>
                 <div class="ns-section-body">
-                    <div class="row g-3">
-                        <div class="col-12">
-                            <label class="ns-field-label">Calle y número</label>
-                            <input class="form-control ns-form-input" @bind="_form.AddressStreet" placeholder="Av. Independencia 456 Interior 3" />
-                        </div>
-                        <div class="col-12 col-md-4">
-                            <label class="ns-field-label">Colonia</label>
-                            <input class="form-control ns-form-input" @bind="_form.AddressColony" placeholder="Col. Centro" />
-                        </div>
-                        <div class="col-12 col-md-4">
-                            <label class="ns-field-label">Ciudad / Municipio</label>
-                            <input class="form-control ns-form-input" @bind="_form.AddressCity" placeholder="Chihuahua" />
-                        </div>
-                        <div class="col-12 col-md-3">
-                            <label class="ns-field-label">Estado</label>
-                            <input class="form-control ns-form-input" @bind="_form.AddressState" placeholder="Chihuahua" />
-                        </div>
-                        <div class="col-6 col-md-2">
-                            <label class="ns-field-label">C.P.</label>
-                            <input class="form-control ns-form-input" @bind="_form.AddressZipCode" maxlength="5" placeholder="31000" />
-                        </div>
-                    </div>
+                    <AddressBlock
+                        ZipCode="@_form.AddressZipCode"
+                        ZipCodeChanged="@(v => _form.AddressZipCode = v)"
+                        Colony="@_form.AddressColony"
+                        ColonyChanged="@(v => _form.AddressColony = v)"
+                        City="@_form.AddressCity"
+                        CityChanged="@(v => _form.AddressCity = v)"
+                        State="@_form.AddressState"
+                        StateChanged="@(v => _form.AddressState = v)"
+                        Street="@_form.AddressStreet"
+                        StreetChanged="@(v => _form.AddressStreet = v)"
+                        LabelClass="ns-field-label"
+                        InputClass="ns-form-input" />
                 </div>
             </div>
         }

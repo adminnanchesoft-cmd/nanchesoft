@@ -11,6 +11,10 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
+builder.Services.AddHttpClient("Copomex").ConfigureHttpClient(c =>
+{
+    c.Timeout = TimeSpan.FromSeconds(5);
+});
 
 builder.Services.AddCors(options =>
 {
@@ -185,6 +189,7 @@ app.MapPost("/api/auth/login", async (AuthLoginRequest request, NanchesoftDbCont
     });
 });
 
+app.MapPostalCodeEndpoints();
 app.MapCompanyEndpoints();
 app.MapBranchEndpoints();
 app.MapWarehouseEndpoints();

@@ -1,0 +1,164 @@
+@using System.Net.Http.Json
+@inject IHttpClientFactory HttpClientFactory
+
+<div class="row g-3">
+
+    @* ── C.P. (primero, dispara el lookup) ─────────────────── *@
+    <div class="col-6 col-md-2">
+        <label class="@LabelClass">C.P.</label>
+        <div style="position:relative;">
+            <input class="form-control @InputClass"
+                   value="@ZipCode"
+                   maxlength="5"
+                   placeholder="37000"
+                   @oninput="OnZipInput"
+                   @onblur="OnZipBlur" />
+            @if (_loading)
+            {
+                <span style="position:absolute;right:8px;top:50%;transform:translateY(-50%);font-size:.75rem;color:#64748b;">
+                    ⏳
+                </span>
+            }
+        </div>
+        @if (!string.IsNullOrEmpty(_cpError))
+        {
+            <div style="font-size:.72rem;color:#dc2626;margin-top:2px;">@_cpError</div>
+        }
+    </div>
+
+    @* ── Colonia ─────────────────────────────────────────────── *@
+    <div class="col-12 col-md-4">
+        <label class="@LabelClass">Colonia</label>
+        @if (_colonias.Count > 1)
+        {
+            <select class="form-select @InputClass" value="@Colony" @onchange="OnColoniaSelect">
+                @if (string.IsNullOrWhiteSpace(Colony))
+                {
+                    <option value="">— Elige colonia —</option>
+                }
+                @foreach (var c in _colonias)
+                {
+                    <option value="@c" selected="@(Colony == c)">@c</option>
+                }
+            </select>
+        }
+        else
+        {
+            <input class="form-control @InputClass"
+                   value="@Colony"
+                   placeholder="Col. Centro"
+                   @oninput="e => ColonyChanged.InvokeAsync(e.Value?.ToString())" />
+        }
+    </div>
+
+    @* ── Ciudad ──────────────────────────────────────────────── *@
+    <div class="col-12 col-md-3">
+        <label class="@LabelClass">Ciudad / Municipio</label>
+        <input class="form-control @InputClass"
+               value="@City"
+               placeholder="León"
+               @oninput="e => CityChanged.InvokeAsync(e.Value?.ToString())" />
+    </div>
+
+    @* ── Estado ──────────────────────────────────────────────── *@
+    <div class="col-12 col-md-3">
+        <label class="@LabelClass">Estado</label>
+        <input class="form-control @InputClass"
+               value="@State"
+               placeholder="Guanajuato"
+               @oninput="e => StateChanged.InvokeAsync(e.Value?.ToString())" />
+    </div>
+
+    @* ── Calle (al final para que CP sea lo primero visible) ─── *@
+    <div class="col-12">
+        <label class="@LabelClass">Calle y número</label>
+        <input class="form-control @InputClass"
+               value="@Street"
+               placeholder="Av. Independencia 456, Interior 3"
+               @oninput="e => StreetChanged.InvokeAsync(e.Value?.ToString())" />
+    </div>
+
+</div>
+
+@code {
+    [Parameter] public string? ZipCode    { get; set; }
+    [Parameter] public string? Colony     { get; set; }
+    [Parameter] public string? City       { get; set; }
+    [Parameter] public string? State      { get; set; }
+    [Parameter] public string? Street     { get; set; }
+
+    [Parameter] public EventCallback<string?> ZipCodeChanged { get; set; }
+    [Parameter] public EventCallback<string?> ColonyChanged  { get; set; }
+    [Parameter] public EventCallback<string?> CityChanged    { get; set; }
+    [Parameter] public EventCallback<string?> StateChanged   { get; set; }
+    [Parameter] public EventCallback<string?> StreetChanged  { get; set; }
+
+    [Parameter] public string LabelClass { get; set; } = "form-label";
+    [Parameter] public string InputClass { get; set; } = string.Empty;
+
+    private List<string> _colonias = [];
+    private bool _loading;
+    private string _cpError = string.Empty;
+    private string _lastLookedUp = string.Empty;
+
+    private async Task OnZipInput(ChangeEventArgs e)
+    {
+        var val = e.Value?.ToString() ?? string.Empty;
+        await ZipCodeChanged.InvokeAsync(val);
+        if (val.Length == 5 && val.All(char.IsDigit))
+            await LookupAsync(val);
+    }
+
+    private async Task OnZipBlur()
+    {
+        var cp = ZipCode ?? string.Empty;
+        if (cp.Length == 5 && cp.All(char.IsDigit) && cp != _lastLookedUp)
+            await LookupAsync(cp);
+    }
+
+    private async Task LookupAsync(string cp)
+    {
+        _lastLookedUp = cp;
+        _cpError = string.Empty;
+        _loading = true;
+        StateHasChanged();
+        try
+        {
+            var client = HttpClientFactory.CreateClient("Nanchesoft.Api");
+            var result = await client.GetFromJsonAsync<PostalCodeResult>($"/api/organization/postal-code/{cp}");
+            if (result is null || (result.Colonias.Count == 0 && string.IsNullOrEmpty(result.Municipio)))
+            {
+                _cpError = "CP no encontrado";
+                _colonias = [];
+                return;
+            }
+
+            _colonias = result.Colonias;
+
+            // Auto-fill ciudad y estado siempre
+            await CityChanged.InvokeAsync(result.Municipio);
+            await StateChanged.InvokeAsync(result.Estado);
+
+            // Auto-fill colonia solo si hay exactamente 1
+            if (result.Colonias.Count == 1)
+                await ColonyChanged.InvokeAsync(result.Colonias[0]);
+            else if (result.Colonias.Count > 1 && string.IsNullOrWhiteSpace(Colony))
+                await ColonyChanged.InvokeAsync(result.Colonias[0]);
+        }
+        catch
+        {
+            _cpError = "No se pudo consultar el CP";
+            _colonias = [];
+        }
+        finally
+        {
+            _loading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task OnColoniaSelect(ChangeEventArgs e)
+        => await ColonyChanged.InvokeAsync(e.Value?.ToString());
+
+    private sealed record PostalCodeResult(string Cp, List<string> Colonias, string Municipio, string Estado);
+}
