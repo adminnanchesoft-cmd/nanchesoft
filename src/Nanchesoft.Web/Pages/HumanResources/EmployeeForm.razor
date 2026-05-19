@@ -479,6 +479,13 @@
                 <div class="ns-section-body">
                     <div class="row g-3">
                         <div class="col-6 col-md-3">
+                            <label class="ns-field-label">Sueldo del periodo</label>
+                            <div class="input-group input-group-sm">
+                                <span class="input-group-text">$</span>
+                                <input type="number" step="0.01" class="form-control ns-form-input" @bind="_form.PeriodSalary" placeholder="0.00" />
+                            </div>
+                        </div>
+                        <div class="col-6 col-md-3">
                             <label class="ns-field-label">Salario diario</label>
                             <div class="input-group input-group-sm">
                                 <span class="input-group-text">$</span>
@@ -1157,6 +1164,7 @@
         public string? AddressCity { get; set; }
         public string? AddressState { get; set; }
         public string? AddressZipCode { get; set; }
+        public decimal PeriodSalary { get; set; }
         public decimal DailySalary { get; set; }
         public decimal IntegratedDailySalary { get; set; }
         public decimal SbcFija { get; set; }

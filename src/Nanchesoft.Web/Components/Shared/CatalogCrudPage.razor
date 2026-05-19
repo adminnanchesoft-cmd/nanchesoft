@@ -113,7 +113,7 @@
             <a class="ns-secondary-btn" href="@_printHref" target="_blank">Imprimir catálogo</a>
             @if (_definition.AllowImport)
             {
-                <button class="ns-secondary-btn" @onclick="() => _showImport = !_showImport">
+                <button class="ns-secondary-btn" @onclick="() => { _showImport = !_showImport; _dropZoneReady = false; }">
                     @(_showImport ? "Cerrar importación" : "Importar CSV")
                 </button>
                 <a class="ns-secondary-btn" href="@_importTemplateHref" download="@($"plantilla_{_definition.CatalogKey}.csv")">Descargar plantilla</a>
@@ -156,9 +156,9 @@
                     Sube un CSV con las columnas que necesites. El sistema reconoce los encabezados por nombre — no necesitas todas las columnas ni en orden específico.
                 </p>
 
-                <div style="position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;min-height:80px;border:2px dashed #93c5fd;border-radius:10px;background:#fff;cursor:pointer;margin-bottom:14px;transition:background .15s;padding:14px;"
-                     onmouseover="this.style.background='#eff6ff'" onmouseout="this.style.background='#fff'"
-                     ondragover="this.style.background='#dbeafe';event.preventDefault();" ondragleave="this.style.background='#fff'">
+                <div id="@_importDropZoneId"
+                     style="position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;min-height:80px;border:2px dashed #93c5fd;border-radius:10px;background:#fff;cursor:pointer;margin-bottom:14px;transition:background .15s;padding:14px;"
+                     onmouseover="this.style.background='#eff6ff'" onmouseout="this.style.background='#fff'">
                     <span style="font-size:1.5rem;pointer-events:none;">📂</span>
                     <span style="font-size:.875rem;font-weight:600;color:#1d4ed8;pointer-events:none;">Arrastra tu CSV aquí o haz clic para seleccionar</span>
                     <span style="font-size:.75rem;color:#64748b;pointer-events:none;">Formatos admitidos: .csv · separador coma o punto y coma</span>
@@ -275,6 +275,7 @@
     private CatalogViewDefinition? _definition;
     private DotNetObjectReference<CatalogCrudPage>? _dotNetReference;
     private readonly string _containerId = $"ns-grid-{Guid.NewGuid():N}";
+    private string _importDropZoneId => $"ns-dz-{_containerId}";
     private bool _gridRendered;
     private string? _clientError;
     private string _csvHref = "#";
@@ -284,6 +285,7 @@
 
     // Import state
     private bool _showImport;
+    private bool _dropZoneReady;
     private List<string> _importHeaders = [];
     private List<List<string>> _importRows = [];
     private List<string> _importStatuses = [];
@@ -332,6 +334,16 @@
                 _clientError = ex.Message;
                 await InvokeAsync(StateHasChanged);
             }
+        }
+
+        if (_definition.AllowImport && _showImport && !_dropZoneReady)
+        {
+            try
+            {
+                await JS.InvokeVoidAsync("nsImport.initDropZone", _importDropZoneId, _dotNetReference);
+                _dropZoneReady = true;
+            }
+            catch { }
         }
     }
 
@@ -665,6 +677,29 @@
 
     private async Task OnImportFileSelected(InputFileChangeEventArgs e)
     {
+        var file = e.File;
+        if (file is null || _definition is null) return;
+
+        using var stream = file.OpenReadStream(maxAllowedSize: 5 * 1024 * 1024);
+        using var ms = new MemoryStream();
+        await stream.CopyToAsync(ms);
+        ms.Position = 0;
+        using var reader = new StreamReader(ms, Encoding.UTF8);
+        var content = await reader.ReadToEndAsync();
+
+        await ProcessCsvContent(content);
+    }
+
+    [JSInvokable]
+    public async Task HandleDroppedCsv(string csvText)
+    {
+        if (_definition is null) return;
+        await ProcessCsvContent(csvText);
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task ProcessCsvContent(string content)
+    {
         _importRows.Clear();
         _importHeaders.Clear();
         _importStatuses.Clear();
@@ -676,13 +711,6 @@
         _importCodeDisplayIdx = -1;
         _importDone = 0;
         _importOk = 0;
-
-        var file = e.File;
-        if (file is null || _definition is null) return;
-
-        using var stream = file.OpenReadStream(maxAllowedSize: 5 * 1024 * 1024);
-        using var reader = new StreamReader(stream, Encoding.UTF8);
-        var content = await reader.ReadToEndAsync();
 
         var lines = content.Split('\n', StringSplitOptions.RemoveEmptyEntries)
                            .Select(l => l.TrimEnd('\r'))

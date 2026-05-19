@@ -391,3 +391,25 @@ window.downloadFileBase64 = function (filename, base64Data) {
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
 };
+
+window.nsImport = {
+    initDropZone: function (elementId, dotNetRef) {
+        const zone = document.getElementById(elementId);
+        if (!zone) return;
+        zone.addEventListener('dragover', e => {
+            e.preventDefault();
+            zone.style.background = '#dbeafe';
+        });
+        zone.addEventListener('dragleave', () => {
+            zone.style.background = '#fff';
+        });
+        zone.addEventListener('drop', async e => {
+            e.preventDefault();
+            zone.style.background = '#fff';
+            const file = e.dataTransfer && e.dataTransfer.files[0];
+            if (!file) return;
+            const text = await file.text();
+            await dotNetRef.invokeMethodAsync('HandleDroppedCsv', text);
+        });
+    }
+};
