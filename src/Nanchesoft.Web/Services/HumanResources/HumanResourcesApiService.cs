@@ -350,7 +350,8 @@ public sealed class HumanResourcesApiService
                 ("Notes", x.Notes),
                 ("PrintReceipt", x.PrintReceipt),
                 ("IsActive", x.IsActive)))
-            .ToList());
+            .ToList(),
+            allowImport: true);
         view.NewUrl = "/human-resources/empleado";
         view.EditUrl = "/human-resources/empleado";
         return view;
