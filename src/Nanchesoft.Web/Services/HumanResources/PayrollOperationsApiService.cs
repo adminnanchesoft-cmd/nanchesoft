@@ -213,6 +213,25 @@ public sealed class PayrollOperationsApiService
         return rows.Select(x => new PayrollConceptItem { ConceptId = x.PayrollConceptId, Code = x.Code, Name = x.Name, ConceptType = x.ConceptType, IsActive = x.IsActive }).ToList();
     }
 
+    public async Task<PrePayrollMatrixData?> GetPrePayrollMatrixAsync(Guid periodId, IEnumerable<Guid> conceptIds)
+    {
+        var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
+        var selected = string.Join(",", conceptIds.Select(x => x.ToString("D")));
+        var suffix = string.IsNullOrWhiteSpace(selected) ? string.Empty : $"?conceptIds={selected}";
+        return await client.GetFromJsonAsync<PrePayrollMatrixData>($"/api/payroll/periods/{periodId}/prepayroll-matrix{suffix}");
+    }
+
+    public async Task SavePrePayrollMatrixAsync(Guid periodId, List<PrePayrollMatrixSaveCell> cells)
+    {
+        var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
+        var response = await client.PostAsJsonAsync($"/api/payroll/periods/{periodId}/prepayroll-matrix-save", new { Cells = cells });
+        if (!response.IsSuccessStatusCode)
+        {
+            var err = await response.Content.ReadAsStringAsync();
+            throw new InvalidOperationException(err);
+        }
+    }
+
     // ── Captura matricial ───────────────────────────────────────────────────────
 
     public async Task<PayrollRunMatrixData?> GetPayrollRunMatrixDataAsync(Guid runId)
@@ -2120,4 +2139,49 @@ public sealed class MatrixSaveEntry
     public Guid PayrollRunLineId { get; set; }
     public Guid PayrollConceptId { get; set; }
     public decimal Amount { get; set; }
+}
+
+public sealed class PrePayrollMatrixData
+{
+    public Guid PayrollPeriodId { get; set; }
+    public string PeriodName { get; set; } = string.Empty;
+    public DateTime PeriodStart { get; set; }
+    public DateTime PeriodEnd { get; set; }
+    public List<PrePayrollMatrixConcept> Concepts { get; set; } = [];
+    public List<PrePayrollMatrixEmployee> Employees { get; set; } = [];
+}
+
+public sealed class PrePayrollMatrixConcept
+{
+    public Guid ConceptId { get; set; }
+    public string Code { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
+    public string ConceptType { get; set; } = string.Empty;
+}
+
+public sealed class PrePayrollMatrixEmployee
+{
+    public Guid EmployeeId { get; set; }
+    public string EmployeeNumber { get; set; } = string.Empty;
+    public string EmployeeName { get; set; } = string.Empty;
+    public string DepartmentName { get; set; } = string.Empty;
+    public string PositionName { get; set; } = string.Empty;
+    public Dictionary<string, PrePayrollMatrixCell> ConceptAmounts { get; set; } = [];
+}
+
+public sealed class PrePayrollMatrixCell
+{
+    public Guid AdjustmentId { get; set; }
+    public decimal Quantity { get; set; }
+    public decimal Amount { get; set; }
+    public string Notes { get; set; } = string.Empty;
+}
+
+public sealed class PrePayrollMatrixSaveCell
+{
+    public Guid EmployeeId { get; set; }
+    public Guid PayrollConceptId { get; set; }
+    public decimal Quantity { get; set; } = 1m;
+    public decimal Amount { get; set; }
+    public string? Notes { get; set; }
 }

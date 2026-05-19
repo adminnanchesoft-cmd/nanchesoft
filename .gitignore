@@ -4,3 +4,5 @@
 **/.vs/
 *.user
 .DS_Store
+Silvasoft/
+.claude/settings.local.json

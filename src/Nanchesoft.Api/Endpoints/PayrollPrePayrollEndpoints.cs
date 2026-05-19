@@ -20,6 +20,10 @@ public static class PayrollPrePayrollEndpoints
         adjustments.MapPut("/{id:guid}", UpdatePrePayrollAdjustmentAsync);
         adjustments.MapDelete("/{id:guid}", DeletePrePayrollAdjustmentAsync);
 
+        var periods = app.MapGroup("/api/payroll/periods").WithTags("PrePayrollWorksheet");
+        periods.MapGet("/{periodId:guid}/prepayroll-matrix", GetPrePayrollMatrixAsync);
+        periods.MapPost("/{periodId:guid}/prepayroll-matrix-save", SavePrePayrollMatrixAsync);
+
         var cutoffs = app.MapGroup("/api/payroll/prepayroll-cutoffs").WithTags("PrePayrollCutoffs");
         cutoffs.MapGet("/", GetPrePayrollCutoffsAsync);
         cutoffs.MapPost("/", CreatePrePayrollCutoffAsync);
@@ -74,6 +78,18 @@ public static class PayrollPrePayrollEndpoints
     {
         var source = value ?? fallback;
         return source.Kind == DateTimeKind.Utc ? source : DateTime.SpecifyKind(source, DateTimeKind.Utc);
+    }
+
+    private static (decimal Taxable, decimal Exempt) SplitConceptAmount(PayrollConcept concept, decimal amount)
+    {
+        if (amount <= 0m) return (0m, 0m);
+        var taxableType = NormalizeLower(concept.TaxableType, "taxable");
+        return taxableType switch
+        {
+            "exempt" => (0m, amount),
+            "mixed" => (Math.Round(amount * (concept.TaxablePercent / 100m), 2), Math.Round(amount * (concept.ExemptPercent / 100m), 2)),
+            _ => (amount, 0m)
+        };
     }
 
     private static async Task<IResult> GetAttendanceDailySummariesAsync(NanchesoftDbContext db)
@@ -326,6 +342,211 @@ public static class PayrollPrePayrollEndpoints
         db.PrePayrollAdjustments.Remove(entity);
         await db.SaveChangesAsync();
         return Results.Ok(new { success = true });
+    }
+
+    private static async Task<IResult> GetPrePayrollMatrixAsync(Guid periodId, string? conceptIds, NanchesoftDbContext db)
+    {
+        var period = await db.PayrollPeriods.AsNoTracking().FirstOrDefaultAsync(x => x.Id == periodId);
+        if (period is null)
+            return Results.NotFound(new { message = "No se encontró el periodo." });
+
+        var selectedConceptIds = (conceptIds ?? string.Empty)
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(x => Guid.TryParse(x, out var id) ? id : Guid.Empty)
+            .Where(x => x != Guid.Empty)
+            .Distinct()
+            .ToList();
+
+        var conceptsQuery = db.PayrollConcepts.AsNoTracking()
+            .Where(x => x.CompanyId == period.CompanyId && x.IsActive && x.ConceptType != "obligation");
+
+        if (selectedConceptIds.Count > 0)
+            conceptsQuery = conceptsQuery.Where(x => selectedConceptIds.Contains(x.Id));
+        else
+            conceptsQuery = conceptsQuery.Where(x => !x.IsAutomatic || x.Code == "BON" || x.Code == "DESCTO");
+
+        var concepts = await conceptsQuery
+            .OrderBy(x => x.SortOrder)
+            .ThenBy(x => x.Code)
+            .Select(x => new PrePayrollMatrixConceptDto
+            {
+                ConceptId = x.Id,
+                Code = x.Code,
+                Name = x.Name,
+                ConceptType = x.ConceptType
+            })
+            .ToListAsync();
+
+        if (concepts.Count == 0)
+            concepts = await db.PayrollConcepts.AsNoTracking()
+                .Where(x => x.CompanyId == period.CompanyId && x.IsActive && x.ConceptType != "obligation")
+                .OrderBy(x => x.SortOrder)
+                .ThenBy(x => x.Code)
+                .Take(8)
+                .Select(x => new PrePayrollMatrixConceptDto
+                {
+                    ConceptId = x.Id,
+                    Code = x.Code,
+                    Name = x.Name,
+                    ConceptType = x.ConceptType
+                })
+                .ToListAsync();
+
+        var conceptIdSet = concepts.Select(x => x.ConceptId).ToHashSet();
+
+        var adjustments = await db.PrePayrollAdjustments.AsNoTracking()
+            .Where(x => x.CompanyId == period.CompanyId && x.PayrollPeriodId == periodId && x.PayrollConceptId.HasValue && conceptIdSet.Contains(x.PayrollConceptId.Value) && x.IsActive)
+            .ToListAsync();
+
+        var adjustmentsByEmployee = adjustments
+            .GroupBy(x => x.EmployeeId)
+            .ToDictionary(
+                g => g.Key,
+                g => g.Where(x => x.PayrollConceptId.HasValue)
+                    .ToDictionary(x => x.PayrollConceptId!.Value.ToString("D"), x => new PrePayrollMatrixCellDto
+                    {
+                        AdjustmentId = x.Id,
+                        Quantity = x.Quantity,
+                        Amount = x.Amount,
+                        Notes = x.Notes
+                    }));
+
+        var employees = await db.Employees.AsNoTracking()
+            .Include(x => x.Department)
+            .Include(x => x.Position)
+            .Where(x => x.CompanyId == period.CompanyId && x.IsActive && x.Status == "active")
+            .OrderBy(x => x.EmployeeNumber)
+            .Select(x => new
+            {
+                x.Id,
+                x.EmployeeNumber,
+                x.FirstName,
+                x.LastName,
+                DepartmentName = x.Department != null ? x.Department.Name : string.Empty,
+                PositionName = x.Position != null ? x.Position.Name : string.Empty
+            })
+            .ToListAsync();
+
+        var rows = employees.Select(x => new PrePayrollMatrixEmployeeDto
+        {
+            EmployeeId = x.Id,
+            EmployeeNumber = x.EmployeeNumber,
+            EmployeeName = (x.FirstName + " " + x.LastName).Trim(),
+            DepartmentName = x.DepartmentName,
+            PositionName = x.PositionName,
+            ConceptAmounts = adjustmentsByEmployee.TryGetValue(x.Id, out var cells) ? cells : []
+        }).ToList();
+
+        return Results.Ok(new PrePayrollMatrixDto
+        {
+            PayrollPeriodId = period.Id,
+            PeriodName = period.Name,
+            PeriodStart = period.StartDate,
+            PeriodEnd = period.EndDate,
+            Concepts = concepts,
+            Employees = rows
+        });
+    }
+
+    private static async Task<IResult> SavePrePayrollMatrixAsync(Guid periodId, PrePayrollMatrixSaveRequest request, NanchesoftDbContext db)
+    {
+        var period = await db.PayrollPeriods.FirstOrDefaultAsync(x => x.Id == periodId);
+        if (period is null)
+            return Results.NotFound(new { message = "No se encontró el periodo." });
+
+        if (request.Cells.Count == 0)
+            return Results.BadRequest(new { message = "No hay movimientos para guardar." });
+
+        var employeeIds = request.Cells.Select(x => x.EmployeeId).Distinct().ToList();
+        var conceptIds = request.Cells.Select(x => x.PayrollConceptId).Distinct().ToList();
+
+        var validEmployees = await db.Employees
+            .Where(x => x.CompanyId == period.CompanyId && employeeIds.Contains(x.Id) && x.IsActive)
+            .Select(x => x.Id)
+            .ToHashSetAsync();
+
+        var concepts = await db.PayrollConcepts
+            .Where(x => x.CompanyId == period.CompanyId && conceptIds.Contains(x.Id) && x.IsActive)
+            .ToDictionaryAsync(x => x.Id);
+
+        var existing = await db.PrePayrollAdjustments
+            .Where(x => x.CompanyId == period.CompanyId && x.PayrollPeriodId == periodId && employeeIds.Contains(x.EmployeeId) && x.PayrollConceptId.HasValue && conceptIds.Contains(x.PayrollConceptId.Value))
+            .ToListAsync();
+        var existingMap = existing.ToDictionary(x => (x.EmployeeId, x.PayrollConceptId!.Value));
+
+        var saved = 0;
+        var deleted = 0;
+        var skipped = 0;
+
+        foreach (var cell in request.Cells)
+        {
+            if (!validEmployees.Contains(cell.EmployeeId) || !concepts.TryGetValue(cell.PayrollConceptId, out var concept))
+            {
+                skipped++;
+                continue;
+            }
+
+            var key = (cell.EmployeeId, cell.PayrollConceptId);
+            var amount = Math.Round(cell.Amount, 2);
+            var quantity = cell.Quantity <= 0m ? 1m : cell.Quantity;
+
+            if (amount <= 0m)
+            {
+                if (existingMap.TryGetValue(key, out var rowToDelete))
+                {
+                    db.PrePayrollAdjustments.Remove(rowToDelete);
+                    deleted++;
+                }
+                continue;
+            }
+
+            var split = SplitConceptAmount(concept, amount);
+            if (existingMap.TryGetValue(key, out var row))
+            {
+                row.AdjustmentCode = NormalizeUpper(concept.Code, row.AdjustmentCode);
+                row.AdjustmentName = NormalizeText(concept.Name, row.AdjustmentName);
+                row.AdjustmentType = NormalizeLower(concept.ConceptType, row.AdjustmentType);
+                row.CaptureSource = "prepayroll-matrix";
+                row.ReferenceDate = period.EndDate;
+                row.Quantity = quantity;
+                row.Amount = amount;
+                row.TaxableAmount = split.Taxable;
+                row.ExemptAmount = split.Exempt;
+                row.Status = "captured";
+                row.Notes = NormalizeText(cell.Notes, row.Notes);
+                row.IsActive = true;
+                row.UpdatedAt = DateTime.UtcNow;
+                row.UpdatedBy = "prepayroll-matrix";
+            }
+            else
+            {
+                db.PrePayrollAdjustments.Add(new PrePayrollAdjustment
+                {
+                    TenantId = period.TenantId,
+                    CompanyId = period.CompanyId,
+                    EmployeeId = cell.EmployeeId,
+                    PayrollPeriodId = period.Id,
+                    PayrollConceptId = concept.Id,
+                    AdjustmentCode = NormalizeUpper(concept.Code),
+                    AdjustmentName = NormalizeText(concept.Name),
+                    AdjustmentType = NormalizeLower(concept.ConceptType, "perception"),
+                    CaptureSource = "prepayroll-matrix",
+                    ReferenceDate = period.EndDate,
+                    Quantity = quantity,
+                    Amount = amount,
+                    TaxableAmount = split.Taxable,
+                    ExemptAmount = split.Exempt,
+                    Status = "captured",
+                    Notes = NormalizeText(cell.Notes),
+                    IsActive = true,
+                    CreatedBy = "prepayroll-matrix"
+                });
+            }
+            saved++;
+        }
+
+        await db.SaveChangesAsync();
+        return Results.Ok(new { success = true, saved, deleted, skipped });
     }
 
     private static async Task<IResult> GetPrePayrollCutoffsAsync(NanchesoftDbContext db)
@@ -597,4 +818,54 @@ public sealed class PrePayrollCutoffDto
     public DateTime? ClosedAt { get; set; }
     public string Notes { get; set; } = string.Empty;
     public bool IsActive { get; set; }
+}
+
+public sealed class PrePayrollMatrixDto
+{
+    public Guid PayrollPeriodId { get; set; }
+    public string PeriodName { get; set; } = string.Empty;
+    public DateTime PeriodStart { get; set; }
+    public DateTime PeriodEnd { get; set; }
+    public List<PrePayrollMatrixConceptDto> Concepts { get; set; } = [];
+    public List<PrePayrollMatrixEmployeeDto> Employees { get; set; } = [];
+}
+
+public sealed class PrePayrollMatrixConceptDto
+{
+    public Guid ConceptId { get; set; }
+    public string Code { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
+    public string ConceptType { get; set; } = string.Empty;
+}
+
+public sealed class PrePayrollMatrixEmployeeDto
+{
+    public Guid EmployeeId { get; set; }
+    public string EmployeeNumber { get; set; } = string.Empty;
+    public string EmployeeName { get; set; } = string.Empty;
+    public string DepartmentName { get; set; } = string.Empty;
+    public string PositionName { get; set; } = string.Empty;
+    public Dictionary<string, PrePayrollMatrixCellDto> ConceptAmounts { get; set; } = [];
+}
+
+public sealed class PrePayrollMatrixCellDto
+{
+    public Guid AdjustmentId { get; set; }
+    public decimal Quantity { get; set; }
+    public decimal Amount { get; set; }
+    public string Notes { get; set; } = string.Empty;
+}
+
+public sealed class PrePayrollMatrixSaveRequest
+{
+    public List<PrePayrollMatrixSaveCell> Cells { get; set; } = [];
+}
+
+public sealed class PrePayrollMatrixSaveCell
+{
+    public Guid EmployeeId { get; set; }
+    public Guid PayrollConceptId { get; set; }
+    public decimal Quantity { get; set; } = 1m;
+    public decimal Amount { get; set; }
+    public string? Notes { get; set; }
 }

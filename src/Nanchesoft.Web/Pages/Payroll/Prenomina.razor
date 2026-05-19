@@ -1,0 +1,274 @@
+@page "/payroll/prenomina"
+@using Nanchesoft.Web.Services.HumanResources
+@inject PayrollMvpApiService PayrollMvpApiService
+@inject PayrollOperationsApiService PayrollOperationsApiService
+
+<PageTitle>Prenómina | Nanchesoft</PageTitle>
+
+<style>
+    .prepayroll-table th, .prepayroll-table td { white-space: nowrap; padding: 4px 8px; font-size: 13px; }
+    .prepayroll-table input[type=number] { width: 96px; padding: 2px 4px; font-size: 12px; text-align: right; border: 1px solid #dee2e6; border-radius: 4px; }
+    .prepayroll-table input[type=number]:focus { outline: 2px solid #0d6efd; border-color: #0d6efd; }
+    .prepayroll-emp { min-width: 230px; position: sticky; left: 0; background: white; z-index: 2; }
+    .prepayroll-emp-head { background: #f8f9fa !important; z-index: 3; }
+    .prepayroll-scroll { overflow: auto; max-height: 68vh; }
+    .prepayroll-table thead th { position: sticky; top: 0; background: #f8f9fa; z-index: 1; }
+    .prepayroll-perception { background: #f0fff4; }
+    .prepayroll-deduction { background: #fff5f5; }
+    .prepayroll-changed input { border-color: #fd7e14 !important; background: #fff8f0; }
+    .concept-picker { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 6px 12px; }
+</style>
+
+<div class="container-fluid py-3">
+    <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+        <div>
+            <h1 class="mb-0">Prenómina</h1>
+            <p class="text-secondary mb-0">Captura tabular de movimientos variables antes del cálculo final.</p>
+        </div>
+        <div class="d-flex gap-2">
+            <span class="badge bg-warning text-dark align-self-center">@_changes.Count cambio(s)</span>
+            <button class="btn btn-primary" @onclick="SaveAsync" disabled="@(_busy || _selectedPeriodId == Guid.Empty || _changes.Count == 0)">
+                @(_busy ? "Guardando..." : "Guardar")
+            </button>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(_message))
+    {
+        <div class="alert @(_isError ? "alert-danger" : "alert-success") alert-dismissible mb-3">
+            @_message <button class="btn-close" @onclick="() => _message = null"></button>
+        </div>
+    }
+
+    <div class="card shadow-sm mb-3">
+        <div class="card-body">
+            <div class="row g-3 align-items-end">
+                <div class="col-md-5">
+                    <label class="form-label fw-semibold">Periodo</label>
+                    <select class="form-select" @onchange="OnPeriodChangedAsync">
+                        <option value="">Selecciona un periodo</option>
+                        @foreach (var p in _periods)
+                        {
+                            <option value="@p.PayrollPeriodId" selected="@(_selectedPeriodId == p.PayrollPeriodId)">
+                                @p.Name - @p.StartDate.ToString("dd/MM/yyyy") al @p.EndDate.ToString("dd/MM/yyyy")
+                            </option>
+                        }
+                    </select>
+                </div>
+                <div class="col-md-7">
+                    <details>
+                        <summary class="fw-semibold" style="cursor:pointer;">Configurar columnas</summary>
+                        <div class="concept-picker mt-2">
+                            @foreach (var concept in _allConcepts)
+                            {
+                                <label class="form-check-label d-flex align-items-center gap-2">
+                                    <input class="form-check-input" type="checkbox" checked="@_selectedConceptIds.Contains(concept.ConceptId)" @onchange="e => ToggleConceptAsync(concept.ConceptId, e)" />
+                                    <span><strong>@concept.Code</strong> @concept.Name</span>
+                                </label>
+                            }
+                        </div>
+                    </details>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @if (_loading)
+    {
+        <div class="text-center py-5 text-secondary">Cargando prenómina...</div>
+    }
+    else if (_matrix is not null)
+    {
+        <div class="d-flex align-items-center justify-content-between mb-2 flex-wrap gap-2">
+            <div class="small text-secondary">
+                @_matrix.Employees.Count colaborador(es) · @_matrix.Concepts.Count concepto(s)
+            </div>
+            <div class="d-flex gap-2 align-items-center flex-wrap">
+                <select class="form-select form-select-sm" style="width:260px;" @bind="_copyConceptId">
+                    <option value="">Copiar importe a columna...</option>
+                    @foreach (var concept in _matrix.Concepts)
+                    {
+                        <option value="@concept.ConceptId">@concept.Code - @concept.Name</option>
+                    }
+                </select>
+                <input class="form-control form-control-sm text-end" style="width:120px;" type="number" min="0" step="0.01" @bind="_copyAmount" />
+                <button class="btn btn-sm btn-outline-primary" @onclick="CopyColumn" disabled="@(_copyConceptId == Guid.Empty)">Aplicar</button>
+            </div>
+        </div>
+
+        <div class="card shadow-sm">
+            <div class="card-body p-0 prepayroll-scroll">
+                <table class="table table-bordered prepayroll-table mb-0">
+                    <thead>
+                        <tr>
+                            <th class="prepayroll-emp prepayroll-emp-head">Colaborador</th>
+                            @foreach (var concept in _matrix.Concepts)
+                            {
+                                <th class="text-center @(concept.ConceptType == "deduction" ? "prepayroll-deduction" : "prepayroll-perception")">
+                                    <div>@concept.Code</div>
+                                    <div style="font-size:10px;font-weight:400;">@concept.Name</div>
+                                </th>
+                            }
+                            <th class="text-end">Total percep.</th>
+                            <th class="text-end">Total deduc.</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var employee in _matrix.Employees)
+                        {
+                            <tr>
+                                <td class="prepayroll-emp">
+                                    <div class="fw-semibold">@employee.EmployeeName</div>
+                                    <div class="text-secondary" style="font-size:11px;">@employee.EmployeeNumber · @employee.DepartmentName</div>
+                                </td>
+                                @foreach (var concept in _matrix.Concepts)
+                                {
+                                    var key = (employee.EmployeeId, concept.ConceptId);
+                                    var conceptKey = concept.ConceptId.ToString("D");
+                                    var changed = _changes.TryGetValue(key, out var changedAmount);
+                                    var amount = changed ? changedAmount : (employee.ConceptAmounts.TryGetValue(conceptKey, out var cell) ? cell.Amount : 0m);
+                                    <td class="text-center @(concept.ConceptType == "deduction" ? "prepayroll-deduction" : "prepayroll-perception") @(changed ? "prepayroll-changed" : "")">
+                                        <input type="number" min="0" step="0.01"
+                                               value="@(amount > 0 ? amount.ToString("F2") : "")"
+                                               placeholder="0"
+                                               @onchange="e => OnCellChanged(employee.EmployeeId, concept.ConceptId, e)" />
+                                    </td>
+                                }
+                                <td class="text-end text-success">@RowTotal(employee, "perception").ToString("C")</td>
+                                <td class="text-end text-danger">@RowTotal(employee, "deduction").ToString("C")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="alert alert-info">Selecciona un periodo para iniciar la captura de prenómina.</div>
+    }
+</div>
+
+@code {
+    private List<PayrollPeriodSimple> _periods = [];
+    private List<PayrollConceptItem> _allConcepts = [];
+    private HashSet<Guid> _selectedConceptIds = [];
+    private Guid _selectedPeriodId;
+    private PrePayrollMatrixData? _matrix;
+    private Dictionary<(Guid EmployeeId, Guid ConceptId), decimal> _changes = [];
+    private bool _loading;
+    private bool _busy;
+    private string? _message;
+    private bool _isError;
+    private Guid _copyConceptId;
+    private decimal _copyAmount;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _periods = await PayrollMvpApiService.GetPeriodsAsync();
+        _allConcepts = (await PayrollOperationsApiService.GetPayrollConceptsAsync())
+            .Where(x => x.IsActive && x.ConceptType != "obligation")
+            .OrderBy(x => x.ConceptType)
+            .ThenBy(x => x.Code)
+            .ToList();
+
+        _selectedConceptIds = _allConcepts
+            .Where(x => x.Code is "BON" or "DESCTO" || !x.Code.Equals("SAL", StringComparison.OrdinalIgnoreCase))
+            .Take(8)
+            .Select(x => x.ConceptId)
+            .ToHashSet();
+    }
+
+    private async Task OnPeriodChangedAsync(ChangeEventArgs e)
+    {
+        _selectedPeriodId = Guid.TryParse(e.Value?.ToString(), out var id) ? id : Guid.Empty;
+        _changes.Clear();
+        await LoadAsync();
+    }
+
+    private async Task ToggleConceptAsync(Guid conceptId, ChangeEventArgs e)
+    {
+        var selected = e.Value is bool b && b;
+        if (selected) _selectedConceptIds.Add(conceptId);
+        else _selectedConceptIds.Remove(conceptId);
+        _changes.Clear();
+        if (_selectedPeriodId != Guid.Empty)
+            await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        if (_selectedPeriodId == Guid.Empty) { _matrix = null; return; }
+        _loading = true;
+        _message = null;
+        StateHasChanged();
+        _matrix = await PayrollOperationsApiService.GetPrePayrollMatrixAsync(_selectedPeriodId, _selectedConceptIds);
+        _loading = false;
+    }
+
+    private void OnCellChanged(Guid employeeId, Guid conceptId, ChangeEventArgs e)
+    {
+        if (decimal.TryParse(e.Value?.ToString(), out var amount) && amount >= 0m)
+            _changes[(employeeId, conceptId)] = amount;
+        else
+            _changes[(employeeId, conceptId)] = 0m;
+    }
+
+    private void CopyColumn()
+    {
+        if (_matrix is null || _copyConceptId == Guid.Empty) return;
+        foreach (var employee in _matrix.Employees)
+            _changes[(employee.EmployeeId, _copyConceptId)] = Math.Max(0m, _copyAmount);
+    }
+
+    private decimal RowTotal(PrePayrollMatrixEmployee employee, string conceptType)
+    {
+        if (_matrix is null) return 0m;
+        decimal total = 0m;
+        foreach (var concept in _matrix.Concepts.Where(x => x.ConceptType == conceptType))
+        {
+            var key = (employee.EmployeeId, concept.ConceptId);
+            if (_changes.TryGetValue(key, out var changed))
+                total += changed;
+            else if (employee.ConceptAmounts.TryGetValue(concept.ConceptId.ToString("D"), out var cell))
+                total += cell.Amount;
+        }
+        return total;
+    }
+
+    private async Task SaveAsync()
+    {
+        if (_selectedPeriodId == Guid.Empty || _changes.Count == 0) return;
+        _busy = true;
+        _message = null;
+        try
+        {
+            var cells = _changes.Select(x => new PrePayrollMatrixSaveCell
+            {
+                EmployeeId = x.Key.EmployeeId,
+                PayrollConceptId = x.Key.ConceptId,
+                Quantity = 1m,
+                Amount = x.Value
+            }).ToList();
+
+            await PayrollOperationsApiService.SavePrePayrollMatrixAsync(_selectedPeriodId, cells);
+            _changes.Clear();
+            await LoadAsync();
+            Show("Prenómina guardada.", false);
+        }
+        catch (Exception ex)
+        {
+            Show(ex.Message, true);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private void Show(string message, bool isError)
+    {
+        _message = message;
+        _isError = isError;
+    }
+}

@@ -1000,6 +1000,11 @@ public static class PayrollMvpEndpoints
             .GroupBy(x => x.EmployeeId)
             .ToDictionaryAsync(g => g.Key, g => g.ToList());
 
+        var prePayrollAdjustments = await db.PrePayrollAdjustments
+            .Where(x => x.CompanyId == run.CompanyId && x.PayrollPeriodId == run.PayrollPeriodId && employeeIds.Contains(x.EmployeeId) && x.IsActive && x.Status != "cancelled")
+            .ToListAsync();
+        var prePayrollByEmployee = prePayrollAdjustments.GroupBy(x => x.EmployeeId).ToDictionary(g => g.Key, g => g.ToList());
+
         var loansByEmployee = await db.EmployeeLoans
             .Where(x => x.CompanyId == run.CompanyId && employeeIds.Contains(x.EmployeeId) && x.Status == "active" && x.IsActive && x.BalanceAmount > 0m)
             .ToListAsync();
@@ -1041,6 +1046,8 @@ public static class PayrollMvpEndpoints
             // ── Incidencias ──
             decimal extraPerceptions = 0m;
             decimal extraDeductions = 0m;
+            decimal incidentPerceptions = 0m;
+            decimal incidentDeductions = 0m;
 
             incidentsByEmployee.TryGetValue(employee.Id, out var incidents);
             if (incidents is not null)
@@ -1050,23 +1057,52 @@ public static class PayrollMvpEndpoints
                     switch (inc.IncidentType.ToLowerInvariant())
                     {
                         case "hora_extra":
-                            extraPerceptions += Math.Round(employee.DailySalary / 8m * 1.5m * inc.Quantity, 2);
+                            var overtimeAmount = Math.Round(employee.DailySalary / 8m * 1.5m * inc.Quantity, 2);
+                            extraPerceptions += overtimeAmount;
+                            incidentPerceptions += overtimeAmount;
                             break;
                         case "bono":
                         case "percepcion":
-                            extraPerceptions += Math.Round(inc.Amount > 0 ? inc.Amount : employee.DailySalary * inc.Quantity, 2);
+                            var perceptionAmount = Math.Round(inc.Amount > 0 ? inc.Amount : employee.DailySalary * inc.Quantity, 2);
+                            extraPerceptions += perceptionAmount;
+                            incidentPerceptions += perceptionAmount;
                             break;
                         case "falta":
-                            extraDeductions += Math.Round(employee.DailySalary * inc.Quantity, 2);
+                            var absenceAmount = Math.Round(employee.DailySalary * inc.Quantity, 2);
+                            extraDeductions += absenceAmount;
+                            incidentDeductions += absenceAmount;
                             break;
                         case "retardo":
-                            extraDeductions += Math.Round(employee.DailySalary / 8m * inc.Quantity, 2);
+                            var delayAmount = Math.Round(employee.DailySalary / 8m * inc.Quantity, 2);
+                            extraDeductions += delayAmount;
+                            incidentDeductions += delayAmount;
                             break;
                         case "deduccion":
                         case "descuento":
-                            extraDeductions += Math.Round(inc.Amount > 0 ? inc.Amount : employee.DailySalary * inc.Quantity, 2);
+                            var deductionAmount = Math.Round(inc.Amount > 0 ? inc.Amount : employee.DailySalary * inc.Quantity, 2);
+                            extraDeductions += deductionAmount;
+                            incidentDeductions += deductionAmount;
                             break;
                     }
+                }
+            }
+
+            // ── Prenómina capturada ──
+            var prePayrollDetails = new List<(PayrollConcept Concept, decimal Qty, decimal Amt, bool IsDeduction, int Sort)>();
+            prePayrollByEmployee.TryGetValue(employee.Id, out var employeePrePayroll);
+            if (employeePrePayroll is not null)
+            {
+                foreach (var adj in employeePrePayroll)
+                {
+                    if (!adj.PayrollConceptId.HasValue) continue;
+                    var concept = concepts.FirstOrDefault(x => x.Id == adj.PayrollConceptId.Value);
+                    if (concept is null) continue;
+                    var amount = Math.Round(adj.Amount, 2);
+                    if (amount <= 0m) continue;
+                    var isDeduction = concept.ConceptType == "deduction" || adj.AdjustmentType == "deduction";
+                    if (isDeduction) extraDeductions += amount;
+                    else extraPerceptions += amount;
+                    prePayrollDetails.Add((concept, adj.Quantity <= 0m ? 1m : adj.Quantity, amount, isDeduction, isDeduction ? 84 : 44));
                 }
             }
 
@@ -1197,9 +1233,9 @@ public static class PayrollMvpEndpoints
                 sortOrder += 10;
             }
 
-            if (extraPerceptions > 0m && conceptBon is not null)
+            if (incidentPerceptions > 0m && conceptBon is not null)
             {
-                db.PayrollRunLineDetails.Add(BuildDetail(run, line, employee, conceptBon, 1m, extraPerceptions, sortOrder));
+                db.PayrollRunLineDetails.Add(BuildDetail(run, line, employee, conceptBon, 1m, incidentPerceptions, sortOrder));
                 sortOrder += 10;
             }
 
@@ -1210,10 +1246,13 @@ public static class PayrollMvpEndpoints
             }
 
             // Deducciones
-            if (extraDeductions > 0m && conceptDescto is not null)
+            if (incidentDeductions > 0m && conceptDescto is not null)
             {
-                db.PayrollRunLineDetails.Add(BuildDetail(run, line, employee, conceptDescto, 1m, extraDeductions, 85, isDeduction: true));
+                db.PayrollRunLineDetails.Add(BuildDetail(run, line, employee, conceptDescto, 1m, incidentDeductions, 85, isDeduction: true));
             }
+
+            foreach (var (ppConcept, ppQty, ppAmt, ppIsDeduction, ppSort) in prePayrollDetails)
+                db.PayrollRunLineDetails.Add(BuildDetail(run, line, employee, ppConcept, ppQty, ppAmt, ppSort, isDeduction: ppIsDeduction));
 
             if (imssAmount > 0m && conceptImss is not null)
             {
