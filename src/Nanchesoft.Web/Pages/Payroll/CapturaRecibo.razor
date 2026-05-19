@@ -1,0 +1,401 @@
+@page "/payroll/captura-recibo/{LineId:guid}"
+@using Nanchesoft.Web.Services.HumanResources
+@inject PayrollOperationsApiService Svc
+@inject IJSRuntime JS
+
+<PageTitle>Captura de recibo | Nanchesoft</PageTitle>
+
+@if (_header is null && !_loading)
+{
+    <div class="container-fluid py-3"><div class="alert alert-warning">No se encontró la línea de nómina.</div></div>
+}
+else if (_loading)
+{
+    <div class="container-fluid py-4 text-center text-secondary">Cargando recibo...</div>
+}
+else if (_header is not null)
+{
+<div class="container-fluid py-3" style="max-width:1100px;">
+
+    @* ── Encabezado ── *@
+    <div class="d-flex align-items-start justify-content-between mb-3 flex-wrap gap-2">
+        <div>
+            <h1 class="mb-1">Captura de recibo</h1>
+            <p class="text-secondary mb-0">Edita percepciones y deducciones del colaborador para esta corrida.</p>
+        </div>
+        <div class="d-flex gap-2">
+            <a class="btn btn-outline-secondary" target="_blank" href="/payroll/print/receipt/@LineId">
+                Imprimir recibo
+            </a>
+            <a class="btn btn-outline-dark" href="/payroll/receipts/@_header.PayrollRunId">
+                Volver a recibos
+            </a>
+        </div>
+    </div>
+
+    @* ── Tarjeta empleado ── *@
+    <div class="card shadow-sm mb-3">
+        <div class="card-body">
+            <div class="row g-2">
+                <div class="col-6 col-md-3">
+                    <div class="text-secondary small">Colaborador</div>
+                    <div class="fw-semibold">@_header.EmployeeName</div>
+                    <div class="text-secondary small">No. @_header.EmployeeNumber</div>
+                </div>
+                <div class="col-6 col-md-3">
+                    <div class="text-secondary small">Puesto / Dpto.</div>
+                    <div>@(_header.PositionName.Length > 0 ? _header.PositionName : "—")</div>
+                    <div class="text-secondary small">@(_header.DepartmentName.Length > 0 ? _header.DepartmentName : "—")</div>
+                </div>
+                <div class="col-6 col-md-3">
+                    <div class="text-secondary small">Periodo</div>
+                    <div>@_header.PeriodName</div>
+                    <div class="text-secondary small">@_header.PeriodStart.ToString("dd/MM/yyyy") — @_header.PeriodEnd.ToString("dd/MM/yyyy")</div>
+                </div>
+                <div class="col-6 col-md-3">
+                    <div class="text-secondary small">Folio / Días</div>
+                    <div>@_header.Folio</div>
+                    <div class="text-secondary small">@_header.DaysPaid días pagados</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @* ── Mensaje ── *@
+    @if (!string.IsNullOrWhiteSpace(_msg))
+    {
+        <div class="alert @(_isError ? "alert-danger" : "alert-success") alert-dismissible mb-3">
+            @_msg
+            <button type="button" class="btn-close" @onclick="() => _msg = null"></button>
+        </div>
+    }
+
+    <div class="row g-3">
+
+        @* ── Percepciones ── *@
+        <div class="col-md-6">
+            <div class="card shadow-sm h-100">
+                <div class="card-header d-flex justify-content-between align-items-center py-2">
+                    <span class="fw-semibold text-success">Percepciones</span>
+                    <button class="btn btn-sm btn-outline-success" @onclick="() => OpenAdd(false)">+ Agregar</button>
+                </div>
+                <div class="card-body p-0">
+                    <table class="table table-sm mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Código</th>
+                                <th>Concepto</th>
+                                <th class="text-end">Cant.</th>
+                                <th class="text-end">Importe</th>
+                                <th style="width:70px"></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                        @foreach (var d in _perceptions)
+                        {
+                            <tr class="@(d.IsGenerated ? "" : "table-warning")">
+                                <td class="text-secondary small">@d.ConceptCode</td>
+                                <td>@d.ConceptName @if (!d.IsGenerated) { <span class="badge bg-warning text-dark ms-1" style="font-size:9px;">manual</span> }</td>
+                                <td class="text-end">@d.Quantity.ToString("N2")</td>
+                                <td class="text-end">
+                                    @if (_editingDetailId == d.DetailId)
+                                    {
+                                        <input type="number" class="form-control form-control-sm text-end" style="width:110px;display:inline-block;"
+                                               @bind="_editAmount" @bind:event="oninput" step="0.01" />
+                                    }
+                                    else
+                                    {
+                                        <span @ondblclick="() => StartEdit(d)" style="cursor:pointer;" title="Doble clic para editar">@d.Amount.ToString("C")</span>
+                                    }
+                                </td>
+                                <td class="text-end">
+                                    @if (_editingDetailId == d.DetailId)
+                                    {
+                                        <button class="btn btn-xs btn-success me-1" @onclick="() => SaveEditAsync(d)" disabled="@_busy">✓</button>
+                                        <button class="btn btn-xs btn-secondary" @onclick="CancelEdit">✗</button>
+                                    }
+                                    else
+                                    {
+                                        <button class="btn btn-xs btn-outline-danger" @onclick="() => DeleteDetailAsync(d)" disabled="@(d.IsGenerated || _busy)" title="@(d.IsGenerated ? "Generado automáticamente" : "Eliminar")">×</button>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                        @if (_perceptions.Count == 0)
+                        {
+                            <tr><td colspan="5" class="text-center text-secondary py-3">Sin percepciones</td></tr>
+                        }
+                        </tbody>
+                        <tfoot>
+                            <tr class="table-light fw-semibold">
+                                <td colspan="3" class="text-end">Total percepciones</td>
+                                <td class="text-end text-success">@_perceptions.Sum(x => x.Amount).ToString("C")</td>
+                                <td></td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        @* ── Deducciones ── *@
+        <div class="col-md-6">
+            <div class="card shadow-sm h-100">
+                <div class="card-header d-flex justify-content-between align-items-center py-2">
+                    <span class="fw-semibold text-danger">Deducciones</span>
+                    <button class="btn btn-sm btn-outline-danger" @onclick="() => OpenAdd(true)">+ Agregar</button>
+                </div>
+                <div class="card-body p-0">
+                    <table class="table table-sm mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Código</th>
+                                <th>Concepto</th>
+                                <th class="text-end">Cant.</th>
+                                <th class="text-end">Importe</th>
+                                <th style="width:70px"></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                        @foreach (var d in _deductions)
+                        {
+                            <tr class="@(d.IsGenerated ? "" : "table-warning")">
+                                <td class="text-secondary small">@d.ConceptCode</td>
+                                <td>@d.ConceptName @if (!d.IsGenerated) { <span class="badge bg-warning text-dark ms-1" style="font-size:9px;">manual</span> }</td>
+                                <td class="text-end">@d.Quantity.ToString("N2")</td>
+                                <td class="text-end">
+                                    @if (_editingDetailId == d.DetailId)
+                                    {
+                                        <input type="number" class="form-control form-control-sm text-end" style="width:110px;display:inline-block;"
+                                               @bind="_editAmount" @bind:event="oninput" step="0.01" />
+                                    }
+                                    else
+                                    {
+                                        <span @ondblclick="() => StartEdit(d)" style="cursor:pointer;" title="Doble clic para editar">@d.Amount.ToString("C")</span>
+                                    }
+                                </td>
+                                <td class="text-end">
+                                    @if (_editingDetailId == d.DetailId)
+                                    {
+                                        <button class="btn btn-xs btn-success me-1" @onclick="() => SaveEditAsync(d)" disabled="@_busy">✓</button>
+                                        <button class="btn btn-xs btn-secondary" @onclick="CancelEdit">✗</button>
+                                    }
+                                    else
+                                    {
+                                        <button class="btn btn-xs btn-outline-danger" @onclick="() => DeleteDetailAsync(d)" disabled="@(d.IsGenerated || _busy)" title="@(d.IsGenerated ? "Generado automáticamente" : "Eliminar")">×</button>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                        @if (_deductions.Count == 0)
+                        {
+                            <tr><td colspan="5" class="text-center text-secondary py-3">Sin deducciones</td></tr>
+                        }
+                        </tbody>
+                        <tfoot>
+                            <tr class="table-light fw-semibold">
+                                <td colspan="3" class="text-end">Total deducciones</td>
+                                <td class="text-end text-danger">@_deductions.Sum(x => x.Amount).ToString("C")</td>
+                                <td></td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @* ── Totales ── *@
+    <div class="card shadow-sm mt-3 border-primary">
+        <div class="card-body">
+            <div class="row text-center">
+                <div class="col">
+                    <div class="text-secondary small">Total percepciones</div>
+                    <div class="fw-bold text-success fs-5">@_perceptions.Sum(x => x.Amount).ToString("C")</div>
+                </div>
+                <div class="col">
+                    <div class="text-secondary small">Total deducciones</div>
+                    <div class="fw-bold text-danger fs-5">@_deductions.Sum(x => x.Amount).ToString("C")</div>
+                </div>
+                <div class="col">
+                    <div class="text-secondary small">Neto a pagar</div>
+                    <div class="fw-bold text-primary fs-4">@(_perceptions.Sum(x => x.Amount) - _deductions.Sum(x => x.Amount)).ToString("C")</div>
+                </div>
+            </div>
+            <div class="text-center mt-2 text-secondary small">
+                (Los totales del encabezado se actualizan al guardar. Neto mostrado: @_header.NetAmount.ToString("C"))
+            </div>
+        </div>
+    </div>
+
+    @* ── Modal agregar concepto ── *@
+    @if (_showAdd)
+    {
+        <div class="modal fade show d-block" style="background:rgba(0,0,0,.4);" tabindex="-1">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Agregar @(_addingDeduction ? "deducción" : "percepción")</h5>
+                        <button type="button" class="btn-close" @onclick="CloseAdd"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Concepto</label>
+                            <select class="form-select" @bind="_addConceptId">
+                                <option value="">— Selecciona —</option>
+                                @foreach (var c in _addingDeduction ? _conceptsDeduction : _conceptsPerception)
+                                {
+                                    <option value="@c.ConceptId">@c.Code — @c.Name</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Cantidad</label>
+                            <input type="number" class="form-control" @bind="_addQuantity" step="1" min="1" />
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Importe</label>
+                            <input type="number" class="form-control" @bind="_addAmount" step="0.01" min="0.01" />
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Notas (opcional)</label>
+                            <input type="text" class="form-control" @bind="_addNotes" maxlength="200" />
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button class="btn btn-secondary" @onclick="CloseAdd">Cancelar</button>
+                        <button class="btn btn-primary" @onclick="SaveAddAsync"
+                                disabled="@(_addConceptId == Guid.Empty || _addAmount <= 0m || _busy)">
+                            @(_busy ? "Guardando..." : "Agregar")
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+
+</div>
+}
+
+@code {
+    [Parameter] public Guid LineId { get; set; }
+
+    private PayrollRunLineHeader? _header;
+    private List<PayrollRunLineDetailItem> _perceptions = [];
+    private List<PayrollRunLineDetailItem> _deductions = [];
+    private List<PayrollConceptItem> _conceptsPerception = [];
+    private List<PayrollConceptItem> _conceptsDeduction = [];
+
+    private bool _loading = true;
+    private bool _busy;
+    private string? _msg;
+    private bool _isError;
+
+    // Edición inline
+    private Guid _editingDetailId;
+    private decimal _editAmount;
+
+    // Modal agregar
+    private bool _showAdd;
+    private bool _addingDeduction;
+    private Guid _addConceptId;
+    private decimal _addQuantity = 1m;
+    private decimal _addAmount;
+    private string? _addNotes;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _loading = true;
+        await LoadAsync();
+        _loading = false;
+    }
+
+    private async Task LoadAsync()
+    {
+        _header = await Svc.GetPayrollRunLineAsync(LineId);
+        var details = await Svc.GetPayrollRunLineDetailsAsync(LineId);
+        _perceptions = details.Where(x => x.ConceptType != "deduction").OrderBy(x => x.SortOrder).ToList();
+        _deductions = details.Where(x => x.ConceptType == "deduction").OrderBy(x => x.SortOrder).ToList();
+
+        if (_conceptsPerception.Count == 0)
+        {
+            var all = await Svc.GetPayrollConceptsAsync();
+            _conceptsPerception = all.Where(x => x.IsActive && x.ConceptType != "deduction").ToList();
+            _conceptsDeduction = all.Where(x => x.IsActive && x.ConceptType == "deduction").ToList();
+        }
+    }
+
+    private void StartEdit(PayrollRunLineDetailItem d)
+    {
+        _editingDetailId = d.DetailId;
+        _editAmount = d.Amount;
+    }
+
+    private void CancelEdit()
+    {
+        _editingDetailId = Guid.Empty;
+        _editAmount = 0m;
+    }
+
+    private async Task SaveEditAsync(PayrollRunLineDetailItem d)
+    {
+        if (_editAmount < 0m) return;
+        _busy = true;
+        try
+        {
+            await Svc.UpdatePayrollRunLineDetailAsync(d.DetailId, _editAmount, d.Quantity);
+            _editingDetailId = Guid.Empty;
+            await LoadAsync();
+            ShowMsg("Concepto actualizado.", false);
+        }
+        catch (Exception ex) { ShowMsg(ex.Message, true); }
+        finally { _busy = false; }
+    }
+
+    private async Task DeleteDetailAsync(PayrollRunLineDetailItem d)
+    {
+        if (d.IsGenerated) return;
+        _busy = true;
+        try
+        {
+            await Svc.DeletePayrollRunLineDetailAsync(d.DetailId);
+            await LoadAsync();
+            ShowMsg("Concepto eliminado.", false);
+        }
+        catch (Exception ex) { ShowMsg(ex.Message, true); }
+        finally { _busy = false; }
+    }
+
+    private void OpenAdd(bool isDeduction)
+    {
+        _addingDeduction = isDeduction;
+        _addConceptId = Guid.Empty;
+        _addQuantity = 1m;
+        _addAmount = 0m;
+        _addNotes = null;
+        _showAdd = true;
+    }
+
+    private void CloseAdd() => _showAdd = false;
+
+    private async Task SaveAddAsync()
+    {
+        if (_addConceptId == Guid.Empty || _addAmount <= 0m) return;
+        _busy = true;
+        try
+        {
+            await Svc.AddPayrollRunLineDetailAsync(LineId, _addConceptId, _addQuantity, _addAmount, _addNotes);
+            _showAdd = false;
+            await LoadAsync();
+            ShowMsg("Concepto agregado.", false);
+        }
+        catch (Exception ex) { ShowMsg(ex.Message, true); }
+        finally { _busy = false; }
+    }
+
+    private void ShowMsg(string msg, bool isError)
+    {
+        _msg = msg;
+        _isError = isError;
+    }
+}

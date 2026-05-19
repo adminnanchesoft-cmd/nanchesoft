@@ -32,7 +32,10 @@
                             <td>@row.GrossAmount</td>
                             <td>@row.DeductionsAmount</td>
                             <td>@row.NetAmount</td>
-                            <td class="text-end"><a class="btn btn-sm btn-outline-primary" target="_blank" href="/payroll/print/receipt/@row.PayrollRunLineId">Imprimir</a></td>
+                            <td class="text-end d-flex gap-1 justify-content-end">
+                                <a class="btn btn-sm btn-outline-secondary" href="/payroll/captura-recibo/@row.PayrollRunLineId">Editar</a>
+                                <a class="btn btn-sm btn-outline-primary" target="_blank" href="/payroll/print/receipt/@row.PayrollRunLineId">Imprimir</a>
+                            </td>
                         </tr>
                     }
                     </tbody>

@@ -49,6 +49,13 @@ public static class PayrollAdvancedEndpoints
         operations.MapGet("/runs/{runId:guid}/receipt-lines", GetReceiptLinesAsync);
         operations.MapGet("/runs/{runId:guid}/print-html", GetPayrollRunPrintHtmlAsync);
         operations.MapGet("/runs/{runId:guid}/report-data", GetPayrollRunReportDataAsync);
+        operations.MapGet("/runs/{runId:guid}/matrix-data", GetPayrollRunMatrixDataAsync);
+        operations.MapPost("/runs/{runId:guid}/matrix-save", SavePayrollRunMatrixAsync);
+        operations.MapGet("/run-lines/{lineId:guid}", GetPayrollRunLineAsync);
+        operations.MapGet("/run-lines/{lineId:guid}/details", GetPayrollRunLineDetailsAsync);
+        operations.MapPost("/run-lines/{lineId:guid}/details", AddPayrollRunLineDetailAsync);
+        operations.MapPut("/run-line-details/{detailId:guid}", UpdatePayrollRunLineDetailAmountAsync);
+        operations.MapDelete("/run-line-details/{detailId:guid}", DeletePayrollRunLineDetailAsync);
         operations.MapGet("/run-lines/{lineId:guid}/receipt-html", GetPayrollReceiptHtmlAsync);
 
         return app;
@@ -690,6 +697,311 @@ public static class PayrollAdvancedEndpoints
         return Results.Ok(new { success = true, createdDetails, createdLoanDeductions });
     }
 
+    // ── Captura individual de recibo ─────────────────────────────────────────────
+
+    private static async Task<IResult> GetPayrollRunLineAsync(Guid lineId, NanchesoftDbContext db)
+    {
+        var line = await db.PayrollRunLines.AsNoTracking()
+            .Include(x => x.Employee)
+            .Include(x => x.Department)
+            .Include(x => x.Position)
+            .Include(x => x.PayrollRun)
+                .ThenInclude(r => r!.PayrollPeriod)
+            .Include(x => x.PayrollRun)
+                .ThenInclude(r => r!.Company)
+            .FirstOrDefaultAsync(x => x.Id == lineId);
+        if (line is null)
+            return Results.NotFound(new { message = "No se encontró la línea de nómina." });
+
+        return Results.Ok(new PayrollRunLineHeaderDto
+        {
+            PayrollRunLineId = line.Id,
+            PayrollRunId = line.PayrollRunId,
+            Folio = line.PayrollRun?.Folio ?? string.Empty,
+            CompanyName = line.PayrollRun?.Company?.Name ?? string.Empty,
+            PeriodName = line.PayrollRun?.PayrollPeriod?.Name ?? string.Empty,
+            PeriodStart = line.PayrollRun?.PayrollPeriod?.StartDate ?? default,
+            PeriodEnd = line.PayrollRun?.PayrollPeriod?.EndDate ?? default,
+            EmployeeId = line.EmployeeId,
+            EmployeeNumber = line.Employee?.EmployeeNumber ?? string.Empty,
+            EmployeeName = line.Employee?.GetFullName() ?? string.Empty,
+            DepartmentName = line.Department?.Name ?? string.Empty,
+            PositionName = line.Position?.Name ?? string.Empty,
+            DaysPaid = line.DaysPaid,
+            GrossAmount = line.GrossAmount,
+            DeductionsAmount = line.DeductionsAmount,
+            NetAmount = line.NetAmount
+        });
+    }
+
+    private static async Task<IResult> GetPayrollRunLineDetailsAsync(Guid lineId, NanchesoftDbContext db)
+    {
+        if (!await db.PayrollRunLines.AnyAsync(x => x.Id == lineId))
+            return Results.NotFound(new { message = "No se encontró la línea de nómina." });
+
+        var rows = await db.PayrollRunLineDetails.AsNoTracking()
+            .Where(x => x.PayrollRunLineId == lineId && x.IsActive)
+            .OrderBy(x => x.SortOrder)
+            .ThenBy(x => x.ConceptCode)
+            .Select(x => new PayrollRunLineDetailItemDto
+            {
+                DetailId = x.Id,
+                PayrollConceptId = x.PayrollConceptId,
+                ConceptCode = x.ConceptCode,
+                ConceptName = x.ConceptName,
+                ConceptType = x.ConceptType,
+                SatCode = x.SatCode,
+                Quantity = x.Quantity,
+                Amount = x.Amount,
+                TaxableAmount = x.TaxableAmount,
+                ExemptAmount = x.ExemptAmount,
+                SortOrder = x.SortOrder,
+                IsGenerated = x.IsGenerated,
+                Notes = x.Notes
+            })
+            .ToListAsync();
+
+        return Results.Ok(rows);
+    }
+
+    private static async Task<IResult> AddPayrollRunLineDetailAsync(Guid lineId, AddDetailRequest request, NanchesoftDbContext db)
+    {
+        var line = await db.PayrollRunLines.FirstOrDefaultAsync(x => x.Id == lineId);
+        if (line is null)
+            return Results.NotFound(new { message = "No se encontró la línea de nómina." });
+
+        var concept = await db.PayrollConcepts.AsNoTracking().FirstOrDefaultAsync(x => x.Id == request.PayrollConceptId);
+        if (concept is null)
+            return Results.BadRequest(new { message = "No se encontró el concepto de nómina." });
+
+        if (request.Amount <= 0m)
+            return Results.BadRequest(new { message = "El importe debe ser mayor a cero." });
+
+        var (taxable, exempt) = SplitTaxableAmount(concept.TaxableType, request.Amount, concept.ConceptType);
+
+        var detail = new PayrollRunLineDetail
+        {
+            TenantId = line.TenantId,
+            CompanyId = line.CompanyId,
+            PayrollRunId = line.PayrollRunId,
+            PayrollRunLineId = line.Id,
+            EmployeeId = line.EmployeeId,
+            PayrollConceptId = concept.Id,
+            ConceptCode = concept.Code,
+            ConceptName = concept.Name,
+            ConceptType = concept.ConceptType,
+            SatCode = concept.SatCode,
+            TaxableType = concept.TaxableType,
+            Quantity = request.Quantity <= 0m ? 1m : request.Quantity,
+            Amount = request.Amount,
+            TaxableAmount = taxable,
+            ExemptAmount = exempt,
+            SortOrder = request.SortOrder > 0 ? request.SortOrder : 50,
+            IsGenerated = false,
+            Status = "active",
+            Notes = request.Notes ?? string.Empty,
+            CreatedBy = "web-ui"
+        };
+
+        db.PayrollRunLineDetails.Add(detail);
+        await db.SaveChangesAsync();
+        await RecalculatePayrollRunAsync(line.PayrollRunId, db);
+
+        return Results.Ok(new { success = true, id = detail.Id });
+    }
+
+    private static async Task<IResult> UpdatePayrollRunLineDetailAmountAsync(Guid detailId, UpdateDetailRequest request, NanchesoftDbContext db)
+    {
+        var detail = await db.PayrollRunLineDetails.FirstOrDefaultAsync(x => x.Id == detailId);
+        if (detail is null)
+            return Results.NotFound(new { message = "No se encontró el detalle." });
+
+        if (request.Amount < 0m)
+            return Results.BadRequest(new { message = "El importe no puede ser negativo." });
+
+        var concept = await db.PayrollConcepts.AsNoTracking().FirstOrDefaultAsync(x => x.Id == detail.PayrollConceptId);
+        var taxableType = concept?.TaxableType ?? detail.TaxableType;
+        var conceptType = concept?.ConceptType ?? detail.ConceptType;
+
+        detail.Amount = request.Amount;
+        detail.Quantity = request.Quantity > 0m ? request.Quantity : detail.Quantity;
+        detail.Notes = request.Notes ?? detail.Notes;
+        var (taxable, exempt) = SplitTaxableAmount(taxableType, request.Amount, conceptType);
+        detail.TaxableAmount = taxable;
+        detail.ExemptAmount = exempt;
+        detail.UpdatedAt = DateTime.UtcNow;
+        detail.UpdatedBy = "web-ui";
+
+        await db.SaveChangesAsync();
+        await RecalculatePayrollRunAsync(detail.PayrollRunId, db);
+        return Results.Ok(new { success = true });
+    }
+
+    private static async Task<IResult> DeletePayrollRunLineDetailAsync(Guid detailId, NanchesoftDbContext db)
+    {
+        var detail = await db.PayrollRunLineDetails.FirstOrDefaultAsync(x => x.Id == detailId);
+        if (detail is null)
+            return Results.NotFound(new { message = "No se encontró el detalle." });
+
+        var runId = detail.PayrollRunId;
+        db.PayrollRunLineDetails.Remove(detail);
+        await db.SaveChangesAsync();
+        await RecalculatePayrollRunAsync(runId, db);
+        return Results.Ok(new { success = true });
+    }
+
+    private static (decimal Taxable, decimal Exempt) SplitTaxableAmount(string taxableType, decimal amount, string conceptType)
+    {
+        if (conceptType == "deduction" || amount <= 0m) return (0m, 0m);
+        return taxableType.ToLowerInvariant() switch
+        {
+            "exempt" => (0m, amount),
+            "mixed" => (Math.Round(amount * 0.60m, 2), Math.Round(amount * 0.40m, 2)),
+            _ => (amount, 0m)
+        };
+    }
+
+    // ── Captura matricial ────────────────────────────────────────────────────────
+
+    private static async Task<IResult> GetPayrollRunMatrixDataAsync(Guid runId, NanchesoftDbContext db)
+    {
+        var run = await db.PayrollRuns.AsNoTracking()
+            .Include(x => x.PayrollPeriod)
+            .Include(x => x.Company)
+            .FirstOrDefaultAsync(x => x.Id == runId);
+        if (run is null)
+            return Results.NotFound(new { message = "No se encontró la corrida de nómina." });
+
+        var concepts = await db.PayrollConcepts.AsNoTracking()
+            .Where(x => x.CompanyId == run.CompanyId && x.IsActive)
+            .OrderBy(x => x.SortOrder).ThenBy(x => x.Code)
+            .Select(x => new MatrixConceptDto
+            {
+                ConceptId = x.Id,
+                Code = x.Code,
+                Name = x.Name,
+                ConceptType = x.ConceptType,
+                SortOrder = x.SortOrder
+            })
+            .ToListAsync();
+
+        var lines = await db.PayrollRunLines.AsNoTracking()
+            .Include(x => x.Employee)
+            .Where(x => x.PayrollRunId == runId)
+            .OrderBy(x => x.Employee!.LastName)
+            .Select(x => new { x.Id, x.EmployeeId, x.Employee, x.GrossAmount, x.DeductionsAmount, x.NetAmount })
+            .ToListAsync();
+
+        var details = await db.PayrollRunLineDetails.AsNoTracking()
+            .Where(x => x.PayrollRunId == runId && x.IsActive)
+            .Select(x => new { x.PayrollRunLineId, x.PayrollConceptId, x.Amount, DetailId = x.Id })
+            .ToListAsync();
+
+        var matrixLines = lines.Select(l =>
+        {
+            var empDetails = details.Where(d => d.PayrollRunLineId == l.Id).ToList();
+            return new MatrixLineDto
+            {
+                PayrollRunLineId = l.Id,
+                EmployeeNumber = l.Employee?.EmployeeNumber ?? string.Empty,
+                EmployeeName = l.Employee?.GetFullName() ?? string.Empty,
+                GrossAmount = l.GrossAmount,
+                DeductionsAmount = l.DeductionsAmount,
+                NetAmount = l.NetAmount,
+                ConceptAmounts = empDetails.ToDictionary(
+                    d => d.PayrollConceptId.ToString("D"),
+                    d => new MatrixCellDto { Amount = d.Amount, DetailId = d.DetailId })
+            };
+        }).ToList();
+
+        return Results.Ok(new PayrollRunMatrixDto
+        {
+            PayrollRunId = run.Id,
+            Folio = run.Folio,
+            PeriodName = run.PayrollPeriod?.Name ?? string.Empty,
+            Concepts = concepts,
+            Lines = matrixLines
+        });
+    }
+
+    private static async Task<IResult> SavePayrollRunMatrixAsync(Guid runId, MatrixSaveRequest request, NanchesoftDbContext db)
+    {
+        if (!await db.PayrollRuns.AnyAsync(x => x.Id == runId))
+            return Results.NotFound(new { message = "No se encontró la corrida de nómina." });
+
+        var updated = 0;
+        var created = 0;
+        var deleted = 0;
+
+        foreach (var cell in request.Cells)
+        {
+            var line = await db.PayrollRunLines.FirstOrDefaultAsync(x => x.Id == cell.PayrollRunLineId);
+            if (line is null) continue;
+
+            var concept = await db.PayrollConcepts.AsNoTracking().FirstOrDefaultAsync(x => x.Id == cell.PayrollConceptId);
+            if (concept is null) continue;
+
+            var existing = await db.PayrollRunLineDetails.FirstOrDefaultAsync(
+                x => x.PayrollRunLineId == cell.PayrollRunLineId && x.PayrollConceptId == cell.PayrollConceptId && x.IsActive);
+
+            if (cell.Amount <= 0m)
+            {
+                if (existing is not null && !existing.IsGenerated)
+                {
+                    db.PayrollRunLineDetails.Remove(existing);
+                    deleted++;
+                }
+                continue;
+            }
+
+            var (taxable, exempt) = SplitTaxableAmount(concept.TaxableType, cell.Amount, concept.ConceptType);
+
+            if (existing is not null)
+            {
+                if (!existing.IsGenerated)
+                {
+                    existing.Amount = cell.Amount;
+                    existing.TaxableAmount = taxable;
+                    existing.ExemptAmount = exempt;
+                    existing.UpdatedAt = DateTime.UtcNow;
+                    existing.UpdatedBy = "web-matrix";
+                    updated++;
+                }
+            }
+            else
+            {
+                db.PayrollRunLineDetails.Add(new PayrollRunLineDetail
+                {
+                    TenantId = line.TenantId,
+                    CompanyId = line.CompanyId,
+                    PayrollRunId = line.PayrollRunId,
+                    PayrollRunLineId = line.Id,
+                    EmployeeId = line.EmployeeId,
+                    PayrollConceptId = concept.Id,
+                    ConceptCode = concept.Code,
+                    ConceptName = concept.Name,
+                    ConceptType = concept.ConceptType,
+                    SatCode = concept.SatCode,
+                    TaxableType = concept.TaxableType,
+                    Quantity = 1m,
+                    Amount = cell.Amount,
+                    TaxableAmount = taxable,
+                    ExemptAmount = exempt,
+                    SortOrder = concept.SortOrder > 0 ? concept.SortOrder : 50,
+                    IsGenerated = false,
+                    Status = "active",
+                    Notes = "Captura matricial",
+                    CreatedBy = "web-matrix"
+                });
+                created++;
+            }
+        }
+
+        await db.SaveChangesAsync();
+        await RecalculatePayrollRunAsync(runId, db);
+        return Results.Ok(new { success = true, updated, created, deleted });
+    }
+
     private static async Task<IResult> GetReceiptLinesAsync(Guid runId, NanchesoftDbContext db)
     {
         if (!await db.PayrollRuns.AnyAsync(x => x.Id == runId))
@@ -1226,4 +1538,108 @@ public sealed class PayrollReportLineDto
     public decimal GrossAmount { get; set; }
     public decimal DeductionsAmount { get; set; }
     public decimal NetAmount { get; set; }
+}
+
+// ── Captura individual ───────────────────────────────────────────────────────
+
+public sealed class PayrollRunLineHeaderDto
+{
+    public Guid PayrollRunLineId { get; set; }
+    public Guid PayrollRunId { get; set; }
+    public string Folio { get; set; } = string.Empty;
+    public string CompanyName { get; set; } = string.Empty;
+    public string PeriodName { get; set; } = string.Empty;
+    public DateTime PeriodStart { get; set; }
+    public DateTime PeriodEnd { get; set; }
+    public Guid EmployeeId { get; set; }
+    public string EmployeeNumber { get; set; } = string.Empty;
+    public string EmployeeName { get; set; } = string.Empty;
+    public string DepartmentName { get; set; } = string.Empty;
+    public string PositionName { get; set; } = string.Empty;
+    public decimal DaysPaid { get; set; }
+    public decimal GrossAmount { get; set; }
+    public decimal DeductionsAmount { get; set; }
+    public decimal NetAmount { get; set; }
+}
+
+public sealed class PayrollRunLineDetailItemDto
+{
+    public Guid DetailId { get; set; }
+    public Guid PayrollConceptId { get; set; }
+    public string ConceptCode { get; set; } = string.Empty;
+    public string ConceptName { get; set; } = string.Empty;
+    public string ConceptType { get; set; } = string.Empty;
+    public string SatCode { get; set; } = string.Empty;
+    public decimal Quantity { get; set; }
+    public decimal Amount { get; set; }
+    public decimal TaxableAmount { get; set; }
+    public decimal ExemptAmount { get; set; }
+    public int SortOrder { get; set; }
+    public bool IsGenerated { get; set; }
+    public string Notes { get; set; } = string.Empty;
+}
+
+public sealed class AddDetailRequest
+{
+    public Guid PayrollConceptId { get; set; }
+    public decimal Quantity { get; set; } = 1m;
+    public decimal Amount { get; set; }
+    public int SortOrder { get; set; }
+    public string? Notes { get; set; }
+}
+
+public sealed class UpdateDetailRequest
+{
+    public decimal Amount { get; set; }
+    public decimal Quantity { get; set; }
+    public string? Notes { get; set; }
+}
+
+// ── Captura matricial ────────────────────────────────────────────────────────
+
+public sealed class MatrixConceptDto
+{
+    public Guid ConceptId { get; set; }
+    public string Code { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
+    public string ConceptType { get; set; } = string.Empty;
+    public int SortOrder { get; set; }
+}
+
+public sealed class MatrixCellDto
+{
+    public decimal Amount { get; set; }
+    public Guid DetailId { get; set; }
+}
+
+public sealed class MatrixLineDto
+{
+    public Guid PayrollRunLineId { get; set; }
+    public string EmployeeNumber { get; set; } = string.Empty;
+    public string EmployeeName { get; set; } = string.Empty;
+    public decimal GrossAmount { get; set; }
+    public decimal DeductionsAmount { get; set; }
+    public decimal NetAmount { get; set; }
+    public Dictionary<string, MatrixCellDto> ConceptAmounts { get; set; } = [];
+}
+
+public sealed class PayrollRunMatrixDto
+{
+    public Guid PayrollRunId { get; set; }
+    public string Folio { get; set; } = string.Empty;
+    public string PeriodName { get; set; } = string.Empty;
+    public List<MatrixConceptDto> Concepts { get; set; } = [];
+    public List<MatrixLineDto> Lines { get; set; } = [];
+}
+
+public sealed class MatrixSaveCell
+{
+    public Guid PayrollRunLineId { get; set; }
+    public Guid PayrollConceptId { get; set; }
+    public decimal Amount { get; set; }
+}
+
+public sealed class MatrixSaveRequest
+{
+    public List<MatrixSaveCell> Cells { get; set; } = [];
 }

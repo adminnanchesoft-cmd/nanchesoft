@@ -1,0 +1,221 @@
+@page "/payroll/captura-matricial"
+@page "/payroll/captura-matricial/{RunId:guid}"
+@using Nanchesoft.Web.Services.HumanResources
+@inject PayrollOperationsApiService Svc
+@inject IJSRuntime JS
+
+<PageTitle>Captura matricial | Nanchesoft</PageTitle>
+
+<style>
+    .matrix-table th, .matrix-table td { white-space: nowrap; padding: 4px 8px; font-size: 13px; }
+    .matrix-table input[type=number] { width: 90px; padding: 2px 4px; font-size: 12px; text-align: right; border: 1px solid #dee2e6; border-radius: 4px; }
+    .matrix-table input[type=number]:focus { outline: 2px solid #0d6efd; border-color: #0d6efd; }
+    .matrix-emp { min-width: 200px; position: sticky; left: 0; background: white; z-index: 2; }
+    .matrix-emp-head { background: #f8f9fa !important; z-index: 3; }
+    .perception-col { background: #f0fff4; }
+    .deduction-col { background: #fff5f5; }
+    .totals-row td { font-weight: 600; background: #f8f9fa; }
+    .matrix-scroll { overflow-x: auto; max-height: 70vh; overflow-y: auto; }
+    .matrix-table thead th { position: sticky; top: 0; background: #f8f9fa; z-index: 1; }
+    .changed-cell input { border-color: #fd7e14 !important; background: #fff8f0; }
+</style>
+
+<div class="container-fluid py-3">
+
+    <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+        <div>
+            <h1 class="mb-0">Captura matricial</h1>
+            <p class="text-secondary mb-0">Ingresa conceptos para todos los empleados en una sola vista tipo Excel.</p>
+        </div>
+        @if (_matrix is not null)
+        {
+            <div class="d-flex gap-2">
+                <span class="badge bg-warning text-dark align-self-center">@_changedCount cambio(s) pendiente(s)</span>
+                <button class="btn btn-primary" @onclick="SaveChangesAsync" disabled="@(_busy || _changedCount == 0)">
+                    @(_busy ? "Guardando..." : "Guardar cambios")
+                </button>
+                <a class="btn btn-outline-secondary" href="/payroll/reporte">Volver</a>
+            </div>
+        }
+    </div>
+
+    @* ── Selector de corrida ── *@
+    <div class="card shadow-sm mb-3">
+        <div class="card-body py-2">
+            <div class="row g-2 align-items-end">
+                <div class="col-md-5">
+                    <label class="form-label fw-semibold mb-1">Proceso de nómina</label>
+                    <select class="form-select" @onchange="OnRunChangedAsync">
+                        <option value="">— Selecciona un proceso —</option>
+                        @foreach (var r in _runs)
+                        {
+                            <option value="@r.PayrollRunId" selected="@(RunId == r.PayrollRunId)">
+                                @r.Folio · @r.PayrollPeriodName (@r.RunDate.ToString("dd/MM/yyyy"))
+                            </option>
+                        }
+                    </select>
+                </div>
+                @if (_matrix is not null)
+                {
+                    <div class="col-auto text-secondary small align-self-center">
+                        @_matrix.Lines.Count empleado(s) · @_matrix.Concepts.Count concepto(s)
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(_msg))
+    {
+        <div class="alert @(_isError ? "alert-danger" : "alert-success") alert-dismissible mb-3">
+            @_msg <button class="btn-close" @onclick="() => _msg = null"></button>
+        </div>
+    }
+
+    @if (_loading)
+    {
+        <div class="text-center py-5 text-secondary">Cargando matriz...</div>
+    }
+    else if (_matrix is not null && _matrix.Lines.Count > 0)
+    {
+        @* ── Leyenda ── *@
+        <div class="d-flex gap-3 mb-2 small text-secondary">
+            <span><span style="display:inline-block;width:14px;height:14px;background:#f0fff4;border:1px solid #adb5bd;border-radius:2px;"></span> Percepción</span>
+            <span><span style="display:inline-block;width:14px;height:14px;background:#fff5f5;border:1px solid #adb5bd;border-radius:2px;"></span> Deducción</span>
+            <span><span style="display:inline-block;width:14px;height:14px;background:#fff8f0;border:1px solid #fd7e14;border-radius:2px;"></span> Modificado</span>
+        </div>
+
+        @* ── Matriz ── *@
+        <div class="card shadow-sm">
+            <div class="card-body p-0 matrix-scroll">
+                <table class="table table-bordered matrix-table mb-0">
+                    <thead>
+                        <tr>
+                            <th class="matrix-emp matrix-emp-head">Colaborador</th>
+                            @foreach (var c in _matrix.Concepts)
+                            {
+                                <th class="text-center @(c.ConceptType == "deduction" ? "deduction-col" : "perception-col")" title="@c.ConceptType">
+                                    <div>@c.Code</div>
+                                    <div style="font-size:10px;font-weight:400;">@c.Name</div>
+                                </th>
+                            }
+                            <th class="text-end" style="min-width:90px;">Bruto</th>
+                            <th class="text-end" style="min-width:90px;">Deduc.</th>
+                            <th class="text-end" style="min-width:90px;">Neto</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    @for (var i = 0; i < _matrix.Lines.Count; i++)
+                    {
+                        var line = _matrix.Lines[i];
+                        var lineIdx = i;
+                        <tr>
+                            <td class="matrix-emp">
+                                <div class="fw-semibold">@line.EmployeeName</div>
+                                <div class="text-secondary" style="font-size:11px;">@line.EmployeeNumber</div>
+                            </td>
+                            @foreach (var c in _matrix.Concepts)
+                            {
+                                var cKey = c.ConceptId.ToString("D");
+                                var isChanged = _changes.TryGetValue((line.PayrollRunLineId, c.ConceptId), out var changedVal);
+                                var currentAmt = isChanged ? changedVal
+                                    : (line.ConceptAmounts.TryGetValue(cKey, out var cell) ? cell.Amount : 0m);
+                                var conceptId = c.ConceptId;
+                                var runLineId = line.PayrollRunLineId;
+                                <td class="text-center @(c.ConceptType == "deduction" ? "deduction-col" : "perception-col") @(isChanged ? "changed-cell" : "")">
+                                    <input type="number" min="0" step="0.01"
+                                           value="@(currentAmt > 0 ? currentAmt.ToString("F2") : "")"
+                                           placeholder="0"
+                                           @onchange="e => OnCellChanged(runLineId, conceptId, e)" />
+                                </td>
+                            }
+                            <td class="text-end text-success">@line.GrossAmount.ToString("C")</td>
+                            <td class="text-end text-danger">@line.DeductionsAmount.ToString("C")</td>
+                            <td class="text-end fw-semibold text-primary">@line.NetAmount.ToString("C")</td>
+                        </tr>
+                    }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="text-secondary small mt-2">
+            Doble clic en una celda para editar. Tab para moverse entre columnas. Los cambios se envían al guardar.
+        </div>
+    }
+    else if (_matrix is not null && _matrix.Lines.Count == 0)
+    {
+        <div class="alert alert-info">Esta corrida no tiene empleados calculados todavía. Primero calcula la nómina.</div>
+    }
+</div>
+
+@code {
+    [Parameter] public Guid RunId { get; set; }
+
+    private List<PayrollRunSummaryItem> _runs = [];
+    private PayrollRunMatrixData? _matrix;
+    private Dictionary<(Guid LineId, Guid ConceptId), decimal> _changes = [];
+    private bool _loading;
+    private bool _busy;
+    private string? _msg;
+    private bool _isError;
+
+    private int _changedCount => _changes.Count(x => x.Value > 0);
+
+    protected override async Task OnInitializedAsync()
+    {
+        _runs = await Svc.GetPayrollRunsListAsync();
+        if (RunId != Guid.Empty)
+            await LoadMatrixAsync(RunId);
+    }
+
+    private async Task OnRunChangedAsync(ChangeEventArgs e)
+    {
+        if (!Guid.TryParse(e.Value?.ToString(), out var id) || id == Guid.Empty) return;
+        RunId = id;
+        _changes.Clear();
+        await LoadMatrixAsync(id);
+    }
+
+    private async Task LoadMatrixAsync(Guid runId)
+    {
+        _loading = true;
+        _matrix = null;
+        StateHasChanged();
+        _matrix = await Svc.GetPayrollRunMatrixDataAsync(runId);
+        _loading = false;
+    }
+
+    private void OnCellChanged(Guid lineId, Guid conceptId, ChangeEventArgs e)
+    {
+        if (decimal.TryParse(e.Value?.ToString(), out var val) && val >= 0m)
+            _changes[(lineId, conceptId)] = val;
+        else
+            _changes.Remove((lineId, conceptId));
+    }
+
+    private async Task SaveChangesAsync()
+    {
+        if (_changes.Count == 0 || RunId == Guid.Empty) return;
+        _busy = true;
+        _msg = null;
+        try
+        {
+            var cells = _changes.Select(kv => new MatrixSaveEntry
+            {
+                PayrollRunLineId = kv.Key.LineId,
+                PayrollConceptId = kv.Key.ConceptId,
+                Amount = kv.Value
+            }).ToList();
+
+            await Svc.SavePayrollRunMatrixAsync(RunId, cells);
+            _changes.Clear();
+            await LoadMatrixAsync(RunId);
+            ShowMsg($"Cambios guardados correctamente.", false);
+        }
+        catch (Exception ex) { ShowMsg(ex.Message, true); }
+        finally { _busy = false; }
+    }
+
+    private void ShowMsg(string msg, bool isError) { _msg = msg; _isError = isError; }
+}

@@ -162,6 +162,76 @@ public sealed class PayrollOperationsApiService
         return await client.GetFromJsonAsync<PayrollRunReportData>($"/api/payroll/runs/{runId}/report-data");
     }
 
+    // ── Captura individual ──────────────────────────────────────────────────────
+
+    public async Task<PayrollRunLineHeader?> GetPayrollRunLineAsync(Guid lineId)
+    {
+        var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
+        return await client.GetFromJsonAsync<PayrollRunLineHeader>($"/api/payroll/run-lines/{lineId}");
+    }
+
+    public async Task<List<PayrollRunLineDetailItem>> GetPayrollRunLineDetailsAsync(Guid lineId)
+    {
+        var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
+        return await client.GetFromJsonAsync<List<PayrollRunLineDetailItem>>($"/api/payroll/run-lines/{lineId}/details") ?? [];
+    }
+
+    public async Task AddPayrollRunLineDetailAsync(Guid lineId, Guid conceptId, decimal quantity, decimal amount, string? notes = null)
+    {
+        var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
+        var response = await client.PostAsJsonAsync($"/api/payroll/run-lines/{lineId}/details", new { PayrollConceptId = conceptId, Quantity = quantity, Amount = amount, Notes = notes });
+        if (!response.IsSuccessStatusCode)
+        {
+            var err = await response.Content.ReadAsStringAsync();
+            throw new InvalidOperationException(err);
+        }
+    }
+
+    public async Task UpdatePayrollRunLineDetailAsync(Guid detailId, decimal amount, decimal quantity, string? notes = null)
+    {
+        var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
+        var response = await client.PutAsJsonAsync($"/api/payroll/run-line-details/{detailId}", new { Amount = amount, Quantity = quantity, Notes = notes });
+        if (!response.IsSuccessStatusCode)
+        {
+            var err = await response.Content.ReadAsStringAsync();
+            throw new InvalidOperationException(err);
+        }
+    }
+
+    public async Task DeletePayrollRunLineDetailAsync(Guid detailId)
+    {
+        var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
+        var response = await client.DeleteAsync($"/api/payroll/run-line-details/{detailId}");
+        if (!response.IsSuccessStatusCode)
+            throw new InvalidOperationException("No se pudo eliminar el concepto.");
+    }
+
+    public async Task<List<PayrollConceptItem>> GetPayrollConceptsAsync()
+    {
+        var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
+        var rows = await client.GetFromJsonAsync<List<PayrollConceptSimpleDto>>("/api/payroll/concepts") ?? [];
+        return rows.Select(x => new PayrollConceptItem { ConceptId = x.PayrollConceptId, Code = x.Code, Name = x.Name, ConceptType = x.ConceptType, IsActive = x.IsActive }).ToList();
+    }
+
+    // ── Captura matricial ───────────────────────────────────────────────────────
+
+    public async Task<PayrollRunMatrixData?> GetPayrollRunMatrixDataAsync(Guid runId)
+    {
+        var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
+        return await client.GetFromJsonAsync<PayrollRunMatrixData>($"/api/payroll/runs/{runId}/matrix-data");
+    }
+
+    public async Task SavePayrollRunMatrixAsync(Guid runId, List<MatrixSaveEntry> cells)
+    {
+        var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
+        var response = await client.PostAsJsonAsync($"/api/payroll/runs/{runId}/matrix-save", new { Cells = cells });
+        if (!response.IsSuccessStatusCode)
+        {
+            var err = await response.Content.ReadAsStringAsync();
+            throw new InvalidOperationException(err);
+        }
+    }
+
     private async Task<CatalogViewDefinition> GetTimeClockAsync()
     {
         var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
@@ -1916,6 +1986,7 @@ public sealed class PayrollOperationsApiService
     private sealed class PayrollConceptLookupDto { public Guid PayrollConceptId { get; set; } public string Code { get; set; } = string.Empty; public string Name { get; set; } = string.Empty; public bool IsActive { get; set; } }
     private sealed class PayrollPeriodLookupDto { public Guid PayrollPeriodId { get; set; } public string Code { get; set; } = string.Empty; public string Name { get; set; } = string.Empty; public DateTime StartDate { get; set; } public bool IsActive { get; set; } }
     private sealed class PayrollRunLookupDto { public Guid PayrollRunId { get; set; } public string Folio { get; set; } = string.Empty; public string PayrollPeriodName { get; set; } = string.Empty; public DateTime RunDate { get; set; } public bool IsActive { get; set; } }
+    private sealed class PayrollConceptSimpleDto { public Guid PayrollConceptId { get; set; } public string Code { get; set; } = string.Empty; public string Name { get; set; } = string.Empty; public string ConceptType { get; set; } = string.Empty; public bool IsActive { get; set; } }
 }
 
 public sealed class PayrollRunSummaryItem
@@ -1962,4 +2033,91 @@ public sealed class PayrollReportLine
     public decimal GrossAmount { get; set; }
     public decimal DeductionsAmount { get; set; }
     public decimal NetAmount { get; set; }
+}
+
+public sealed class PayrollRunLineHeader
+{
+    public Guid PayrollRunLineId { get; set; }
+    public Guid PayrollRunId { get; set; }
+    public string Folio { get; set; } = string.Empty;
+    public string CompanyName { get; set; } = string.Empty;
+    public string PeriodName { get; set; } = string.Empty;
+    public DateTime PeriodStart { get; set; }
+    public DateTime PeriodEnd { get; set; }
+    public Guid EmployeeId { get; set; }
+    public string EmployeeNumber { get; set; } = string.Empty;
+    public string EmployeeName { get; set; } = string.Empty;
+    public string DepartmentName { get; set; } = string.Empty;
+    public string PositionName { get; set; } = string.Empty;
+    public decimal DaysPaid { get; set; }
+    public decimal GrossAmount { get; set; }
+    public decimal DeductionsAmount { get; set; }
+    public decimal NetAmount { get; set; }
+}
+
+public sealed class PayrollRunLineDetailItem
+{
+    public Guid DetailId { get; set; }
+    public Guid PayrollConceptId { get; set; }
+    public string ConceptCode { get; set; } = string.Empty;
+    public string ConceptName { get; set; } = string.Empty;
+    public string ConceptType { get; set; } = string.Empty;
+    public string SatCode { get; set; } = string.Empty;
+    public decimal Quantity { get; set; }
+    public decimal Amount { get; set; }
+    public decimal TaxableAmount { get; set; }
+    public decimal ExemptAmount { get; set; }
+    public int SortOrder { get; set; }
+    public bool IsGenerated { get; set; }
+    public string Notes { get; set; } = string.Empty;
+}
+
+public sealed class PayrollConceptItem
+{
+    public Guid ConceptId { get; set; }
+    public string Code { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
+    public string ConceptType { get; set; } = string.Empty;
+    public bool IsActive { get; set; }
+}
+
+public sealed class PayrollRunMatrixData
+{
+    public Guid PayrollRunId { get; set; }
+    public string Folio { get; set; } = string.Empty;
+    public string PeriodName { get; set; } = string.Empty;
+    public List<MatrixConceptItem> Concepts { get; set; } = [];
+    public List<MatrixLineItem> Lines { get; set; } = [];
+}
+
+public sealed class MatrixConceptItem
+{
+    public Guid ConceptId { get; set; }
+    public string Code { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
+    public string ConceptType { get; set; } = string.Empty;
+}
+
+public sealed class MatrixLineItem
+{
+    public Guid PayrollRunLineId { get; set; }
+    public string EmployeeNumber { get; set; } = string.Empty;
+    public string EmployeeName { get; set; } = string.Empty;
+    public decimal GrossAmount { get; set; }
+    public decimal DeductionsAmount { get; set; }
+    public decimal NetAmount { get; set; }
+    public Dictionary<string, MatrixCellItem> ConceptAmounts { get; set; } = [];
+}
+
+public sealed class MatrixCellItem
+{
+    public decimal Amount { get; set; }
+    public Guid DetailId { get; set; }
+}
+
+public sealed class MatrixSaveEntry
+{
+    public Guid PayrollRunLineId { get; set; }
+    public Guid PayrollConceptId { get; set; }
+    public decimal Amount { get; set; }
 }

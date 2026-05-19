@@ -27,7 +27,7 @@ public static class HumanResourcesLifecycleSeeder
         var movementId = Guid.Parse("E5000000-0000-0000-0000-000000000502");
         var certificationId = Guid.Parse("E5000000-0000-0000-0000-000000000503");
 
-        if (!await dbContext.EmployeeDocumentRecords.AnyAsync(x => x.CompanyId == company.Id && x.EmployeeId == employee.Id && x.DocumentCode == "INE"))
+        if (!await dbContext.EmployeeDocumentRecords.AnyAsync(x => x.Id == documentId || (x.CompanyId == company.Id && x.EmployeeId == employee.Id && x.DocumentCode == "INE")))
         {
             dbContext.EmployeeDocumentRecords.Add(new EmployeeDocumentRecord
             {
@@ -55,7 +55,7 @@ public static class HumanResourcesLifecycleSeeder
             });
         }
 
-        if (!await dbContext.EmployeeLaborMovements.AnyAsync(x => x.CompanyId == company.Id && x.MovementCode == "MOV-0001"))
+        if (!await dbContext.EmployeeLaborMovements.AnyAsync(x => x.Id == movementId || (x.CompanyId == company.Id && x.MovementCode == "MOV-0001")))
         {
             dbContext.EmployeeLaborMovements.Add(new EmployeeLaborMovement
             {
@@ -82,7 +82,7 @@ public static class HumanResourcesLifecycleSeeder
             });
         }
 
-        if (!await dbContext.EmployeeCertificationRecords.AnyAsync(x => x.CompanyId == company.Id && x.EmployeeId == employee.Id && x.CertificationCode == "CERT-SEG"))
+        if (!await dbContext.EmployeeCertificationRecords.AnyAsync(x => x.Id == certificationId || (x.CompanyId == company.Id && x.EmployeeId == employee.Id && x.CertificationCode == "CERT-SEG")))
         {
             dbContext.EmployeeCertificationRecords.Add(new EmployeeCertificationRecord
             {
