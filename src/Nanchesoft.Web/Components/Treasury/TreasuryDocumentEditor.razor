@@ -52,10 +52,20 @@ else if (_accountDefinition is not null)
                         }
                     </select>
                 </div>
-                <div class="col-md-2">
-                    <label class="form-label">Saldo inicial</label>
-                    <input class="form-control" type="number" step="0.01" @bind="_accountDefinition.Account.CurrentBalance" />
-                </div>
+                @if (_accountDefinition.IsCashAccount)
+                {
+                    <div class="col-md-2">
+                        <label class="form-label">Saldo inicial</label>
+                        <input class="form-control" type="number" step="0.01" @bind="_accountDefinition.Account.CurrentBalance" />
+                    </div>
+                }
+                else
+                {
+                    <div class="col-md-2">
+                        <label class="form-label">Saldo inicial</label>
+                        <input class="form-control" type="number" step="0.01" @bind="_accountDefinition.Account.InitialBalance" />
+                    </div>
+                }
 
                 <div class="col-md-4">
                     <label class="form-label">Empresa</label>
@@ -119,6 +129,22 @@ else if (_accountDefinition is not null)
                     <div class="col-md-4">
                         <label class="form-label">CLABE</label>
                         <input class="form-control" @bind="_accountDefinition.Account.Clabe" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Sucursal del banco</label>
+                        <input class="form-control" @bind="_accountDefinition.Account.BankBranch" placeholder="Ej. Polanco" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Ejecutivo de cuenta</label>
+                        <input class="form-control" @bind="_accountDefinition.Account.AccountExecutive" placeholder="Nombre del ejecutivo" />
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">Saldo actual</label>
+                        <input class="form-control" type="number" step="0.01" @bind="_accountDefinition.Account.CurrentBalance" />
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">Saldo conciliado</label>
+                        <input class="form-control" type="number" step="0.01" @bind="_accountDefinition.Account.ReconciledBalance" />
                     </div>
                 }
 

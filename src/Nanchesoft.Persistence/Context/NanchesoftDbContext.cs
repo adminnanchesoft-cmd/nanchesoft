@@ -228,6 +228,9 @@ public sealed class NanchesoftDbContext : DbContext
     public DbSet<PaymentLine> PaymentLines => Set<PaymentLine>();
     public DbSet<Reconciliation> Reconciliations => Set<Reconciliation>();
     public DbSet<ReconciliationLine> ReconciliationLines => Set<ReconciliationLine>();
+    public DbSet<BankStatement> BankStatements => Set<BankStatement>();
+    public DbSet<BankStatementEntry> BankStatementEntries => Set<BankStatementEntry>();
+    public DbSet<InternalTransfer> InternalTransfers => Set<InternalTransfer>();
 
     public DbSet<AccountsReceivableAccount> AccountsReceivableAccounts => Set<AccountsReceivableAccount>();
     public DbSet<AccountsReceivableMovement> AccountsReceivableMovements => Set<AccountsReceivableMovement>();

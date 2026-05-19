@@ -15,8 +15,12 @@ public sealed class BankAccountConfiguration : IEntityTypeConfiguration<BankAcco
         builder.Property(x => x.AccountHolder).HasMaxLength(160);
         builder.Property(x => x.AccountNumber).HasMaxLength(32);
         builder.Property(x => x.Clabe).HasMaxLength(32);
+        builder.Property(x => x.BankBranch).HasMaxLength(120);
+        builder.Property(x => x.AccountExecutive).HasMaxLength(160);
         builder.Property(x => x.Status).HasMaxLength(40).IsRequired();
+        builder.Property(x => x.InitialBalance).HasPrecision(18, 2);
         builder.Property(x => x.CurrentBalance).HasPrecision(18, 2);
+        builder.Property(x => x.ReconciledBalance).HasPrecision(18, 2);
         builder.HasIndex(x => new { x.CompanyId, x.Code }).IsUnique();
         builder.HasOne(x => x.Tenant).WithMany().HasForeignKey(x => x.TenantId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne(x => x.Company).WithMany().HasForeignKey(x => x.CompanyId).OnDelete(DeleteBehavior.Restrict);

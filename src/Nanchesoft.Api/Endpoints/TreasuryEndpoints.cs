@@ -127,8 +127,12 @@ public static class TreasuryEndpoints
                     x.AccountHolder,
                     x.AccountNumber,
                     x.Clabe,
+                    x.BankBranch,
+                    x.AccountExecutive,
                     x.Status,
+                    x.InitialBalance,
                     x.CurrentBalance,
+                    x.ReconciledBalance,
                     x.IsActive
                 }).ToListAsync()));
 
@@ -149,8 +153,12 @@ public static class TreasuryEndpoints
                 AccountHolder = entity.AccountHolder,
                 AccountNumber = entity.AccountNumber,
                 Clabe = entity.Clabe,
+                BankBranch = entity.BankBranch,
+                AccountExecutive = entity.AccountExecutive,
                 Status = entity.Status,
+                InitialBalance = entity.InitialBalance,
                 CurrentBalance = entity.CurrentBalance,
+                ReconciledBalance = entity.ReconciledBalance,
                 IsActive = entity.IsActive
             });
         });
@@ -158,6 +166,8 @@ public static class TreasuryEndpoints
         group.MapPost("/", async (TreasuryBankAccountRequest request, NanchesoftDbContext db) =>
         {
             var company = await GetCompanyAsync(db, request.CompanyId);
+            var initial = request.InitialBalance;
+            var current = request.CurrentBalance == 0m ? initial : request.CurrentBalance;
             var entity = new BankAccount
             {
                 TenantId = company.TenantId,
@@ -169,8 +179,12 @@ public static class TreasuryEndpoints
                 AccountHolder = (request.AccountHolder ?? string.Empty).Trim(),
                 AccountNumber = (request.AccountNumber ?? string.Empty).Trim(),
                 Clabe = (request.Clabe ?? string.Empty).Trim(),
+                BankBranch = (request.BankBranch ?? string.Empty).Trim(),
+                AccountExecutive = (request.AccountExecutive ?? string.Empty).Trim(),
                 Status = NormalizeStatus(request.Status, "active"),
-                CurrentBalance = request.CurrentBalance,
+                InitialBalance = initial,
+                CurrentBalance = current,
+                ReconciledBalance = request.ReconciledBalance,
                 IsActive = request.IsActive,
                 CreatedBy = "web-api"
             };
@@ -193,8 +207,12 @@ public static class TreasuryEndpoints
             entity.AccountHolder = request.AccountHolder?.Trim() ?? entity.AccountHolder;
             entity.AccountNumber = request.AccountNumber?.Trim() ?? entity.AccountNumber;
             entity.Clabe = request.Clabe?.Trim() ?? entity.Clabe;
+            entity.BankBranch = request.BankBranch?.Trim() ?? entity.BankBranch;
+            entity.AccountExecutive = request.AccountExecutive?.Trim() ?? entity.AccountExecutive;
             entity.Status = NormalizeStatus(request.Status, entity.Status);
+            entity.InitialBalance = request.InitialBalance;
             entity.CurrentBalance = request.CurrentBalance;
+            entity.ReconciledBalance = request.ReconciledBalance;
             entity.IsActive = request.IsActive;
             entity.UpdatedAt = DateTime.UtcNow;
             entity.UpdatedBy = "web-api";
@@ -1210,8 +1228,12 @@ public sealed class TreasuryBankAccountRequest
     public string? AccountHolder { get; set; }
     public string? AccountNumber { get; set; }
     public string? Clabe { get; set; }
+    public string? BankBranch { get; set; }
+    public string? AccountExecutive { get; set; }
     public string? Status { get; set; }
+    public decimal InitialBalance { get; set; }
     public decimal CurrentBalance { get; set; }
+    public decimal ReconciledBalance { get; set; }
     public bool IsActive { get; set; } = true;
 }
 

@@ -240,6 +240,9 @@ public static class NanchesoftSchemaCatalog
         modelBuilder.Entity<PaymentLine>().ToTable("payment_lines", FinanceSchema);
         modelBuilder.Entity<Reconciliation>().ToTable("reconciliations", FinanceSchema);
         modelBuilder.Entity<ReconciliationLine>().ToTable("reconciliation_lines", FinanceSchema);
+        modelBuilder.Entity<BankStatement>().ToTable("bank_statements", FinanceSchema);
+        modelBuilder.Entity<BankStatementEntry>().ToTable("bank_statement_entries", FinanceSchema);
+        modelBuilder.Entity<InternalTransfer>().ToTable("internal_transfers", FinanceSchema);
         modelBuilder.Entity<AccountsReceivableAccount>().ToTable("accounts_receivable_accounts", FinanceSchema);
         modelBuilder.Entity<AccountsReceivableMovement>().ToTable("accounts_receivable_movements", FinanceSchema);
         modelBuilder.Entity<ReceiptApplication>().ToTable("receipt_applications", FinanceSchema);

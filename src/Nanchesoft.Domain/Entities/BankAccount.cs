@@ -17,6 +17,10 @@ public sealed class BankAccount : BaseEntity
     public string AccountHolder { get; set; } = string.Empty;
     public string AccountNumber { get; set; } = string.Empty;
     public string Clabe { get; set; } = string.Empty;
+    public string BankBranch { get; set; } = string.Empty;
+    public string AccountExecutive { get; set; } = string.Empty;
     public string Status { get; set; } = "active";
+    public decimal InitialBalance { get; set; }
     public decimal CurrentBalance { get; set; }
+    public decimal ReconciledBalance { get; set; }
 }

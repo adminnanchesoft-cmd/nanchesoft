@@ -256,8 +256,12 @@ public sealed class TreasuryApiService
                 ["AccountHolder"] = x.AccountHolder,
                 ["AccountNumber"] = x.AccountNumber,
                 ["Clabe"] = x.Clabe,
+                ["BankBranch"] = x.BankBranch,
+                ["AccountExecutive"] = x.AccountExecutive,
                 ["Status"] = x.Status,
+                ["InitialBalance"] = x.InitialBalance,
                 ["CurrentBalance"] = x.CurrentBalance,
+                ["ReconciledBalance"] = x.ReconciledBalance,
                 ["IsActive"] = x.IsActive
             }).ToList());
     }
@@ -471,8 +475,12 @@ public sealed class TreasuryApiService
                 AccountHolder = account.AccountHolder,
                 AccountNumber = account.AccountNumber,
                 Clabe = account.Clabe,
+                BankBranch = account.BankBranch,
+                AccountExecutive = account.AccountExecutive,
                 Status = account.Status,
+                InitialBalance = account.InitialBalance,
                 CurrentBalance = account.CurrentBalance,
+                ReconciledBalance = account.ReconciledBalance,
                 IsActive = account.IsActive
             }
         };
@@ -575,8 +583,12 @@ public sealed class TreasuryApiService
             AccountHolder = dto.AccountHolder ?? string.Empty,
             AccountNumber = dto.AccountNumber ?? string.Empty,
             Clabe = dto.Clabe ?? string.Empty,
+            BankBranch = dto.BankBranch ?? string.Empty,
+            AccountExecutive = dto.AccountExecutive ?? string.Empty,
             Status = dto.Status ?? "active",
+            InitialBalance = dto.InitialBalance,
             CurrentBalance = dto.CurrentBalance,
+            ReconciledBalance = dto.ReconciledBalance,
             IsActive = dto.IsActive
         };
 
@@ -685,9 +697,13 @@ public sealed class TreasuryApiService
             TextColumn("AccountHolder", "Titular", width: 180),
             TextColumn("AccountNumber", "Cuenta", width: 160),
             TextColumn("Clabe", "CLABE", width: 180),
+            TextColumn("BankBranch", "Sucursal", width: 140),
+            TextColumn("AccountExecutive", "Ejecutivo", width: 160),
             LookupColumn("CurrencyId", "Moneda", lookups.Currencies, true, 140),
             TextColumn("Status", "Estatus", true, width: 120),
+            NumberColumn("InitialBalance", "Saldo inicial", width: 140),
             NumberColumn("CurrentBalance", "Saldo actual", width: 140),
+            NumberColumn("ReconciledBalance", "Saldo conciliado", width: 160),
             BoolColumn("IsActive", "Activo")
         ];
     }
@@ -817,8 +833,12 @@ public sealed class TreasuryAccountModel
     public string AccountHolder { get; set; } = string.Empty;
     public string AccountNumber { get; set; } = string.Empty;
     public string Clabe { get; set; } = string.Empty;
+    public string BankBranch { get; set; } = string.Empty;
+    public string AccountExecutive { get; set; } = string.Empty;
     public string Status { get; set; } = "active";
+    public decimal InitialBalance { get; set; }
     public decimal CurrentBalance { get; set; }
+    public decimal ReconciledBalance { get; set; }
     public bool IsActive { get; set; } = true;
 }
 
@@ -1002,8 +1022,12 @@ public sealed class BankAccountListRow
     public string AccountHolder { get; set; } = string.Empty;
     public string AccountNumber { get; set; } = string.Empty;
     public string Clabe { get; set; } = string.Empty;
+    public string BankBranch { get; set; } = string.Empty;
+    public string AccountExecutive { get; set; } = string.Empty;
     public string Status { get; set; } = string.Empty;
+    public decimal InitialBalance { get; set; }
     public decimal CurrentBalance { get; set; }
+    public decimal ReconciledBalance { get; set; }
     public bool IsActive { get; set; }
 }
 
@@ -1072,8 +1096,12 @@ public sealed class BankAccountRequestDto
     public string? AccountHolder { get; set; }
     public string? AccountNumber { get; set; }
     public string? Clabe { get; set; }
+    public string? BankBranch { get; set; }
+    public string? AccountExecutive { get; set; }
     public string? Status { get; set; }
+    public decimal InitialBalance { get; set; }
     public decimal CurrentBalance { get; set; }
+    public decimal ReconciledBalance { get; set; }
     public bool IsActive { get; set; } = true;
 }
 
