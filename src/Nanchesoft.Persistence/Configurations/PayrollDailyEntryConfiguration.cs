@@ -17,8 +17,11 @@ public sealed class PayrollDailyEntryConfiguration : IEntityTypeConfiguration<Pa
         builder.Property(x => x.Units).HasPrecision(18, 4);
         builder.Property(x => x.Amount).HasPrecision(18, 2);
 
-        builder.HasIndex(x => new { x.CompanyId, x.PayrollPeriodId, x.EmployeeId, x.WorkDate });
-        builder.HasIndex(x => new { x.CompanyId, x.PayrollPeriodId, x.EmployeeId, x.WorkDate, x.PayrollDayMnemonicId });
+        // Nombres explícitos para evitar colisión por truncado a 63 chars en PostgreSQL
+        builder.HasIndex(x => new { x.CompanyId, x.PayrollPeriodId, x.EmployeeId, x.WorkDate })
+            .HasDatabaseName("ix_pde_co_pp_emp_date");
+        builder.HasIndex(x => new { x.CompanyId, x.PayrollPeriodId, x.EmployeeId, x.WorkDate, x.PayrollDayMnemonicId })
+            .HasDatabaseName("ix_pde_co_pp_emp_date_mnem");
 
         builder.HasOne(x => x.Company).WithMany().HasForeignKey(x => x.CompanyId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne(x => x.Employee).WithMany().HasForeignKey(x => x.EmployeeId).OnDelete(DeleteBehavior.Restrict);

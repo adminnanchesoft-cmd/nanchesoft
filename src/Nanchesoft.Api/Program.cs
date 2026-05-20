@@ -79,7 +79,7 @@ using (var scope = app.Services.CreateScope())
     await AccountsPayableSeeder.SeedAsync(dbContext);
     await CfdiSeeder.SeedAsync(dbContext);
     await AccountingSeeder.SeedAsync(dbContext);
-    await HumanResourcesSeeder.SeedAsync(dbContext);
+    //await HumanResourcesSeeder.SeedAsync(dbContext);
     await PayrollAdvancedSeeder.SeedAsync(dbContext);
     await HumanResourcesEnterpriseSeeder.SeedAsync(dbContext);
     await HumanResourcesLifecycleSeeder.SeedAsync(dbContext);

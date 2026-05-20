@@ -39,16 +39,28 @@ public static class PayrollMvpEndpoints
     //   RFC, CURP, Email, Telefono, FechaIngreso, SalarioDiario, SalarioDiarioIntegrado,
     //   DepartamentoCodigo, PuestoCodigo
     // ──────────────────────────────────────────────────────────────
-    private static async Task<IResult> ImportEmployeesFromExcelAsync(IFormFile file, NanchesoftDbContext db)
+    private static async Task<IResult> ImportEmployeesFromExcelAsync(HttpContext httpContext, IFormFile file, NanchesoftDbContext db)
     {
         if (file is null || file.Length == 0)
             return Results.BadRequest(new { message = "El archivo está vacío." });
 
-        var company = await db.Companies.OrderBy(x => x.CreatedAt).FirstOrDefaultAsync();
-        if (company is null)
-            return Results.BadRequest(new { message = "No existe empresa configurada." });
+        // Resolver empresa/tenant del contexto del usuario (headers X-Tenant-Id / X-Company-Id),
+        // no agarrar la primera por fecha — eso ponía todos los empleados en la empresa semilla.
+        var ctxTenantId = ApiTenantScope.ResolveTenantId(httpContext);
+        var ctxCompanyId = ApiTenantScope.ResolveCompanyId(httpContext);
+        var ctxBranchId = ApiTenantScope.ResolveBranchId(httpContext);
 
-        var branchId = await db.Branches.Where(x => x.CompanyId == company.Id).OrderBy(x => x.CreatedAt).Select(x => (Guid?)x.Id).FirstOrDefaultAsync();
+        Company? company = null;
+        if (ctxCompanyId.HasValue)
+            company = await db.Companies.FirstOrDefaultAsync(x => x.Id == ctxCompanyId.Value);
+        else if (ctxTenantId.HasValue)
+            company = await db.Companies.Where(x => x.TenantId == ctxTenantId.Value && x.IsActive).OrderBy(x => x.CreatedAt).FirstOrDefaultAsync();
+
+        if (company is null)
+            return Results.BadRequest(new { message = "No se pudo determinar la empresa para importar. Selecciona empresa activa en el contexto del usuario." });
+
+        var branchId = ctxBranchId
+            ?? await db.Branches.Where(x => x.CompanyId == company.Id).OrderBy(x => x.CreatedAt).Select(x => (Guid?)x.Id).FirstOrDefaultAsync();
 
         using var stream = file.OpenReadStream();
         using var workbook = new XLWorkbook(stream);
@@ -693,6 +705,11 @@ public static class PayrollMvpEndpoints
         public int PrePayrollAdjustments { get; set; }
         public int RecurringMovements { get; set; }
         public int ActiveLoans { get; set; }
+        public int TotalEmployeesInCompany { get; set; }
+        public int DiscardedInactive { get; set; }
+        public int DiscardedByStatus { get; set; }
+        public int WithoutDepartment { get; set; }
+        public int WithoutPosition { get; set; }
         public List<string> MissingConceptCodes { get; set; } = [];
         public List<string> Warnings { get; set; } = [];
     }
@@ -703,14 +720,39 @@ public static class PayrollMvpEndpoints
         if (period is null)
             return Results.NotFound(new { message = "No se encontró el periodo." });
 
-        var employeeIds = await db.Employees.AsNoTracking()
-            .Where(x => x.CompanyId == period.CompanyId && x.IsActive && x.Status == "active")
-            .Select(x => x.Id)
+        // MVP nómina básica: empleado elegible si IsActive + Status="active" + CompanyId del periodo.
+        // No filtrar por DepartmentId/PositionId/WorkScheduleId/PayrollScheduleId (son opcionales).
+        var companyEmployees = await db.Employees.AsNoTracking()
+            .Where(x => x.CompanyId == period.CompanyId)
+            .Select(x => new
+            {
+                x.Id,
+                x.EmployeeNumber,
+                x.IsActive,
+                x.Status,
+                x.DailySalary,
+                x.PeriodSalary,
+                HasDepartment = x.DepartmentId.HasValue,
+                HasPosition = x.PositionId.HasValue
+            })
             .ToListAsync();
 
+        // Comparación tolerante: status puede venir "Active", "ACTIVE", "Activo"...
+        bool IsActiveStatus(string? s)
+            => string.IsNullOrWhiteSpace(s) || s.Equals("active", StringComparison.OrdinalIgnoreCase) || s.Equals("activo", StringComparison.OrdinalIgnoreCase);
+
+        var employeeIds = companyEmployees
+            .Where(x => x.IsActive && IsActiveStatus(x.Status))
+            .Select(x => x.Id)
+            .ToList();
+
         var activeEmployees = employeeIds.Count;
-        var employeesWithoutSalary = await db.Employees.AsNoTracking()
-            .CountAsync(x => x.CompanyId == period.CompanyId && x.IsActive && x.Status == "active" && x.DailySalary <= 0m && x.PeriodSalary <= 0m);
+        var totalInCompany = companyEmployees.Count;
+        var discardedInactive = companyEmployees.Count(x => !x.IsActive);
+        var discardedStatus = companyEmployees.Count(x => x.IsActive && !IsActiveStatus(x.Status));
+        var employeesWithoutSalary = companyEmployees.Count(x => x.IsActive && IsActiveStatus(x.Status) && x.DailySalary <= 0m && x.PeriodSalary <= 0m);
+        var employeesWithoutDepartment = companyEmployees.Count(x => x.IsActive && IsActiveStatus(x.Status) && !x.HasDepartment);
+        var employeesWithoutPosition = companyEmployees.Count(x => x.IsActive && IsActiveStatus(x.Status) && !x.HasPosition);
         var attendanceSummaries = await db.AttendanceDailySummaries.AsNoTracking()
             .CountAsync(x => x.CompanyId == period.CompanyId && x.PayrollPeriodId == period.Id && x.IsActive);
         var incidents = await db.EmployeeIncidents.AsNoTracking()
@@ -736,12 +778,18 @@ public static class PayrollMvpEndpoints
         var missingConcepts = requiredConcepts.Except(existingConceptCodes).ToList();
 
         var warnings = new List<string>();
-        if (activeEmployees == 0)
-            warnings.Add("No hay colaboradores activos para generar nómina.");
+        if (totalInCompany == 0)
+            warnings.Add($"La empresa del periodo no tiene colaboradores registrados. Importa empleados con la empresa actual seleccionada.");
+        else if (activeEmployees == 0)
+            warnings.Add($"Hay {totalInCompany} colaborador(es) en la empresa, pero ninguno elegible: {discardedInactive} inactivos, {discardedStatus} con status distinto a 'active'.");
         if (employeesWithoutSalary > 0)
-            warnings.Add($"{employeesWithoutSalary} colaboradores no tienen salario diario ni salario por periodo.");
+            warnings.Add($"{employeesWithoutSalary} colaborador(es) elegibles sin sueldo del periodo ni sueldo diario — quedarán en 0 al calcular.");
+        if (employeesWithoutDepartment > 0)
+            warnings.Add($"{employeesWithoutDepartment} colaborador(es) sin departamento — pueden procesarse igual, sólo informativo.");
+        if (employeesWithoutPosition > 0)
+            warnings.Add($"{employeesWithoutPosition} colaborador(es) sin puesto — pueden procesarse igual, sólo informativo.");
         if (attendanceSummaries == 0)
-            warnings.Add("No hay resumen diario de asistencia para el periodo.");
+            warnings.Add("No hay resumen diario de asistencia para el periodo (es opcional; sin esto se procesa con sueldo completo).");
         if (missingConcepts.Count > 0)
             warnings.Add("Faltan conceptos base; se crearán automáticamente al calcular: " + string.Join(", ", missingConcepts) + ".");
 
@@ -756,6 +804,11 @@ public static class PayrollMvpEndpoints
             PrePayrollAdjustments = prePayrollAdjustments,
             RecurringMovements = recurringMovements,
             ActiveLoans = activeLoans,
+            TotalEmployeesInCompany = totalInCompany,
+            DiscardedInactive = discardedInactive,
+            DiscardedByStatus = discardedStatus,
+            WithoutDepartment = employeesWithoutDepartment,
+            WithoutPosition = employeesWithoutPosition,
             MissingConceptCodes = missingConcepts,
             Warnings = warnings
         });
@@ -1044,12 +1097,26 @@ public static class PayrollMvpEndpoints
         var period = run.PayrollPeriod!;
         int periodDays = (period.EndDate.Date - period.StartDate.Date).Days + 1;
 
+        // MVP: empleado elegible si IsActive y status "active"/"activo"/vacío (case-insensitive).
+        // No exigir DepartmentId/PositionId/WorkScheduleId/PayrollScheduleId.
         var employees = await db.Employees
-            .Where(x => x.CompanyId == run.CompanyId && x.IsActive && x.Status == "active")
+            .Where(x => x.CompanyId == run.CompanyId && x.IsActive
+                && (x.Status == null
+                    || x.Status == ""
+                    || EF.Functions.ILike(x.Status, "active")
+                    || EF.Functions.ILike(x.Status, "activo")))
             .ToListAsync();
 
         if (employees.Count == 0)
-            return Results.BadRequest(new { message = "No hay empleados activos para calcular." });
+        {
+            var totalInCompany = await db.Employees.CountAsync(x => x.CompanyId == run.CompanyId);
+            return Results.BadRequest(new
+            {
+                message = totalInCompany == 0
+                    ? "La empresa del periodo no tiene empleados. Importa colaboradores con la empresa actual seleccionada."
+                    : $"Hay {totalInCompany} empleado(s) en la empresa pero ninguno elegible (IsActive=true y status 'active'). Revisa los colaboradores."
+            });
+        }
 
         await EnsureDefaultConceptsAsync(db, run.CompanyId);
 
@@ -1356,9 +1423,12 @@ public static class PayrollMvpEndpoints
             int sortOrder = 10;
 
             // Percepciones
+            // SAL siempre primero (sortOrder=10). Etiqueta visible: "Sueldo del periodo".
             if (baseSalary > 0m)
             {
-                db.PayrollRunLineDetails.Add(BuildDetail(run, line, employee, conceptSal, daysPaid, baseSalary, sortOrder));
+                var salDetail = BuildDetail(run, line, employee, conceptSal, daysPaid, baseSalary, sortOrder);
+                salDetail.ConceptName = "Sueldo del periodo";
+                db.PayrollRunLineDetails.Add(salDetail);
                 sortOrder += 10;
             }
 

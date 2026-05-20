@@ -183,6 +183,11 @@ public sealed class PayrollGenerationPreview
     public int PrePayrollAdjustments { get; set; }
     public int RecurringMovements { get; set; }
     public int ActiveLoans { get; set; }
+    public int TotalEmployeesInCompany { get; set; }
+    public int DiscardedInactive { get; set; }
+    public int DiscardedByStatus { get; set; }
+    public int WithoutDepartment { get; set; }
+    public int WithoutPosition { get; set; }
     public List<string> MissingConceptCodes { get; set; } = [];
     public List<string> Warnings { get; set; } = [];
 }

@@ -105,9 +105,15 @@
                         {
                             <div class="border rounded p-3 mb-3 bg-light">
                                 <div class="row g-2 small">
-                                    <div class="col-6 col-md-4"><span class="text-secondary">Periódicos</span><div class="fw-semibold">@_preview.RecurringMovements</div></div>
-                                    <div class="col-6 col-md-4"><span class="text-secondary">Préstamos activos</span><div class="fw-semibold">@_preview.ActiveLoans</div></div>
-                                    <div class="col-6 col-md-4"><span class="text-secondary">Sin salario</span><div class="fw-semibold">@_preview.EmployeesWithoutSalary</div></div>
+                                    <div class="col-6 col-md-3"><span class="text-secondary">Empleados en empresa</span><div class="fw-semibold">@_preview.TotalEmployeesInCompany</div></div>
+                                    <div class="col-6 col-md-3"><span class="text-secondary">Elegibles</span><div class="fw-semibold text-success">@_preview.ActiveEmployees</div></div>
+                                    <div class="col-6 col-md-3"><span class="text-secondary">Descartados (inactivos)</span><div class="fw-semibold @(_preview.DiscardedInactive > 0 ? "text-warning" : "")">@_preview.DiscardedInactive</div></div>
+                                    <div class="col-6 col-md-3"><span class="text-secondary">Descartados (status)</span><div class="fw-semibold @(_preview.DiscardedByStatus > 0 ? "text-warning" : "")">@_preview.DiscardedByStatus</div></div>
+                                    <div class="col-6 col-md-3"><span class="text-secondary">Sin salario</span><div class="fw-semibold @(_preview.EmployeesWithoutSalary > 0 ? "text-danger" : "")">@_preview.EmployeesWithoutSalary</div></div>
+                                    <div class="col-6 col-md-3"><span class="text-secondary">Sin departamento</span><div class="fw-semibold">@_preview.WithoutDepartment</div></div>
+                                    <div class="col-6 col-md-3"><span class="text-secondary">Sin puesto</span><div class="fw-semibold">@_preview.WithoutPosition</div></div>
+                                    <div class="col-6 col-md-3"><span class="text-secondary">Periódicos activos</span><div class="fw-semibold">@_preview.RecurringMovements</div></div>
+                                    <div class="col-6 col-md-3"><span class="text-secondary">Préstamos activos</span><div class="fw-semibold">@_preview.ActiveLoans</div></div>
                                 </div>
                                 @if (_preview.MissingConceptCodes.Count > 0)
                                 {
@@ -230,6 +236,10 @@
                     <button class="btn btn-outline-primary" @onclick="GenerateSummariesAsync" disabled="@_busy">
                         @(_busy ? "Generando resumen…" : "Generar resumen de asistencia")
                     </button>
+                    <div class="alert alert-info mt-3 py-2 px-3 small mb-0">
+                        <strong>Este paso es opcional.</strong> Si no capturaste checadas puedes omitirlo —
+                        se procesará con sueldo completo (sin descuento por inasistencias).
+                    </div>
                 }
                 @if (_summaryResult is not null)
                 {
@@ -240,8 +250,8 @@
             </div>
             <div class="card-footer d-flex justify-content-between gap-2">
                 <button class="btn btn-outline-secondary" @onclick="() => GoToStep(2)">← Anterior</button>
-                <button class="btn btn-primary" @onclick="() => GoToStep(4)" disabled="@(_busy || _summaryResult is null)">
-                    Siguiente →
+                <button class="btn btn-primary" @onclick="() => GoToStep(4)" disabled="@_busy">
+                    @(_summaryResult is not null ? "Siguiente →" : "Omitir / Siguiente →")
                 </button>
             </div>
         </div>
@@ -274,6 +284,10 @@
                     <button class="btn btn-outline-primary" @onclick="GenerateIncidentsAsync" disabled="@_busy">
                         @(_busy ? "Generando incidencias…" : "Generar incidencias")
                     </button>
+                    <div class="alert alert-info mt-3 py-2 px-3 small mb-0">
+                        <strong>Las incidencias son opcionales.</strong>
+                        Si no las capturas, se procesará la nómina con sueldo completo del periodo.
+                    </div>
                 }
                 @if (_incidentResult is not null)
                 {
@@ -284,8 +298,8 @@
             </div>
             <div class="card-footer d-flex justify-content-between gap-2">
                 <button class="btn btn-outline-secondary" @onclick="() => GoToStep(3)">← Anterior</button>
-                <button class="btn btn-primary" @onclick="() => GoToStep(5)" disabled="@(_busy || _incidentResult is null)">
-                    Siguiente →
+                <button class="btn btn-primary" @onclick="() => GoToStep(5)" disabled="@_busy">
+                    @(_incidentResult is not null ? "Siguiente →" : "Omitir / Siguiente →")
                 </button>
             </div>
         </div>
@@ -301,14 +315,62 @@
             <div class="card-body">
                 @if (_run is null)
                 {
+                    @* Validaciones pre-cálculo *@
+                    var canCalculate = _preview is not null
+                        && _preview.ActiveEmployees > 0
+                        && _preview.EmployeesWithoutSalary < _preview.ActiveEmployees
+                        && !string.IsNullOrWhiteSpace(_runFolio);
+
+                    @if (_preview is null)
+                    {
+                        <div class="alert alert-warning py-2 px-3 mb-3 small">
+                            <strong>Validando…</strong> No se ha podido validar el periodo. Regresa al Paso 1 y oprime "Validar generación".
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="border rounded p-3 mb-3 bg-light small">
+                            <strong>Resumen antes de calcular</strong>
+                            <ul class="mt-2 mb-0">
+                                <li>Colaboradores activos: <strong>@_preview.ActiveEmployees</strong></li>
+                                <li>Préstamos activos a aplicar: <strong>@_preview.ActiveLoans</strong></li>
+                                <li>Incidencias capturadas: <strong>@_preview.Incidents</strong> @(_preview.Incidents == 0 ? "(opcional)" : "")</li>
+                                @if (_preview.EmployeesWithoutSalary > 0)
+                                {
+                                    <li class="text-warning">
+                                        ⚠ <strong>@_preview.EmployeesWithoutSalary</strong> empleado(s) sin sueldo del periodo ni sueldo diario — quedarán en 0.
+                                    </li>
+                                }
+                            </ul>
+                        </div>
+
+                        @if (_preview.ActiveEmployees == 0)
+                        {
+                            <div class="alert alert-danger py-2 px-3 mb-3 small">
+                                <strong>No hay empleados activos en este periodo.</strong>
+                                Asegúrate de tener empleados con estatus "active" en la empresa antes de procesar.
+                            </div>
+                        }
+                        else if (_preview.EmployeesWithoutSalary >= _preview.ActiveEmployees)
+                        {
+                            <div class="alert alert-danger py-2 px-3 mb-3 small">
+                                <strong>Ningún empleado tiene sueldo capturado.</strong>
+                                Edita los colaboradores y captura "Sueldo del periodo" o "Sueldo diario" antes de procesar.
+                            </div>
+                        }
+                    }
+
                     <div class="mb-3" style="max-width:400px;">
                         <label class="form-label fw-semibold">Folio de la corrida</label>
                         <input type="text" class="form-control" @bind="_runFolio" placeholder="Ej. NOM-2026-001" />
                         <div class="form-text">Identificador único para esta corrida de nómina.</div>
                     </div>
-                    <button class="btn btn-outline-primary" @onclick="CreateAndCalculateAsync" disabled="@(_busy || string.IsNullOrWhiteSpace(_runFolio))">
-                        @(_busy ? "Calculando…" : "Crear corrida y calcular")
+                    <button class="btn btn-primary" @onclick="CreateAndCalculateAsync" disabled="@(_busy || !canCalculate)">
+                        @(_busy ? "Procesando…" : "Procesar nómina")
                     </button>
+                    <div class="small text-secondary mt-2">
+                        Se aplicará: sueldo del periodo como percepción #1, incidencias, movimientos periódicos, préstamos activos e ISR/IMSS.
+                    </div>
                 }
                 @if (_calculateResult is not null && _run is not null)
                 {
@@ -325,6 +387,17 @@
                                 <tr><td class="text-secondary" style="border-top:2px solid #dee2e6;">Neto a pagar</td><td style="border-top:2px solid #dee2e6;"><strong class="text-success fs-5">@_calculateResult.NetAmount.ToString("C2")</strong></td></tr>
                             </tbody>
                         </table>
+                    @if (_calculateResult.DeductionsAmount > _calculateResult.GrossAmount)
+                    {
+                        <div class="alert alert-warning py-2 px-3 mt-2 mb-0 small">
+                            ⚠ Las deducciones superan al total de percepciones. Revisa préstamos, descuentos e incidencias.
+                        </div>
+                    }
+                    <div class="d-flex flex-wrap gap-2 mt-3">
+                        <button class="btn btn-outline-primary btn-sm" @onclick="RecalculateRunAsync" disabled="@_busy">
+                            🔄 @(_busy ? "Recalculando…" : "Recalcular todos")
+                        </button>
+                    </div>
                     </div>
                 }
             </div>
@@ -344,32 +417,61 @@
     @if (_step == 6)
     {
         <div class="card shadow-sm">
-            <div class="card-header fw-semibold">Paso 6 — Imprimir recibos</div>
+            <div class="card-header fw-semibold">Paso 6 — Revisar y autorizar</div>
             <div class="card-body">
-                <p class="text-secondary mb-3">La nómina está lista. Accede a los recibos individuales o imprime el resumen general.</p>
+                <p class="text-secondary mb-3">La nómina está lista. Revisa los recibos individuales, imprime el resumen y autoriza cuando esté correcta.</p>
                 @if (_run is not null)
                 {
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-3 col-6">
+                            <div class="border rounded p-2 small bg-white text-center">
+                                <div class="text-secondary">Folio</div>
+                                <div class="fw-bold">@_run.Folio</div>
+                            </div>
+                        </div>
+                        <div class="col-md-3 col-6">
+                            <div class="border rounded p-2 small bg-white text-center">
+                                <div class="text-secondary">Empleados</div>
+                                <div class="fw-bold">@_run.EmployeeCount</div>
+                            </div>
+                        </div>
+                        <div class="col-md-3 col-6">
+                            <div class="border rounded p-2 small bg-white text-center">
+                                <div class="text-secondary">Deducciones</div>
+                                <div class="fw-bold text-danger">@_run.DeductionsAmount.ToString("C2")</div>
+                            </div>
+                        </div>
+                        <div class="col-md-3 col-6">
+                            <div class="border rounded p-2 small bg-success text-white text-center">
+                                <div style="opacity:.85">Neto a pagar</div>
+                                <div class="fw-bold fs-5">@_run.NetAmount.ToString("C2")</div>
+                            </div>
+                        </div>
+                    </div>
+
                     <div class="d-flex flex-wrap gap-2">
-                        <a class="btn btn-outline-primary" target="_blank" href="/payroll/print/run/@_run.PayrollRunId">
-                            🖨️ Imprimir resumen nómina
+                        <a class="btn btn-primary" href="/payroll/receipts/@_run.PayrollRunId">
+                            📄 Ver recibos
                         </a>
-                        <a class="btn btn-outline-secondary" href="/payroll/receipts/@_run.PayrollRunId">
-                            📄 Ver recibos individuales
+                        <a class="btn btn-outline-primary" target="_blank" href="/payroll/print/run/@_run.PayrollRunId">
+                            🖨️ Imprimir resumen / PDF
+                        </a>
+                        <a class="btn btn-outline-secondary" href="/payroll/reporte">
+                            📈 Ver resumen (Reporte / Lista de raya)
                         </a>
                         <a class="btn btn-outline-secondary" href="/payroll/captura-matricial/@_run.PayrollRunId">
                             📊 Captura matricial
                         </a>
-                        <a class="btn btn-outline-secondary" href="/payroll/reporte">
-                            📈 Reporte de nómina
-                        </a>
+                        <button class="btn btn-outline-warning" @onclick="RecalculateRunAsync" disabled="@_busy">
+                            🔄 @(_busy ? "Recalculando…" : "Recalcular todos")
+                        </button>
                         <a class="btn btn-outline-dark" href="/payroll/runs">
-                            📋 Volver a corridas
+                            📋 Listado de corridas
                         </a>
                     </div>
-                    <div class="mt-3 p-3 bg-light rounded" style="font-size:13px;">
-                        <strong>Folio:</strong> @_run.Folio &nbsp;|&nbsp;
-                        <strong>Empleados:</strong> @_run.EmployeeCount &nbsp;|&nbsp;
-                        <strong>Neto:</strong> @_run.NetAmount.ToString("C2")
+
+                    <div class="alert alert-info mt-3 py-2 px-3 small mb-0">
+                        <strong>Siguiente paso:</strong> revisa los recibos uno por uno. Cuando estén correctos, ve a "Listado de corridas" y marca la corrida como autorizada/cerrada para que los saldos de préstamos queden firmes.
                     </div>
                 }
             </div>
@@ -474,6 +576,21 @@
         _errorMessage = null;
         _successMessage = null;
         _step = step;
+        // Refrescar preview al entrar a calcular para tener cifras actualizadas
+        if (step == 5 && _selectedPeriodId != Guid.Empty)
+        {
+            _ = RefreshPreviewAsync();
+        }
+    }
+
+    private async Task RefreshPreviewAsync()
+    {
+        try
+        {
+            _preview = await PayrollMvpApiService.GetGenerationPreviewAsync(_selectedPeriodId);
+            await InvokeAsync(StateHasChanged);
+        }
+        catch { /* no-op: lo manejará el botón Validar */ }
     }
 
     private async Task GoToStep2()
@@ -558,6 +675,20 @@
             // Reload to get updated totals
             var runs = await PayrollMvpApiService.GetRunsAsync();
             _run = runs.FirstOrDefault(x => x.PayrollRunId == _run.PayrollRunId) ?? _run;
+            _successMessage = $"Nómina procesada: {_calculateResult.Employees} empleado(s), neto {_calculateResult.NetAmount:C2}.";
+        });
+    }
+
+    private async Task RecalculateRunAsync()
+    {
+        if (_run is null) return;
+        await RunAsync(async () =>
+        {
+            _calculateResult = await PayrollMvpApiService.CalculatePayrollRunAsync(_run.PayrollRunId);
+            var runs = await PayrollMvpApiService.GetRunsAsync();
+            _run = runs.FirstOrDefault(x => x.PayrollRunId == _run.PayrollRunId) ?? _run;
+            _preview = await PayrollMvpApiService.GetGenerationPreviewAsync(_selectedPeriodId);
+            _successMessage = $"Nómina recalculada: {_calculateResult.Employees} empleado(s), neto {_calculateResult.NetAmount:C2}.";
         });
     }
 

@@ -1,5 +1,1700 @@
 @page "/human-resources/work-schedules"
+@using System.Net.Http.Json
+@using System.Text.Json
+@using System.Globalization
+@using Nanchesoft.Web.Services.HumanResources
+@using Nanchesoft.Web.State
+@inject IHttpClientFactory HttpClientFactory
+@inject IJSRuntime JS
+@inject NavigationManager Nav
+@inject AppState AppState
+@inject AuthState AuthState
 
 <PageTitle>Horarios laborales | Nanchesoft</PageTitle>
 
-<CatalogCrudPage CatalogKey="hr-work-schedules" />
+@* ══════════════════════════════════════════════════════════════════════════ *@
+@*                                LISTADO                                      *@
+@* ══════════════════════════════════════════════════════════════════════════ *@
+@if (_mode == Mode.List)
+{
+    <div class="ns-header">
+        <div class="flex-grow-1">
+            <div class="ns-breadcrumb mb-0">
+                <a href="/human-resources">RRHH</a>
+                <span class="sep">/</span>
+                <span class="text-dark fw-semibold">Horarios laborales</span>
+            </div>
+            <div class="d-flex align-items-center gap-2 mt-1">
+                <span class="bi bi-calendar-week text-primary fs-5"></span>
+                <span class="fw-bold" style="font-size:16px;">Horarios laborales</span>
+                <span class="ns-badge-active">@_schedules.Count(x => x.IsActive) activos</span>
+                <span class="ns-badge-inactive">@_schedules.Count(x => !x.IsActive) inactivos</span>
+            </div>
+        </div>
+        <div class="d-flex gap-2 align-items-center">
+            <button class="btn btn-outline-secondary btn-sm px-3" @onclick="LoadListAsync" title="Recargar">
+                <span class="bi bi-arrow-clockwise"></span>
+            </button>
+            <button class="btn btn-primary btn-sm px-4" @onclick="OpenNew">
+                <span class="bi bi-plus-lg me-1"></span>
+                <span>Nuevo horario</span>
+            </button>
+        </div>
+    </div>
+
+    <div style="max-width:1280px;margin:0 auto;padding:20px 16px 40px 16px;">
+
+        @if (!string.IsNullOrEmpty(_error))
+        {
+            <div class="alert alert-danger d-flex align-items-center gap-2 mb-3 py-2" style="font-size:13px;">
+                <span class="bi bi-exclamation-triangle-fill"></span>
+                <span class="flex-grow-1">@_error</span>
+                <button type="button" class="btn-close" @onclick="() => _error = string.Empty"></button>
+            </div>
+        }
+
+        @* KPIs *@
+        <div class="row g-3 mb-3">
+            <div class="col-6 col-md-3">
+                <div class="ws-kpi ws-kpi-blue">
+                    <div class="ws-kpi-icon"><span class="bi bi-calendar-week"></span></div>
+                    <div>
+                        <div class="ws-kpi-label">Total horarios</div>
+                        <div class="ws-kpi-value">@_schedules.Count</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-6 col-md-3">
+                <div class="ws-kpi ws-kpi-green">
+                    <div class="ws-kpi-icon"><span class="bi bi-check2-circle"></span></div>
+                    <div>
+                        <div class="ws-kpi-label">Activos</div>
+                        <div class="ws-kpi-value">@_schedules.Count(x => x.IsActive)</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-6 col-md-3">
+                <div class="ws-kpi ws-kpi-purple">
+                    <div class="ws-kpi-icon"><span class="bi bi-lightning-charge"></span></div>
+                    <div>
+                        <div class="ws-kpi-label">Flexibles</div>
+                        <div class="ws-kpi-value">@_schedules.Count(x => x.IsFlexible)</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-6 col-md-3">
+                <div class="ws-kpi ws-kpi-amber">
+                    <div class="ws-kpi-icon"><span class="bi bi-clock-history"></span></div>
+                    <div>
+                        <div class="ws-kpi-label">Horas/sem promedio</div>
+                        <div class="ws-kpi-value">@(_schedules.Count == 0 ? "0" : Math.Round(_schedules.Average(x => x.WeeklyHours), 1).ToString(CultureInfo.InvariantCulture))</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        @* Filtros *@
+        <div class="ws-filters">
+            <div class="ws-search">
+                <span class="bi bi-search"></span>
+                <input class="form-control ns-form-input" placeholder="Buscar por código, nombre o turno..." @bind="_search" @bind:event="oninput" />
+            </div>
+            <div class="d-flex gap-1 flex-wrap">
+                <button class="ws-chip @(_filter == "all" ? "ws-chip-active" : "")" @onclick='() => _filter = "all"'>Todos</button>
+                <button class="ws-chip @(_filter == "active" ? "ws-chip-active" : "")" @onclick='() => _filter = "active"'>Activos</button>
+                <button class="ws-chip @(_filter == "inactive" ? "ws-chip-active" : "")" @onclick='() => _filter = "inactive"'>Inactivos</button>
+                <button class="ws-chip @(_filter == "flexible" ? "ws-chip-active" : "")" @onclick='() => _filter = "flexible"'>Flexibles</button>
+            </div>
+        </div>
+
+        @if (_loading)
+        {
+            <div class="text-center py-5">
+                <div class="spinner-border text-primary mb-2" style="width:2.5rem;height:2.5rem;"></div>
+                <p class="text-muted" style="font-size:13px;">Cargando horarios laborales…</p>
+            </div>
+        }
+        else if (FilteredSchedules().Count == 0)
+        {
+            <div class="ws-empty">
+                <span class="bi bi-calendar-x" style="font-size:48px;color:#cbd5e1;"></span>
+                <h5 class="mt-3" style="color:#475569;">Sin horarios configurados</h5>
+                <p class="text-muted" style="font-size:13px;">Crea el primer horario laboral para tus colaboradores.</p>
+                <button class="btn btn-primary btn-sm px-4" @onclick="OpenNew">
+                    <span class="bi bi-plus-lg me-1"></span> Crear horario
+                </button>
+            </div>
+        }
+        else
+        {
+            <div class="ws-grid">
+                @foreach (var s in FilteredSchedules())
+                {
+                    var totalDays = ActiveDayCount(s);
+                    <div class="ws-card @(s.IsActive ? "" : "ws-card-inactive")" @onclick="() => OpenEdit(s)">
+                        <div class="ws-card-header">
+                            <div class="d-flex align-items-center gap-2 flex-grow-1 min-w-0">
+                                <span class="ws-card-icon"><span class="bi bi-calendar-week"></span></span>
+                                <div class="flex-grow-1 min-w-0">
+                                    <div class="ws-card-title text-truncate" title="@s.Name">@(string.IsNullOrWhiteSpace(s.Name) ? "(Sin nombre)" : s.Name)</div>
+                                    <div class="ws-card-code">@s.Code</div>
+                                </div>
+                            </div>
+                            @if (s.IsActive)
+                            {
+                                <span class="ns-badge-active">Activo</span>
+                            }
+                            else
+                            {
+                                <span class="ns-badge-inactive">Inactivo</span>
+                            }
+                        </div>
+
+                        <div class="ws-card-week">
+                            @foreach (var d in WeekDayList())
+                            {
+                                var on = IsDayActive(s, d.Index);
+                                <div class="ws-mini-day @(on ? "ws-mini-on" : "ws-mini-off")" title="@d.LongLabel">@d.ShortLabel</div>
+                            }
+                        </div>
+
+                        <div class="ws-card-footer">
+                            <div class="ws-card-metric">
+                                <span class="bi bi-clock"></span>
+                                <span>@s.WeeklyHours.ToString("0.#") h/sem</span>
+                            </div>
+                            <div class="ws-card-metric">
+                                <span class="bi bi-calendar2-check"></span>
+                                <span>@totalDays días</span>
+                            </div>
+                            @if (s.IsFlexible)
+                            {
+                                <span class="ws-tag ws-tag-purple"><span class="bi bi-lightning-charge"></span> Flexible</span>
+                            }
+                        </div>
+
+                        <div class="ws-card-actions">
+                            <button class="btn btn-link btn-sm p-0 text-primary"
+                                    @onclick="(e) => { OpenEdit(s); }"
+                                    @onclick:stopPropagation="true">
+                                <span class="bi bi-pencil-square me-1"></span>Editar
+                            </button>
+                            <button class="btn btn-link btn-sm p-0 text-danger"
+                                    @onclick="(e) => DeleteAsync(s)"
+                                    @onclick:stopPropagation="true">
+                                <span class="bi bi-trash me-1"></span>Eliminar
+                            </button>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+    </div>
+}
+
+@* ══════════════════════════════════════════════════════════════════════════ *@
+@*                                  EDITOR                                     *@
+@* ══════════════════════════════════════════════════════════════════════════ *@
+@if (_mode == Mode.Edit && _form is not null)
+{
+    <div class="ns-header">
+        <button class="btn btn-link p-0 text-secondary" @onclick="CancelEdit" title="Volver">
+            <span class="bi bi-arrow-left fs-5"></span>
+        </button>
+        <div class="flex-grow-1">
+            <div class="ns-breadcrumb mb-0">
+                <a href="/human-resources">RRHH</a>
+                <span class="sep">/</span>
+                <a href="javascript:void(0)" @onclick="CancelEdit">Horarios laborales</a>
+                <span class="sep">/</span>
+                <span class="text-dark fw-semibold">@(_isNew ? "Nuevo" : _form.Name)</span>
+            </div>
+            <div class="d-flex align-items-center gap-2 mt-1">
+                <span class="bi bi-calendar-week text-primary fs-5"></span>
+                <span class="fw-bold" style="font-size:15px;">
+                    @(_isNew ? "Nuevo horario laboral" : _form.Name)
+                </span>
+                @if (!_isNew)
+                {
+                    <span class="ns-badge-@(_form.IsActive ? "active" : "inactive")">
+                        @(_form.IsActive ? "Activo" : "Inactivo")
+                    </span>
+                    <small class="text-muted" style="font-size:12px;">@_form.Code</small>
+                }
+            </div>
+        </div>
+        <div class="d-flex gap-2 align-items-center">
+            <button class="btn btn-outline-secondary btn-sm px-3" @onclick="CancelEdit">
+                <span class="bi bi-x-lg me-1"></span>Cancelar
+            </button>
+            <button class="btn btn-primary btn-sm px-4" @onclick="SaveAsync" disabled="@_saving">
+                @if (_saving)
+                {
+                    <span class="spinner-border spinner-border-sm me-1"></span>
+                    <span>Guardando…</span>
+                }
+                else
+                {
+                    <span class="bi bi-check2 me-1"></span>
+                    <span>Guardar</span>
+                }
+            </button>
+        </div>
+    </div>
+
+    <div style="max-width:1280px;margin:0 auto;padding:20px 16px 40px 16px;">
+
+        @if (!string.IsNullOrEmpty(_error))
+        {
+            <div class="alert alert-danger d-flex align-items-center gap-2 mb-3 py-2" style="font-size:13px;">
+                <span class="bi bi-exclamation-triangle-fill"></span>
+                <span class="flex-grow-1">@_error</span>
+                <button type="button" class="btn-close" @onclick="() => _error = string.Empty"></button>
+            </div>
+        }
+        @if (!string.IsNullOrEmpty(_success))
+        {
+            <div class="alert alert-success d-flex align-items-center gap-2 mb-3 py-2" style="font-size:13px;">
+                <span class="bi bi-check-circle-fill"></span>
+                <span class="flex-grow-1">@_success</span>
+                <button type="button" class="btn-close" @onclick="() => _success = string.Empty"></button>
+            </div>
+        }
+
+        @{
+            var liveIssues = LiveWarnings();
+        }
+        @if (liveIssues.Count > 0)
+        {
+            <div class="ws-warn">
+                <div class="ws-warn-head">
+                    <span class="bi bi-exclamation-triangle-fill"></span>
+                    <strong>Hay @liveIssues.Count detalle(s) por revisar antes de guardar</strong>
+                </div>
+                <ul class="ws-warn-list">
+                    @foreach (var msg in liveIssues)
+                    {
+                        <li>@msg</li>
+                    }
+                </ul>
+            </div>
+        }
+
+        @* ══ Resumen automático (sticky top) ══ *@
+        <div class="ws-summary">
+            <div class="ws-summary-item ws-summary-blue">
+                <div class="ws-summary-icon"><span class="bi bi-clock-history"></span></div>
+                <div>
+                    <div class="ws-summary-label">Horas semanales</div>
+                    <div class="ws-summary-value">@CalcWeeklyHours().ToString("0.##") <small>h</small></div>
+                </div>
+            </div>
+            <div class="ws-summary-item ws-summary-green">
+                <div class="ws-summary-icon"><span class="bi bi-calendar2-check"></span></div>
+                <div>
+                    <div class="ws-summary-label">Días laborales</div>
+                    <div class="ws-summary-value">@CalcActiveDays() <small>de 7</small></div>
+                </div>
+            </div>
+            <div class="ws-summary-item ws-summary-slate">
+                <div class="ws-summary-icon"><span class="bi bi-cup-hot"></span></div>
+                <div>
+                    <div class="ws-summary-label">Días con descanso</div>
+                    <div class="ws-summary-value">@CalcLunchDays() <small>días</small></div>
+                </div>
+            </div>
+            <div class="ws-summary-item ws-summary-purple">
+                <div class="ws-summary-icon"><span class="bi bi-sunrise"></span></div>
+                <div>
+                    <div class="ws-summary-label">Entrada prom.</div>
+                    <div class="ws-summary-value">@CalcAvgEntry()</div>
+                </div>
+            </div>
+            <div class="ws-summary-item ws-summary-amber">
+                <div class="ws-summary-icon"><span class="bi bi-sunset"></span></div>
+                <div>
+                    <div class="ws-summary-label">Salida prom.</div>
+                    <div class="ws-summary-value">@CalcAvgExit()</div>
+                </div>
+            </div>
+        </div>
+
+        @* ══ Datos generales ══ *@
+        <div class="ns-section ns-blue">
+            <div class="ns-section-header">
+                <span class="bi bi-info-circle"></span> Datos generales del horario
+            </div>
+            <div class="ns-section-body">
+                <div class="row g-3">
+                    <div class="col-12 col-md-3">
+                        <label class="ns-field-label">Código <span class="text-danger">*</span></label>
+                        <input class="form-control ns-form-input" @bind="_form.Code" placeholder="HOR-001" />
+                    </div>
+                    <div class="col-12 col-md-5">
+                        <label class="ns-field-label">Nombre del horario <span class="text-danger">*</span></label>
+                        <input class="form-control ns-form-input" @bind="_form.Name" placeholder="Lunes a viernes 8 a 5" />
+                    </div>
+                    <div class="col-12 col-md-4">
+                        <label class="ns-field-label">Empresa</label>
+                        @if (_singleCompanyMode)
+                        {
+                            <div class="ws-readonly-pill" title="El tenant tiene una sola empresa activa.">
+                                <span class="bi bi-building"></span>
+                                <span class="ws-readonly-text">@_autoCompanyName</span>
+                                <span class="ws-readonly-tag">Auto</span>
+                            </div>
+                        }
+                        else
+                        {
+                            <select class="form-select ns-form-input" @bind="_form.CompanyId">
+                                <option value="">— Selecciona empresa —</option>
+                                @foreach (var c in _companies)
+                                {
+                                    <option value="@c.Id">@c.Name</option>
+                                }
+                            </select>
+                        }
+                    </div>
+                    <div class="col-12 col-md-6">
+                        <label class="ns-field-label">Turno base (opcional)</label>
+                        <select class="form-select ns-form-input" @bind="_form.WorkShiftId">
+                            <option value="">— Sin turno base —</option>
+                            @foreach (var s in _shifts)
+                            {
+                                <option value="@s.Id">@s.Name</option>
+                            }
+                        </select>
+                        <div class="ws-help"><span class="bi bi-info-circle"></span> Si el horario hereda de un turno, asocialo aquí.</div>
+                    </div>
+                    <div class="col-12 col-md-3">
+                        <label class="ns-field-label">Horario flexible</label>
+                        <div class="form-check form-switch pt-1">
+                            <input class="form-check-input" type="checkbox" id="chkFlex" @bind="_form.IsFlexible" />
+                            <label class="form-check-label" for="chkFlex" style="font-size:13px;">
+                                @(_form.IsFlexible ? "Sí, horario flexible" : "Horario fijo")
+                            </label>
+                        </div>
+                    </div>
+                    <div class="col-12 col-md-3">
+                        <label class="ns-field-label">Estatus</label>
+                        <div class="form-check form-switch pt-1">
+                            <input class="form-check-input" type="checkbox" id="chkActive" @bind="_form.IsActive" />
+                            <label class="form-check-label" for="chkActive" style="font-size:13px;">
+                                @(_form.IsActive ? "Activo" : "Inactivo")
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        @* ══ Vista previa semanal ══ *@
+        <div class="ns-section ns-cyan">
+            <div class="ns-section-header">
+                <span class="bi bi-calendar2-week"></span> Vista previa semanal
+                <span class="ws-help ms-auto" style="font-weight:400;">
+                    <span class="bi bi-hand-index"></span> Haz clic en un día para activarlo / desactivarlo
+                </span>
+            </div>
+            <div class="ns-section-body">
+                <div class="ws-week-grid">
+                    @foreach (var d in WeekDayList())
+                    {
+                        var on = GetDayActive(d.Index);
+                        var entry = GetEntry(d.Index);
+                        var exit = GetExit(d.Index);
+                        var lunch1 = GetLunchStart(d.Index);
+                        var lunch2 = GetLunchEnd(d.Index);
+                        var hours = CalcDayHours(d.Index);
+                        <div class="ws-day-card @(on ? "ws-day-on" : "ws-day-off") @(_dayTab == d.Index ? "ws-day-focused" : "")"
+                             @onclick="() => _dayTab = d.Index">
+                            <div class="ws-day-head">
+                                <div>
+                                    <div class="ws-day-title">@d.LongLabel</div>
+                                    <div class="ws-day-sub">@(on ? "Laboral" : "Descanso")</div>
+                                </div>
+                                <label class="ws-switch" @onclick:stopPropagation="true">
+                                    <input type="checkbox" checked="@on" @onchange="(e) => SetDayActive(d.Index, (bool?)e.Value ?? false)" />
+                                    <span></span>
+                                </label>
+                            </div>
+                            @if (on)
+                            {
+                                <div class="ws-day-times">
+                                    <div class="ws-time-row">
+                                        <span class="ws-tag ws-tag-blue"><span class="bi bi-box-arrow-in-right"></span> Entrada</span>
+                                        <span class="ws-time-val">@FormatTimeOrDash(entry)</span>
+                                    </div>
+                                    <div class="ws-time-row">
+                                        <span class="ws-tag ws-tag-slate"><span class="bi bi-cup-hot"></span> Comida</span>
+                                        <span class="ws-time-val">@FormatTimeRangeOrDash(lunch1, lunch2)</span>
+                                    </div>
+                                    <div class="ws-time-row">
+                                        <span class="ws-tag ws-tag-purple"><span class="bi bi-box-arrow-right"></span> Salida</span>
+                                        <span class="ws-time-val">@FormatTimeOrDash(exit)</span>
+                                    </div>
+                                </div>
+                                <div class="ws-day-foot">
+                                    <span class="ws-tag ws-tag-green"><span class="bi bi-clock"></span> @hours.ToString("0.##") h</span>
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="ws-day-rest">
+                                    <span class="bi bi-moon-stars" style="font-size:24px;color:#94a3b8;"></span>
+                                    <div style="font-size:11px;color:#94a3b8;margin-top:4px;">Día de descanso</div>
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+
+        @* ══ Días trabajados (acciones rápidas) ══ *@
+        <div class="ns-section ns-green">
+            <div class="ns-section-header">
+                <span class="bi bi-calendar2-check"></span> Días trabajados
+            </div>
+            <div class="ns-section-body">
+                <div class="d-flex flex-wrap gap-2 mb-2">
+                    <button class="btn btn-outline-success btn-sm" @onclick="SetWeekdaysOnly">
+                        <span class="bi bi-briefcase me-1"></span> Lunes a viernes
+                    </button>
+                    <button class="btn btn-outline-success btn-sm" @onclick="SetMondayToSaturday">
+                        <span class="bi bi-calendar-week me-1"></span> Lunes a sábado
+                    </button>
+                    <button class="btn btn-outline-success btn-sm" @onclick="SetAllDays">
+                        <span class="bi bi-calendar3 me-1"></span> Todos los días
+                    </button>
+                    <button class="btn btn-outline-secondary btn-sm" @onclick="ClearAllDays">
+                        <span class="bi bi-eraser me-1"></span> Ninguno
+                    </button>
+                    <button class="btn btn-outline-primary btn-sm" @onclick="CopyMondayToWeekdays" disabled="@(!GetDayActive(0))">
+                        <span class="bi bi-clipboard-check me-1"></span> Copiar lunes a L-V
+                    </button>
+                    <button class="btn btn-outline-primary btn-sm" @onclick="CopyMondayToAllActive" disabled="@(!GetDayActive(0))">
+                        <span class="bi bi-stack me-1"></span> Copiar lunes a todos
+                    </button>
+                </div>
+                <div class="ws-help"><span class="bi bi-info-circle"></span> Las acciones rápidas marcan qué días son laborables. Captura los horarios específicos en la siguiente sección.</div>
+            </div>
+        </div>
+
+        @* ══ Captura por día ══ *@
+        <div class="ns-section ns-blue">
+            <div class="ns-section-header">
+                <span class="bi bi-keyboard"></span> Captura del día
+            </div>
+            <div class="ns-section-body">
+                @* Tabs de días *@
+                <ul class="nav ns-tab-nav mb-3">
+                    @foreach (var d in WeekDayList())
+                    {
+                        var on = GetDayActive(d.Index);
+                        <li class="nav-item">
+                            <button class="nav-link @(_dayTab == d.Index ? "active" : "")"
+                                    @onclick="() => _dayTab = d.Index">
+                                <span class="bi @(on ? "bi-check-circle-fill text-success" : "bi-circle text-muted")"></span>
+                                <span>@d.LongLabel</span>
+                            </button>
+                        </li>
+                    }
+                </ul>
+
+                @{
+                    var idx = _dayTab;
+                    var dayOn = GetDayActive(idx);
+                    var dayName = WeekDayList()[idx].LongLabel;
+                }
+
+                @if (!dayOn)
+                {
+                    <div class="ws-day-empty">
+                        <span class="bi bi-moon-stars" style="font-size:36px;color:#94a3b8;"></span>
+                        <div class="mt-2" style="font-size:14px;color:#475569;font-weight:600;">@dayName es día de descanso</div>
+                        <div style="font-size:12px;color:#94a3b8;margin-bottom:10px;">Activa el día para capturar horarios.</div>
+                        <button class="btn btn-success btn-sm px-3" @onclick="() => SetDayActive(idx, true)">
+                            <span class="bi bi-toggle-on me-1"></span> Activar @dayName
+                        </button>
+                    </div>
+                }
+                else
+                {
+                    @* Jornada laboral *@
+                    <div class="ws-subsection ws-sub-blue">
+                        <div class="ws-subsection-title"><span class="bi bi-sunrise"></span> Jornada laboral — @dayName</div>
+                        <div class="row g-3">
+                            <div class="col-6 col-md-3">
+                                <label class="ns-field-label">Hora de entrada</label>
+                                <input type="time" class="form-control ns-form-input"
+                                       value="@GetEntry(idx)"
+                                       @onchange="(e) => SetEntry(idx, e.Value?.ToString())" />
+                            </div>
+                            <div class="col-6 col-md-3">
+                                <label class="ns-field-label">Hora de salida</label>
+                                <input type="time" class="form-control ns-form-input"
+                                       value="@GetExit(idx)"
+                                       @onchange="(e) => SetExit(idx, e.Value?.ToString())" />
+                            </div>
+                            <div class="col-12 col-md-6 d-flex align-items-end">
+                                <div class="ws-jornada-info">
+                                    <span class="bi bi-clock"></span>
+                                    <span><strong>@CalcDayHours(idx).ToString("0.##") h</strong> de trabajo efectivo</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    @* Descansos *@
+                    <div class="ws-subsection ws-sub-slate">
+                        <div class="ws-subsection-title"><span class="bi bi-cup-hot"></span> Descanso / Comida</div>
+                        <div class="row g-3">
+                            <div class="col-6 col-md-3">
+                                <label class="ns-field-label">Sale a comer</label>
+                                <input type="time" class="form-control ns-form-input"
+                                       value="@GetLunchStart(idx)"
+                                       @onchange="(e) => SetLunchStart(idx, e.Value?.ToString())" />
+                            </div>
+                            <div class="col-6 col-md-3">
+                                <label class="ns-field-label">Regresa de comer</label>
+                                <input type="time" class="form-control ns-form-input"
+                                       value="@GetLunchEnd(idx)"
+                                       @onchange="(e) => SetLunchEnd(idx, e.Value?.ToString())" />
+                            </div>
+                            <div class="col-12 col-md-6 d-flex align-items-end">
+                                <div class="ws-jornada-info ws-jornada-slate">
+                                    <span class="bi bi-cup-hot"></span>
+                                    <span>Descanso: <strong>@FormatMinutesOrDash(CalcLunchMinutes(idx))</strong></span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="ws-help mt-2"><span class="bi bi-info-circle"></span> Si no aplica comida deja ambos campos vacíos.</div>
+                    </div>
+
+                    @* Tolerancias *@
+                    <div class="ws-subsection ws-sub-amber">
+                        <div class="ws-subsection-title"><span class="bi bi-shield-exclamation"></span> Tolerancia / Reglas de retardos</div>
+                        <div class="row g-3">
+                            <div class="col-6 col-md-4">
+                                <label class="ns-field-label">Tolerancia (minutos)</label>
+                                <input type="number" min="0" max="120" step="1"
+                                       class="form-control ns-form-input"
+                                       value="@GetTolerance(idx)"
+                                       @onchange="(e) => SetTolerance(idx, e.Value?.ToString())" />
+                            </div>
+                            <div class="col-12 col-md-8 d-flex align-items-end">
+                                <div class="ws-jornada-info ws-jornada-amber">
+                                    <span class="bi bi-info-circle"></span>
+                                    <span>
+                                        Si llega después de
+                                        <strong>@LateThreshold(idx)</strong>
+                                        se considera retardo.
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="d-flex flex-wrap gap-2 mt-2">
+                            <button class="btn btn-outline-warning btn-sm" @onclick="() => SetTolerance(idx, 0)">Sin tolerancia</button>
+                            <button class="btn btn-outline-warning btn-sm" @onclick="() => SetTolerance(idx, 5)">5 min</button>
+                            <button class="btn btn-outline-warning btn-sm" @onclick="() => SetTolerance(idx, 10)">10 min</button>
+                            <button class="btn btn-outline-warning btn-sm" @onclick="() => SetTolerance(idx, 15)">15 min</button>
+                        </div>
+                    </div>
+
+                    @* Horas extra *@
+                    <div class="ws-subsection ws-sub-purple">
+                        <div class="ws-subsection-title"><span class="bi bi-lightning-charge"></span> Horas extra</div>
+                        <div class="row g-3 align-items-center">
+                            <div class="col-12">
+                                <div class="ws-jornada-info ws-jornada-purple">
+                                    <span class="bi bi-info-circle"></span>
+                                    <span>
+                                        Cualquier hora trabajada después de
+                                        <strong>@FormatTimeOrDash(GetExit(idx))</strong>
+                                        se contabiliza como hora extra en la pre-nómina.
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="ws-help mt-2">
+                            <span class="bi bi-info-circle"></span>
+                            Las reglas de hora extra simple/doble/triple se calculan en el cálculo de nómina según el día y el rango (ver catálogo HE1..HE5).
+                        </div>
+                    </div>
+
+                    @* Acciones de copiado *@
+                    <div class="ws-subsection ws-sub-cyan">
+                        <div class="ws-subsection-title"><span class="bi bi-clipboard-check"></span> Acciones</div>
+                        <div class="d-flex flex-wrap gap-2">
+                            <button class="btn btn-outline-primary btn-sm" @onclick="() => CopyDayToAllActive(idx)">
+                                <span class="bi bi-files me-1"></span> Copiar este día a todos los días activos
+                            </button>
+                            <button class="btn btn-outline-secondary btn-sm" @onclick="() => ClearDay(idx)">
+                                <span class="bi bi-eraser me-1"></span> Limpiar horarios de @dayName
+                            </button>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+
+        @* ══ Notas ══ *@
+        <div class="ns-section ns-slate">
+            <div class="ns-section-header">
+                <span class="bi bi-journal-text"></span> Notas internas
+            </div>
+            <div class="ns-section-body">
+                <textarea class="form-control ns-form-input" rows="3"
+                          placeholder="Observaciones internas sobre el horario, excepciones, criterios..."
+                          @bind="_form.Notes"></textarea>
+            </div>
+        </div>
+    </div>
+}
+
+@* ══════════════════════════════════════════════════════════════════════════ *@
+@*                                  ESTILOS                                    *@
+@* ══════════════════════════════════════════════════════════════════════════ *@
+<style>
+    /* KPIs */
+    .ws-kpi { display:flex; align-items:center; gap:12px; padding:14px; border-radius:12px; border:1px solid #e2e8f0; background:#fff; box-shadow:0 1px 3px rgba(0,0,0,.05); }
+    .ws-kpi-icon { width:42px;height:42px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0; }
+    .ws-kpi-label { font-size:11px; color:#64748b; text-transform:uppercase; letter-spacing:.4px; font-weight:600; }
+    .ws-kpi-value { font-size:20px; font-weight:700; color:#0f172a; }
+    .ws-kpi-blue .ws-kpi-icon { background:#dbeafe; color:#1d4ed8; }
+    .ws-kpi-green .ws-kpi-icon { background:#dcfce7; color:#15803d; }
+    .ws-kpi-purple .ws-kpi-icon { background:#ede9fe; color:#6d28d9; }
+    .ws-kpi-amber .ws-kpi-icon { background:#fef3c7; color:#b45309; }
+
+    /* Filtros y búsqueda */
+    .ws-filters { display:flex; flex-wrap:wrap; gap:12px; align-items:center; padding:12px; background:#fff; border:1px solid #e2e8f0; border-radius:12px; margin-bottom:16px; box-shadow:0 1px 3px rgba(0,0,0,.04); }
+    .ws-search { display:flex; align-items:center; gap:8px; flex:1; min-width:240px; background:#f8fafc; padding:6px 12px; border-radius:10px; border:1px solid #e2e8f0; }
+    .ws-search .bi { color:#94a3b8; }
+    .ws-search input { border:none; background:transparent; box-shadow:none !important; padding:4px 0; font-size:13px; }
+    .ws-chip { background:#fff; border:1px solid #e2e8f0; color:#475569; font-size:12px; padding:5px 12px; border-radius:20px; cursor:pointer; transition:all .15s; font-weight:500; }
+    .ws-chip:hover { background:#f1f5f9; color:#1e40af; border-color:#bfdbfe; }
+    .ws-chip-active { background:#1d4ed8; color:#fff; border-color:#1d4ed8; }
+    .ws-chip-active:hover { background:#1e3a8a; color:#fff; }
+
+    /* Grid de horarios */
+    .ws-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(320px, 1fr)); gap:14px; }
+    .ws-card { background:#fff; border:1px solid #e2e8f0; border-radius:14px; box-shadow:0 1px 3px rgba(0,0,0,.06); padding:14px; cursor:pointer; transition:all .15s; display:flex; flex-direction:column; gap:10px; }
+    .ws-card:hover { box-shadow:0 4px 12px rgba(29,78,216,.12); border-color:#bfdbfe; transform:translateY(-1px); }
+    .ws-card-inactive { opacity:.65; }
+    .ws-card-header { display:flex; align-items:center; gap:8px; }
+    .ws-card-icon { width:36px;height:36px;background:#eff6ff;color:#1d4ed8;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0; }
+    .ws-card-title { font-size:14px; font-weight:600; color:#0f172a; }
+    .ws-card-code { font-size:11px; color:#64748b; }
+    .ws-card-week { display:grid; grid-template-columns:repeat(7, 1fr); gap:4px; }
+    .ws-mini-day { display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:600; padding:6px 0; border-radius:6px; }
+    .ws-mini-on { background:#dcfce7; color:#166534; border:1px solid #86efac; }
+    .ws-mini-off { background:#f1f5f9; color:#94a3b8; border:1px solid #e2e8f0; }
+    .ws-card-footer { display:flex; flex-wrap:wrap; gap:8px; align-items:center; border-top:1px solid #f1f5f9; padding-top:10px; }
+    .ws-card-metric { display:flex; align-items:center; gap:4px; font-size:12px; color:#475569; font-weight:500; }
+    .ws-card-metric .bi { color:#1d4ed8; }
+    .ws-card-actions { display:flex; gap:14px; border-top:1px dashed #e2e8f0; padding-top:8px; }
+    .ws-card-actions .btn { font-size:12px; text-decoration:none; }
+
+    /* Empty */
+    .ws-empty { background:#fff; border:1px dashed #cbd5e1; border-radius:14px; padding:48px 16px; text-align:center; }
+
+    /* Resumen */
+    .ws-summary { display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:10px; margin-bottom:16px; }
+    .ws-summary-item { display:flex; align-items:center; gap:10px; padding:12px 14px; border-radius:12px; background:#fff; border:1px solid #e2e8f0; box-shadow:0 1px 3px rgba(0,0,0,.04); }
+    .ws-summary-icon { width:38px;height:38px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0; }
+    .ws-summary-label { font-size:10px; color:#64748b; text-transform:uppercase; letter-spacing:.4px; font-weight:700; }
+    .ws-summary-value { font-size:17px; font-weight:700; color:#0f172a; }
+    .ws-summary-value small { font-size:11px; color:#94a3b8; font-weight:500; }
+    .ws-summary-blue .ws-summary-icon { background:#dbeafe; color:#1d4ed8; }
+    .ws-summary-green .ws-summary-icon { background:#dcfce7; color:#15803d; }
+    .ws-summary-slate .ws-summary-icon { background:#f1f5f9; color:#475569; }
+    .ws-summary-purple .ws-summary-icon { background:#ede9fe; color:#6d28d9; }
+    .ws-summary-amber .ws-summary-icon { background:#fef3c7; color:#b45309; }
+
+    /* Vista previa semanal */
+    .ws-week-grid { display:grid; grid-template-columns:repeat(7, 1fr); gap:8px; }
+    @@media (max-width: 992px) { .ws-week-grid { grid-template-columns:repeat(4, 1fr); } }
+    @@media (max-width: 576px) { .ws-week-grid { grid-template-columns:repeat(2, 1fr); } }
+    .ws-day-card { background:#fff; border:2px solid #e2e8f0; border-radius:12px; padding:10px; cursor:pointer; transition:all .15s; min-height:160px; display:flex; flex-direction:column; gap:6px; }
+    .ws-day-card:hover { box-shadow:0 4px 12px rgba(0,0,0,.08); }
+    .ws-day-on { background:linear-gradient(180deg,#f0fdf4 0%, #fff 60%); border-color:#86efac; }
+    .ws-day-off { background:#f8fafc; border-color:#e2e8f0; opacity:.85; }
+    .ws-day-focused { border-color:#1d4ed8 !important; box-shadow:0 0 0 3px rgba(29,78,216,.15); }
+    .ws-day-head { display:flex; justify-content:space-between; align-items:flex-start; gap:6px; }
+    .ws-day-title { font-size:13px; font-weight:700; color:#0f172a; }
+    .ws-day-sub { font-size:10px; color:#64748b; text-transform:uppercase; letter-spacing:.3px; font-weight:600; }
+    .ws-day-on .ws-day-sub { color:#16a34a; }
+    .ws-day-off .ws-day-sub { color:#94a3b8; }
+    .ws-day-times { display:flex; flex-direction:column; gap:4px; flex-grow:1; }
+    .ws-time-row { display:flex; justify-content:space-between; align-items:center; gap:4px; }
+    .ws-time-val { font-size:11px; font-weight:600; color:#0f172a; font-variant-numeric:tabular-nums; }
+    .ws-day-foot { display:flex; justify-content:flex-end; }
+    .ws-day-rest { flex-grow:1; display:flex; flex-direction:column; align-items:center; justify-content:center; }
+
+    /* Switch */
+    .ws-switch { position:relative; display:inline-block; width:36px; height:20px; cursor:pointer; flex-shrink:0; }
+    .ws-switch input { opacity:0; width:0; height:0; }
+    .ws-switch span { position:absolute; inset:0; background:#cbd5e1; border-radius:20px; transition:.2s; }
+    .ws-switch span::before { content:""; position:absolute; height:14px; width:14px; left:3px; top:3px; background:#fff; border-radius:50%; transition:.2s; box-shadow:0 1px 3px rgba(0,0,0,.2); }
+    .ws-switch input:checked + span { background:#15803d; }
+    .ws-switch input:checked + span::before { transform:translateX(16px); }
+
+    /* Tags */
+    .ws-tag { display:inline-flex; align-items:center; gap:4px; font-size:10px; font-weight:600; padding:2px 8px; border-radius:10px; }
+    .ws-tag-blue { background:#dbeafe; color:#1d4ed8; }
+    .ws-tag-green { background:#dcfce7; color:#15803d; }
+    .ws-tag-slate { background:#f1f5f9; color:#475569; }
+    .ws-tag-purple { background:#ede9fe; color:#6d28d9; }
+
+    /* Subsecciones */
+    .ws-subsection { border-radius:10px; padding:14px; margin-bottom:12px; border:1px solid #e2e8f0; background:#fff; }
+    .ws-subsection-title { font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.4px; margin-bottom:12px; display:flex; align-items:center; gap:6px; }
+    .ws-sub-blue { background:#f8fbff; border-color:#dbeafe; }
+    .ws-sub-blue .ws-subsection-title { color:#1e40af; }
+    .ws-sub-slate { background:#fafbfc; border-color:#e2e8f0; }
+    .ws-sub-slate .ws-subsection-title { color:#334155; }
+    .ws-sub-amber { background:#fffbeb; border-color:#fde68a; }
+    .ws-sub-amber .ws-subsection-title { color:#92400e; }
+    .ws-sub-purple { background:#faf5ff; border-color:#e9d5ff; }
+    .ws-sub-purple .ws-subsection-title { color:#6d28d9; }
+    .ws-sub-cyan { background:#f0f9ff; border-color:#bae6fd; }
+    .ws-sub-cyan .ws-subsection-title { color:#075985; }
+
+    /* Info pills inside subsections */
+    .ws-jornada-info { display:flex; align-items:center; gap:8px; padding:8px 12px; border-radius:8px; background:#eff6ff; color:#1e40af; font-size:13px; }
+    .ws-jornada-slate { background:#f1f5f9; color:#334155; }
+    .ws-jornada-amber { background:#fffbeb; color:#92400e; }
+    .ws-jornada-purple { background:#faf5ff; color:#6d28d9; }
+
+    .ws-help { font-size:11px; color:#64748b; font-weight:500; display:flex; align-items:center; gap:4px; margin-top:6px; }
+    .ws-help .bi { color:#94a3b8; }
+
+    /* Estado vacío de día */
+    .ws-day-empty { text-align:center; padding:32px 16px; background:#f8fafc; border-radius:10px; border:1px dashed #cbd5e1; }
+
+    .min-w-0 { min-width:0; }
+
+    /* Panel de advertencias suaves */
+    .ws-warn { background:#fffbeb; border:1px solid #fde68a; border-left:4px solid #d97706; border-radius:10px; padding:12px 14px; margin-bottom:14px; }
+    .ws-warn-head { display:flex; align-items:center; gap:8px; color:#92400e; font-size:13px; margin-bottom:6px; }
+    .ws-warn-head .bi { font-size:16px; color:#d97706; }
+    .ws-warn-list { margin:0; padding-left:24px; font-size:12px; color:#78350f; }
+    .ws-warn-list li { margin-bottom:2px; }
+
+    /* Empresa readonly (single tenant mode) */
+    .ws-readonly-pill { display:flex; align-items:center; gap:8px; padding:7px 12px; border-radius:8px; background:#f8fafc; border:1px solid #e2e8f0; font-size:13px; color:#0f172a; min-height:38px; }
+    .ws-readonly-pill .bi { color:#1d4ed8; }
+    .ws-readonly-text { font-weight:600; flex-grow:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .ws-readonly-tag { font-size:10px; background:#dbeafe; color:#1d4ed8; border-radius:8px; padding:1px 8px; font-weight:700; letter-spacing:.3px; }
+</style>
+
+@code {
+    private enum Mode { List, Edit }
+    private Mode _mode = Mode.List;
+
+    private List<WorkScheduleDto> _schedules = new();
+    private List<LookupItem> _companies = new();
+    private List<LookupItem> _shifts = new();
+
+    private bool _loading;
+    private bool _saving;
+    private string _error = string.Empty;
+    private string _success = string.Empty;
+
+    private string _search = string.Empty;
+    private string _filter = "all";
+
+    private WorkScheduleForm? _form;
+    private bool _isNew;
+    private int _dayTab;
+
+    // Auto-selección de empresa cuando el tenant tiene una sola
+    private bool _singleCompanyMode;
+    private string? _autoCompanyId;
+    private string _autoCompanyName = string.Empty;
+
+    private HttpClient Client => HttpClientFactory.CreateClient("Nanchesoft.Api");
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadListAsync();
+        await LoadLookupsAsync();
+    }
+
+    private async Task LoadListAsync()
+    {
+        _loading = true;
+        _error = string.Empty;
+        try
+        {
+            var rows = await Client.GetFromJsonAsync<List<WorkScheduleDto>>("/api/hr/work-schedules") ?? new();
+            _schedules = rows.OrderBy(x => x.Code).ToList();
+        }
+        catch (Exception ex)
+        {
+            _error = $"No se pudieron cargar los horarios: {ex.Message}";
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task LoadLookupsAsync()
+    {
+        try
+        {
+            var companies = await Client.GetFromJsonAsync<List<CompanyLookup>>("/api/organization/companies") ?? new();
+            var tenantId = AppState.CurrentTenantId ?? AuthState.TenantId;
+            var filtered = companies.Where(x => x.IsActive);
+            if (tenantId.HasValue)
+                filtered = filtered.Where(x => x.TenantId == tenantId.Value);
+            _companies = filtered.OrderBy(x => x.Name)
+                .Select(x => new LookupItem { Id = x.CompanyId.ToString("D"), Name = x.Name }).ToList();
+
+            // Si el tenant tiene UNA sola empresa activa, auto-seleccionarla.
+            if (_companies.Count == 1)
+            {
+                _singleCompanyMode = true;
+                _autoCompanyId = _companies[0].Id;
+                _autoCompanyName = _companies[0].Name;
+            }
+            else
+            {
+                _singleCompanyMode = false;
+                // Si el contexto ya tiene una empresa seleccionada, úsala como sugerencia inicial.
+                var ctxCompany = (AppState.CurrentCompanyId ?? AuthState.CompanyId)?.ToString("D");
+                if (!string.IsNullOrEmpty(ctxCompany) && _companies.Any(c => string.Equals(c.Id, ctxCompany, StringComparison.OrdinalIgnoreCase)))
+                {
+                    _autoCompanyId = ctxCompany;
+                    _autoCompanyName = _companies.First(c => string.Equals(c.Id, ctxCompany, StringComparison.OrdinalIgnoreCase)).Name;
+                }
+            }
+        }
+        catch { _companies = new(); }
+
+        try
+        {
+            var shifts = await Client.GetFromJsonAsync<List<WorkShiftLookup>>("/api/hr/shifts") ?? new();
+            _shifts = shifts.Where(x => x.IsActive).OrderBy(x => x.Name)
+                .Select(x => new LookupItem { Id = x.WorkShiftId.ToString("D"), Name = string.IsNullOrWhiteSpace(x.Code) ? x.Name : $"{x.Code} · {x.Name}" }).ToList();
+        }
+        catch { _shifts = new(); }
+    }
+
+    private List<WorkScheduleDto> FilteredSchedules()
+    {
+        var q = (_search ?? string.Empty).Trim();
+        IEnumerable<WorkScheduleDto> result = _schedules;
+
+        result = _filter switch
+        {
+            "active" => result.Where(x => x.IsActive),
+            "inactive" => result.Where(x => !x.IsActive),
+            "flexible" => result.Where(x => x.IsFlexible),
+            _ => result
+        };
+
+        if (!string.IsNullOrEmpty(q))
+        {
+            result = result.Where(x =>
+                (x.Code ?? "").Contains(q, StringComparison.OrdinalIgnoreCase) ||
+                (x.Name ?? "").Contains(q, StringComparison.OrdinalIgnoreCase) ||
+                (x.Notes ?? "").Contains(q, StringComparison.OrdinalIgnoreCase));
+        }
+
+        return result.ToList();
+    }
+
+    private void OpenNew()
+    {
+        _isNew = true;
+        _form = new WorkScheduleForm
+        {
+            IsActive = true,
+            CompanyId = _autoCompanyId,
+            Monday = true, Tuesday = true, Wednesday = true, Thursday = true, Friday = true,
+            MonEntryTime = "08:00", MonExitTime = "17:00", MonLunchStartTime = "13:00", MonLunchEndTime = "14:00", MonToleranceMinutes = 10,
+            TueEntryTime = "08:00", TueExitTime = "17:00", TueLunchStartTime = "13:00", TueLunchEndTime = "14:00", TueToleranceMinutes = 10,
+            WedEntryTime = "08:00", WedExitTime = "17:00", WedLunchStartTime = "13:00", WedLunchEndTime = "14:00", WedToleranceMinutes = 10,
+            ThuEntryTime = "08:00", ThuExitTime = "17:00", ThuLunchStartTime = "13:00", ThuLunchEndTime = "14:00", ThuToleranceMinutes = 10,
+            FriEntryTime = "08:00", FriExitTime = "17:00", FriLunchStartTime = "13:00", FriLunchEndTime = "14:00", FriToleranceMinutes = 10,
+        };
+        _dayTab = 0;
+        _mode = Mode.Edit;
+        _error = string.Empty;
+        _success = string.Empty;
+    }
+
+    private void OpenEdit(WorkScheduleDto s)
+    {
+        _isNew = false;
+        _form = WorkScheduleForm.FromDto(s);
+        // Si el horario no tiene empresa pero el tenant tiene una única, asígnala automáticamente.
+        if (string.IsNullOrWhiteSpace(_form.CompanyId) && !string.IsNullOrEmpty(_autoCompanyId))
+            _form.CompanyId = _autoCompanyId;
+        _dayTab = 0;
+        _mode = Mode.Edit;
+        _error = string.Empty;
+        _success = string.Empty;
+    }
+
+    private void CancelEdit()
+    {
+        _mode = Mode.List;
+        _form = null;
+        _error = string.Empty;
+        _success = string.Empty;
+    }
+
+    private async Task SaveAsync()
+    {
+        if (_form is null) return;
+
+        // Validaciones de campos básicos
+        if (string.IsNullOrWhiteSpace(_form.Code))
+        {
+            _error = "El código del horario es obligatorio.";
+            return;
+        }
+        if (string.IsNullOrWhiteSpace(_form.Name))
+        {
+            _error = "El nombre del horario es obligatorio.";
+            return;
+        }
+
+        // Si el tenant tiene una sola empresa, garantizar que viaje en el payload.
+        if (string.IsNullOrWhiteSpace(_form.CompanyId) && !string.IsNullOrEmpty(_autoCompanyId))
+            _form.CompanyId = _autoCompanyId;
+
+        // Validaciones de jornada
+        var issues = ValidateSchedule();
+        if (issues.Count > 0)
+        {
+            _error = "Revisa la captura del horario:\n• " + string.Join("\n• ", issues);
+            return;
+        }
+
+        _saving = true;
+        _error = string.Empty;
+        try
+        {
+            _form.WeeklyHours = (decimal)Math.Round(CalcWeeklyHours(), 2);
+            var payload = _form.ToRequest();
+            HttpResponseMessage response;
+            if (_isNew)
+                response = await Client.PostAsJsonAsync("/api/hr/work-schedules", payload);
+            else
+                response = await Client.PutAsJsonAsync($"/api/hr/work-schedules/{_form.WorkScheduleId:D}", payload);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                var msg = await response.Content.ReadAsStringAsync();
+                _error = $"Error al guardar: {msg}";
+                return;
+            }
+
+            _success = _isNew ? "Horario creado correctamente." : "Horario actualizado correctamente.";
+            await LoadListAsync();
+            _mode = Mode.List;
+            _form = null;
+        }
+        catch (Exception ex)
+        {
+            _error = $"Error al guardar: {ex.Message}";
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private async Task DeleteAsync(WorkScheduleDto s)
+    {
+        var confirmed = await JS.InvokeAsync<bool>("confirm", $"¿Eliminar el horario '{s.Name}'?");
+        if (!confirmed) return;
+
+        try
+        {
+            var response = await Client.DeleteAsync($"/api/hr/work-schedules/{s.WorkScheduleId:D}");
+            if (!response.IsSuccessStatusCode)
+            {
+                var msg = await response.Content.ReadAsStringAsync();
+                _error = $"No se pudo eliminar: {msg}";
+                return;
+            }
+            await LoadListAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = $"Error al eliminar: {ex.Message}";
+        }
+    }
+
+    // ─── Helpers para días ───────────────────────────────────────────────────
+    private static readonly (int Index, string ShortLabel, string LongLabel)[] _weekdays = new[]
+    {
+        (0, "L",  "Lunes"),
+        (1, "M",  "Martes"),
+        (2, "Mi", "Miércoles"),
+        (3, "J",  "Jueves"),
+        (4, "V",  "Viernes"),
+        (5, "S",  "Sábado"),
+        (6, "D",  "Domingo")
+    };
+
+    private static List<(int Index, string ShortLabel, string LongLabel)> WeekDayList() => _weekdays.ToList();
+
+    private static int ActiveDayCount(WorkScheduleDto s)
+        => (s.Monday ? 1 : 0) + (s.Tuesday ? 1 : 0) + (s.Wednesday ? 1 : 0)
+         + (s.Thursday ? 1 : 0) + (s.Friday ? 1 : 0) + (s.Saturday ? 1 : 0) + (s.Sunday ? 1 : 0);
+
+    private static bool IsDayActive(WorkScheduleDto s, int idx) => idx switch
+    {
+        0 => s.Monday, 1 => s.Tuesday, 2 => s.Wednesday, 3 => s.Thursday,
+        4 => s.Friday, 5 => s.Saturday, 6 => s.Sunday, _ => false
+    };
+
+    private bool GetDayActive(int idx)
+    {
+        if (_form is null) return false;
+        return idx switch
+        {
+            0 => _form.Monday, 1 => _form.Tuesday, 2 => _form.Wednesday, 3 => _form.Thursday,
+            4 => _form.Friday, 5 => _form.Saturday, 6 => _form.Sunday, _ => false
+        };
+    }
+
+    private void SetDayActive(int idx, bool value)
+    {
+        if (_form is null) return;
+        switch (idx)
+        {
+            case 0: _form.Monday = value; break;
+            case 1: _form.Tuesday = value; break;
+            case 2: _form.Wednesday = value; break;
+            case 3: _form.Thursday = value; break;
+            case 4: _form.Friday = value; break;
+            case 5: _form.Saturday = value; break;
+            case 6: _form.Sunday = value; break;
+        }
+    }
+
+    private string GetEntry(int idx) => _form is null ? "" : idx switch
+    {
+        0 => _form.MonEntryTime, 1 => _form.TueEntryTime, 2 => _form.WedEntryTime, 3 => _form.ThuEntryTime,
+        4 => _form.FriEntryTime, 5 => _form.SatEntryTime, 6 => _form.SunEntryTime, _ => ""
+    };
+
+    private void SetEntry(int idx, string? v)
+    {
+        if (_form is null) return;
+        v = NormalizeHHmm(v ?? "");
+        switch (idx)
+        {
+            case 0: _form.MonEntryTime = v; break;
+            case 1: _form.TueEntryTime = v; break;
+            case 2: _form.WedEntryTime = v; break;
+            case 3: _form.ThuEntryTime = v; break;
+            case 4: _form.FriEntryTime = v; break;
+            case 5: _form.SatEntryTime = v; break;
+            case 6: _form.SunEntryTime = v; break;
+        }
+    }
+
+    private string GetExit(int idx) => _form is null ? "" : idx switch
+    {
+        0 => _form.MonExitTime, 1 => _form.TueExitTime, 2 => _form.WedExitTime, 3 => _form.ThuExitTime,
+        4 => _form.FriExitTime, 5 => _form.SatExitTime, 6 => _form.SunExitTime, _ => ""
+    };
+
+    private void SetExit(int idx, string? v)
+    {
+        if (_form is null) return;
+        v = NormalizeHHmm(v ?? "");
+        switch (idx)
+        {
+            case 0: _form.MonExitTime = v; break;
+            case 1: _form.TueExitTime = v; break;
+            case 2: _form.WedExitTime = v; break;
+            case 3: _form.ThuExitTime = v; break;
+            case 4: _form.FriExitTime = v; break;
+            case 5: _form.SatExitTime = v; break;
+            case 6: _form.SunExitTime = v; break;
+        }
+    }
+
+    private string GetLunchStart(int idx) => _form is null ? "" : idx switch
+    {
+        0 => _form.MonLunchStartTime, 1 => _form.TueLunchStartTime, 2 => _form.WedLunchStartTime,
+        3 => _form.ThuLunchStartTime, 4 => _form.FriLunchStartTime, 5 => _form.SatLunchStartTime,
+        6 => _form.SunLunchStartTime, _ => ""
+    };
+
+    private void SetLunchStart(int idx, string? v)
+    {
+        if (_form is null) return;
+        v = NormalizeHHmm(v ?? "");
+        switch (idx)
+        {
+            case 0: _form.MonLunchStartTime = v; break;
+            case 1: _form.TueLunchStartTime = v; break;
+            case 2: _form.WedLunchStartTime = v; break;
+            case 3: _form.ThuLunchStartTime = v; break;
+            case 4: _form.FriLunchStartTime = v; break;
+            case 5: _form.SatLunchStartTime = v; break;
+            case 6: _form.SunLunchStartTime = v; break;
+        }
+    }
+
+    private string GetLunchEnd(int idx) => _form is null ? "" : idx switch
+    {
+        0 => _form.MonLunchEndTime, 1 => _form.TueLunchEndTime, 2 => _form.WedLunchEndTime,
+        3 => _form.ThuLunchEndTime, 4 => _form.FriLunchEndTime, 5 => _form.SatLunchEndTime,
+        6 => _form.SunLunchEndTime, _ => ""
+    };
+
+    private void SetLunchEnd(int idx, string? v)
+    {
+        if (_form is null) return;
+        v = NormalizeHHmm(v ?? "");
+        switch (idx)
+        {
+            case 0: _form.MonLunchEndTime = v; break;
+            case 1: _form.TueLunchEndTime = v; break;
+            case 2: _form.WedLunchEndTime = v; break;
+            case 3: _form.ThuLunchEndTime = v; break;
+            case 4: _form.FriLunchEndTime = v; break;
+            case 5: _form.SatLunchEndTime = v; break;
+            case 6: _form.SunLunchEndTime = v; break;
+        }
+    }
+
+    private int GetTolerance(int idx) => _form is null ? 0 : idx switch
+    {
+        0 => _form.MonToleranceMinutes, 1 => _form.TueToleranceMinutes, 2 => _form.WedToleranceMinutes,
+        3 => _form.ThuToleranceMinutes, 4 => _form.FriToleranceMinutes, 5 => _form.SatToleranceMinutes,
+        6 => _form.SunToleranceMinutes, _ => 0
+    };
+
+    private void SetTolerance(int idx, string? raw)
+    {
+        if (_form is null) return;
+        if (!int.TryParse(raw, out var v)) v = 0;
+        v = Math.Clamp(v, 0, 120);
+        SetTolerance(idx, v);
+    }
+
+    private void SetTolerance(int idx, int v)
+    {
+        if (_form is null) return;
+        switch (idx)
+        {
+            case 0: _form.MonToleranceMinutes = v; break;
+            case 1: _form.TueToleranceMinutes = v; break;
+            case 2: _form.WedToleranceMinutes = v; break;
+            case 3: _form.ThuToleranceMinutes = v; break;
+            case 4: _form.FriToleranceMinutes = v; break;
+            case 5: _form.SatToleranceMinutes = v; break;
+            case 6: _form.SunToleranceMinutes = v; break;
+        }
+    }
+
+    // ─── Acciones rápidas ───────────────────────────────────────────────────
+    private void SetWeekdaysOnly()
+    {
+        if (_form is null) return;
+        _form.Monday = _form.Tuesday = _form.Wednesday = _form.Thursday = _form.Friday = true;
+        _form.Saturday = _form.Sunday = false;
+    }
+
+    private void SetMondayToSaturday()
+    {
+        if (_form is null) return;
+        _form.Monday = _form.Tuesday = _form.Wednesday = _form.Thursday = _form.Friday = _form.Saturday = true;
+        _form.Sunday = false;
+    }
+
+    private void SetAllDays()
+    {
+        if (_form is null) return;
+        _form.Monday = _form.Tuesday = _form.Wednesday = _form.Thursday = _form.Friday = _form.Saturday = _form.Sunday = true;
+    }
+
+    private void ClearAllDays()
+    {
+        if (_form is null) return;
+        _form.Monday = _form.Tuesday = _form.Wednesday = _form.Thursday = _form.Friday = _form.Saturday = _form.Sunday = false;
+    }
+
+    private void CopyMondayToWeekdays()
+    {
+        if (_form is null) return;
+        for (int i = 1; i <= 4; i++) CopyDay(0, i);
+    }
+
+    private void CopyMondayToAllActive()
+    {
+        if (_form is null) return;
+        for (int i = 1; i <= 6; i++)
+        {
+            if (GetDayActive(i)) CopyDay(0, i);
+        }
+    }
+
+    private void CopyDayToAllActive(int srcIdx)
+    {
+        if (_form is null) return;
+        for (int i = 0; i <= 6; i++)
+        {
+            if (i == srcIdx) continue;
+            if (GetDayActive(i)) CopyDay(srcIdx, i);
+        }
+    }
+
+    private void CopyDay(int src, int dst)
+    {
+        SetEntry(dst, GetEntry(src));
+        SetExit(dst, GetExit(src));
+        SetLunchStart(dst, GetLunchStart(src));
+        SetLunchEnd(dst, GetLunchEnd(src));
+        SetTolerance(dst, GetTolerance(src));
+    }
+
+    private void ClearDay(int idx)
+    {
+        SetEntry(idx, "");
+        SetExit(idx, "");
+        SetLunchStart(idx, "");
+        SetLunchEnd(idx, "");
+        SetTolerance(idx, 0);
+    }
+
+    // ─── Cálculos ───────────────────────────────────────────────────────────
+    private static TimeSpan? ParseTime(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return null;
+        var trimmed = value.Trim();
+
+        // Limpiar AM/PM si vienen pegados (poco común pero defensivo)
+        var upper = trimmed.ToUpperInvariant();
+        bool isPm = false, isAm = false;
+        if (upper.EndsWith("PM") || upper.EndsWith("P.M."))
+        {
+            isPm = true;
+            trimmed = upper.Replace("P.M.", "").Replace("PM", "").Trim();
+        }
+        else if (upper.EndsWith("AM") || upper.EndsWith("A.M."))
+        {
+            isAm = true;
+            trimmed = upper.Replace("A.M.", "").Replace("AM", "").Trim();
+        }
+
+        if (TimeSpan.TryParseExact(trimmed,
+                new[] { @"hh\:mm", @"hh\:mm\:ss", @"h\:mm", @"h\:mm\:ss" },
+                CultureInfo.InvariantCulture, out var ts))
+        {
+            if (isPm && ts.Hours < 12) ts = ts.Add(TimeSpan.FromHours(12));
+            else if (isAm && ts.Hours == 12) ts = ts.Subtract(TimeSpan.FromHours(12));
+            return ts;
+        }
+        if (TimeSpan.TryParse(trimmed, CultureInfo.InvariantCulture, out var ts2))
+        {
+            if (isPm && ts2.Hours < 12) ts2 = ts2.Add(TimeSpan.FromHours(12));
+            else if (isAm && ts2.Hours == 12) ts2 = ts2.Subtract(TimeSpan.FromHours(12));
+            return ts2;
+        }
+        return null;
+    }
+
+    // Normaliza cualquier formato de hora a "HH:mm" para inputs type=time.
+    // Si no es parseable, retorna el original (no destruye datos no estándar).
+    private static string NormalizeHHmm(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return string.Empty;
+        var ts = ParseTime(value);
+        if (ts is null) return value.Trim();
+        return $"{(int)ts.Value.TotalHours:D2}:{ts.Value.Minutes:D2}";
+    }
+
+    private double CalcDayHours(int idx)
+    {
+        if (!GetDayActive(idx)) return 0;
+        var entry = ParseTime(GetEntry(idx));
+        var exit = ParseTime(GetExit(idx));
+        if (entry is null || exit is null) return 0;
+        var diff = exit.Value - entry.Value;
+        if (diff.TotalMinutes <= 0) return 0;
+        var lunch = CalcLunchMinutes(idx);
+        var net = diff.TotalMinutes - lunch;
+        return net > 0 ? Math.Round(net / 60.0, 2) : 0;
+    }
+
+    private double CalcLunchMinutes(int idx)
+    {
+        var s = ParseTime(GetLunchStart(idx));
+        var e = ParseTime(GetLunchEnd(idx));
+        if (s is null || e is null) return 0;
+        var diff = (e.Value - s.Value).TotalMinutes;
+        return diff > 0 ? diff : 0;
+    }
+
+    private double CalcWeeklyHours()
+    {
+        double total = 0;
+        for (int i = 0; i <= 6; i++) total += CalcDayHours(i);
+        return Math.Round(total, 2);
+    }
+
+    private int CalcActiveDays()
+    {
+        int n = 0;
+        for (int i = 0; i <= 6; i++) if (GetDayActive(i)) n++;
+        return n;
+    }
+
+    private int CalcLunchDays()
+    {
+        int n = 0;
+        for (int i = 0; i <= 6; i++)
+        {
+            if (!GetDayActive(i)) continue;
+            if (CalcLunchMinutes(i) > 0) n++;
+        }
+        return n;
+    }
+
+    private string CalcAvgEntry()
+    {
+        var values = new List<TimeSpan>();
+        for (int i = 0; i <= 6; i++)
+        {
+            if (!GetDayActive(i)) continue;
+            var t = ParseTime(GetEntry(i));
+            if (t is not null) values.Add(t.Value);
+        }
+        if (values.Count == 0) return "—";
+        var avg = TimeSpan.FromMinutes(values.Average(x => x.TotalMinutes));
+        return $"{(int)avg.TotalHours:D2}:{avg.Minutes:D2}";
+    }
+
+    private string CalcAvgExit()
+    {
+        var values = new List<TimeSpan>();
+        for (int i = 0; i <= 6; i++)
+        {
+            if (!GetDayActive(i)) continue;
+            var t = ParseTime(GetExit(i));
+            if (t is not null) values.Add(t.Value);
+        }
+        if (values.Count == 0) return "—";
+        var avg = TimeSpan.FromMinutes(values.Average(x => x.TotalMinutes));
+        return $"{(int)avg.TotalHours:D2}:{avg.Minutes:D2}";
+    }
+
+    private List<string> ValidateSchedule()
+    {
+        var issues = new List<string>();
+        if (_form is null) return issues;
+
+        // 1) Debe haber al menos un día activo
+        if (CalcActiveDays() == 0)
+        {
+            issues.Add("Debes activar al menos un día laboral.");
+            return issues;
+        }
+
+        for (int i = 0; i <= 6; i++)
+        {
+            if (!GetDayActive(i)) continue;
+            var dayName = _weekdays[i].LongLabel;
+
+            var entry = ParseTime(GetEntry(i));
+            var exit = ParseTime(GetExit(i));
+
+            if (entry is null || exit is null)
+            {
+                issues.Add($"{dayName}: captura entrada y salida.");
+                continue;
+            }
+
+            if (exit.Value <= entry.Value)
+            {
+                issues.Add($"{dayName}: la hora de salida debe ser mayor a la de entrada.");
+                continue;
+            }
+
+            var turnMinutes = (exit.Value - entry.Value).TotalMinutes;
+
+            var lunchStart = ParseTime(GetLunchStart(i));
+            var lunchEnd = ParseTime(GetLunchEnd(i));
+
+            if (lunchStart is not null && lunchEnd is null)
+            {
+                issues.Add($"{dayName}: capturaste salida a comer pero falta el regreso.");
+                continue;
+            }
+            if (lunchStart is null && lunchEnd is not null)
+            {
+                issues.Add($"{dayName}: capturaste regreso de comer pero falta la salida.");
+                continue;
+            }
+            if (lunchStart is not null && lunchEnd is not null)
+            {
+                if (lunchEnd.Value <= lunchStart.Value)
+                {
+                    issues.Add($"{dayName}: el regreso de comer debe ser después de la salida a comer.");
+                    continue;
+                }
+                if (lunchStart.Value < entry.Value || lunchEnd.Value > exit.Value)
+                {
+                    issues.Add($"{dayName}: el horario de comida debe estar dentro de la jornada.");
+                    continue;
+                }
+                var lunchMinutes = (lunchEnd.Value - lunchStart.Value).TotalMinutes;
+                if (lunchMinutes >= turnMinutes)
+                {
+                    issues.Add($"{dayName}: el descanso de comida no puede ser mayor o igual a la jornada.");
+                    continue;
+                }
+                if (turnMinutes - lunchMinutes <= 0)
+                {
+                    issues.Add($"{dayName}: las horas efectivas no pueden ser negativas o cero.");
+                    continue;
+                }
+            }
+
+            var tolerance = GetTolerance(i);
+            if (tolerance < 0 || tolerance > 120)
+            {
+                issues.Add($"{dayName}: la tolerancia debe estar entre 0 y 120 minutos.");
+            }
+        }
+
+        return issues;
+    }
+
+    private List<string> LiveWarnings()
+    {
+        // Versión "no bloqueante" para mostrar en el editor mientras captura.
+        return ValidateSchedule();
+    }
+
+    private string LateThreshold(int idx)
+    {
+        var entry = ParseTime(GetEntry(idx));
+        if (entry is null) return "—";
+        var t = entry.Value + TimeSpan.FromMinutes(GetTolerance(idx));
+        return $"{(int)t.TotalHours:D2}:{t.Minutes:D2}";
+    }
+
+    private static string FormatTimeOrDash(string? value)
+    {
+        var t = ParseTime(value);
+        if (t is null) return "—";
+        return $"{(int)t.Value.TotalHours:D2}:{t.Value.Minutes:D2}";
+    }
+
+    private static string FormatTimeRangeOrDash(string? a, string? b)
+    {
+        var ta = FormatTimeOrDash(a);
+        var tb = FormatTimeOrDash(b);
+        if (ta == "—" && tb == "—") return "—";
+        return $"{ta} — {tb}";
+    }
+
+    private static string FormatMinutesOrDash(double minutes)
+    {
+        if (minutes <= 0) return "—";
+        if (minutes >= 60)
+        {
+            var h = (int)(minutes / 60);
+            var m = (int)(minutes % 60);
+            return m == 0 ? $"{h} h" : $"{h} h {m} min";
+        }
+        return $"{(int)minutes} min";
+    }
+
+    // ─── DTOs ──────────────────────────────────────────────────────────────
+    public sealed class LookupItem
+    {
+        public string Id { get; set; } = string.Empty;
+        public string Name { get; set; } = string.Empty;
+    }
+
+    public sealed class CompanyLookup
+    {
+        public Guid CompanyId { get; set; }
+        public Guid TenantId { get; set; }
+        public string Name { get; set; } = string.Empty;
+        public bool IsActive { get; set; }
+    }
+
+    public sealed class WorkShiftLookup
+    {
+        public Guid WorkShiftId { get; set; }
+        public string Code { get; set; } = string.Empty;
+        public string Name { get; set; } = string.Empty;
+        public bool IsActive { get; set; }
+    }
+
+    public sealed class WorkScheduleDto
+    {
+        public Guid WorkScheduleId { get; set; }
+        public Guid? CompanyId { get; set; }
+        public Guid? WorkShiftId { get; set; }
+        public string Code { get; set; } = string.Empty;
+        public string Name { get; set; } = string.Empty;
+        public bool Monday { get; set; }
+        public bool Tuesday { get; set; }
+        public bool Wednesday { get; set; }
+        public bool Thursday { get; set; }
+        public bool Friday { get; set; }
+        public bool Saturday { get; set; }
+        public bool Sunday { get; set; }
+        public string MonEntryTime { get; set; } = string.Empty;
+        public int MonToleranceMinutes { get; set; }
+        public string MonLunchStartTime { get; set; } = string.Empty;
+        public string MonLunchEndTime { get; set; } = string.Empty;
+        public string MonExitTime { get; set; } = string.Empty;
+        public string TueEntryTime { get; set; } = string.Empty;
+        public int TueToleranceMinutes { get; set; }
+        public string TueLunchStartTime { get; set; } = string.Empty;
+        public string TueLunchEndTime { get; set; } = string.Empty;
+        public string TueExitTime { get; set; } = string.Empty;
+        public string WedEntryTime { get; set; } = string.Empty;
+        public int WedToleranceMinutes { get; set; }
+        public string WedLunchStartTime { get; set; } = string.Empty;
+        public string WedLunchEndTime { get; set; } = string.Empty;
+        public string WedExitTime { get; set; } = string.Empty;
+        public string ThuEntryTime { get; set; } = string.Empty;
+        public int ThuToleranceMinutes { get; set; }
+        public string ThuLunchStartTime { get; set; } = string.Empty;
+        public string ThuLunchEndTime { get; set; } = string.Empty;
+        public string ThuExitTime { get; set; } = string.Empty;
+        public string FriEntryTime { get; set; } = string.Empty;
+        public int FriToleranceMinutes { get; set; }
+        public string FriLunchStartTime { get; set; } = string.Empty;
+        public string FriLunchEndTime { get; set; } = string.Empty;
+        public string FriExitTime { get; set; } = string.Empty;
+        public string SatEntryTime { get; set; } = string.Empty;
+        public int SatToleranceMinutes { get; set; }
+        public string SatLunchStartTime { get; set; } = string.Empty;
+        public string SatLunchEndTime { get; set; } = string.Empty;
+        public string SatExitTime { get; set; } = string.Empty;
+        public string SunEntryTime { get; set; } = string.Empty;
+        public int SunToleranceMinutes { get; set; }
+        public string SunLunchStartTime { get; set; } = string.Empty;
+        public string SunLunchEndTime { get; set; } = string.Empty;
+        public string SunExitTime { get; set; } = string.Empty;
+        public decimal WeeklyHours { get; set; }
+        public bool IsFlexible { get; set; }
+        public string Notes { get; set; } = string.Empty;
+        public bool IsActive { get; set; }
+    }
+
+    public sealed class WorkScheduleForm
+    {
+        public Guid WorkScheduleId { get; set; }
+        public string? CompanyId { get; set; }
+        public string? WorkShiftId { get; set; }
+        public string Code { get; set; } = string.Empty;
+        public string Name { get; set; } = string.Empty;
+        public bool Monday { get; set; }
+        public bool Tuesday { get; set; }
+        public bool Wednesday { get; set; }
+        public bool Thursday { get; set; }
+        public bool Friday { get; set; }
+        public bool Saturday { get; set; }
+        public bool Sunday { get; set; }
+        public string MonEntryTime { get; set; } = string.Empty;
+        public int MonToleranceMinutes { get; set; }
+        public string MonLunchStartTime { get; set; } = string.Empty;
+        public string MonLunchEndTime { get; set; } = string.Empty;
+        public string MonExitTime { get; set; } = string.Empty;
+        public string TueEntryTime { get; set; } = string.Empty;
+        public int TueToleranceMinutes { get; set; }
+        public string TueLunchStartTime { get; set; } = string.Empty;
+        public string TueLunchEndTime { get; set; } = string.Empty;
+        public string TueExitTime { get; set; } = string.Empty;
+        public string WedEntryTime { get; set; } = string.Empty;
+        public int WedToleranceMinutes { get; set; }
+        public string WedLunchStartTime { get; set; } = string.Empty;
+        public string WedLunchEndTime { get; set; } = string.Empty;
+        public string WedExitTime { get; set; } = string.Empty;
+        public string ThuEntryTime { get; set; } = string.Empty;
+        public int ThuToleranceMinutes { get; set; }
+        public string ThuLunchStartTime { get; set; } = string.Empty;
+        public string ThuLunchEndTime { get; set; } = string.Empty;
+        public string ThuExitTime { get; set; } = string.Empty;
+        public string FriEntryTime { get; set; } = string.Empty;
+        public int FriToleranceMinutes { get; set; }
+        public string FriLunchStartTime { get; set; } = string.Empty;
+        public string FriLunchEndTime { get; set; } = string.Empty;
+        public string FriExitTime { get; set; } = string.Empty;
+        public string SatEntryTime { get; set; } = string.Empty;
+        public int SatToleranceMinutes { get; set; }
+        public string SatLunchStartTime { get; set; } = string.Empty;
+        public string SatLunchEndTime { get; set; } = string.Empty;
+        public string SatExitTime { get; set; } = string.Empty;
+        public string SunEntryTime { get; set; } = string.Empty;
+        public int SunToleranceMinutes { get; set; }
+        public string SunLunchStartTime { get; set; } = string.Empty;
+        public string SunLunchEndTime { get; set; } = string.Empty;
+        public string SunExitTime { get; set; } = string.Empty;
+        public decimal WeeklyHours { get; set; }
+        public bool IsFlexible { get; set; }
+        public string Notes { get; set; } = string.Empty;
+        public bool IsActive { get; set; }
+
+        public static WorkScheduleForm FromDto(WorkScheduleDto x) => new()
+        {
+            WorkScheduleId = x.WorkScheduleId,
+            CompanyId = x.CompanyId?.ToString("D"),
+            WorkShiftId = x.WorkShiftId?.ToString("D"),
+            Code = x.Code,
+            Name = x.Name,
+            Monday = x.Monday, Tuesday = x.Tuesday, Wednesday = x.Wednesday, Thursday = x.Thursday,
+            Friday = x.Friday, Saturday = x.Saturday, Sunday = x.Sunday,
+            MonEntryTime = NormalizeHHmm(x.MonEntryTime), MonToleranceMinutes = x.MonToleranceMinutes,
+            MonLunchStartTime = NormalizeHHmm(x.MonLunchStartTime), MonLunchEndTime = NormalizeHHmm(x.MonLunchEndTime), MonExitTime = NormalizeHHmm(x.MonExitTime),
+            TueEntryTime = NormalizeHHmm(x.TueEntryTime), TueToleranceMinutes = x.TueToleranceMinutes,
+            TueLunchStartTime = NormalizeHHmm(x.TueLunchStartTime), TueLunchEndTime = NormalizeHHmm(x.TueLunchEndTime), TueExitTime = NormalizeHHmm(x.TueExitTime),
+            WedEntryTime = NormalizeHHmm(x.WedEntryTime), WedToleranceMinutes = x.WedToleranceMinutes,
+            WedLunchStartTime = NormalizeHHmm(x.WedLunchStartTime), WedLunchEndTime = NormalizeHHmm(x.WedLunchEndTime), WedExitTime = NormalizeHHmm(x.WedExitTime),
+            ThuEntryTime = NormalizeHHmm(x.ThuEntryTime), ThuToleranceMinutes = x.ThuToleranceMinutes,
+            ThuLunchStartTime = NormalizeHHmm(x.ThuLunchStartTime), ThuLunchEndTime = NormalizeHHmm(x.ThuLunchEndTime), ThuExitTime = NormalizeHHmm(x.ThuExitTime),
+            FriEntryTime = NormalizeHHmm(x.FriEntryTime), FriToleranceMinutes = x.FriToleranceMinutes,
+            FriLunchStartTime = NormalizeHHmm(x.FriLunchStartTime), FriLunchEndTime = NormalizeHHmm(x.FriLunchEndTime), FriExitTime = NormalizeHHmm(x.FriExitTime),
+            SatEntryTime = NormalizeHHmm(x.SatEntryTime), SatToleranceMinutes = x.SatToleranceMinutes,
+            SatLunchStartTime = NormalizeHHmm(x.SatLunchStartTime), SatLunchEndTime = NormalizeHHmm(x.SatLunchEndTime), SatExitTime = NormalizeHHmm(x.SatExitTime),
+            SunEntryTime = NormalizeHHmm(x.SunEntryTime), SunToleranceMinutes = x.SunToleranceMinutes,
+            SunLunchStartTime = NormalizeHHmm(x.SunLunchStartTime), SunLunchEndTime = NormalizeHHmm(x.SunLunchEndTime), SunExitTime = NormalizeHHmm(x.SunExitTime),
+            WeeklyHours = x.WeeklyHours,
+            IsFlexible = x.IsFlexible,
+            Notes = x.Notes,
+            IsActive = x.IsActive
+        };
+
+        public object ToRequest() => new
+        {
+            CompanyId = string.IsNullOrWhiteSpace(CompanyId) ? (Guid?)null : Guid.Parse(CompanyId),
+            WorkShiftId = string.IsNullOrWhiteSpace(WorkShiftId) ? (Guid?)null : Guid.Parse(WorkShiftId),
+            Code,
+            Name,
+            Monday, Tuesday, Wednesday, Thursday, Friday, Saturday, Sunday,
+            MonEntryTime, MonToleranceMinutes, MonLunchStartTime, MonLunchEndTime, MonExitTime,
+            TueEntryTime, TueToleranceMinutes, TueLunchStartTime, TueLunchEndTime, TueExitTime,
+            WedEntryTime, WedToleranceMinutes, WedLunchStartTime, WedLunchEndTime, WedExitTime,
+            ThuEntryTime, ThuToleranceMinutes, ThuLunchStartTime, ThuLunchEndTime, ThuExitTime,
+            FriEntryTime, FriToleranceMinutes, FriLunchStartTime, FriLunchEndTime, FriExitTime,
+            SatEntryTime, SatToleranceMinutes, SatLunchStartTime, SatLunchEndTime, SatExitTime,
+            SunEntryTime, SunToleranceMinutes, SunLunchStartTime, SunLunchEndTime, SunExitTime,
+            WeeklyHours,
+            IsFlexible,
+            Notes,
+            IsActive
+        };
+    }
+}
