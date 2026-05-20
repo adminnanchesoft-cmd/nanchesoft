@@ -372,6 +372,91 @@ public sealed class PayrollOperationsApiService
         return await client.GetFromJsonAsync<List<PayrollGlobalMovementLineItem>>($"/api/payroll/global-movements/{id:D}/lines") ?? [];
     }
 
+    // ── Días y horas (mnemónicos) ───────────────────────────────────────────────
+
+    public async Task<List<PayrollDayMnemonicItem>> GetDayMnemonicsAsync()
+    {
+        var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
+        return await client.GetFromJsonAsync<List<PayrollDayMnemonicItem>>("/api/payroll/day-mnemonics") ?? [];
+    }
+
+    public async Task<Guid> CreateDayMnemonicAsync(PayrollDayMnemonicSubmit submit)
+    {
+        var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
+        var response = await client.PostAsJsonAsync("/api/payroll/day-mnemonics", submit);
+        if (!response.IsSuccessStatusCode)
+        {
+            var err = await response.Content.ReadAsStringAsync();
+            throw new InvalidOperationException(err);
+        }
+        var doc = await response.Content.ReadFromJsonAsync<PayrollGlobalMovementCreatedResponse>();
+        return doc?.Id ?? Guid.Empty;
+    }
+
+    public async Task UpdateDayMnemonicAsync(Guid id, PayrollDayMnemonicSubmit submit)
+    {
+        var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
+        var response = await client.PutAsJsonAsync($"/api/payroll/day-mnemonics/{id:D}", submit);
+        if (!response.IsSuccessStatusCode)
+        {
+            var err = await response.Content.ReadAsStringAsync();
+            throw new InvalidOperationException(err);
+        }
+    }
+
+    public async Task DeleteDayMnemonicAsync(Guid id)
+    {
+        var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
+        var response = await client.DeleteAsync($"/api/payroll/day-mnemonics/{id:D}");
+        if (!response.IsSuccessStatusCode)
+        {
+            var err = await response.Content.ReadAsStringAsync();
+            throw new InvalidOperationException(err);
+        }
+    }
+
+    public async Task<PayrollDailyGrid?> GetDaysHoursGridAsync(Guid periodId)
+    {
+        var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
+        return await client.GetFromJsonAsync<PayrollDailyGrid>($"/api/payroll/periods/{periodId:D}/days-hours-grid");
+    }
+
+    public async Task<Guid> SaveDaysHoursCellAsync(Guid periodId, PayrollDailyEntrySubmit submit)
+    {
+        var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
+        var response = await client.PostAsJsonAsync($"/api/payroll/periods/{periodId:D}/days-hours-save", submit);
+        if (!response.IsSuccessStatusCode)
+        {
+            var err = await response.Content.ReadAsStringAsync();
+            throw new InvalidOperationException(err);
+        }
+        var doc = await response.Content.ReadFromJsonAsync<PayrollDailyEntrySaveResponse>();
+        return doc?.Id ?? Guid.Empty;
+    }
+
+    public async Task DeleteDaysHoursEntryAsync(Guid periodId, Guid entryId)
+    {
+        var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
+        var response = await client.DeleteAsync($"/api/payroll/periods/{periodId:D}/days-hours-entry/{entryId:D}");
+        if (!response.IsSuccessStatusCode)
+        {
+            var err = await response.Content.ReadAsStringAsync();
+            throw new InvalidOperationException(err);
+        }
+    }
+
+    public async Task<PayrollDailyConsolidateResponse> ConsolidateDaysHoursAsync(Guid periodId)
+    {
+        var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
+        var response = await client.PostAsync($"/api/payroll/periods/{periodId:D}/days-hours-consolidate", null);
+        if (!response.IsSuccessStatusCode)
+        {
+            var err = await response.Content.ReadAsStringAsync();
+            throw new InvalidOperationException(err);
+        }
+        return await response.Content.ReadFromJsonAsync<PayrollDailyConsolidateResponse>() ?? new();
+    }
+
     // ── Captura matricial ───────────────────────────────────────────────────────
 
     public async Task<PayrollRunMatrixData?> GetPayrollRunMatrixDataAsync(Guid runId)

@@ -154,6 +154,8 @@ public sealed class NanchesoftDbContext : DbContext
     public DbSet<PrePayrollColumnPreference> PrePayrollColumnPreferences => Set<PrePayrollColumnPreference>();
     public DbSet<PayrollGlobalMovement> PayrollGlobalMovements => Set<PayrollGlobalMovement>();
     public DbSet<PayrollGlobalMovementLine> PayrollGlobalMovementLines => Set<PayrollGlobalMovementLine>();
+    public DbSet<PayrollDayMnemonic> PayrollDayMnemonics => Set<PayrollDayMnemonic>();
+    public DbSet<PayrollDailyEntry> PayrollDailyEntries => Set<PayrollDailyEntry>();
 
     // Production module
     public DbSet<ProductionCell> ProductionCells => Set<ProductionCell>();

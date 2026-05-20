@@ -135,3 +135,119 @@ public sealed class PayrollGlobalMovementLineItem
     public string Notes { get; set; } = string.Empty;
     public bool IsActive { get; set; }
 }
+
+// ── Días y horas ─────────────────────────────────────────────────────
+
+public sealed class PayrollDayMnemonicItem
+{
+    public Guid PayrollDayMnemonicId { get; set; }
+    public Guid TenantId { get; set; }
+    public Guid CompanyId { get; set; }
+    public Guid? PayrollConceptId { get; set; }
+    public string PayrollConceptCode { get; set; } = string.Empty;
+    public string Code { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
+    public string Kind { get; set; } = string.Empty;
+    public string UnitType { get; set; } = string.Empty;
+    public decimal DefaultUnits { get; set; }
+    public decimal Multiplier { get; set; }
+    public string ColorCode { get; set; } = string.Empty;
+    public string ShortLabel { get; set; } = string.Empty;
+    public bool AffectsAttendance { get; set; }
+    public bool AffectsPayroll { get; set; }
+    public int SortOrder { get; set; }
+    public string Notes { get; set; } = string.Empty;
+    public bool IsActive { get; set; }
+}
+
+public sealed class PayrollDayMnemonicSubmit
+{
+    public Guid? PayrollConceptId { get; set; }
+    public string? Code { get; set; }
+    public string? Name { get; set; }
+    public string? Kind { get; set; }
+    public string? UnitType { get; set; }
+    public decimal DefaultUnits { get; set; } = 1m;
+    public decimal Multiplier { get; set; } = 1m;
+    public string? ColorCode { get; set; }
+    public string? ShortLabel { get; set; }
+    public bool AffectsAttendance { get; set; } = true;
+    public bool AffectsPayroll { get; set; } = true;
+    public int SortOrder { get; set; }
+    public string? Notes { get; set; }
+    public bool IsActive { get; set; } = true;
+}
+
+public sealed class PayrollDailyGrid
+{
+    public Guid PayrollPeriodId { get; set; }
+    public string PeriodName { get; set; } = string.Empty;
+    public DateTime StartDate { get; set; }
+    public DateTime EndDate { get; set; }
+    public List<DateTime> Days { get; set; } = [];
+    public List<PayrollDayMnemonicGridItem> Mnemonics { get; set; } = [];
+    public List<PayrollDailyGridEmployee> Employees { get; set; } = [];
+}
+
+public sealed class PayrollDayMnemonicGridItem
+{
+    public Guid PayrollDayMnemonicId { get; set; }
+    public string Code { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
+    public string Kind { get; set; } = string.Empty;
+    public string UnitType { get; set; } = string.Empty;
+    public decimal DefaultUnits { get; set; }
+    public decimal Multiplier { get; set; }
+    public string ColorCode { get; set; } = string.Empty;
+    public string ShortLabel { get; set; } = string.Empty;
+    public bool AffectsPayroll { get; set; }
+}
+
+public sealed class PayrollDailyEntryItem
+{
+    public Guid PayrollDailyEntryId { get; set; }
+    public Guid EmployeeId { get; set; }
+    public Guid PayrollDayMnemonicId { get; set; }
+    public DateTime WorkDate { get; set; }
+    public decimal Units { get; set; }
+    public decimal Amount { get; set; }
+    public string Notes { get; set; } = string.Empty;
+    public string Status { get; set; } = string.Empty;
+    public Guid? ResultingAdjustmentId { get; set; }
+}
+
+public sealed class PayrollDailyGridEmployee
+{
+    public Guid EmployeeId { get; set; }
+    public string EmployeeNumber { get; set; } = string.Empty;
+    public string EmployeeName { get; set; } = string.Empty;
+    public string DepartmentName { get; set; } = string.Empty;
+    public List<PayrollDailyEntryItem> Entries { get; set; } = [];
+}
+
+public sealed class PayrollDailyEntrySubmit
+{
+    public Guid? PayrollDailyEntryId { get; set; }
+    public Guid EmployeeId { get; set; }
+    public Guid PayrollDayMnemonicId { get; set; }
+    public DateTime WorkDate { get; set; }
+    public decimal Units { get; set; }
+    public decimal Amount { get; set; }
+    public string? Notes { get; set; }
+}
+
+public sealed class PayrollDailyEntrySaveResponse
+{
+    public bool Success { get; set; }
+    public Guid Id { get; set; }
+    public bool Deleted { get; set; }
+}
+
+public sealed class PayrollDailyConsolidateResponse
+{
+    public bool Success { get; set; }
+    public int Generated { get; set; }
+    public int Updated { get; set; }
+    public int Skipped { get; set; }
+    public int EntriesProcessed { get; set; }
+}

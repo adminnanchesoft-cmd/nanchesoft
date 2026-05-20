@@ -12,6 +12,7 @@ Estado base validado:
 - Retardos y faltas configurables: implementado como base operativa en proceso de nomina.
 - Prenomina configurable (config columnas persistida por usuario+periodo, exportar CSV): implementado (fase 2A).
 - Movimientos globales (lote multiempleado con filtros, preview, aplicacion masiva, opcion permanente): implementado (fase 2A).
+- Dias y horas tipo CONTPAQi (catalogo de claves FINJ/RET/HE1..HE5/INCAP/VAC, grid empleado×dia, consolidacion a prenomina): implementado (fase 2B).
 
 ## Prioridad siguiente
 
@@ -22,10 +23,11 @@ Estado base validado:
    - Copiar importes a toda una columna. (OK)
    - Importar/exportar movimientos de prenomina. (OK)
 
-2. Dias y horas tipo CONTPAQi
-   - Captura diaria por empleado y dia del periodo.
-   - Soportar claves/mnemonicos: `FINJ`, `RET`, `HE1..HE5`, permisos, incapacidades, castigos y dias trabajados.
-   - Integrar estas claves con incidencias y calculo de nomina.
+2. Dias y horas tipo CONTPAQi [HECHO]
+   - Captura diaria por empleado y dia del periodo en grid matricial. (OK)
+   - Claves/mnemonicos: FINJ, FJUS, RET, HE1..HE5, PERM, PERMSG, INCAP, VAC, PRIMD, CASTG, DT. (OK)
+   - Catalogo configurable por empresa (color, multiplicador, concepto destino, afecta nomina). (OK)
+   - Consolidacion a PrePayrollAdjustment con prorrateo por unidades y multiplicador. (OK)
 
 3. Captura por tipo de incidencia
    - Seleccionar una incidencia, fecha y unidades por omision.

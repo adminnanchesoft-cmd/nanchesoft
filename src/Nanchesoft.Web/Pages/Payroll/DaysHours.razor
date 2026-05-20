@@ -1,0 +1,443 @@
+@page "/payroll/days-hours"
+@using Nanchesoft.Web.Services.HumanResources
+@inject PayrollOperationsApiService PayrollOperationsApiService
+@inject PayrollMvpApiService PayrollMvpApiService
+
+<PageTitle>Días y horas | Nanchesoft</PageTitle>
+
+<style>
+    .dh-toolbar { display:flex; gap:12px; flex-wrap:wrap; align-items:end; }
+    .dh-grid-scroll { overflow:auto; max-height:74vh; border:1px solid #dee2e6; border-radius:6px; }
+    .dh-grid { border-collapse: separate; border-spacing: 0; }
+    .dh-grid th, .dh-grid td { padding: 2px 4px; font-size: 11px; border-right:1px solid #e9ecef; border-bottom:1px solid #f1f3f5; white-space: nowrap; vertical-align: middle; }
+    .dh-grid thead th { position: sticky; top: 0; background:#f8f9fa; z-index: 2; text-align:center; }
+    .dh-grid thead th:first-child { left: 0; z-index: 3; }
+    .dh-emp-col { position: sticky; left: 0; background:#fff; z-index: 1; min-width: 200px; max-width: 200px; }
+    .dh-cell { width: 70px; min-width: 70px; max-width: 70px; height: 36px; cursor: pointer; text-align:center; user-select:none; }
+    .dh-cell:hover { background:#fffbe6 !important; outline:1px dashed #0d6efd; }
+    .dh-cell.has-entry { font-weight: 600; color:#fff; }
+    .dh-cell-weekend { background:#fafbfc; }
+    .dh-keys { display:flex; gap:6px; flex-wrap:wrap; margin-top:6px; }
+    .dh-key { padding:2px 8px; border-radius:10px; font-size:11px; color:#fff; cursor:pointer; user-select:none; }
+    .dh-key.selected { box-shadow: 0 0 0 2px #212529 inset; }
+    .dh-cell-tag { font-size: 10px; line-height:1.1; }
+    .dh-cell-tag .units { font-size: 11px; }
+    .dh-summary-row td { background:#f8f9fa; font-weight:600; }
+    .dh-modal { position: fixed; top:0; left:0; width:100vw; height:100vh; background: rgba(0,0,0,0.35); z-index: 1050; display:flex; align-items:center; justify-content:center; }
+    .dh-modal-card { background:#fff; border-radius: 8px; min-width: 360px; max-width: 480px; box-shadow: 0 8px 32px rgba(0,0,0,0.2); }
+</style>
+
+<div class="container-fluid py-3">
+    <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+        <div>
+            <h1 class="mb-0">Días y horas</h1>
+            <p class="text-secondary mb-0">Captura matricial por empleado × día con claves operativas (FINJ, RET, HE1, etc.) y consolidación a prenómina.</p>
+        </div>
+        <div class="d-flex gap-2">
+            <button class="btn btn-outline-secondary" @onclick="() => _manageKeys = !_manageKeys">
+                <i class="bi bi-gear"></i> Catálogo de claves
+            </button>
+            <button class="btn btn-success" @onclick="ConsolidateAsync" disabled="@(_busy || _selectedPeriodId == Guid.Empty)" title="Generar PrePayrollAdjustments con los totales por concepto">
+                <i class="bi bi-arrow-down-circle"></i> Consolidar a prenómina
+            </button>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(_message))
+    {
+        <div class="alert @(_isError ? "alert-danger" : "alert-success") alert-dismissible mb-3">
+            @_message <button class="btn-close" @onclick="() => _message = null"></button>
+        </div>
+    }
+
+    <div class="card shadow-sm mb-3">
+        <div class="card-body">
+            <div class="dh-toolbar">
+                <div style="min-width:300px;">
+                    <label class="form-label fw-semibold">Periodo</label>
+                    <select class="form-select" @onchange="OnPeriodChangedAsync">
+                        <option value="">Selecciona un periodo</option>
+                        @foreach (var p in _periods)
+                        {
+                            <option value="@p.PayrollPeriodId" selected="@(_selectedPeriodId == p.PayrollPeriodId)">
+                                @p.Name · @p.StartDate.ToString("dd/MM/yyyy") - @p.EndDate.ToString("dd/MM/yyyy")
+                            </option>
+                        }
+                    </select>
+                </div>
+                <div class="flex-grow-1">
+                    <label class="form-label fw-semibold">Clave activa <span class="text-secondary small">(click en una celda)</span></label>
+                    <div class="dh-keys">
+                        @foreach (var key in _mnemonics)
+                        {
+                            <span class="dh-key @(_activeMnemonicId == key.PayrollDayMnemonicId ? "selected" : "")"
+                                  style="background:@key.ColorCode;"
+                                  title="@key.Name (@key.Kind, x@key.Multiplier)"
+                                  @onclick="() => _activeMnemonicId = key.PayrollDayMnemonicId">
+                                @key.Code
+                            </span>
+                        }
+                        @if (_mnemonics.Count == 0)
+                        {
+                            <span class="text-secondary small">Sin claves. Crea/seedea desde "Catálogo de claves".</span>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @if (_manageKeys)
+    {
+        <div class="card shadow-sm mb-3">
+            <div class="card-header bg-light"><strong>Catálogo de claves operativas</strong></div>
+            <div class="card-body p-0">
+                <table class="table table-sm mb-0">
+                    <thead class="table-light">
+                        <tr><th>Código</th><th>Nombre</th><th>Tipo</th><th>Unidad</th><th>Concepto</th><th class="text-end">Multiplicador</th><th>Color</th><th>Activo</th></tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var key in _mnemonics)
+                        {
+                            <tr>
+                                <td><span class="dh-key" style="background:@key.ColorCode;">@key.Code</span></td>
+                                <td>@key.Name</td>
+                                <td>@key.Kind</td>
+                                <td>@key.UnitType</td>
+                                <td>@key.PayrollConceptCode</td>
+                                <td class="text-end">@key.Multiplier</td>
+                                <td><code class="small">@key.ColorCode</code></td>
+                                <td>@(key.IsActive ? "Sí" : "No")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+
+    @if (_loading)
+    {
+        <div class="text-center py-5 text-secondary">Cargando grid...</div>
+    }
+    else if (_grid is null)
+    {
+        <div class="alert alert-info">Selecciona un periodo para empezar la captura diaria.</div>
+    }
+    else
+    {
+        <div class="card shadow-sm">
+            <div class="card-body p-0">
+                <div class="dh-grid-scroll">
+                    <table class="dh-grid">
+                        <thead>
+                            <tr>
+                                <th class="dh-emp-col">Colaborador</th>
+                                @foreach (var d in _grid.Days)
+                                {
+                                    var isWeekend = d.DayOfWeek == DayOfWeek.Saturday || d.DayOfWeek == DayOfWeek.Sunday;
+                                    <th class="@(isWeekend ? "dh-cell-weekend" : "")">
+                                        <div>@d.Day.ToString("00")</div>
+                                        <div style="font-weight:400;">@System.Globalization.CultureInfo.GetCultureInfo("es-MX").DateTimeFormat.AbbreviatedDayNames[(int)d.DayOfWeek]</div>
+                                    </th>
+                                }
+                                <th class="text-end">Totales</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var emp in _grid.Employees)
+                            {
+                                <tr>
+                                    <td class="dh-emp-col">
+                                        <div class="fw-semibold">@emp.EmployeeName</div>
+                                        <div class="text-secondary" style="font-size:10px;">@emp.EmployeeNumber · @emp.DepartmentName</div>
+                                    </td>
+                                    @foreach (var d in _grid.Days)
+                                    {
+                                        var dayEntries = emp.Entries.Where(x => x.WorkDate.Date == d.Date).ToList();
+                                        var isWeekend = d.DayOfWeek == DayOfWeek.Saturday || d.DayOfWeek == DayOfWeek.Sunday;
+                                        var cellStyle = "";
+                                        var firstEntry = dayEntries.FirstOrDefault();
+                                        if (firstEntry is not null)
+                                        {
+                                            var mn = _mnemonicMap.GetValueOrDefault(firstEntry.PayrollDayMnemonicId);
+                                            if (mn is not null) cellStyle = $"background:{mn.ColorCode};";
+                                        }
+                                        <td class="dh-cell @(dayEntries.Count > 0 ? "has-entry" : "") @(isWeekend ? "dh-cell-weekend" : "")"
+                                            style="@cellStyle"
+                                            @onclick="() => OpenCellEditor(emp, d, dayEntries)">
+                                            @if (dayEntries.Count == 0)
+                                            {
+                                                <span class="text-secondary">·</span>
+                                            }
+                                            else if (dayEntries.Count == 1)
+                                            {
+                                                var entry = dayEntries[0];
+                                                var mn = _mnemonicMap.GetValueOrDefault(entry.PayrollDayMnemonicId);
+                                                <div class="dh-cell-tag">
+                                                    <div>@(mn?.ShortLabel ?? mn?.Code ?? "?")</div>
+                                                    <div class="units">@entry.Units.ToString("0.##")</div>
+                                                </div>
+                                            }
+                                            else
+                                            {
+                                                <div class="dh-cell-tag">
+                                                    <div>@dayEntries.Count ítems</div>
+                                                    <div class="units">@dayEntries.Sum(x => x.Units).ToString("0.##")</div>
+                                                </div>
+                                            }
+                                        </td>
+                                    }
+                                    <td class="text-end">
+                                        <div class="small text-secondary">@emp.Entries.Count cap.</div>
+                                        <div>@emp.Entries.Sum(x => x.Units).ToString("0.##")</div>
+                                    </td>
+                                </tr>
+                            }
+                            <tr class="dh-summary-row">
+                                <td class="dh-emp-col">Totales por clave</td>
+                                <td colspan="@(_grid.Days.Count + 1)">
+                                    @foreach (var mn in _mnemonics)
+                                    {
+                                        var total = _grid.Employees.SelectMany(e => e.Entries).Where(x => x.PayrollDayMnemonicId == mn.PayrollDayMnemonicId).Sum(x => x.Units);
+                                        if (total > 0m)
+                                        {
+                                            <span class="dh-key me-1" style="background:@mn.ColorCode;">@mn.Code: @total.ToString("0.##")</span>
+                                        }
+                                    }
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@if (_editor is not null)
+{
+    <div class="dh-modal" @onclick="CloseEditor">
+        <div class="dh-modal-card" @onclick:stopPropagation>
+            <div class="p-3 border-bottom">
+                <strong>@_editor.EmployeeName</strong>
+                <div class="small text-secondary">@_editor.WorkDate.ToString("dddd dd MMM yyyy")</div>
+            </div>
+            <div class="p-3">
+                @if (_editor.Existing.Count > 0)
+                {
+                    <div class="mb-3">
+                        <div class="small text-secondary mb-1">Capturas del día</div>
+                        @foreach (var entry in _editor.Existing)
+                        {
+                            var mn = _mnemonicMap.GetValueOrDefault(entry.PayrollDayMnemonicId);
+                            <div class="d-flex justify-content-between align-items-center border-bottom py-1">
+                                <div>
+                                    <span class="dh-key" style="background:@(mn?.ColorCode ?? "#666")">@(mn?.Code ?? "?")</span>
+                                    <span class="ms-2 small">@entry.Units.ToString("0.##") @(mn?.UnitType ?? "")</span>
+                                    @if (!string.IsNullOrEmpty(entry.Notes))
+                                    {
+                                        <span class="text-secondary ms-2 small">@entry.Notes</span>
+                                    }
+                                </div>
+                                <button class="btn btn-sm btn-outline-danger" @onclick="() => DeleteEntryAsync(entry)" disabled="@_busy">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </div>
+                        }
+                    </div>
+                }
+
+                <div class="mb-2">
+                    <label class="form-label small fw-semibold">Clave</label>
+                    <select class="form-select form-select-sm" @bind="_editor.MnemonicId">
+                        <option value="">— Selecciona —</option>
+                        @foreach (var mn in _mnemonics)
+                        {
+                            <option value="@mn.PayrollDayMnemonicId">@mn.Code · @mn.Name (@mn.UnitType, x@mn.Multiplier)</option>
+                        }
+                    </select>
+                </div>
+                <div class="row g-2 mb-2">
+                    <div class="col-6">
+                        <label class="form-label small fw-semibold">Unidades</label>
+                        <input class="form-control form-control-sm text-end" type="number" min="0" step="0.25" @bind="_editor.Units" />
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label small fw-semibold">Importe (opcional)</label>
+                        <input class="form-control form-control-sm text-end" type="number" min="0" step="0.01" @bind="_editor.Amount" />
+                    </div>
+                </div>
+                <div class="mb-2">
+                    <label class="form-label small fw-semibold">Notas</label>
+                    <input class="form-control form-control-sm" @bind="_editor.Notes" />
+                </div>
+                <div class="d-flex gap-2 justify-content-end mt-3">
+                    <button class="btn btn-sm btn-light" @onclick="CloseEditor">Cancelar</button>
+                    <button class="btn btn-sm btn-primary" @onclick="SaveEntryAsync" disabled="@(_busy || _editor.MnemonicId == Guid.Empty || _editor.Units <= 0m)">
+                        @(_busy ? "Guardando..." : "Agregar / Guardar")
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<PayrollPeriodSimple> _periods = [];
+    private List<PayrollDayMnemonicItem> _mnemonics = [];
+    private Dictionary<Guid, PayrollDayMnemonicItem> _mnemonicMap = new();
+    private PayrollDailyGrid? _grid;
+    private Guid _selectedPeriodId;
+    private Guid _activeMnemonicId;
+    private bool _loading;
+    private bool _busy;
+    private bool _manageKeys;
+    private string? _message;
+    private bool _isError;
+    private CellEditor? _editor;
+
+    private sealed class CellEditor
+    {
+        public Guid? EntryId { get; set; }
+        public Guid EmployeeId { get; set; }
+        public string EmployeeName { get; set; } = string.Empty;
+        public DateTime WorkDate { get; set; }
+        public Guid MnemonicId { get; set; }
+        public decimal Units { get; set; } = 1m;
+        public decimal Amount { get; set; }
+        public string Notes { get; set; } = string.Empty;
+        public List<PayrollDailyEntryItem> Existing { get; set; } = [];
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        var periodsTask = PayrollMvpApiService.GetPeriodsAsync();
+        var mnemonicsTask = PayrollOperationsApiService.GetDayMnemonicsAsync();
+        await Task.WhenAll(periodsTask, mnemonicsTask);
+        _periods = periodsTask.Result;
+        _mnemonics = mnemonicsTask.Result.Where(x => x.IsActive).OrderBy(x => x.SortOrder).ThenBy(x => x.Code).ToList();
+        _mnemonicMap = _mnemonics.ToDictionary(x => x.PayrollDayMnemonicId);
+        _activeMnemonicId = _mnemonics.FirstOrDefault()?.PayrollDayMnemonicId ?? Guid.Empty;
+    }
+
+    private async Task OnPeriodChangedAsync(ChangeEventArgs e)
+    {
+        _selectedPeriodId = Guid.TryParse(e.Value?.ToString(), out var id) ? id : Guid.Empty;
+        await LoadGridAsync();
+    }
+
+    private async Task LoadGridAsync()
+    {
+        if (_selectedPeriodId == Guid.Empty) { _grid = null; return; }
+        _loading = true;
+        try
+        {
+            _grid = await PayrollOperationsApiService.GetDaysHoursGridAsync(_selectedPeriodId);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void OpenCellEditor(PayrollDailyGridEmployee emp, DateTime day, List<PayrollDailyEntryItem> existing)
+    {
+        var preferred = _activeMnemonicId;
+        if (preferred == Guid.Empty && _mnemonics.Count > 0) preferred = _mnemonics[0].PayrollDayMnemonicId;
+        var defaultUnits = 1m;
+        if (preferred != Guid.Empty && _mnemonicMap.TryGetValue(preferred, out var mn)) defaultUnits = mn.DefaultUnits;
+
+        _editor = new CellEditor
+        {
+            EntryId = null,
+            EmployeeId = emp.EmployeeId,
+            EmployeeName = emp.EmployeeName,
+            WorkDate = day,
+            MnemonicId = preferred,
+            Units = defaultUnits,
+            Amount = 0m,
+            Notes = string.Empty,
+            Existing = existing
+        };
+    }
+
+    private void CloseEditor() => _editor = null;
+
+    private async Task SaveEntryAsync()
+    {
+        if (_editor is null || _selectedPeriodId == Guid.Empty) return;
+        _busy = true;
+        try
+        {
+            await PayrollOperationsApiService.SaveDaysHoursCellAsync(_selectedPeriodId, new PayrollDailyEntrySubmit
+            {
+                PayrollDailyEntryId = _editor.EntryId,
+                EmployeeId = _editor.EmployeeId,
+                PayrollDayMnemonicId = _editor.MnemonicId,
+                WorkDate = _editor.WorkDate,
+                Units = _editor.Units,
+                Amount = _editor.Amount,
+                Notes = _editor.Notes
+            });
+            await LoadGridAsync();
+            _editor = null;
+            Show("Captura guardada.", false);
+        }
+        catch (Exception ex)
+        {
+            Show(ex.Message, true);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task DeleteEntryAsync(PayrollDailyEntryItem entry)
+    {
+        if (_selectedPeriodId == Guid.Empty) return;
+        _busy = true;
+        try
+        {
+            await PayrollOperationsApiService.DeleteDaysHoursEntryAsync(_selectedPeriodId, entry.PayrollDailyEntryId);
+            await LoadGridAsync();
+            _editor = null;
+            Show("Captura eliminada.", false);
+        }
+        catch (Exception ex)
+        {
+            Show(ex.Message, true);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task ConsolidateAsync()
+    {
+        if (_selectedPeriodId == Guid.Empty) return;
+        _busy = true;
+        try
+        {
+            var result = await PayrollOperationsApiService.ConsolidateDaysHoursAsync(_selectedPeriodId);
+            await LoadGridAsync();
+            Show($"Consolidación lista. Generados: {result.Generated}, actualizados: {result.Updated}, omitidos: {result.Skipped}, capturas procesadas: {result.EntriesProcessed}.", false);
+        }
+        catch (Exception ex)
+        {
+            Show(ex.Message, true);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private void Show(string text, bool isError)
+    {
+        _message = text;
+        _isError = isError;
+    }
+}

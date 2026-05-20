@@ -227,6 +227,7 @@ app.MapHumanResourcesPerformanceEndpoints();
 app.MapPayrollPrePayrollEndpoints();
 app.MapPayrollPrePayrollAdvancedEndpoints();
 app.MapPayrollGlobalMovementsEndpoints();
+app.MapPayrollDaysHoursEndpoints();
 app.MapPayrollCalculatedEndpoints();
 app.MapPayrollDisbursementEndpoints();
 app.MapPayrollFiscalEndpoints();

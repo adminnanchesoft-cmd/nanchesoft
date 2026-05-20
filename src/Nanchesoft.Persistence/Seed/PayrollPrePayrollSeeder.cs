@@ -314,5 +314,128 @@ CREATE TABLE IF NOT EXISTS payroll.payroll_global_movement_lines (
 CREATE UNIQUE INDEX IF NOT EXISTS ix_payroll_global_movement_lines_batch_employee_period ON payroll.payroll_global_movement_lines (payroll_global_movement_id, employee_id, payroll_period_id);
 CREATE INDEX IF NOT EXISTS ix_payroll_global_movement_lines_company_employee ON payroll.payroll_global_movement_lines (company_id, employee_id);
 """);
+
+        await dbContext.Database.ExecuteSqlRawAsync("""
+CREATE TABLE IF NOT EXISTS payroll.payroll_day_mnemonics (
+    id uuid PRIMARY KEY,
+    tenant_id uuid NOT NULL,
+    company_id uuid NOT NULL,
+    payroll_concept_id uuid NULL,
+    code character varying(20) NOT NULL,
+    name character varying(120) NOT NULL,
+    kind character varying(30) NOT NULL,
+    unit_type character varying(20) NOT NULL,
+    default_units numeric(18,4) NOT NULL,
+    multiplier numeric(18,4) NOT NULL,
+    color_code character varying(16) NOT NULL,
+    short_label character varying(12) NOT NULL,
+    affects_attendance boolean NOT NULL,
+    affects_payroll boolean NOT NULL,
+    sort_order integer NOT NULL,
+    notes character varying(400) NOT NULL,
+    is_active boolean NOT NULL,
+    created_at timestamp with time zone NOT NULL,
+    created_by text NULL,
+    updated_at timestamp with time zone NULL,
+    updated_by text NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS ix_payroll_day_mnemonics_company_code ON payroll.payroll_day_mnemonics (company_id, code);
+""");
+
+        await dbContext.Database.ExecuteSqlRawAsync("""
+CREATE TABLE IF NOT EXISTS payroll.payroll_daily_entries (
+    id uuid PRIMARY KEY,
+    tenant_id uuid NOT NULL,
+    company_id uuid NOT NULL,
+    employee_id uuid NOT NULL,
+    payroll_period_id uuid NOT NULL,
+    payroll_day_mnemonic_id uuid NOT NULL,
+    work_date timestamp with time zone NOT NULL,
+    units numeric(18,4) NOT NULL,
+    amount numeric(18,2) NOT NULL,
+    notes character varying(400) NOT NULL,
+    status character varying(30) NOT NULL,
+    resulting_adjustment_id uuid NULL,
+    is_active boolean NOT NULL,
+    created_at timestamp with time zone NOT NULL,
+    created_by text NULL,
+    updated_at timestamp with time zone NULL,
+    updated_by text NULL
+);
+CREATE INDEX IF NOT EXISTS ix_payroll_daily_entries_company_period_employee_date ON payroll.payroll_daily_entries (company_id, payroll_period_id, employee_id, work_date);
+""");
+
+        await SeedDayMnemonicsAsync(dbContext);
+    }
+
+    private static async Task SeedDayMnemonicsAsync(NanchesoftDbContext dbContext)
+    {
+        var companies = await dbContext.Companies.AsNoTracking().Select(x => new { x.Id, x.TenantId }).ToListAsync();
+        if (companies.Count == 0) return;
+
+        var defaults = new[]
+        {
+            new { Code = "DT",    Name = "Día trabajado",            Kind = "worked",    UnitType = "days",    Units = 1m,    Mult = 1m,   Color = "#198754", Short = "DT",  Aff = true,  Pay = false, Sort = 10,  Concept = (string?)null },
+            new { Code = "RET",   Name = "Retardo",                  Kind = "delay",     UnitType = "minutes", Units = 15m,   Mult = 1m,   Color = "#ffc107", Short = "RET", Aff = true,  Pay = false, Sort = 20,  Concept = (string?)null },
+            new { Code = "FINJ",  Name = "Falta injustificada",      Kind = "absence",   UnitType = "days",    Units = 1m,    Mult = 1m,   Color = "#dc3545", Short = "F",   Aff = true,  Pay = true,  Sort = 30,  Concept = (string?)"FALTA" },
+            new { Code = "FJUS",  Name = "Falta justificada",        Kind = "absence",   UnitType = "days",    Units = 1m,    Mult = 1m,   Color = "#fd7e14", Short = "FJ",  Aff = true,  Pay = false, Sort = 40,  Concept = (string?)null },
+            new { Code = "HE1",   Name = "Horas extra dobles",       Kind = "overtime",  UnitType = "hours",   Units = 1m,    Mult = 2m,   Color = "#0d6efd", Short = "HE1", Aff = true,  Pay = true,  Sort = 50,  Concept = (string?)"HE1" },
+            new { Code = "HE2",   Name = "Horas extra triples",      Kind = "overtime",  UnitType = "hours",   Units = 1m,    Mult = 3m,   Color = "#0a58ca", Short = "HE2", Aff = true,  Pay = true,  Sort = 60,  Concept = (string?)"HE2" },
+            new { Code = "HE3",   Name = "Horas extra triples ext.", Kind = "overtime",  UnitType = "hours",   Units = 1m,    Mult = 3m,   Color = "#084298", Short = "HE3", Aff = true,  Pay = true,  Sort = 70,  Concept = (string?)"HE3" },
+            new { Code = "HE4",   Name = "Horas extra mixtas",       Kind = "overtime",  UnitType = "hours",   Units = 1m,    Mult = 2.5m, Color = "#052c65", Short = "HE4", Aff = true,  Pay = true,  Sort = 80,  Concept = (string?)null },
+            new { Code = "HE5",   Name = "Horas extra dominicales",  Kind = "overtime",  UnitType = "hours",   Units = 1m,    Mult = 2m,   Color = "#020c2c", Short = "HE5", Aff = true,  Pay = true,  Sort = 90,  Concept = (string?)null },
+            new { Code = "PERM",  Name = "Permiso con goce",         Kind = "leave",     UnitType = "days",    Units = 1m,    Mult = 1m,   Color = "#6f42c1", Short = "P",   Aff = true,  Pay = false, Sort = 100, Concept = (string?)null },
+            new { Code = "PERMSG",Name = "Permiso sin goce",         Kind = "leave",     UnitType = "days",    Units = 1m,    Mult = 1m,   Color = "#6610f2", Short = "PSG", Aff = true,  Pay = true,  Sort = 110, Concept = (string?)null },
+            new { Code = "INCAP", Name = "Incapacidad",              Kind = "leave",     UnitType = "days",    Units = 1m,    Mult = 1m,   Color = "#20c997", Short = "I",   Aff = true,  Pay = true,  Sort = 120, Concept = (string?)null },
+            new { Code = "VAC",   Name = "Vacaciones",               Kind = "leave",     UnitType = "days",    Units = 1m,    Mult = 1m,   Color = "#0dcaf0", Short = "V",   Aff = true,  Pay = true,  Sort = 130, Concept = (string?)"VAC" },
+            new { Code = "PRIMD", Name = "Prima dominical",          Kind = "premium",   UnitType = "days",    Units = 1m,    Mult = 0.25m,Color = "#d63384", Short = "PRD", Aff = false, Pay = true,  Sort = 140, Concept = (string?)"PRIMD" },
+            new { Code = "CASTG", Name = "Castigo / suspensión",     Kind = "discipline",UnitType = "days",    Units = 1m,    Mult = 1m,   Color = "#495057", Short = "C",   Aff = true,  Pay = true,  Sort = 150, Concept = (string?)null }
+        };
+
+        foreach (var company in companies)
+        {
+            var existingCodes = await dbContext.PayrollDayMnemonics.AsNoTracking()
+                .Where(x => x.CompanyId == company.Id)
+                .Select(x => x.Code)
+                .ToListAsync();
+            var existingSet = existingCodes.ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var d in defaults)
+            {
+                if (existingSet.Contains(d.Code)) continue;
+
+                Guid? conceptId = null;
+                if (!string.IsNullOrEmpty(d.Concept))
+                {
+                    conceptId = await dbContext.PayrollConcepts.AsNoTracking()
+                        .Where(x => x.CompanyId == company.Id && x.Code == d.Concept)
+                        .Select(x => (Guid?)x.Id)
+                        .FirstOrDefaultAsync();
+                }
+
+                dbContext.PayrollDayMnemonics.Add(new PayrollDayMnemonic
+                {
+                    TenantId = company.TenantId,
+                    CompanyId = company.Id,
+                    PayrollConceptId = conceptId,
+                    Code = d.Code,
+                    Name = d.Name,
+                    Kind = d.Kind,
+                    UnitType = d.UnitType,
+                    DefaultUnits = d.Units,
+                    Multiplier = d.Mult,
+                    ColorCode = d.Color,
+                    ShortLabel = d.Short,
+                    AffectsAttendance = d.Aff,
+                    AffectsPayroll = d.Pay,
+                    SortOrder = d.Sort,
+                    Notes = string.Empty,
+                    IsActive = true,
+                    CreatedBy = "seed-day-mnemonics"
+                });
+            }
+        }
+
+        await dbContext.SaveChangesAsync();
     }
 }

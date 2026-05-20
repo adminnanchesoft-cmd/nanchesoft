@@ -190,6 +190,8 @@ public static class NanchesoftSchemaCatalog
         modelBuilder.Entity<PrePayrollColumnPreference>().ToTable("payroll_prepayroll_column_preferences", PayrollSchema);
         modelBuilder.Entity<PayrollGlobalMovement>().ToTable("payroll_global_movements", PayrollSchema);
         modelBuilder.Entity<PayrollGlobalMovementLine>().ToTable("payroll_global_movement_lines", PayrollSchema);
+        modelBuilder.Entity<PayrollDayMnemonic>().ToTable("payroll_day_mnemonics", PayrollSchema);
+        modelBuilder.Entity<PayrollDailyEntry>().ToTable("payroll_daily_entries", PayrollSchema);
         modelBuilder.Entity<PurchaseRequisition>().ToTable("purchase_requisitions", PurchaseSchema);
         modelBuilder.Entity<PurchaseRequisitionLine>().ToTable("purchase_requisition_lines", PurchaseSchema);
         modelBuilder.Entity<PurchaseOrder>().ToTable("purchase_orders", PurchaseSchema);
