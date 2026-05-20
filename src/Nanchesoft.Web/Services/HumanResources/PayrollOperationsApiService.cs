@@ -247,6 +247,131 @@ public sealed class PayrollOperationsApiService
         return await response.Content.ReadFromJsonAsync<PrePayrollMatrixImportResult>() ?? new();
     }
 
+    public async Task<byte[]> ExportPrePayrollMatrixAsync(Guid periodId, IEnumerable<Guid> conceptIds)
+    {
+        var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
+        var selected = string.Join(",", conceptIds.Select(x => x.ToString("D")));
+        var suffix = string.IsNullOrWhiteSpace(selected) ? string.Empty : $"?conceptIds={selected}";
+        return await client.GetByteArrayAsync($"/api/payroll/periods/{periodId}/prepayroll-matrix-export{suffix}");
+    }
+
+    public async Task<PrePayrollColumnPreferenceResult> GetPrePayrollColumnPreferencesAsync(Guid? periodId)
+    {
+        var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
+        var suffix = periodId.HasValue && periodId.Value != Guid.Empty ? $"?periodId={periodId:D}" : string.Empty;
+        return await client.GetFromJsonAsync<PrePayrollColumnPreferenceResult>($"/api/payroll/prepayroll-column-preferences/{suffix}") ?? new();
+    }
+
+    public async Task SavePrePayrollColumnPreferencesAsync(IEnumerable<Guid> conceptIds, Guid? periodId)
+    {
+        var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
+        var payload = new { ConceptIds = conceptIds };
+        var url = periodId.HasValue && periodId.Value != Guid.Empty
+            ? $"/api/payroll/prepayroll-column-preferences/period/{periodId:D}"
+            : "/api/payroll/prepayroll-column-preferences/base";
+        var response = await client.PutAsJsonAsync(url, payload);
+        if (!response.IsSuccessStatusCode)
+        {
+            var err = await response.Content.ReadAsStringAsync();
+            throw new InvalidOperationException(err);
+        }
+    }
+
+    public async Task ClearPrePayrollPeriodPreferenceAsync(Guid periodId)
+    {
+        var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
+        var response = await client.DeleteAsync($"/api/payroll/prepayroll-column-preferences/period/{periodId:D}");
+        if (!response.IsSuccessStatusCode)
+        {
+            var err = await response.Content.ReadAsStringAsync();
+            throw new InvalidOperationException(err);
+        }
+    }
+
+    // ── Movimientos globales ────────────────────────────────────────────────────
+
+    public async Task<List<PayrollGlobalMovementListItem>> GetGlobalMovementsAsync()
+    {
+        var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
+        return await client.GetFromJsonAsync<List<PayrollGlobalMovementListItem>>("/api/payroll/global-movements") ?? [];
+    }
+
+    public async Task<PayrollGlobalMovementListItem?> GetGlobalMovementAsync(Guid id)
+    {
+        var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
+        return await client.GetFromJsonAsync<PayrollGlobalMovementListItem>($"/api/payroll/global-movements/{id:D}");
+    }
+
+    public async Task<Guid> CreateGlobalMovementAsync(PayrollGlobalMovementSubmit submit)
+    {
+        var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
+        var response = await client.PostAsJsonAsync("/api/payroll/global-movements", submit);
+        if (!response.IsSuccessStatusCode)
+        {
+            var err = await response.Content.ReadAsStringAsync();
+            throw new InvalidOperationException(err);
+        }
+        var dto = await response.Content.ReadFromJsonAsync<PayrollGlobalMovementCreatedResponse>();
+        return dto?.Id ?? Guid.Empty;
+    }
+
+    public async Task UpdateGlobalMovementAsync(Guid id, PayrollGlobalMovementSubmit submit)
+    {
+        var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
+        var response = await client.PutAsJsonAsync($"/api/payroll/global-movements/{id:D}", submit);
+        if (!response.IsSuccessStatusCode)
+        {
+            var err = await response.Content.ReadAsStringAsync();
+            throw new InvalidOperationException(err);
+        }
+    }
+
+    public async Task DeleteGlobalMovementAsync(Guid id)
+    {
+        var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
+        var response = await client.DeleteAsync($"/api/payroll/global-movements/{id:D}");
+        if (!response.IsSuccessStatusCode)
+        {
+            var err = await response.Content.ReadAsStringAsync();
+            throw new InvalidOperationException(err);
+        }
+    }
+
+    public async Task<PayrollGlobalMovementPreview> PreviewGlobalMovementAsync(Guid id)
+    {
+        var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
+        return await client.GetFromJsonAsync<PayrollGlobalMovementPreview>($"/api/payroll/global-movements/{id:D}/preview") ?? new();
+    }
+
+    public async Task<PayrollGlobalMovementApplyResponse> ApplyGlobalMovementAsync(Guid id, Guid periodId)
+    {
+        var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
+        var response = await client.PostAsJsonAsync($"/api/payroll/global-movements/{id:D}/apply", new { PayrollPeriodId = periodId });
+        if (!response.IsSuccessStatusCode)
+        {
+            var err = await response.Content.ReadAsStringAsync();
+            throw new InvalidOperationException(err);
+        }
+        return await response.Content.ReadFromJsonAsync<PayrollGlobalMovementApplyResponse>() ?? new();
+    }
+
+    public async Task CloseGlobalMovementAsync(Guid id)
+    {
+        var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
+        var response = await client.PostAsync($"/api/payroll/global-movements/{id:D}/close", null);
+        if (!response.IsSuccessStatusCode)
+        {
+            var err = await response.Content.ReadAsStringAsync();
+            throw new InvalidOperationException(err);
+        }
+    }
+
+    public async Task<List<PayrollGlobalMovementLineItem>> GetGlobalMovementLinesAsync(Guid id)
+    {
+        var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
+        return await client.GetFromJsonAsync<List<PayrollGlobalMovementLineItem>>($"/api/payroll/global-movements/{id:D}/lines") ?? [];
+    }
+
     // ── Captura matricial ───────────────────────────────────────────────────────
 
     public async Task<PayrollRunMatrixData?> GetPayrollRunMatrixDataAsync(Guid runId)

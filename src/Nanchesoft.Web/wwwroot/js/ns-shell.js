@@ -376,12 +376,13 @@ window.downloadFile = function (filename, mimeType, content) {
     URL.revokeObjectURL(url);
 };
 
-// Descarga un archivo binario (PDF) desde un string base64
-window.downloadFileBase64 = function (filename, base64Data) {
+// Descarga un archivo binario (PDF por defecto) desde un string base64.
+// Acepta opcionalmente el mime-type como tercer argumento para CSV/XLSX/XML.
+window.downloadFileBase64 = function (filename, base64Data, mimeType) {
     const byteChars = atob(base64Data);
     const byteNums = new Array(byteChars.length);
     for (let i = 0; i < byteChars.length; i++) byteNums[i] = byteChars.charCodeAt(i);
-    const blob = new Blob([new Uint8Array(byteNums)], { type: 'application/pdf' });
+    const blob = new Blob([new Uint8Array(byteNums)], { type: mimeType || 'application/pdf' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -390,6 +391,11 @@ window.downloadFileBase64 = function (filename, base64Data) {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
+};
+
+// Alias enterprise para mimes arbitrarios.
+window.nanchesoftDownload = function (filename, base64Data, mimeType) {
+    window.downloadFileBase64(filename, base64Data, mimeType);
 };
 
 window.nsImport = {

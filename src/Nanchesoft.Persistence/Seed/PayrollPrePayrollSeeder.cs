@@ -227,5 +227,92 @@ CREATE TABLE IF NOT EXISTS payroll.payroll_prepayroll_cutoffs (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS ix_payroll_prepayroll_cutoffs_company_period_code ON payroll.payroll_prepayroll_cutoffs (company_id, payroll_period_id, cutoff_code);
 """);
+
+        await dbContext.Database.ExecuteSqlRawAsync("""
+CREATE TABLE IF NOT EXISTS payroll.payroll_prepayroll_column_preferences (
+    id uuid PRIMARY KEY,
+    tenant_id uuid NOT NULL,
+    company_id uuid NOT NULL,
+    payroll_period_id uuid NULL,
+    user_key character varying(120) NOT NULL,
+    concept_ids character varying(4000) NOT NULL,
+    notes character varying(600) NOT NULL,
+    is_active boolean NOT NULL,
+    created_at timestamp with time zone NOT NULL,
+    created_by text NULL,
+    updated_at timestamp with time zone NULL,
+    updated_by text NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS ix_payroll_prepayroll_column_preferences_company_user_period ON payroll.payroll_prepayroll_column_preferences (company_id, user_key, payroll_period_id);
+""");
+
+        await dbContext.Database.ExecuteSqlRawAsync("""
+CREATE TABLE IF NOT EXISTS payroll.payroll_global_movements (
+    id uuid PRIMARY KEY,
+    tenant_id uuid NOT NULL,
+    company_id uuid NOT NULL,
+    payroll_concept_id uuid NOT NULL,
+    batch_code character varying(40) NOT NULL,
+    batch_name character varying(160) NOT NULL,
+    movement_type character varying(30) NOT NULL,
+    calculation_mode character varying(40) NOT NULL,
+    quantity numeric(18,4) NOT NULL,
+    amount numeric(18,2) NOT NULL,
+    percentage numeric(18,4) NOT NULL,
+    start_date timestamp with time zone NOT NULL,
+    end_date timestamp with time zone NULL,
+    times_to_apply integer NOT NULL,
+    times_applied integer NOT NULL,
+    max_amount numeric(18,2) NOT NULL,
+    accumulated_amount numeric(18,2) NOT NULL,
+    control_number character varying(60) NOT NULL,
+    filter_department_ids character varying(4000) NOT NULL,
+    filter_position_ids character varying(4000) NOT NULL,
+    filter_branch_ids character varying(4000) NOT NULL,
+    filter_employer_registration_ids character varying(4000) NOT NULL,
+    filter_work_shift_ids character varying(4000) NOT NULL,
+    filter_employee_ids character varying(4000) NOT NULL,
+    exclude_employee_ids character varying(4000) NOT NULL,
+    min_salary numeric(18,2) NOT NULL,
+    max_salary numeric(18,2) NOT NULL,
+    make_recurring boolean NOT NULL,
+    status character varying(30) NOT NULL,
+    applied_at timestamp with time zone NULL,
+    applied_by character varying(160) NOT NULL,
+    notes character varying(600) NOT NULL,
+    is_active boolean NOT NULL,
+    created_at timestamp with time zone NOT NULL,
+    created_by text NULL,
+    updated_at timestamp with time zone NULL,
+    updated_by text NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS ix_payroll_global_movements_company_batch_code ON payroll.payroll_global_movements (company_id, batch_code);
+""");
+
+        await dbContext.Database.ExecuteSqlRawAsync("""
+CREATE TABLE IF NOT EXISTS payroll.payroll_global_movement_lines (
+    id uuid PRIMARY KEY,
+    tenant_id uuid NOT NULL,
+    company_id uuid NOT NULL,
+    payroll_global_movement_id uuid NOT NULL,
+    employee_id uuid NOT NULL,
+    payroll_period_id uuid NULL,
+    quantity numeric(18,4) NOT NULL,
+    amount numeric(18,2) NOT NULL,
+    applied_at timestamp with time zone NOT NULL,
+    applied_by character varying(160) NOT NULL,
+    resulting_adjustment_id uuid NULL,
+    resulting_recurring_movement_id uuid NULL,
+    status character varying(30) NOT NULL,
+    notes character varying(600) NOT NULL,
+    is_active boolean NOT NULL,
+    created_at timestamp with time zone NOT NULL,
+    created_by text NULL,
+    updated_at timestamp with time zone NULL,
+    updated_by text NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS ix_payroll_global_movement_lines_batch_employee_period ON payroll.payroll_global_movement_lines (payroll_global_movement_id, employee_id, payroll_period_id);
+CREATE INDEX IF NOT EXISTS ix_payroll_global_movement_lines_company_employee ON payroll.payroll_global_movement_lines (company_id, employee_id);
+""");
     }
 }

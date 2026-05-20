@@ -10,15 +10,17 @@ Estado base validado:
 - Prestamos y deducciones: implementado.
 - Importacion de checadas CSV/Silvasoft: implementado.
 - Retardos y faltas configurables: implementado como base operativa en proceso de nomina.
+- Prenomina configurable (config columnas persistida por usuario+periodo, exportar CSV): implementado (fase 2A).
+- Movimientos globales (lote multiempleado con filtros, preview, aplicacion masiva, opcion permanente): implementado (fase 2A).
 
 ## Prioridad siguiente
 
-1. Prenomina configurable
-   - Configurar columnas por periodo/usuario.
-   - Elegir conceptos de percepcion, deduccion y obligacion que aparecen en matriz.
-   - Guardar configuracion base y permitir configuracion especial por periodo.
-   - Copiar importes a toda una columna.
-   - Importar/exportar movimientos de prenomina.
+1. Prenomina configurable [HECHO]
+   - Configurar columnas por periodo/usuario. (OK)
+   - Elegir conceptos de percepcion, deduccion y obligacion que aparecen en matriz. (OK)
+   - Guardar configuracion base y permitir configuracion especial por periodo. (OK)
+   - Copiar importes a toda una columna. (OK)
+   - Importar/exportar movimientos de prenomina. (OK)
 
 2. Dias y horas tipo CONTPAQi
    - Captura diaria por empleado y dia del periodo.
@@ -30,11 +32,12 @@ Estado base validado:
    - Agregar multiples empleados en una sola captura.
    - Permitir ajustar unidades/fecha por empleado antes de guardar.
 
-4. Movimientos globales
-   - Definir filtros por departamento, puesto, empleado u otros criterios.
-   - Aplicar conceptos a grupos de empleados.
-   - Manejar fecha inicio, veces a aplicar, monto limite, acumulado, estado y numero de control.
-   - Reflejar el movimiento como permanente por empleado cuando corresponda.
+4. Movimientos globales [HECHO]
+   - Filtros por departamento, puesto, sucursal, salario, empleados incluidos/excluidos. (OK)
+   - Aplicar conceptos a grupos de empleados con preview. (OK)
+   - Fecha inicio/fin, veces a aplicar, monto limite, acumulado, estado, numero de control. (OK)
+   - Marcado opcional como permanente -> crea PayrollRecurringMovement por empleado. (OK)
+   - Pendiente: ampliar filtros para registro patronal y turno cuando Employee tenga esas FK.
 
 5. Conceptos avanzados y validacion fiscal
    - Agregar configuracion de formulas por concepto: importe total, gravado ISR, exento ISR e IMSS.

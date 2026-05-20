@@ -225,6 +225,8 @@ app.MapHumanResourcesLifecycleEndpoints();
 app.MapHumanResourcesTalentEndpoints();
 app.MapHumanResourcesPerformanceEndpoints();
 app.MapPayrollPrePayrollEndpoints();
+app.MapPayrollPrePayrollAdvancedEndpoints();
+app.MapPayrollGlobalMovementsEndpoints();
 app.MapPayrollCalculatedEndpoints();
 app.MapPayrollDisbursementEndpoints();
 app.MapPayrollFiscalEndpoints();

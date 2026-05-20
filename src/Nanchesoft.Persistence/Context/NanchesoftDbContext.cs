@@ -151,6 +151,9 @@ public sealed class NanchesoftDbContext : DbContext
     public DbSet<PayrollTaxAccumulator> PayrollTaxAccumulators => Set<PayrollTaxAccumulator>();
     public DbSet<PayrollEmployerObligation> PayrollEmployerObligations => Set<PayrollEmployerObligation>();
     public DbSet<PayrollFiscalReconciliation> PayrollFiscalReconciliations => Set<PayrollFiscalReconciliation>();
+    public DbSet<PrePayrollColumnPreference> PrePayrollColumnPreferences => Set<PrePayrollColumnPreference>();
+    public DbSet<PayrollGlobalMovement> PayrollGlobalMovements => Set<PayrollGlobalMovement>();
+    public DbSet<PayrollGlobalMovementLine> PayrollGlobalMovementLines => Set<PayrollGlobalMovementLine>();
 
     // Production module
     public DbSet<ProductionCell> ProductionCells => Set<ProductionCell>();

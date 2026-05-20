@@ -2,6 +2,7 @@
 @using Nanchesoft.Web.Services.HumanResources
 @inject PayrollMvpApiService PayrollMvpApiService
 @inject PayrollOperationsApiService PayrollOperationsApiService
+@inject IJSRuntime JS
 
 <PageTitle>Prenómina | Nanchesoft</PageTitle>
 
@@ -27,6 +28,9 @@
         </div>
         <div class="d-flex gap-2">
             <span class="badge bg-warning text-dark align-self-center">@_changes.Count cambio(s)</span>
+            <button class="btn btn-outline-secondary" @onclick="ExportMatrixAsync" disabled="@(_busy || _selectedPeriodId == Guid.Empty)" title="Descargar movimientos a CSV">
+                <i class="bi bi-download"></i> Exportar
+            </button>
             <button class="btn btn-primary" @onclick="SaveAsync" disabled="@(_busy || _selectedPeriodId == Guid.Empty || _changes.Count == 0)">
                 @(_busy ? "Guardando..." : "Guardar")
             </button>
@@ -56,8 +60,16 @@
                     </select>
                 </div>
                 <div class="col-md-7">
-                    <details>
-                        <summary class="fw-semibold" style="cursor:pointer;">Configurar columnas</summary>
+                    <details open="@(_selectedPeriodId == Guid.Empty)">
+                        <summary class="fw-semibold" style="cursor:pointer;">
+                            Configurar columnas
+                            @if (!string.IsNullOrEmpty(_preferenceSource))
+                            {
+                                <span class="badge ms-2 @(_preferenceSource == "period" ? "bg-info" : _preferenceSource == "base" ? "bg-secondary" : "bg-light text-dark")">
+                                    @(_preferenceSource == "period" ? "Configuración del periodo" : _preferenceSource == "base" ? "Configuración base" : "Por defecto")
+                                </span>
+                            }
+                        </summary>
                         <div class="concept-picker mt-2">
                             @foreach (var concept in _allConcepts)
                             {
@@ -65,6 +77,20 @@
                                     <input class="form-check-input" type="checkbox" checked="@_selectedConceptIds.Contains(concept.ConceptId)" @onchange="e => ToggleConceptAsync(concept.ConceptId, e)" />
                                     <span><strong>@concept.Code</strong> @concept.Name</span>
                                 </label>
+                            }
+                        </div>
+                        <div class="d-flex flex-wrap gap-2 mt-3">
+                            <button class="btn btn-sm btn-outline-primary" @onclick="() => SavePreferenceAsync(false)" disabled="@_busy">
+                                <i class="bi bi-save"></i> Guardar como configuración base
+                            </button>
+                            <button class="btn btn-sm btn-outline-info" @onclick="() => SavePreferenceAsync(true)" disabled="@(_busy || _selectedPeriodId == Guid.Empty)">
+                                <i class="bi bi-save"></i> Guardar solo para este periodo
+                            </button>
+                            @if (_hasPeriodOverride && _selectedPeriodId != Guid.Empty)
+                            {
+                                <button class="btn btn-sm btn-outline-warning" @onclick="ClearPeriodOverrideAsync" disabled="@_busy">
+                                    <i class="bi bi-arrow-counterclockwise"></i> Restaurar configuración base
+                                </button>
                             }
                         </div>
                     </details>
@@ -191,6 +217,9 @@
     private decimal _copyAmount;
     private Microsoft.AspNetCore.Components.Forms.IBrowserFile? _importFile;
     private PrePayrollMatrixImportResult? _importResult;
+    private string _preferenceSource = string.Empty;
+    private bool _hasBasePreference;
+    private bool _hasPeriodOverride;
 
     protected override async Task OnInitializedAsync()
     {
@@ -201,11 +230,40 @@
             .ThenBy(x => x.Code)
             .ToList();
 
-        _selectedConceptIds = _allConcepts
-            .Where(x => x.Code is "BON" or "DESCTO" || !x.Code.Equals("SAL", StringComparison.OrdinalIgnoreCase))
-            .Take(8)
-            .Select(x => x.ConceptId)
-            .ToHashSet();
+        await LoadPreferenceAsync();
+    }
+
+    private async Task LoadPreferenceAsync()
+    {
+        try
+        {
+            var pref = await PayrollOperationsApiService.GetPrePayrollColumnPreferencesAsync(_selectedPeriodId == Guid.Empty ? null : _selectedPeriodId);
+            _preferenceSource = pref.Source ?? "default";
+            _hasBasePreference = pref.HasBase;
+            _hasPeriodOverride = pref.HasPeriodOverride;
+
+            if (pref.ConceptIds is not null && pref.ConceptIds.Count > 0)
+            {
+                var validIds = _allConcepts.Select(x => x.ConceptId).ToHashSet();
+                _selectedConceptIds = pref.ConceptIds.Where(validIds.Contains).ToHashSet();
+            }
+            else
+            {
+                _selectedConceptIds = _allConcepts
+                    .Where(x => x.Code is "BON" or "DESCTO" || !x.Code.Equals("SAL", StringComparison.OrdinalIgnoreCase))
+                    .Take(8)
+                    .Select(x => x.ConceptId)
+                    .ToHashSet();
+            }
+        }
+        catch
+        {
+            _selectedConceptIds = _allConcepts
+                .Where(x => x.Code is "BON" or "DESCTO" || !x.Code.Equals("SAL", StringComparison.OrdinalIgnoreCase))
+                .Take(8)
+                .Select(x => x.ConceptId)
+                .ToHashSet();
+        }
     }
 
     private async Task OnPeriodChangedAsync(ChangeEventArgs e)
@@ -214,6 +272,7 @@
         _changes.Clear();
         _importFile = null;
         _importResult = null;
+        await LoadPreferenceAsync();
         await LoadAsync();
     }
 
@@ -225,6 +284,69 @@
         _changes.Clear();
         if (_selectedPeriodId != Guid.Empty)
             await LoadAsync();
+    }
+
+    private async Task SavePreferenceAsync(bool perPeriod)
+    {
+        _busy = true;
+        try
+        {
+            Guid? targetPeriod = perPeriod && _selectedPeriodId != Guid.Empty ? _selectedPeriodId : null;
+            await PayrollOperationsApiService.SavePrePayrollColumnPreferencesAsync(_selectedConceptIds, targetPeriod);
+            await LoadPreferenceAsync();
+            Show(perPeriod ? "Configuración guardada para este periodo." : "Configuración base guardada.", false);
+        }
+        catch (Exception ex)
+        {
+            Show(ex.Message, true);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task ClearPeriodOverrideAsync()
+    {
+        if (_selectedPeriodId == Guid.Empty) return;
+        _busy = true;
+        try
+        {
+            await PayrollOperationsApiService.ClearPrePayrollPeriodPreferenceAsync(_selectedPeriodId);
+            await LoadPreferenceAsync();
+            await LoadAsync();
+            Show("Se restauró la configuración base para este periodo.", false);
+        }
+        catch (Exception ex)
+        {
+            Show(ex.Message, true);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task ExportMatrixAsync()
+    {
+        if (_selectedPeriodId == Guid.Empty) return;
+        _busy = true;
+        try
+        {
+            var bytes = await PayrollOperationsApiService.ExportPrePayrollMatrixAsync(_selectedPeriodId, _selectedConceptIds);
+            var period = _periods.FirstOrDefault(x => x.PayrollPeriodId == _selectedPeriodId);
+            var fileName = $"prenomina-{period?.Name?.Replace(' ', '_') ?? _selectedPeriodId.ToString()}.csv";
+            await JS.InvokeVoidAsync("nanchesoftDownload", fileName, Convert.ToBase64String(bytes), "text/csv");
+            Show("Movimientos exportados.", false);
+        }
+        catch (Exception ex)
+        {
+            Show(ex.Message, true);
+        }
+        finally
+        {
+            _busy = false;
+        }
     }
 
     private async Task LoadAsync()

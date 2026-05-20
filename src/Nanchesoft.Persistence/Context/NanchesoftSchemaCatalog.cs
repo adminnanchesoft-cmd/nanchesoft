@@ -187,6 +187,9 @@ public static class NanchesoftSchemaCatalog
         modelBuilder.Entity<PayrollTaxAccumulator>().ToTable("payroll_tax_accumulators", PayrollSchema);
         modelBuilder.Entity<PayrollEmployerObligation>().ToTable("payroll_employer_obligations", PayrollSchema);
         modelBuilder.Entity<PayrollFiscalReconciliation>().ToTable("payroll_fiscal_reconciliations", PayrollSchema);
+        modelBuilder.Entity<PrePayrollColumnPreference>().ToTable("payroll_prepayroll_column_preferences", PayrollSchema);
+        modelBuilder.Entity<PayrollGlobalMovement>().ToTable("payroll_global_movements", PayrollSchema);
+        modelBuilder.Entity<PayrollGlobalMovementLine>().ToTable("payroll_global_movement_lines", PayrollSchema);
         modelBuilder.Entity<PurchaseRequisition>().ToTable("purchase_requisitions", PurchaseSchema);
         modelBuilder.Entity<PurchaseRequisitionLine>().ToTable("purchase_requisition_lines", PurchaseSchema);
         modelBuilder.Entity<PurchaseOrder>().ToTable("purchase_orders", PurchaseSchema);
