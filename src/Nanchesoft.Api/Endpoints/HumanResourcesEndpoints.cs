@@ -1280,7 +1280,25 @@ public static class HumanResourcesEndpoints
                 IsAutomatic = x.IsAutomatic,
                 PrintOnReceipt = x.PrintOnReceipt,
                 SortOrder = x.SortOrder,
-                IsActive = x.IsActive
+                IsActive = x.IsActive,
+                Formula = x.Formula,
+                TaxableFormula = x.TaxableFormula,
+                ExemptFormula = x.ExemptFormula,
+                ImssTaxableFormula = x.ImssTaxableFormula,
+                SatTipoPercepcionCode = x.SatTipoPercepcionCode,
+                SatTipoDeduccionCode = x.SatTipoDeduccionCode,
+                SatTipoOtroPagoCode = x.SatTipoOtroPagoCode,
+                AutomaticOnGlobalRun = x.AutomaticOnGlobalRun,
+                AutomaticOnTermination = x.AutomaticOnTermination,
+                IsInKind = x.IsInKind,
+                AffectsSeventhDay = x.AffectsSeventhDay,
+                AffectsHolidayPay = x.AffectsHolidayPay,
+                AffectsImss = x.AffectsImss,
+                AffectsIsr = x.AffectsIsr,
+                AffectsAccumulators = x.AffectsAccumulators,
+                RequiresSatStamping = x.RequiresSatStamping,
+                MinAmount = x.MinAmount,
+                MaxAmount = x.MaxAmount
             })
             .ToListAsync();
 
@@ -1323,6 +1341,24 @@ public static class HumanResourcesEndpoints
             PrintOnReceipt = request.PrintOnReceipt,
             SortOrder = request.SortOrder,
             IsActive = request.IsActive,
+            Formula = NormalizeText(request.Formula),
+            TaxableFormula = NormalizeText(request.TaxableFormula),
+            ExemptFormula = NormalizeText(request.ExemptFormula),
+            ImssTaxableFormula = NormalizeText(request.ImssTaxableFormula),
+            SatTipoPercepcionCode = NormalizeUpper(request.SatTipoPercepcionCode),
+            SatTipoDeduccionCode = NormalizeUpper(request.SatTipoDeduccionCode),
+            SatTipoOtroPagoCode = NormalizeUpper(request.SatTipoOtroPagoCode),
+            AutomaticOnGlobalRun = request.AutomaticOnGlobalRun,
+            AutomaticOnTermination = request.AutomaticOnTermination,
+            IsInKind = request.IsInKind,
+            AffectsSeventhDay = request.AffectsSeventhDay,
+            AffectsHolidayPay = request.AffectsHolidayPay,
+            AffectsImss = request.AffectsImss,
+            AffectsIsr = request.AffectsIsr,
+            AffectsAccumulators = request.AffectsAccumulators,
+            RequiresSatStamping = request.RequiresSatStamping,
+            MinAmount = Math.Max(0m, request.MinAmount),
+            MaxAmount = Math.Max(0m, request.MaxAmount),
             CreatedBy = "web-api"
         };
 
@@ -1355,6 +1391,24 @@ public static class HumanResourcesEndpoints
         entity.PrintOnReceipt = request.PrintOnReceipt;
         entity.SortOrder = request.SortOrder;
         entity.IsActive = request.IsActive;
+        entity.Formula = NormalizeText(request.Formula, entity.Formula);
+        entity.TaxableFormula = NormalizeText(request.TaxableFormula, entity.TaxableFormula);
+        entity.ExemptFormula = NormalizeText(request.ExemptFormula, entity.ExemptFormula);
+        entity.ImssTaxableFormula = NormalizeText(request.ImssTaxableFormula, entity.ImssTaxableFormula);
+        entity.SatTipoPercepcionCode = NormalizeUpper(request.SatTipoPercepcionCode, entity.SatTipoPercepcionCode);
+        entity.SatTipoDeduccionCode = NormalizeUpper(request.SatTipoDeduccionCode, entity.SatTipoDeduccionCode);
+        entity.SatTipoOtroPagoCode = NormalizeUpper(request.SatTipoOtroPagoCode, entity.SatTipoOtroPagoCode);
+        entity.AutomaticOnGlobalRun = request.AutomaticOnGlobalRun;
+        entity.AutomaticOnTermination = request.AutomaticOnTermination;
+        entity.IsInKind = request.IsInKind;
+        entity.AffectsSeventhDay = request.AffectsSeventhDay;
+        entity.AffectsHolidayPay = request.AffectsHolidayPay;
+        entity.AffectsImss = request.AffectsImss;
+        entity.AffectsIsr = request.AffectsIsr;
+        entity.AffectsAccumulators = request.AffectsAccumulators;
+        entity.RequiresSatStamping = request.RequiresSatStamping;
+        entity.MinAmount = Math.Max(0m, request.MinAmount);
+        entity.MaxAmount = Math.Max(0m, request.MaxAmount);
         entity.UpdatedAt = DateTime.UtcNow;
         entity.UpdatedBy = "web-api";
 
@@ -1838,6 +1892,24 @@ public class PayrollConceptRequest
     public bool PrintOnReceipt { get; set; } = true;
     public int SortOrder { get; set; }
     public bool IsActive { get; set; } = true;
+    public string? Formula { get; set; }
+    public string? TaxableFormula { get; set; }
+    public string? ExemptFormula { get; set; }
+    public string? ImssTaxableFormula { get; set; }
+    public string? SatTipoPercepcionCode { get; set; }
+    public string? SatTipoDeduccionCode { get; set; }
+    public string? SatTipoOtroPagoCode { get; set; }
+    public bool AutomaticOnGlobalRun { get; set; }
+    public bool AutomaticOnTermination { get; set; }
+    public bool IsInKind { get; set; }
+    public bool AffectsSeventhDay { get; set; }
+    public bool AffectsHolidayPay { get; set; }
+    public bool AffectsImss { get; set; } = true;
+    public bool AffectsIsr { get; set; } = true;
+    public bool AffectsAccumulators { get; set; } = true;
+    public bool RequiresSatStamping { get; set; } = true;
+    public decimal MinAmount { get; set; }
+    public decimal MaxAmount { get; set; }
 }
 
 public sealed class PayrollConceptDto : PayrollConceptRequest

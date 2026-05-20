@@ -23,4 +23,23 @@ public sealed class PayrollConcept : BaseEntity
     public decimal TaxablePercent { get; set; } = 100m;
     public decimal ExemptPercent { get; set; } = 0m;
     public int SortOrder { get; set; }
+
+    public string Formula { get; set; } = string.Empty;
+    public string TaxableFormula { get; set; } = string.Empty;
+    public string ExemptFormula { get; set; } = string.Empty;
+    public string ImssTaxableFormula { get; set; } = string.Empty;
+    public string SatTipoPercepcionCode { get; set; } = string.Empty;
+    public string SatTipoDeduccionCode { get; set; } = string.Empty;
+    public string SatTipoOtroPagoCode { get; set; } = string.Empty;
+    public bool AutomaticOnGlobalRun { get; set; }
+    public bool AutomaticOnTermination { get; set; }
+    public bool IsInKind { get; set; }
+    public bool AffectsSeventhDay { get; set; }
+    public bool AffectsHolidayPay { get; set; }
+    public bool AffectsImss { get; set; } = true;
+    public bool AffectsIsr { get; set; } = true;
+    public bool AffectsAccumulators { get; set; } = true;
+    public bool RequiresSatStamping { get; set; } = true;
+    public decimal MinAmount { get; set; }
+    public decimal MaxAmount { get; set; }
 }
