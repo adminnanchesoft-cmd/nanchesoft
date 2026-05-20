@@ -1,0 +1,373 @@
+@page "/finance/payment-batches/{Id:guid}"
+@using Nanchesoft.Web.Services.Finance
+@inject PaymentCentralApiService Api
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+
+<PageTitle>Lote @(_batch?.Folio) | Nanchesoft</PageTitle>
+
+@if (_loading)
+{
+    <div class="alert alert-info">Cargando lote...</div>
+}
+else if (_batch is null)
+{
+    <div class="alert alert-danger">No se encontró el lote.</div>
+}
+else
+{
+    <div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-3">
+        <div>
+            <div class="text-muted small">Nanchesoft ERP · Finanzas · Pagos</div>
+            <h1 class="h3 mb-1">@_batch.Folio @StatusBadge(_batch.Status)</h1>
+            <div class="text-muted">Lote del @_batch.BatchDate.ToString("dd/MM/yyyy") · Solicitado por @_batch.RequestedByName</div>
+        </div>
+        <div class="d-flex gap-2 flex-wrap">
+            <a class="btn btn-outline-secondary" href="/finance/payment-batches">← Lotes</a>
+            <button class="btn btn-outline-secondary" @onclick="PrintAsync">Imprimir</button>
+            @if (_batch.Status == "pending" || _batch.Status == "in_review")
+            {
+                <button class="btn btn-success" @onclick="OpenAuthorize">Autorizar</button>
+                <button class="btn btn-outline-danger" @onclick="OpenReject">Rechazar</button>
+                <button class="btn btn-outline-dark" @onclick="CancelAsync">Cancelar</button>
+            }
+            @if (_batch.Status == "authorized" || _batch.Status == "in_review")
+            {
+                <button class="btn btn-primary" @onclick="ExecuteAsync">Ejecutar pagos</button>
+            }
+        </div>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(_message))
+    {
+        <div class="alert alert-success">@_message</div>
+    }
+    @if (!string.IsNullOrWhiteSpace(_error))
+    {
+        <div class="alert alert-danger">@_error</div>
+    }
+
+    <div class="row g-3 mb-3">
+        <div class="col-md-3"><div class="card border-primary shadow-sm h-100"><div class="card-body"><div class="text-muted small">Total solicitado</div><div class="fs-4 fw-bold text-primary">@_batch.TotalAmount.ToString("C")</div><div class="text-muted small">@_batch.LineCount pagos · @_batch.CompanyCount empresas · @_batch.SupplierCount proveedores</div></div></div></div>
+        <div class="col-md-3"><div class="card border-info shadow-sm h-100"><div class="card-body"><div class="text-muted small">Autorizado</div><div class="fs-4 fw-bold text-info">@_batch.AuthorizedAmount.ToString("C")</div><div class="text-muted small">@(_batch.AuthorizedByName) @(_batch.AuthorizedAt?.ToString("dd/MM/yyyy") ?? string.Empty)</div></div></div></div>
+        <div class="col-md-3"><div class="card border-success shadow-sm h-100"><div class="card-body"><div class="text-muted small">Ejecutado</div><div class="fs-4 fw-bold text-success">@_batch.ExecutedAmount.ToString("C")</div><div class="text-muted small">@(_batch.ExecutedAt?.ToString("dd/MM/yyyy") ?? "—")</div></div></div></div>
+        <div class="col-md-3"><div class="card shadow-sm h-100 @(_batch.Status == "rejected" ? "border-danger" : "")"><div class="card-body"><div class="text-muted small">Programado para</div><div class="fs-4 fw-bold">@(_batch.ScheduledDate?.ToString("dd/MM/yyyy") ?? "—")</div><div class="text-muted small">@_batch.RejectedReason</div></div></div></div>
+    </div>
+
+    <div class="card shadow-sm mb-3">
+        <div class="table-responsive">
+            <table class="table table-sm table-striped align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Empresa</th>
+                        <th>Proveedor</th>
+                        <th>Factura</th>
+                        <th>Vence</th>
+                        <th>Días</th>
+                        <th class="text-end">Original</th>
+                        <th class="text-end">Pendiente</th>
+                        <th class="text-end">A pagar</th>
+                        <th>Tipo</th>
+                        <th>Cuenta</th>
+                        <th>Prioridad</th>
+                        <th>Estatus</th>
+                        <th>Folio ejec.</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var line in _batch.Lines)
+                    {
+                        <tr class="@RowClass(line.LineStatus)">
+                            <td><span class="badge bg-light text-dark border">@CompanyName(line.CompanyId)</span></td>
+                            <td>@line.SupplierName</td>
+                            <td><code>@line.InvoiceFolio</code></td>
+                            <td>@(line.DueDate?.ToString("dd/MM/yyyy") ?? "—")</td>
+                            <td>@line.DaysOverdue</td>
+                            <td class="text-end">@line.OriginalAmount.ToString("N2")</td>
+                            <td class="text-end">@line.AmountDue.ToString("N2")</td>
+                            <td class="text-end fw-bold">@line.AmountToPay.ToString("N2") @line.CurrencyCode</td>
+                            <td>@PaymentTypeLabel(line.PaymentType)</td>
+                            <td>@AccountLabel(line)</td>
+                            <td>@PriorityBadge(line.Priority)</td>
+                            <td>@LineStatusBadge(line.LineStatus)</td>
+                            <td>@(string.IsNullOrWhiteSpace(line.ExecutedFolio) ? "—" : line.ExecutedFolio)</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="card shadow-sm">
+        <div class="card-header bg-light">
+            <strong>Bitácora del lote</strong>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-sm mb-0">
+                <thead>
+                    <tr>
+                        <th>Fecha</th>
+                        <th>Acción</th>
+                        <th>Usuario</th>
+                        <th>Detalle</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (_audit.Count == 0)
+                    {
+                        <tr><td colspan="4" class="text-center text-muted py-3">Sin eventos.</td></tr>
+                    }
+                    @foreach (var entry in _audit)
+                    {
+                        <tr>
+                            <td>@entry.Timestamp.ToString("dd/MM/yyyy HH:mm")</td>
+                            <td><span class="badge bg-light text-dark border">@entry.Action</span></td>
+                            <td>@entry.UserName</td>
+                            <td>@entry.NewValue @if (!string.IsNullOrWhiteSpace(entry.Notes)) { <text>· @entry.Notes</text> }</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+}
+
+@if (_showAuthorizeModal && _batch is not null)
+{
+    <div class="modal d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Autorizar lote</h5>
+                    <button class="btn-close" @onclick="() => _showAuthorizeModal = false"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-info small">
+                        Se autorizan todas las líneas pendientes del lote. Total: <strong>@_batch.TotalAmount.ToString("C")</strong>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Autorizado por</label>
+                        <input class="form-control" @bind="_authorizedByName" placeholder="Nombre" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Notas (opcional)</label>
+                        <textarea class="form-control" rows="2" @bind="_authorizeNotes"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" @onclick="() => _showAuthorizeModal = false">Cancelar</button>
+                    <button class="btn btn-success" @onclick="AuthorizeAsync">Autorizar lote</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@if (_showRejectModal && _batch is not null)
+{
+    <div class="modal d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Rechazar lote</h5>
+                    <button class="btn-close" @onclick="() => _showRejectModal = false"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Motivo de rechazo</label>
+                        <textarea class="form-control" rows="3" @bind="_rejectReason"></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Quien rechaza</label>
+                        <input class="form-control" @bind="_rejectedByName" />
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" @onclick="() => _showRejectModal = false">Cancelar</button>
+                    <button class="btn btn-danger" @onclick="RejectAsync">Confirmar rechazo</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+    private bool _loading = true;
+    private string? _message;
+    private string? _error;
+    private PaymentBatchDetail? _batch;
+    private List<PaymentBatchAuditRow> _audit = new();
+    private PaymentCentralLookups? _lookups;
+
+    private bool _showAuthorizeModal;
+    private bool _showRejectModal;
+    private string _authorizedByName = string.Empty;
+    private string _authorizeNotes = string.Empty;
+    private string _rejectedByName = string.Empty;
+    private string _rejectReason = string.Empty;
+
+    protected override async Task OnParametersSetAsync() => await ReloadAsync();
+
+    private async Task ReloadAsync()
+    {
+        _loading = true;
+        _error = null;
+        try
+        {
+            _lookups ??= await Api.GetLookupsAsync();
+            _batch = await Api.GetBatchAsync(Id);
+            _audit = await Api.GetAuditAsync(Id);
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _loading = false; }
+    }
+
+    private string CompanyName(Guid id)
+        => _lookups?.Companies.FirstOrDefault(c => c.Id == id)?.Name ?? id.ToString();
+
+    private string AccountLabel(PaymentBatchLineDetail line)
+    {
+        if (line.BankAccountId.HasValue)
+            return _lookups?.BankAccounts.FirstOrDefault(a => a.Id == line.BankAccountId.Value)?.Name ?? "🏦";
+        if (line.CashAccountId.HasValue)
+            return _lookups?.CashAccounts.FirstOrDefault(a => a.Id == line.CashAccountId.Value)?.Name ?? "💵";
+        return "—";
+    }
+
+    private void OpenAuthorize() => _showAuthorizeModal = true;
+    private void OpenReject() => _showRejectModal = true;
+
+    private async Task AuthorizeAsync()
+    {
+        try
+        {
+            var response = await Api.AuthorizeAsync(Id, new PaymentBatchAuthorizeRequest
+            {
+                AuthorizedByName = _authorizedByName,
+                Notes = _authorizeNotes
+            });
+            if (!response.IsSuccessStatusCode)
+            {
+                _error = await response.Content.ReadAsStringAsync();
+                return;
+            }
+            _showAuthorizeModal = false;
+            _message = "Lote autorizado.";
+            await ReloadAsync();
+        }
+        catch (Exception ex) { _error = ex.Message; }
+    }
+
+    private async Task RejectAsync()
+    {
+        try
+        {
+            var response = await Api.RejectAsync(Id, new PaymentBatchRejectRequest
+            {
+                UserName = _rejectedByName,
+                Reason = _rejectReason
+            });
+            if (!response.IsSuccessStatusCode)
+            {
+                _error = await response.Content.ReadAsStringAsync();
+                return;
+            }
+            _showRejectModal = false;
+            _message = "Lote rechazado.";
+            await ReloadAsync();
+        }
+        catch (Exception ex) { _error = ex.Message; }
+    }
+
+    private async Task CancelAsync()
+    {
+        if (!await JS.InvokeAsync<bool>("confirm", "¿Cancelar el lote? Las líneas no ejecutadas quedarán como canceladas.")) return;
+        try
+        {
+            var response = await Api.CancelAsync(Id);
+            if (!response.IsSuccessStatusCode)
+            {
+                _error = await response.Content.ReadAsStringAsync();
+                return;
+            }
+            _message = "Lote cancelado.";
+            await ReloadAsync();
+        }
+        catch (Exception ex) { _error = ex.Message; }
+    }
+
+    private async Task ExecuteAsync()
+    {
+        if (!await JS.InvokeAsync<bool>("confirm", "¿Ejecutar pagos del lote? Esto generará los movimientos bancarios, cheques y aplicaciones.")) return;
+        try
+        {
+            var response = await Api.ExecuteAsync(Id, new PaymentBatchExecuteRequest());
+            if (!response.IsSuccessStatusCode)
+            {
+                _error = await response.Content.ReadAsStringAsync();
+                return;
+            }
+            _message = "Pagos ejecutados.";
+            await ReloadAsync();
+        }
+        catch (Exception ex) { _error = ex.Message; }
+    }
+
+    private async Task PrintAsync()
+    {
+        await JS.InvokeVoidAsync("window.print");
+    }
+
+    private static string RowClass(string status) => status switch
+    {
+        "rejected" => "table-danger",
+        "executed" => "table-success",
+        "cancelled" => "text-muted",
+        "authorized" => "table-info",
+        _ => string.Empty
+    };
+
+    private static MarkupString StatusBadge(string status)
+    {
+        var (cls, label) = status switch
+        {
+            "draft" => ("bg-secondary", "Borrador"),
+            "pending" => ("bg-warning text-dark", "Pendiente"),
+            "in_review" => ("bg-info text-dark", "En revisión"),
+            "authorized" => ("bg-primary", "Autorizado"),
+            "executed" => ("bg-success", "Ejecutado"),
+            "partially_executed" => ("bg-success", "Parcial"),
+            "rejected" => ("bg-danger", "Rechazado"),
+            "cancelled" => ("bg-dark", "Cancelado"),
+            _ => ("bg-light text-dark", status)
+        };
+        return new MarkupString($"<span class=\"badge {cls}\">{label}</span>");
+    }
+
+    private static MarkupString LineStatusBadge(string status) => StatusBadge(status);
+
+    private static MarkupString PriorityBadge(string priority)
+    {
+        var (cls, label) = priority switch
+        {
+            "critical" => ("bg-danger", "Crítica"),
+            "high" => ("bg-warning text-dark", "Alta"),
+            "low" => ("bg-light text-dark", "Baja"),
+            _ => ("bg-secondary", "Normal")
+        };
+        return new MarkupString($"<span class=\"badge {cls}\">{label}</span>");
+    }
+
+    private static string PaymentTypeLabel(string code) => code switch
+    {
+        "transfer" => "Transferencia",
+        "check" => "Cheque",
+        "spei" => "SPEI",
+        "deposit" => "Depósito",
+        "cash" => "Efectivo",
+        "card" => "Tarjeta",
+        "offset" => "Compensación",
+        _ => "Otros"
+    };
+}

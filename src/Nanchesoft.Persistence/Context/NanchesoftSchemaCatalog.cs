@@ -247,6 +247,9 @@ public static class NanchesoftSchemaCatalog
         modelBuilder.Entity<Check>().ToTable("checks", FinanceSchema);
         modelBuilder.Entity<FinanceMovementType>().ToTable("movement_types", FinanceSchema);
         modelBuilder.Entity<FinanceConcept>().ToTable("concepts", FinanceSchema);
+        modelBuilder.Entity<PaymentBatch>().ToTable("payment_batches", FinanceSchema);
+        modelBuilder.Entity<PaymentBatchLine>().ToTable("payment_batch_lines", FinanceSchema);
+        modelBuilder.Entity<PaymentBatchAudit>().ToTable("payment_batch_audits", FinanceSchema);
         modelBuilder.Entity<AccountsReceivableAccount>().ToTable("accounts_receivable_accounts", FinanceSchema);
         modelBuilder.Entity<AccountsReceivableMovement>().ToTable("accounts_receivable_movements", FinanceSchema);
         modelBuilder.Entity<ReceiptApplication>().ToTable("receipt_applications", FinanceSchema);

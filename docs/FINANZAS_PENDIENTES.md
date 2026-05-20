@@ -4,6 +4,51 @@ Documento de seguimiento para el módulo financiero moderno de Nanchesoft ERP.
 Refleja el alcance de la **Fase 1** (2026-05-19) y la **Fase 2** (2026-05-19,
 mismo día) con todos los frentes ejecutados.
 
+## -1. Avance fase 3 (completado el 2026-05-20)
+
+### Central de Pagos multiempresa
+- Entidades `PaymentBatch`, `PaymentBatchLine`, `PaymentBatchAudit` (esquema
+  `finance`). Soportan multiempresa, multibanco y multicuenta sin cambiar de
+  contexto.
+- Endpoint `GET /api/payment-central/pending` consolida todas las facturas
+  pendientes de pago a nivel tenant, calcula vencimiento real, prioridad y
+  cantidad ya comprometida en lotes vivos.
+- Endpoint `GET /api/payment-central/lookups` devuelve empresas, cuentas
+  bancarias/caja con saldos, proveedores, monedas y tipos de pago con prefijos
+  de folio (TR, CH, SPEI, DEP, EF, TJ, COMP, OTR).
+- Endpoints CRUD `/api/payment-central/batches`:
+  - `POST /` genera folio `LOTE-YYYY-NNNNN`, registra auditoría.
+  - `POST /{id}/authorize` autoriza líneas (total o parcial con overrides).
+  - `POST /{id}/reject` rechazo de lote entero con motivo.
+  - `POST /{id}/cancel` cancela lote no ejecutado.
+  - `POST /{id}/execute` aplica pago a la factura, genera `Payment`,
+    `BankMovement`, `Check` (si tipo cheque) y descuenta saldo bancario / caja.
+  - `GET /{id}/audit` bitácora completa.
+- Endpoint `GET /api/payment-central/executive` con pendientes, autorizados,
+  ejecutados 30d, flujo comprometido vs disponible, razón de riesgo, bancos
+  con menor saldo y vencimientos en 14 días.
+
+### UI Blazor
+- `/finance/payment-central` — vista global tipo ERP premium con
+  selección masiva, edición inline (cuenta, tipo, monto, prioridad),
+  asignación rápida y generación del lote.
+- `/finance/payment-batches` — listado de lotes con filtros por estatus.
+- `/finance/payment-batches/{id}` — detalle del lote con autorización,
+  rechazo, cancelación, ejecución, bitácora e impresión (window.print).
+- `/finance/payment-executive` — pantalla ejecutiva con tarjetas, bancos
+  con menor saldo y próximos vencimientos.
+
+### Navegación
+- En grupo **CxP** se agregaron: "Central de pagos", "Lotes de pre-pago" y
+  "Pantalla ejecutiva pagos".
+
+### Migración SQL fase 3
+- Archivo `database/20260520_payment_central.sql` idempotente con tablas
+  `finance.payment_batches`, `finance.payment_batch_lines`,
+  `finance.payment_batch_audits` con sus índices y FKs.
+
+---
+
 ## 0. Avance fase 2 (completado)
 
 ### Cheques y chequeras

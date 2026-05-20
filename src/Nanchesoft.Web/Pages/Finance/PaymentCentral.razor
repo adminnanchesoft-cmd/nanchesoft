@@ -1,0 +1,455 @@
+@page "/finance/payment-central"
+@using Nanchesoft.Web.Services.Finance
+@inject PaymentCentralApiService Api
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+
+<PageTitle>Central de pagos | Nanchesoft</PageTitle>
+
+<div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-3">
+    <div>
+        <div class="text-muted small">Nanchesoft ERP · Finanzas · Pagos</div>
+        <h1 class="h3 mb-1">Central de pagos</h1>
+        <div class="text-muted">Vista global multiempresa con todas las facturas pendientes. Selecciona, asigna cuentas y genera un lote de pre-pago.</div>
+    </div>
+    <div class="d-flex gap-2">
+        <a class="btn btn-outline-secondary" href="/finance/payment-batches">Lotes de pago</a>
+        <a class="btn btn-outline-secondary" href="/finance/payment-executive">Pantalla ejecutiva</a>
+    </div>
+</div>
+
+@if (!string.IsNullOrWhiteSpace(_message))
+{
+    <div class="alert alert-success">@_message</div>
+}
+@if (!string.IsNullOrWhiteSpace(_error))
+{
+    <div class="alert alert-danger">@_error</div>
+}
+
+<div class="card shadow-sm mb-3">
+    <div class="card-body">
+        <div class="row g-3 align-items-end">
+            <div class="col-md-3">
+                <label class="form-label">Empresa</label>
+                <select class="form-select" @bind="_filterCompanyText" @bind:after="ReloadAsync">
+                    <option value="">Todas las empresas</option>
+                    @foreach (var c in _lookups?.Companies ?? new())
+                    {
+                        <option value="@c.Id">@c.Name</option>
+                    }
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Proveedor</label>
+                <select class="form-select" @bind="_filterSupplierText" @bind:after="ReloadAsync">
+                    <option value="">Todos los proveedores</option>
+                    @foreach (var s in _lookups?.Suppliers ?? new())
+                    {
+                        <option value="@s.Id">@s.Name</option>
+                    }
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">Moneda</label>
+                <select class="form-select" @bind="_filterCurrencyText" @bind:after="ReloadAsync">
+                    <option value="">Todas</option>
+                    @foreach (var c in _lookups?.Currencies ?? new())
+                    {
+                        <option value="@c.Id">@c.Name</option>
+                    }
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">Prioridad</label>
+                <select class="form-select" @bind="_filterPriority" @bind:after="ReloadAsync">
+                    <option value="">Todas</option>
+                    <option value="critical">Crítica (+30 días)</option>
+                    <option value="high">Alta (+7 días)</option>
+                    <option value="normal">Normal</option>
+                    <option value="low">Baja</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">Días vencidos ≥</label>
+                <input type="number" class="form-control text-end" @bind="_filterOverdue" @bind:after="ReloadAsync" />
+            </div>
+        </div>
+    </div>
+</div>
+
+@if (_rows.Count > 0)
+{
+    var selectedCount = _rows.Count(x => x.Selected);
+    var selectedAmount = _rows.Where(x => x.Selected).Sum(x => x.AmountToPay);
+    <div class="card shadow-sm mb-3 border-primary">
+        <div class="card-body d-flex justify-content-between flex-wrap gap-3 align-items-center">
+            <div>
+                <div class="fs-5 fw-bold">@selectedCount facturas seleccionadas · Total a pagar @selectedAmount.ToString("C")</div>
+                <div class="text-muted small">@_rows.Count(x => x.Selected && x.BankAccountId == null && x.CashAccountId == null) sin cuenta asignada</div>
+            </div>
+            <div class="d-flex gap-2 align-items-end">
+                <div>
+                    <label class="form-label small">Cuenta de pago (rápida)</label>
+                    <select class="form-select form-select-sm" @bind="_bulkAccountText">
+                        <option value="">Selecciona...</option>
+                        @foreach (var acc in _lookups?.BankAccounts ?? new())
+                        {
+                            <option value="bank:@acc.Id">@acc.CompanyName · @acc.Name (@acc.CurrentBalance.ToString("C"))</option>
+                        }
+                        @foreach (var acc in _lookups?.CashAccounts ?? new())
+                        {
+                            <option value="cash:@acc.Id">@acc.CompanyName · @acc.Name (@acc.CurrentBalance.ToString("C"))</option>
+                        }
+                    </select>
+                </div>
+                <div>
+                    <label class="form-label small">Tipo de pago (rápido)</label>
+                    <select class="form-select form-select-sm" @bind="_bulkType">
+                        @foreach (var pt in _lookups?.PaymentTypes ?? new())
+                        {
+                            <option value="@pt.Code">@pt.Name</option>
+                        }
+                    </select>
+                </div>
+                <button class="btn btn-outline-primary btn-sm" @onclick="ApplyBulk">Aplicar a seleccionadas</button>
+                <button class="btn btn-success" @onclick="OpenBatchModal" disabled="@(selectedCount == 0)">Generar lote de pre-pago</button>
+            </div>
+        </div>
+    </div>
+}
+
+@if (_loading)
+{
+    <div class="alert alert-info">Cargando facturas pendientes...</div>
+}
+else
+{
+    <div class="card shadow-sm">
+        <div class="table-responsive">
+            <table class="table table-sm table-striped align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>
+                            <input type="checkbox" @bind="_selectAll" @bind:after="ToggleSelectAll" />
+                        </th>
+                        <th>Empresa</th>
+                        <th>Proveedor</th>
+                        <th>Folio</th>
+                        <th>Fact. prov.</th>
+                        <th>Fecha</th>
+                        <th>Vencimiento</th>
+                        <th>Días</th>
+                        <th class="text-end">Total</th>
+                        <th class="text-end">Pendiente</th>
+                        <th class="text-end">Disponible</th>
+                        <th class="text-end">A pagar</th>
+                        <th>Tipo</th>
+                        <th style="min-width:200px;">Cuenta</th>
+                        <th>Prioridad</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (_rows.Count == 0)
+                    {
+                        <tr><td colspan="15" class="text-center text-muted py-4">No hay facturas pendientes con los filtros seleccionados.</td></tr>
+                    }
+                    else
+                    {
+                        @foreach (var row in _rows)
+                        {
+                            <tr class="@(row.Selected ? "table-warning" : "")">
+                                <td>
+                                    <input type="checkbox" checked="@row.Selected" @onchange="e => OnRowSelected(row, e)" />
+                                </td>
+                                <td><span class="badge bg-light text-dark border">@row.CompanyName</span></td>
+                                <td>
+                                    <div class="fw-semibold">@row.SupplierName</div>
+                                    <div class="text-muted small">@row.SupplierCode</div>
+                                </td>
+                                <td><code>@row.Folio</code></td>
+                                <td>@row.SupplierInvoiceFolio</td>
+                                <td>@row.InvoiceDate.ToString("dd/MM/yyyy")</td>
+                                <td>@row.DueDate.ToString("dd/MM/yyyy")</td>
+                                <td>@PriorityBadge(row.Priority, row.DaysOverdue)</td>
+                                <td class="text-end">@row.Total.ToString("N2")</td>
+                                <td class="text-end">@row.PendingAmount.ToString("N2")</td>
+                                <td class="text-end text-success">@row.AvailableToPay.ToString("N2")</td>
+                                <td>
+                                    <input type="number" step="0.01" class="form-control form-control-sm text-end" value="@row.AmountToPay" @onchange="e => OnAmountChanged(row, e)" disabled="@(!row.Selected)" />
+                                </td>
+                                <td>
+                                    <select class="form-select form-select-sm" value="@row.PaymentType" @onchange="e => OnPaymentTypeChanged(row, e)">
+                                        @foreach (var pt in _lookups?.PaymentTypes ?? new())
+                                        {
+                                            <option value="@pt.Code">@pt.Name</option>
+                                        }
+                                    </select>
+                                </td>
+                                <td>
+                                    <select class="form-select form-select-sm" value="@AccountSelectionValue(row)" @onchange="e => OnAccountChanged(row, e)">
+                                        <option value="">Sin asignar</option>
+                                        @foreach (var acc in (_lookups?.BankAccounts ?? new()).Where(x => x.CompanyId == row.CompanyId))
+                                        {
+                                            <option value="bank:@acc.Id">🏦 @acc.Name (@acc.CurrentBalance.ToString("C"))</option>
+                                        }
+                                        @foreach (var acc in (_lookups?.CashAccounts ?? new()).Where(x => x.CompanyId == row.CompanyId))
+                                        {
+                                            <option value="cash:@acc.Id">💵 @acc.Name</option>
+                                        }
+                                    </select>
+                                </td>
+                                <td>
+                                    <select class="form-select form-select-sm" value="@row.Priority" @onchange="e => OnPriorityChanged(row, e)">
+                                        <option value="critical">Crítica</option>
+                                        <option value="high">Alta</option>
+                                        <option value="normal">Normal</option>
+                                        <option value="low">Baja</option>
+                                    </select>
+                                </td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+}
+
+@if (_showBatchModal)
+{
+    <div class="modal d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Generar lote de pre-pago</h5>
+                    <button class="btn-close" @onclick="CloseBatchModal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <div class="text-muted small">Resumen</div>
+                        <div class="fs-5 fw-bold">@_rows.Count(x => x.Selected) pagos · @_rows.Where(x => x.Selected).Sum(x => x.AmountToPay).ToString("C")</div>
+                    </div>
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Fecha del lote</label>
+                            <input type="date" class="form-control" @bind="_batchDate" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Programado para</label>
+                            <input type="date" class="form-control" @bind="_scheduledDate" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Solicitado por</label>
+                            <input class="form-control" @bind="_requestedByName" placeholder="Nombre" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Prioridad</label>
+                            <select class="form-select" @bind="_batchPriority">
+                                <option value="critical">Crítica</option>
+                                <option value="high">Alta</option>
+                                <option value="normal">Normal</option>
+                                <option value="low">Baja</option>
+                            </select>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">Notas</label>
+                            <textarea class="form-control" rows="2" @bind="_batchNotes"></textarea>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" @onclick="CloseBatchModal">Cancelar</button>
+                    <button class="btn btn-success" @onclick="CreateBatchAsync">Crear lote</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private bool _loading = true;
+    private string? _message;
+    private string? _error;
+    private List<PendingPaymentRow> _rows = new();
+    private PaymentCentralLookups? _lookups;
+    private string _filterCompanyText = string.Empty;
+    private string _filterSupplierText = string.Empty;
+    private string _filterCurrencyText = string.Empty;
+    private string _filterPriority = string.Empty;
+    private int? _filterOverdue;
+    private bool _selectAll;
+    private string _bulkAccountText = string.Empty;
+    private string _bulkType = "transfer";
+
+    private bool _showBatchModal;
+    private DateTime? _batchDate = DateTime.Today;
+    private DateTime? _scheduledDate = DateTime.Today;
+    private string _batchPriority = "normal";
+    private string _batchNotes = string.Empty;
+    private string _requestedByName = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try { _lookups = await Api.GetLookupsAsync(); }
+        catch (Exception ex) { _error = ex.Message; }
+        await ReloadAsync();
+    }
+
+    private async Task ReloadAsync()
+    {
+        _loading = true;
+        _error = null;
+        try
+        {
+            Guid? company = Guid.TryParse(_filterCompanyText, out var c) ? c : null;
+            Guid? supplier = Guid.TryParse(_filterSupplierText, out var s) ? s : null;
+            Guid? currency = Guid.TryParse(_filterCurrencyText, out var cu) ? cu : null;
+            _rows = await Api.GetPendingAsync(company, supplier, currency, _filterOverdue, string.IsNullOrWhiteSpace(_filterPriority) ? null : _filterPriority);
+            foreach (var r in _rows)
+            {
+                r.AmountToPay = r.AvailableToPay;
+                r.ScheduledDate = DateTime.Today;
+            }
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _loading = false; }
+    }
+
+    private void OnRowSelected(PendingPaymentRow row, ChangeEventArgs e)
+    {
+        row.Selected = e.Value is bool b && b;
+        if (row.Selected && row.AmountToPay == 0m) row.AmountToPay = row.AvailableToPay;
+    }
+
+    private void ToggleSelectAll()
+    {
+        foreach (var r in _rows)
+        {
+            r.Selected = _selectAll;
+            if (_selectAll && r.AmountToPay == 0m) r.AmountToPay = r.AvailableToPay;
+        }
+    }
+
+    private void OnAmountChanged(PendingPaymentRow row, ChangeEventArgs e)
+    {
+        if (decimal.TryParse(e.Value?.ToString(), out var amount))
+        {
+            row.AmountToPay = Math.Min(Math.Max(0m, amount), row.AvailableToPay);
+        }
+    }
+
+    private string AccountSelectionValue(PendingPaymentRow row)
+    {
+        if (row.BankAccountId.HasValue) return $"bank:{row.BankAccountId.Value}";
+        if (row.CashAccountId.HasValue) return $"cash:{row.CashAccountId.Value}";
+        return string.Empty;
+    }
+
+    private void OnPaymentTypeChanged(PendingPaymentRow row, ChangeEventArgs e)
+    {
+        row.PaymentType = e.Value?.ToString() ?? "transfer";
+    }
+
+    private void OnPriorityChanged(PendingPaymentRow row, ChangeEventArgs e)
+    {
+        row.Priority = e.Value?.ToString() ?? "normal";
+    }
+
+    private void OnAccountChanged(PendingPaymentRow row, ChangeEventArgs e)
+    {
+        var value = e.Value?.ToString() ?? string.Empty;
+        row.BankAccountId = null;
+        row.CashAccountId = null;
+        if (string.IsNullOrWhiteSpace(value)) return;
+        var parts = value.Split(':');
+        if (parts.Length != 2 || !Guid.TryParse(parts[1], out var id)) return;
+        if (parts[0] == "bank") row.BankAccountId = id;
+        else if (parts[0] == "cash") row.CashAccountId = id;
+    }
+
+    private void ApplyBulk()
+    {
+        if (string.IsNullOrWhiteSpace(_bulkAccountText) && string.IsNullOrWhiteSpace(_bulkType)) return;
+        var parts = string.IsNullOrWhiteSpace(_bulkAccountText) ? null : _bulkAccountText.Split(':');
+        Guid? bankId = null;
+        Guid? cashId = null;
+        if (parts is not null && parts.Length == 2 && Guid.TryParse(parts[1], out var id))
+        {
+            if (parts[0] == "bank") bankId = id;
+            else if (parts[0] == "cash") cashId = id;
+        }
+        foreach (var r in _rows.Where(x => x.Selected))
+        {
+            if (!string.IsNullOrWhiteSpace(_bulkType)) r.PaymentType = _bulkType;
+            if (bankId.HasValue || cashId.HasValue)
+            {
+                r.BankAccountId = bankId;
+                r.CashAccountId = cashId;
+            }
+        }
+    }
+
+    private void OpenBatchModal() => _showBatchModal = true;
+    private void CloseBatchModal() => _showBatchModal = false;
+
+    private async Task CreateBatchAsync()
+    {
+        var selected = _rows.Where(x => x.Selected && x.AmountToPay > 0m).ToList();
+        if (selected.Count == 0)
+        {
+            _error = "Selecciona al menos una factura con monto válido.";
+            return;
+        }
+        var request = new PaymentBatchSaveRequest
+        {
+            BatchDate = _batchDate,
+            ScheduledDate = _scheduledDate,
+            Priority = _batchPriority,
+            Notes = _batchNotes,
+            RequestedByName = _requestedByName,
+            Lines = selected.Select(r => new PaymentBatchLineSave
+            {
+                PurchaseInvoiceId = r.PurchaseInvoiceId,
+                SupplierName = r.SupplierName,
+                DueDate = r.DueDate,
+                DaysOverdue = r.DaysOverdue,
+                AmountDue = r.PendingAmount,
+                AmountToPay = r.AmountToPay,
+                Priority = r.Priority,
+                PaymentType = r.PaymentType,
+                BankAccountId = r.BankAccountId,
+                CashAccountId = r.CashAccountId,
+                CheckBookId = r.CheckBookId,
+                ScheduledDate = r.ScheduledDate ?? _scheduledDate,
+                Reference = string.Empty,
+                Notes = r.Notes
+            }).ToList()
+        };
+        try
+        {
+            var response = await Api.CreateBatchAsync(request);
+            if (!response.IsSuccessStatusCode)
+            {
+                _error = await response.Content.ReadAsStringAsync();
+                return;
+            }
+            _showBatchModal = false;
+            _message = "Lote creado correctamente.";
+            Nav.NavigateTo("/finance/payment-batches");
+        }
+        catch (Exception ex) { _error = ex.Message; }
+    }
+
+    private static MarkupString PriorityBadge(string priority, int days)
+    {
+        var (cls, label) = priority switch
+        {
+            "critical" => ("bg-danger", days > 0 ? $"{days}d 🔥" : "Crítica"),
+            "high" => ("bg-warning text-dark", days > 0 ? $"{days}d" : "Alta"),
+            "normal" => ("bg-secondary", days >= 0 ? $"{days}d" : "Normal"),
+            _ => ("bg-light text-dark", $"{days}d")
+        };
+        return new MarkupString($"<span class=\"badge {cls}\">{label}</span>");
+    }
+}

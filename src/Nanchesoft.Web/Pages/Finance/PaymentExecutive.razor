@@ -1,0 +1,175 @@
+@page "/finance/payment-executive"
+@using Nanchesoft.Web.Services.Finance
+@inject PaymentCentralApiService Api
+
+<PageTitle>Pantalla ejecutiva de pagos | Nanchesoft</PageTitle>
+
+<div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-3">
+    <div>
+        <div class="text-muted small">Nanchesoft ERP · Finanzas · Pagos</div>
+        <h1 class="h3 mb-1">Pantalla ejecutiva de pagos</h1>
+        <div class="text-muted">Visión rápida del flujo comprometido, disponibilidad bancaria y próximos vencimientos.</div>
+    </div>
+    <div class="d-flex gap-2">
+        <a class="btn btn-outline-secondary" href="/finance/payment-central">Central de pagos</a>
+        <a class="btn btn-outline-secondary" href="/finance/payment-batches">Lotes</a>
+        <button class="btn btn-outline-primary" @onclick="ReloadAsync">Actualizar</button>
+    </div>
+</div>
+
+@if (_loading)
+{
+    <div class="alert alert-info">Cargando...</div>
+}
+else if (_error is not null)
+{
+    <div class="alert alert-danger">@_error</div>
+}
+else if (_data is not null)
+{
+    <div class="row g-3 mb-3">
+        <div class="col-md-3">
+            <div class="card border-warning shadow-sm h-100">
+                <div class="card-body">
+                    <div class="text-muted small">Pendientes de autorizar</div>
+                    <div class="fs-3 fw-bold text-warning">@_data.PendingBatches</div>
+                    <div class="text-muted small">@_data.PendingAmount.ToString("C")</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-primary shadow-sm h-100">
+                <div class="card-body">
+                    <div class="text-muted small">Autorizados (por ejecutar)</div>
+                    <div class="fs-3 fw-bold text-primary">@_data.AuthorizedBatches</div>
+                    <div class="text-muted small">@_data.AuthorizedAmount.ToString("C")</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-success shadow-sm h-100">
+                <div class="card-body">
+                    <div class="text-muted small">Ejecutados (30 días)</div>
+                    <div class="fs-3 fw-bold text-success">@_data.ExecutedBatches30d</div>
+                    <div class="text-muted small">@_data.ExecutedAmount30d.ToString("C")</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-info shadow-sm h-100">
+                <div class="card-body">
+                    <div class="text-muted small">Razón de riesgo</div>
+                    <div class="fs-3 fw-bold @(_data.RiskRatio <= 0.6m ? "text-success" : _data.RiskRatio <= 1m ? "text-warning" : "text-danger")">@_data.RiskRatio.ToString("0.00")</div>
+                    <div class="text-muted small">Comprometido / disponible</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-3 mb-3">
+        <div class="col-md-6">
+            <div class="card shadow-sm h-100">
+                <div class="card-body">
+                    <div class="text-muted small">Flujo comprometido</div>
+                    <div class="fs-3 fw-bold text-danger">@_data.CommittedFlow.ToString("C")</div>
+                    <div class="text-muted small mt-2">Lotes pendientes + autorizados</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card shadow-sm h-100">
+                <div class="card-body">
+                    <div class="text-muted small">Flujo disponible</div>
+                    <div class="fs-3 fw-bold text-success">@_data.AvailableFlow.ToString("C")</div>
+                    <div class="text-muted small mt-2">Saldo consolidado en bancos</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-3 mb-3">
+        <div class="col-md-6">
+            <div class="card shadow-sm h-100">
+                <div class="card-header bg-light"><strong>Bancos con menor saldo</strong></div>
+                <div class="table-responsive">
+                    <table class="table table-sm mb-0">
+                        <thead>
+                            <tr>
+                                <th>Empresa</th>
+                                <th>Banco / cuenta</th>
+                                <th class="text-end">Saldo</th>
+                                <th class="text-end">Conciliado</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @if (_data.LowBalanceAccounts.Count == 0)
+                            {
+                                <tr><td colspan="4" class="text-center text-muted py-3">Sin cuentas registradas.</td></tr>
+                            }
+                            @foreach (var acc in _data.LowBalanceAccounts)
+                            {
+                                <tr>
+                                    <td>@acc.CompanyName</td>
+                                    <td>@acc.BankName · @acc.AccountName</td>
+                                    <td class="text-end fw-bold @(acc.Balance < 0 ? "text-danger" : "")">@acc.Balance.ToString("C")</td>
+                                    <td class="text-end">@acc.ReconciledBalance.ToString("C")</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card shadow-sm h-100">
+                <div class="card-header bg-light"><strong>Próximos vencimientos (14 días)</strong></div>
+                <div class="table-responsive">
+                    <table class="table table-sm mb-0">
+                        <thead>
+                            <tr>
+                                <th>Factura</th>
+                                <th>Proveedor</th>
+                                <th>Vence</th>
+                                <th>Días</th>
+                                <th class="text-end">Pendiente</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @if (_data.UpcomingDue.Count == 0)
+                            {
+                                <tr><td colspan="5" class="text-center text-muted py-3">Sin facturas próximas a vencer.</td></tr>
+                            }
+                            @foreach (var due in _data.UpcomingDue)
+                            {
+                                <tr class="@(due.DaysToDue <= 0 ? "table-danger" : due.DaysToDue <= 3 ? "table-warning" : "")">
+                                    <td><code>@due.InvoiceFolio</code></td>
+                                    <td>@due.SupplierName</td>
+                                    <td>@due.DueDate.ToString("dd/MM/yyyy")</td>
+                                    <td>@due.DaysToDue</td>
+                                    <td class="text-end fw-bold">@due.PendingAmount.ToString("C")</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private bool _loading = true;
+    private string? _error;
+    private PaymentCentralExecutive? _data;
+
+    protected override async Task OnInitializedAsync() => await ReloadAsync();
+
+    private async Task ReloadAsync()
+    {
+        _loading = true;
+        _error = null;
+        try { _data = await Api.GetExecutiveAsync(); }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _loading = false; }
+    }
+}

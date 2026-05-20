@@ -1,0 +1,166 @@
+@page "/finance/payment-batches"
+@using Nanchesoft.Web.Services.Finance
+@inject PaymentCentralApiService Api
+@inject NavigationManager Nav
+
+<PageTitle>Lotes de pre-pago | Nanchesoft</PageTitle>
+
+<div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-3">
+    <div>
+        <div class="text-muted small">Nanchesoft ERP · Finanzas · Pagos</div>
+        <h1 class="h3 mb-1">Lotes de pre-pago</h1>
+        <div class="text-muted">Solicitudes consolidadas de pago. Cada lote vive su flujo: pendiente → autorizado → ejecutado.</div>
+    </div>
+    <div class="d-flex gap-2">
+        <a class="btn btn-outline-secondary" href="/finance/payment-executive">Pantalla ejecutiva</a>
+        <a class="btn btn-primary" href="/finance/payment-central">+ Nuevo lote</a>
+    </div>
+</div>
+
+<div class="card shadow-sm mb-3">
+    <div class="card-body">
+        <div class="row g-3 align-items-end">
+            <div class="col-md-3">
+                <label class="form-label">Estatus</label>
+                <select class="form-select" @bind="_statusFilter" @bind:after="ReloadAsync">
+                    <option value="">Todos</option>
+                    <option value="pending">Pendientes</option>
+                    <option value="in_review">En revisión</option>
+                    <option value="authorized">Autorizados</option>
+                    <option value="executed">Ejecutados</option>
+                    <option value="partially_executed">Parciales</option>
+                    <option value="rejected">Rechazados</option>
+                    <option value="cancelled">Cancelados</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Desde</label>
+                <input type="date" class="form-control" @bind="_fromDate" @bind:after="ReloadAsync" />
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Hasta</label>
+                <input type="date" class="form-control" @bind="_toDate" @bind:after="ReloadAsync" />
+            </div>
+            <div class="col-md-3 d-grid">
+                <button class="btn btn-outline-secondary" @onclick="ReloadAsync">Refrescar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@if (_loading)
+{
+    <div class="alert alert-info">Cargando lotes...</div>
+}
+else if (_error is not null)
+{
+    <div class="alert alert-danger">@_error</div>
+}
+else
+{
+    <div class="card shadow-sm">
+        <div class="table-responsive">
+            <table class="table table-striped align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Folio</th>
+                        <th>Fecha</th>
+                        <th>Programado</th>
+                        <th>Estatus</th>
+                        <th>Prioridad</th>
+                        <th class="text-end">Pagos</th>
+                        <th class="text-end">Empresas</th>
+                        <th class="text-end">Proveedores</th>
+                        <th class="text-end">Total</th>
+                        <th class="text-end">Autorizado</th>
+                        <th class="text-end">Ejecutado</th>
+                        <th>Solicitó</th>
+                        <th>Autorizó</th>
+                        <th class="text-end">Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (_rows.Count == 0)
+                    {
+                        <tr><td colspan="14" class="text-center text-muted py-4">Sin lotes en el rango seleccionado.</td></tr>
+                    }
+                    else
+                    {
+                        @foreach (var row in _rows)
+                        {
+                            <tr>
+                                <td><code>@row.Folio</code></td>
+                                <td>@row.BatchDate.ToString("dd/MM/yyyy")</td>
+                                <td>@(row.ScheduledDate?.ToString("dd/MM/yyyy") ?? "—")</td>
+                                <td>@StatusBadge(row.Status)</td>
+                                <td>@PriorityBadge(row.Priority)</td>
+                                <td class="text-end">@row.LineCount</td>
+                                <td class="text-end">@row.CompanyCount</td>
+                                <td class="text-end">@row.SupplierCount</td>
+                                <td class="text-end fw-bold">@row.TotalAmount.ToString("C")</td>
+                                <td class="text-end text-info">@row.AuthorizedAmount.ToString("N2")</td>
+                                <td class="text-end text-success">@row.ExecutedAmount.ToString("N2")</td>
+                                <td>@row.RequestedByName</td>
+                                <td>@row.AuthorizedByName</td>
+                                <td class="text-end">
+                                    <button class="btn btn-sm btn-outline-primary" @onclick="() => Open(row.Id)">Abrir</button>
+                                </td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+}
+
+@code {
+    private bool _loading = true;
+    private string? _error;
+    private List<PaymentBatchListRow> _rows = new();
+    private string _statusFilter = string.Empty;
+    private DateTime? _fromDate = DateTime.Today.AddMonths(-3);
+    private DateTime? _toDate = DateTime.Today;
+
+    protected override async Task OnInitializedAsync() => await ReloadAsync();
+
+    private async Task ReloadAsync()
+    {
+        _loading = true;
+        _error = null;
+        try { _rows = await Api.GetBatchesAsync(string.IsNullOrWhiteSpace(_statusFilter) ? null : _statusFilter, _fromDate, _toDate); }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _loading = false; }
+    }
+
+    private void Open(Guid id) => Nav.NavigateTo($"/finance/payment-batches/{id}");
+
+    private static MarkupString StatusBadge(string status)
+    {
+        var (cls, label) = status switch
+        {
+            "draft" => ("bg-secondary", "Borrador"),
+            "pending" => ("bg-warning text-dark", "Pendiente"),
+            "in_review" => ("bg-info text-dark", "En revisión"),
+            "authorized" => ("bg-primary", "Autorizado"),
+            "executed" => ("bg-success", "Ejecutado"),
+            "partially_executed" => ("bg-success", "Parcial"),
+            "rejected" => ("bg-danger", "Rechazado"),
+            "cancelled" => ("bg-dark", "Cancelado"),
+            _ => ("bg-light text-dark", status)
+        };
+        return new MarkupString($"<span class=\"badge {cls}\">{label}</span>");
+    }
+
+    private static MarkupString PriorityBadge(string priority)
+    {
+        var (cls, label) = priority switch
+        {
+            "critical" => ("bg-danger", "Crítica"),
+            "high" => ("bg-warning text-dark", "Alta"),
+            "low" => ("bg-light text-dark", "Baja"),
+            _ => ("bg-secondary", "Normal")
+        };
+        return new MarkupString($"<span class=\"badge {cls}\">{label}</span>");
+    }
+}
