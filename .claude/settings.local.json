@@ -133,7 +133,23 @@
       "Bash(npm i *)",
       "Bash(node test-ia-chat.mjs)",
       "Bash(npx -y playwright install-deps chromium)",
-      "Bash(pkill -f \"dotnet run.*Nanchesoft\")"
+      "Bash(pkill -f \"dotnet run.*Nanchesoft\")",
+      "Bash(systemctl list-unit-files *)",
+      "Bash(docker exec *)",
+      "Bash(node test-ia-fase2.mjs)",
+      "Bash(grep -iE \"user.{0,3}id|X-Is-Platform\")",
+      "Bash(journalctl -u nanchesoft-api -n 60 --no-pager)",
+      "Bash(journalctl -u nanchesoft-api -n 200 --no-pager)",
+      "Bash(journalctl -u nanchesoft-api -n 300 --no-pager)",
+      "Bash(journalctl -u nanchesoft-web -n 50 --no-pager)",
+      "Bash(journalctl -u nanchesoft-api -n 100 --no-pager)",
+      "Bash(node *)",
+      "Bash(journalctl -u nanchesoft-api -n 20 --no-pager)",
+      "Bash(journalctl -u nanchesoft-api -n 500 --no-pager)",
+      "Bash(journalctl -u nanchesoft-api -n 5000 --no-pager)",
+      "Bash(journalctl -u nanchesoft-web -n 40 --no-pager)",
+      "Bash(journalctl -u nanchesoft-web -n 60 --no-pager)",
+      "Bash(journalctl -u nanchesoft-web -n 80 --no-pager)"
     ]
   }
 }

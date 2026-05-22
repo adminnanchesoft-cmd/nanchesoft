@@ -6,6 +6,7 @@ namespace Nanchesoft.Persistence.Context;
 public static class NanchesoftSchemaCatalog
 {
     public const string AccountingSchema = "accounting";
+    public const string AiSchema = "ai";
     public const string AuthSchema = "auth";
     public const string CatalogSchema = "catalog";
     public const string ConfigSchema = "config";
@@ -24,6 +25,7 @@ public static class NanchesoftSchemaCatalog
     public static IReadOnlyList<string> AllSchemas { get; } = new[]
     {
         AccountingSchema,
+        AiSchema,
         AuthSchema,
         CatalogSchema,
         ConfigSchema,
@@ -255,6 +257,8 @@ public static class NanchesoftSchemaCatalog
         modelBuilder.Entity<AccountingJournalEntry>().ToTable("accounting_journal_entries", AccountingSchema);
         modelBuilder.Entity<AccountingJournalEntryLine>().ToTable("accounting_journal_entry_lines", AccountingSchema);
         modelBuilder.Entity<AccountingLedgerSnapshot>().ToTable("accounting_ledger_snapshots", AccountingSchema);
+        modelBuilder.Entity<AiConversation>().ToTable("ai_conversations", AiSchema);
+        modelBuilder.Entity<AiMessage>().ToTable("ai_messages", AiSchema);
     }
 
     public static string BuildEnsureSchemasSql()

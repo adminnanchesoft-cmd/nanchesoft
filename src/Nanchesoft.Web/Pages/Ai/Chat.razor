@@ -2,228 +2,304 @@
 @using System.Text.Json
 @using Microsoft.AspNetCore.Components.Rendering
 @using Microsoft.AspNetCore.Components.Web
+@using Nanchesoft.Web.Services
 @using Nanchesoft.Web.Services.Ai
+@using Nanchesoft.Web.State
 @inject AiAssistantApiService AiApi
+@inject AuthService AuthService
+@inject AuthState AuthState
 @inject IJSRuntime JS
 
-<PageTitle>Nanchesoft IA | Asistente</PageTitle>
+<PageTitle>Nanchesoft IA - Nóminas y RH</PageTitle>
 
 <style>
-    .ia-shell { display: grid; grid-template-columns: 320px 1fr; gap: 16px; }
-    @@media (max-width: 992px) { .ia-shell { grid-template-columns: 1fr; } }
-    .ia-card { background: #fff; border: 1px solid #e5e7eb; border-radius: 14px; box-shadow: 0 1px 3px rgba(15,23,42,.06); }
-    .ia-card-header { padding: 14px 18px; border-bottom: 1px solid #f1f5f9; }
-    .ia-card-body { padding: 16px 18px; }
-    .ia-eyebrow { text-transform: uppercase; letter-spacing: .04em; font-size: .72rem; color: #64748b; font-weight: 700; }
-    .ia-title { font-size: 1.25rem; font-weight: 800; color: #0f172a; margin: 0; }
-    .ia-subtitle { font-size: .9rem; color: #64748b; margin-top: 2px; }
-    .ia-suggestions { display: flex; flex-direction: column; gap: 8px; }
-    .ia-suggestion-btn {
-        background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px;
-        padding: 10px 12px; text-align: left; font-size: .88rem; color: #1e293b;
-        transition: all .15s ease; cursor: pointer;
+    .nia-page { padding: 12px; }
+    .nia-shell { display: grid; grid-template-columns: 280px 1fr; gap: 14px; min-height: 78vh; }
+    @@media (max-width: 992px) { .nia-shell { grid-template-columns: 1fr; } }
+    .nia-card { background: #fff; border: 1px solid #e5e7eb; border-radius: 16px; box-shadow: 0 1px 4px rgba(15,23,42,.05); display: flex; flex-direction: column; overflow: hidden; }
+    .nia-card-header { padding: 14px 18px; border-bottom: 1px solid #f1f5f9; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    .nia-card-body { padding: 14px 18px; flex: 1; overflow: auto; }
+    .nia-eyebrow { text-transform: uppercase; letter-spacing: .04em; font-size: .68rem; color: #64748b; font-weight: 700; }
+    .nia-title { font-size: 1.2rem; font-weight: 800; color: #0f172a; margin: 0; }
+    .nia-subtitle { font-size: .82rem; color: #64748b; margin-top: 2px; }
+    .nia-badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: .68rem; font-weight: 700; letter-spacing: .03em; }
+    .nia-badge-active { background: #ecfdf5; color: #047857; }
+    .nia-badge-soon { background: #fef3c7; color: #b45309; }
+    .nia-badge-ia { background: linear-gradient(135deg, #6366f1, #ec4899); color: #fff; }
+
+    .nia-conv-list { display: flex; flex-direction: column; gap: 4px; }
+    .nia-conv-item {
+        padding: 10px 12px; border-radius: 10px; border: 1px solid transparent;
+        cursor: pointer; background: #f8fafc; transition: all .15s;
     }
-    .ia-suggestion-btn:hover { border-color: #6366f1; background: #eef2ff; color: #312e81; }
-    .ia-suggestion-btn:disabled { opacity: .6; cursor: not-allowed; }
-    .ia-history { display: flex; flex-direction: column; gap: 4px; max-height: 320px; overflow-y: auto; }
-    .ia-history-item {
-        display: flex; align-items: flex-start; gap: 8px;
-        padding: 8px 10px; border-radius: 8px;
-        font-size: .82rem; color: #475569; cursor: pointer;
-        background: transparent; border: 1px solid transparent;
+    .nia-conv-item:hover { background: #eef2ff; border-color: #c7d2fe; }
+    .nia-conv-item.active { background: #eef2ff; border-color: #6366f1; box-shadow: 0 1px 3px rgba(99,102,241,.18); }
+    .nia-conv-item-title { font-size: .88rem; font-weight: 700; color: #0f172a; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .nia-conv-item-meta { font-size: .68rem; color: #94a3b8; margin-top: 2px; display: flex; align-items: center; gap: 6px; }
+    .nia-conv-empty { text-align: center; color: #94a3b8; padding: 16px; font-size: .84rem; }
+
+    .nia-quick-cards { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-top: 10px; }
+    .nia-quick-card {
+        border: 1px solid #e2e8f0; border-radius: 10px; padding: 10px 12px;
+        background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%); cursor: pointer;
+        font-size: .78rem; color: #0f172a; line-height: 1.25; min-height: 56px;
+        text-align: left; transition: all .15s;
     }
-    .ia-history-item:hover { background: #f8fafc; border-color: #e2e8f0; }
-    .ia-history-bullet { width: 6px; height: 6px; border-radius: 50%; background: #6366f1; margin-top: 6px; flex-shrink: 0; }
-    .ia-chat { display: flex; flex-direction: column; min-height: 60vh; }
-    .ia-chat-body { flex: 1; padding: 18px; overflow-y: auto; max-height: 60vh; }
-    .ia-empty { text-align: center; color: #64748b; padding: 60px 20px; }
-    .ia-empty-icon { font-size: 2.4rem; margin-bottom: 12px; }
-    .ia-msg { display: flex; gap: 10px; margin-bottom: 14px; }
-    .ia-msg-avatar {
-        width: 34px; height: 34px; border-radius: 50%; flex-shrink: 0;
+    .nia-quick-card:hover { border-color: #6366f1; background: #eef2ff; }
+    .nia-quick-card-icon { font-size: 1.1rem; margin-bottom: 4px; }
+
+    .nia-main { display: flex; flex-direction: column; flex: 1; min-height: 78vh; }
+    .nia-chat-body { padding: 18px 22px; overflow-y: auto; flex: 1; background: linear-gradient(180deg, #fdfdff 0%, #ffffff 60%); }
+    .nia-empty { text-align: center; padding: 60px 20px; color: #475569; }
+    .nia-empty-icon {
+        width: 64px; height: 64px; border-radius: 50%;
+        background: linear-gradient(135deg, #6366f1, #ec4899);
+        color: #fff; font-weight: 800; font-size: 1.4rem;
+        display: inline-flex; align-items: center; justify-content: center;
+        margin-bottom: 14px; box-shadow: 0 6px 20px rgba(99,102,241,.35);
+    }
+    .nia-empty-title { font-size: 1.1rem; font-weight: 800; color: #0f172a; margin-bottom: 4px; }
+    .nia-empty-text { font-size: .9rem; color: #475569; max-width: 580px; margin: 0 auto; }
+
+    .nia-msg { display: flex; gap: 10px; margin-bottom: 16px; animation: niaIn .25s ease; }
+    @@keyframes niaIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+    .nia-msg-avatar {
+        width: 36px; height: 36px; border-radius: 50%; flex-shrink: 0;
         display: flex; align-items: center; justify-content: center;
-        font-weight: 800; font-size: .85rem; color: #fff;
+        font-weight: 800; font-size: .82rem; color: #fff;
     }
-    .ia-msg-avatar-user { background: linear-gradient(135deg, #6366f1, #4338ca); }
-    .ia-msg-avatar-bot { background: linear-gradient(135deg, #10b981, #047857); }
-    .ia-msg-content {
-        background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px;
-        padding: 10px 14px; max-width: 80%; font-size: .92rem; color: #0f172a;
-        white-space: pre-wrap; word-break: break-word;
+    .nia-msg-avatar-user { background: linear-gradient(135deg, #6366f1, #4338ca); }
+    .nia-msg-avatar-bot  { background: linear-gradient(135deg, #10b981, #047857); }
+    .nia-msg-content {
+        background: #ffffff; border: 1px solid #e2e8f0; border-radius: 14px;
+        padding: 10px 14px; max-width: 85%; font-size: .92rem; color: #0f172a;
+        line-height: 1.5; white-space: pre-wrap;
     }
-    .ia-msg-user .ia-msg-content { background: #eef2ff; border-color: #c7d2fe; }
-    .ia-msg-bot .ia-msg-content { background: #ecfdf5; border-color: #a7f3d0; }
-    .ia-msg-time { font-size: .72rem; color: #94a3b8; margin-top: 4px; }
-    .ia-data-card {
-        margin-top: 10px; background: #fff; border: 1px solid #e2e8f0; border-radius: 10px;
-        padding: 10px 12px; font-size: .82rem;
+    .nia-msg-user .nia-msg-content { background: #eef2ff; border-color: #c7d2fe; }
+    .nia-msg-bot  .nia-msg-content { background: #f0fdf4; border-color: #bbf7d0; }
+    .nia-msg-meta { font-size: .66rem; color: #94a3b8; margin-top: 4px; display: flex; gap: 8px; align-items: center; }
+    .nia-typing { display: flex; gap: 6px; padding: 12px 16px; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 14px; width: max-content; }
+    .nia-typing span { width: 6px; height: 6px; border-radius: 50%; background: #047857; animation: niaTyping 1.2s infinite ease-in-out; }
+    .nia-typing span:nth-child(2) { animation-delay: .15s; }
+    .nia-typing span:nth-child(3) { animation-delay: .3s; }
+    @@keyframes niaTyping { 0%, 80%, 100% { transform: scale(.6); opacity: .4; } 40% { transform: scale(1); opacity: 1; } }
+
+    .nia-data-card { margin-top: 10px; background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 12px; font-size: .82rem; }
+    .nia-pill-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+    .nia-pill { background: #f8fafc; border-radius: 10px; padding: 8px 10px; }
+    .nia-pill-label { font-size: .66rem; color: #64748b; text-transform: uppercase; letter-spacing: .04em; }
+    .nia-pill-value { font-size: 1rem; font-weight: 700; color: #0f172a; margin-top: 2px; }
+    .nia-pill.success .nia-pill-value { color: #047857; }
+    .nia-pill.danger  .nia-pill-value { color: #b91c1c; }
+    .nia-pill.info    .nia-pill-value { color: #1d4ed8; }
+    .nia-pill.warn    .nia-pill-value { color: #b45309; }
+
+    .nia-table { width: 100%; font-size: .82rem; border-collapse: collapse; }
+    .nia-table th, .nia-table td { padding: 6px 8px; border-bottom: 1px solid #f1f5f9; }
+    .nia-table th { text-align: left; color: #64748b; font-weight: 600; background: #f8fafc; }
+    .nia-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
+
+    .nia-route-link {
+        display: inline-flex; align-items: center; gap: 6px;
+        margin-top: 8px; padding: 6px 12px; border-radius: 999px;
+        background: #eef2ff; color: #4338ca; text-decoration: none;
+        font-size: .76rem; font-weight: 600;
     }
-    .ia-data-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 8px; }
-    .ia-data-pill {
-        background: #f1f5f9; border-radius: 8px; padding: 8px 10px;
-        display: flex; flex-direction: column;
+    .nia-route-link:hover { background: #c7d2fe; color: #3730a3; }
+
+    .nia-input-bar {
+        border-top: 1px solid #e5e7eb; padding: 12px 14px;
+        display: flex; gap: 8px; background: #fff;
+        border-bottom-left-radius: 16px; border-bottom-right-radius: 16px;
     }
-    .ia-data-pill-label { font-size: .68rem; color: #64748b; text-transform: uppercase; letter-spacing: .04em; }
-    .ia-data-pill-value { font-size: 1rem; font-weight: 700; color: #0f172a; margin-top: 2px; }
-    .ia-data-pill.success .ia-data-pill-value { color: #047857; }
-    .ia-data-pill.danger .ia-data-pill-value { color: #b91c1c; }
-    .ia-data-pill.info .ia-data-pill-value { color: #1d4ed8; }
-    .ia-data-table { width: 100%; font-size: .82rem; }
-    .ia-data-table th, .ia-data-table td { padding: 6px 8px; border-bottom: 1px solid #f1f5f9; }
-    .ia-data-table th { text-align: left; color: #64748b; font-weight: 600; }
-    .ia-data-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
-    .ia-input-bar { border-top: 1px solid #f1f5f9; padding: 12px 14px; display: flex; gap: 8px; background: #fff; border-bottom-left-radius: 14px; border-bottom-right-radius: 14px; }
-    .ia-input {
-        flex: 1; border: 1px solid #cbd5e1; border-radius: 10px; padding: 10px 14px;
-        font-size: .95rem; outline: none; transition: border-color .15s;
+    .nia-input {
+        flex: 1; border: 1px solid #cbd5e1; border-radius: 12px; padding: 12px 16px;
+        font-size: .95rem; outline: none; transition: border-color .15s, box-shadow .15s;
     }
-    .ia-input:focus { border-color: #6366f1; box-shadow: 0 0 0 3px rgba(99,102,241,.18); }
-    .ia-send-btn {
-        background: linear-gradient(135deg, #6366f1, #4338ca);
-        color: #fff; border: 0; border-radius: 10px; padding: 0 18px; font-weight: 700; cursor: pointer;
-        transition: opacity .15s;
+    .nia-input:focus { border-color: #6366f1; box-shadow: 0 0 0 3px rgba(99,102,241,.18); }
+    .nia-send-btn {
+        background: linear-gradient(135deg, #6366f1, #4338ca); color: #fff; border: 0;
+        border-radius: 12px; padding: 0 20px; font-weight: 700; cursor: pointer;
+        font-size: .92rem; transition: opacity .15s;
     }
-    .ia-send-btn:disabled { opacity: .5; cursor: not-allowed; }
-    .ia-roadmap { display: flex; flex-direction: column; gap: 8px; }
-    .ia-roadmap-item { display: flex; align-items: center; gap: 8px; font-size: .82rem; color: #475569; }
-    .ia-roadmap-dot { width: 8px; height: 8px; border-radius: 50%; background: #cbd5e1; }
-    .ia-roadmap-item.active .ia-roadmap-dot { background: #10b981; }
-    .ia-badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: .68rem; font-weight: 700; letter-spacing: .03em; }
-    .ia-badge-fase1 { background: #eef2ff; color: #4338ca; }
-    .ia-badge-soon { background: #fef3c7; color: #b45309; }
+    .nia-send-btn:disabled { opacity: .5; cursor: not-allowed; }
+
+    .nia-suggestion-chip {
+        display: inline-block; margin: 3px 4px 0 0;
+        padding: 5px 12px; border-radius: 999px;
+        background: #f1f5f9; border: 1px solid #e2e8f0;
+        font-size: .76rem; color: #1e293b; cursor: pointer;
+        transition: all .15s;
+    }
+    .nia-suggestion-chip:hover { background: #eef2ff; border-color: #c7d2fe; color: #312e81; }
 </style>
 
-<div class="container-fluid py-3">
+<div class="nia-page">
     <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
         <div>
-            <div class="ia-eyebrow">Nanchesoft ERP · Inteligencia artificial</div>
-            <h1 class="ia-title">Nanchesoft IA <span class="ia-badge ia-badge-fase1">Fase 1</span></h1>
-            <p class="ia-subtitle">Pregúntale al asistente sobre tu operación. Las respuestas usan datos reales de tu tenant.</p>
+            <div class="nia-eyebrow">Nanchesoft ERP · Inteligencia artificial</div>
+            <h1 class="nia-title">
+                Nanchesoft IA — Nóminas y RH
+                <span class="nia-badge nia-badge-ia ms-2">Fase 2</span>
+            </h1>
+            <p class="nia-subtitle">Asistente operativo y de capacitación. Pregunta como hablas: la IA entiende sinónimos.</p>
         </div>
-        <div class="text-end">
-            <span class="badge bg-secondary">@_history.Count consulta(s)</span>
-            <button class="btn btn-outline-secondary btn-sm ms-2" @onclick="ClearHistory" disabled="@(_history.Count == 0 || _busy)">Limpiar</button>
+        <div class="text-end d-flex gap-2 align-items-center">
+            <span class="nia-badge nia-badge-active">Memoria activa</span>
+            <button class="btn btn-outline-primary btn-sm" @onclick="StartNewConversationAsync" disabled="@_busy">
+                + Nueva conversación
+            </button>
         </div>
     </div>
 
-    <div class="ia-shell">
-        <div class="d-flex flex-column gap-3">
-            <div class="ia-card">
-                <div class="ia-card-header">
-                    <div class="ia-eyebrow">Preguntas frecuentes</div>
-                    <div class="fw-semibold mt-1" style="font-size:.95rem;">Toca para ejecutar</div>
+    <div class="nia-shell">
+        <div class="nia-card">
+            <div class="nia-card-header">
+                <div>
+                    <div class="nia-eyebrow">Conversaciones</div>
+                    <div class="fw-semibold mt-1" style="font-size:.9rem;">Tu historial</div>
                 </div>
-                <div class="ia-card-body">
-                    <div class="ia-suggestions">
-                        @foreach (var sug in _suggestions)
+                <button class="btn btn-light btn-sm" @onclick="ReloadConversationsAsync" title="Refrescar" disabled="@_busy">↻</button>
+            </div>
+            <div class="nia-card-body">
+                @if (_conversations.Count == 0)
+                {
+                    <div class="nia-conv-empty">Aún no tienes conversaciones. Escribe abajo para iniciar una.</div>
+                }
+                else
+                {
+                    <div class="nia-conv-list">
+                        @foreach (var conv in _conversations)
                         {
-                            <button class="ia-suggestion-btn" type="button" @onclick="@(() => AskAsync(sug))" disabled="@_busy">@sug</button>
+                            <div class="nia-conv-item @(conv.Id == _activeConversationId ? "active" : "")"
+                                 @onclick="@(() => LoadConversationAsync(conv.Id))">
+                                <div class="nia-conv-item-title">@conv.Title</div>
+                                <div class="nia-conv-item-meta">
+                                    <span>@conv.MessageCount msg</span>
+                                    <span>·</span>
+                                    <span>@FormatRelative(conv.LastActivityAt)</span>
+                                </div>
+                            </div>
                         }
+                    </div>
+                }
+
+                <div class="mt-4">
+                    <div class="nia-eyebrow">Tarjetas rápidas</div>
+                    <div class="nia-quick-cards">
+                        <button class="nia-quick-card" @onclick='@(() => AskAsync("¿Cuánto se pagará de nómina?"))' disabled="@_busy">
+                            <div class="nia-quick-card-icon">$</div>
+                            ¿Cuánto se pagará de nómina?
+                        </button>
+                        <button class="nia-quick-card" @onclick='@(() => AskAsync("¿Qué empleados tienen incidencias?"))' disabled="@_busy">
+                            <div class="nia-quick-card-icon">!</div>
+                            Empleados con incidencias
+                        </button>
+                        <button class="nia-quick-card" @onclick='@(() => AskAsync("¿Cómo doy de alta un colaborador?"))' disabled="@_busy">
+                            <div class="nia-quick-card-icon">+</div>
+                            Cómo dar de alta un colaborador
+                        </button>
+                        <button class="nia-quick-card" @onclick='@(() => AskAsync("¿Qué departamentos cuestan más?"))' disabled="@_busy">
+                            <div class="nia-quick-card-icon">#</div>
+                            Departamentos con mayor costo
+                        </button>
                     </div>
                 </div>
             </div>
+        </div>
 
-            <div class="ia-card">
-                <div class="ia-card-header">
-                    <div class="ia-eyebrow">Historial</div>
-                    <div class="fw-semibold mt-1" style="font-size:.95rem;">Últimas consultas</div>
+        <div class="nia-card nia-main">
+            <div class="nia-card-header">
+                <div>
+                    <div class="nia-eyebrow">Asistente</div>
+                    <div class="fw-semibold mt-1" style="font-size:.95rem;">@(_activeTitle ?? "Conversación")</div>
                 </div>
-                <div class="ia-card-body">
-                    @if (_history.Count == 0)
+                <div class="d-flex gap-2 align-items-center">
+                    @if (_busy)
                     {
-                        <div class="text-muted small">Aún no has realizado preguntas.</div>
+                        <span class="badge bg-primary"><span class="spinner-border spinner-border-sm me-1" style="width:.7rem;height:.7rem;"></span>Procesando</span>
                     }
                     else
                     {
-                        <div class="ia-history">
-                            @foreach (var item in _history.AsEnumerable().Reverse())
+                        <span class="nia-badge nia-badge-active">Listo</span>
+                    }
+                </div>
+            </div>
+            <div class="nia-chat-body" @ref="_chatBodyRef">
+                @if (_messages.Count == 0)
+                {
+                    <div class="nia-empty">
+                        <div class="nia-empty-icon">IA</div>
+                        <div class="nia-empty-title">Bienvenido a Nanchesoft IA</div>
+                        <div class="nia-empty-text">
+                            Pregúntame lo que necesites sobre Nóminas y Recursos Humanos. Puedo consultar datos reales (incidencias, plantilla, periodos)
+                            y enseñarte cómo usar el sistema paso a paso.
+                        </div>
+                        <div class="mt-3">
+                            @foreach (var grp in _suggestionGroups)
                             {
-                                <div class="ia-history-item" @onclick="@(() => AskAsync(item.Question))" title="Volver a preguntar">
-                                    <div class="ia-history-bullet"></div>
-                                    <div>
-                                        <div class="fw-semibold" style="color:#1e293b;">@item.Question</div>
-                                        <div style="font-size:.72rem;color:#94a3b8;">@item.Timestamp.ToString("HH:mm:ss")</div>
+                                <div class="mt-3">
+                                    <div class="nia-eyebrow">@grp.Title</div>
+                                    <div class="mt-1">
+                                        @foreach (var s in grp.Items)
+                                        {
+                                            <span class="nia-suggestion-chip" @onclick="@(() => AskAsync(s))">@s</span>
+                                        }
                                     </div>
                                 </div>
                             }
                         </div>
-                    }
-                </div>
-            </div>
-
-            <div class="ia-card">
-                <div class="ia-card-header">
-                    <div class="ia-eyebrow">Roadmap IA</div>
-                    <div class="fw-semibold mt-1" style="font-size:.95rem;">Próximas fases</div>
-                </div>
-                <div class="ia-card-body">
-                    <div class="ia-roadmap">
-                        <div class="ia-roadmap-item active"><div class="ia-roadmap-dot"></div>Fase 1 · Consultas operativas <span class="ia-badge ia-badge-fase1 ms-1">Activa</span></div>
-                        <div class="ia-roadmap-item"><div class="ia-roadmap-dot"></div>Fase 2 · Guía del sistema <span class="ia-badge ia-badge-soon ms-1">Próx.</span></div>
-                        <div class="ia-roadmap-item"><div class="ia-roadmap-dot"></div>Fase 3 · Reportes automáticos</div>
-                        <div class="ia-roadmap-item"><div class="ia-roadmap-dot"></div>Fase 4 · Dashboards conversacionales</div>
-                        <div class="ia-roadmap-item"><div class="ia-roadmap-dot"></div>Fase 5 · Acciones con confirmación</div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="ia-card ia-chat">
-            <div class="ia-card-header d-flex justify-content-between align-items-center">
-                <div>
-                    <div class="ia-eyebrow">Asistente</div>
-                    <div class="fw-semibold mt-1" style="font-size:.95rem;">Conversación</div>
-                </div>
-                <div class="text-end">
-                    @if (_busy)
-                    {
-                        <span class="badge bg-primary"><span class="spinner-border spinner-border-sm me-1" style="width:.75rem;height:.75rem;"></span>Consultando...</span>
-                    }
-                    else
-                    {
-                        <span class="badge bg-success-subtle text-success">Listo</span>
-                    }
-                </div>
-            </div>
-            <div class="ia-chat-body" @ref="_chatBodyRef">
-                @if (_messages.Count == 0)
-                {
-                    <div class="ia-empty">
-                        <div class="ia-empty-icon">[IA]</div>
-                        <div class="fw-bold mb-1" style="color:#0f172a;">Bienvenido al asistente de Nanchesoft</div>
-                        <div>Selecciona una pregunta frecuente o escribe la tuya abajo. Las respuestas respetan el tenant, empresa y sucursal de tu sesión.</div>
                     </div>
                 }
                 else
                 {
                     @foreach (var msg in _messages)
                     {
-                        <div class="ia-msg @(msg.IsUser ? "ia-msg-user" : "ia-msg-bot")">
-                            @if (msg.IsUser)
-                            {
-                                <div class="ia-msg-avatar ia-msg-avatar-user">TU</div>
-                            }
-                            else
-                            {
-                                <div class="ia-msg-avatar ia-msg-avatar-bot">IA</div>
-                            }
-                            <div>
-                                <div class="ia-msg-content">@msg.Text</div>
+                        <div class="nia-msg @(msg.IsUser ? "nia-msg-user" : "nia-msg-bot")">
+                            <div class="nia-msg-avatar @(msg.IsUser ? "nia-msg-avatar-user" : "nia-msg-avatar-bot")">@(msg.IsUser ? "TU" : "IA")</div>
+                            <div style="flex:1; min-width:0;">
+                                <div class="nia-msg-content">@msg.Text</div>
                                 @if (!msg.IsUser && msg.Result is not null)
                                 {
                                     @RenderResultData(msg.Result)
+                                    @if (!string.IsNullOrEmpty(msg.Result.Route))
+                                    {
+                                        <a class="nia-route-link" href="@msg.Result.Route">→ Ir a @msg.Result.Route</a>
+                                    }
+                                    @if (msg.Result.Suggestions is { Count: > 0 })
+                                    {
+                                        <div class="mt-2">
+                                            @foreach (var s in msg.Result.Suggestions)
+                                            {
+                                                <span class="nia-suggestion-chip" @onclick="@(() => AskAsync(s))">@s</span>
+                                            }
+                                        </div>
+                                    }
                                 }
-                                <div class="ia-msg-time">@msg.Timestamp.ToString("HH:mm:ss")@(msg.IsUser ? string.Empty : $" · {msg.Result?.Endpoint}")</div>
+                                <div class="nia-msg-meta">
+                                    <span>@msg.Timestamp.ToString("HH:mm:ss")</span>
+                                    @if (!msg.IsUser && !string.IsNullOrEmpty(msg.Result?.Endpoint))
+                                    {
+                                        <span>· @msg.Result!.Endpoint</span>
+                                    }
+                                </div>
                             </div>
+                        </div>
+                    }
+                    @if (_busy)
+                    {
+                        <div class="nia-msg nia-msg-bot">
+                            <div class="nia-msg-avatar nia-msg-avatar-bot">IA</div>
+                            <div class="nia-typing"><span></span><span></span><span></span></div>
                         </div>
                     }
                 }
             </div>
-            <div class="ia-input-bar">
-                <input @ref="_inputRef" class="ia-input" placeholder="Ej. ¿Cuánto vendí hoy?"
+            <div class="nia-input-bar">
+                <input class="nia-input" placeholder="Pregunta cualquier cosa de Nóminas o RH..."
                        @bind="_input" @bind:event="oninput" @onkeydown="HandleKeyDown" disabled="@_busy" />
-                <button class="ia-send-btn" @onclick="SendCurrentAsync" disabled="@(_busy || string.IsNullOrWhiteSpace(_input))">
-                    @(_busy ? "Enviando..." : "Enviar")
+                <button class="nia-send-btn" @onclick="SendCurrentAsync" disabled="@(_busy || string.IsNullOrWhiteSpace(_input))">
+                    @(_busy ? "..." : "Enviar")
                 </button>
             </div>
         </div>
@@ -232,21 +308,31 @@
 
 @code {
     private readonly List<ChatMessage> _messages = new();
-    private readonly List<HistoryItem> _history = new();
+    private List<AiConversationDto> _conversations = new();
+    private List<AiSuggestionGroupDto> _suggestionGroups = new();
 
-    private readonly List<string> _suggestions = new()
-    {
-        "¿Cuántos pedidos tengo hoy?",
-        "¿Cuánto vendí hoy?",
-        "¿Cuál es el saldo de mis clientes?",
-        "¿Cuánto se pagará de nómina en el periodo abierto?",
-        "¿Qué clientes tienen saldo vencido?"
-    };
-
+    private Guid? _activeConversationId;
+    private string? _activeTitle;
     private string _input = string.Empty;
     private bool _busy;
     private ElementReference _chatBodyRef;
-    private ElementReference _inputRef;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try { _suggestionGroups = await AiApi.GetSuggestionsAsync(); } catch { }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        // Ensure auth state is restored from localStorage before making user-scoped calls.
+        if (!AuthState.IsAuthenticated)
+        {
+            try { await AuthService.RestoreSessionAsync(); } catch { }
+        }
+        try { _conversations = await AiApi.GetConversationsAsync(); } catch { }
+        StateHasChanged();
+    }
 
     private async Task HandleKeyDown(KeyboardEventArgs e)
     {
@@ -259,44 +345,97 @@
     private async Task SendCurrentAsync()
     {
         if (string.IsNullOrWhiteSpace(_input)) return;
-        var question = _input.Trim();
+        var q = _input.Trim();
         _input = string.Empty;
-        await AskAsync(question);
+        await AskAsync(q);
     }
 
     private async Task AskAsync(string question)
     {
         if (_busy || string.IsNullOrWhiteSpace(question)) return;
-
         _busy = true;
         var now = DateTime.Now;
         _messages.Add(new ChatMessage { IsUser = true, Text = question, Timestamp = now });
-        _history.Add(new HistoryItem { Question = question, Timestamp = now });
         StateHasChanged();
         await ScrollChatToBottom();
 
         try
         {
-            var result = await AiApi.AskAsync(question);
+            var result = await AiApi.ChatAsync(question, _activeConversationId);
+            _activeConversationId = result.ConversationId;
+            _activeTitle = result.ConversationTitle;
             _messages.Add(new ChatMessage
             {
                 IsUser = false,
                 Text = string.IsNullOrWhiteSpace(result.Answer)
-                    ? "No encontré esa información, intenta preguntar de otra forma."
+                    ? "No encontré información suficiente para responder eso."
                     : result.Answer,
                 Result = result,
                 Timestamp = DateTime.Now
             });
+            await ReloadConversationsAsync();
         }
         catch (Exception ex)
         {
             _messages.Add(new ChatMessage
             {
                 IsUser = false,
-                Text = $"Ocurrió un error al consultar al asistente: {ex.Message}",
+                Text = $"Ocurrió un error: {ex.Message}",
                 Timestamp = DateTime.Now
             });
         }
+        finally
+        {
+            _busy = false;
+            StateHasChanged();
+            await ScrollChatToBottom();
+        }
+    }
+
+    private async Task ReloadConversationsAsync()
+    {
+        try { _conversations = await AiApi.GetConversationsAsync(); } catch { }
+        StateHasChanged();
+    }
+
+    private async Task StartNewConversationAsync()
+    {
+        _activeConversationId = null;
+        _activeTitle = null;
+        _messages.Clear();
+        StateHasChanged();
+        await Task.CompletedTask;
+    }
+
+    private async Task LoadConversationAsync(Guid id)
+    {
+        if (_busy) return;
+        _busy = true;
+        try
+        {
+            var msgs = await AiApi.GetMessagesAsync(id);
+            _activeConversationId = id;
+            _activeTitle = _conversations.FirstOrDefault(c => c.Id == id)?.Title;
+            _messages.Clear();
+            foreach (var m in msgs)
+            {
+                _messages.Add(new ChatMessage
+                {
+                    IsUser = m.Role == "user",
+                    Text = m.Content,
+                    Timestamp = m.CreatedAt.ToLocalTime(),
+                    Result = m.Role == "user" ? null : new AiChatResultDto
+                    {
+                        ConversationId = m.ConversationId,
+                        Intent = m.Intent ?? "unknown",
+                        Answer = m.Content,
+                        Endpoint = m.Endpoint,
+                        Data = m.Data
+                    }
+                });
+            }
+        }
+        catch { }
         finally
         {
             _busy = false;
@@ -310,176 +449,236 @@
         try
         {
             await JS.InvokeVoidAsync("eval",
-                "(function(){var el=document.querySelector('.ia-chat-body'); if(el){el.scrollTop=el.scrollHeight;}})()");
+                "(function(){var el=document.querySelector('.nia-chat-body'); if(el){el.scrollTop=el.scrollHeight;}})()");
         }
         catch { }
     }
 
-    private void ClearHistory()
+    private static string FormatRelative(DateTime utc)
     {
-        _messages.Clear();
-        _history.Clear();
+        var local = utc.Kind == DateTimeKind.Utc ? utc.ToLocalTime() : utc;
+        var diff = DateTime.Now - local;
+        if (diff.TotalMinutes < 1) return "ahora";
+        if (diff.TotalMinutes < 60) return $"hace {(int)diff.TotalMinutes} min";
+        if (diff.TotalHours < 24) return $"hace {(int)diff.TotalHours} h";
+        if (diff.TotalDays < 7) return $"hace {(int)diff.TotalDays} d";
+        return local.ToString("dd/MM/yyyy");
     }
 
-    private RenderFragment RenderResultData(AiAskResultDto result) => builder =>
+    private RenderFragment RenderResultData(AiChatResultDto result) => builder =>
     {
         if (result.Data is null || result.Data.Value.ValueKind == JsonValueKind.Null)
         {
             return;
         }
 
-        builder.OpenElement(0, "div");
-        builder.AddAttribute(1, "class", "ia-data-card");
+        var data = result.Data.Value;
+        var kind = GetString(data, "kind");
 
-        switch (result.Intent)
+        builder.OpenElement(0, "div");
+        builder.AddAttribute(1, "class", "nia-data-card");
+
+        switch (kind)
         {
-            case AiIntentDto.TodaySummary:
-                RenderTodaySummary(builder, result.Data.Value);
+            case "payroll_summary":
+                RenderPayrollSummary(builder, data);
                 break;
-            case AiIntentDto.TodaySales:
-                RenderTodaySales(builder, result.Data.Value);
+            case "employee_incidents":
+            case "today_incidents":
+            case "overtime_employees":
+            case "faltas":
+                RenderEmployeeIncidents(builder, data);
                 break;
-            case AiIntentDto.CustomerBalance:
-                RenderCustomerBalance(builder, result.Data.Value);
+            case "employees_status":
+                RenderEmployeesStatus(builder, data);
                 break;
-            case AiIntentDto.PayrollOpenPeriod:
-                RenderPayrollPeriod(builder, result.Data.Value);
+            case "employee_loans":
+                RenderEmployeeLoans(builder, data);
                 break;
-            case AiIntentDto.OverdueCustomers:
-                RenderOverdueCustomers(builder, result.Data.Value);
+            case "departments_cost":
+                RenderDepartmentsCost(builder, data);
+                break;
+            case "concept_totals":
+                RenderConceptTotals(builder, data);
+                break;
+            case "missing_data":
+                RenderMissingData(builder, data);
+                break;
+            case "training":
+                RenderTraining(builder, data);
                 break;
         }
 
         builder.CloseElement();
     };
 
-    private static void RenderTodaySummary(RenderTreeBuilder builder, JsonElement data)
+    private static void RenderPayrollSummary(RenderTreeBuilder b, JsonElement data)
     {
-        builder.OpenElement(10, "div");
-        builder.AddAttribute(11, "class", "ia-data-grid");
-        AddPill(builder, 12, "info", "Pedidos hoy", GetInt(data, "orderCount").ToString("N0"));
-        AddPill(builder, 13, "info", "Total pedidos", FormatCurrency(GetDecimal(data, "orderTotal")));
-        AddPill(builder, 14, "success", "Facturas hoy", GetInt(data, "invoiceCount").ToString("N0"));
-        AddPill(builder, 15, "success", "Total facturado", FormatCurrency(GetDecimal(data, "invoiceTotal")));
-        builder.CloseElement();
-    }
+        if (!data.TryGetProperty("period", out var period) || period.ValueKind != JsonValueKind.Object) return;
+        b.OpenElement(10, "div"); b.AddAttribute(11, "class", "nia-pill-grid");
+        AddPill(b, 12, "info", "Periodo", GetString(period, "periodName"));
+        AddPill(b, 13, "info", "Empleados", GetInt(period, "employeeCount").ToString("N0"));
+        AddPill(b, 14, "success", "Percepciones", FormatCurrency(GetDecimal(period, "gross")));
+        AddPill(b, 15, "danger",  "Deducciones", FormatCurrency(GetDecimal(period, "deductions")));
+        AddPill(b, 16, "success", "Neto a pagar", FormatCurrency(GetDecimal(period, "net")));
+        AddPill(b, 17, "info", "Pago", FormatDate(GetString(period, "paymentDate")));
+        b.CloseElement();
 
-    private static void RenderTodaySales(RenderTreeBuilder builder, JsonElement data)
-    {
-        builder.OpenElement(20, "div");
-        builder.AddAttribute(21, "class", "ia-data-grid");
-        AddPill(builder, 22, "info", "Facturas", GetInt(data, "invoiceCount").ToString("N0"));
-        AddPill(builder, 23, "info", "Subtotal", FormatCurrency(GetDecimal(data, "subtotal")));
-        AddPill(builder, 24, "info", "Impuestos", FormatCurrency(GetDecimal(data, "tax")));
-        AddPill(builder, 25, "success", "Total vendido", FormatCurrency(GetDecimal(data, "total")));
-        builder.CloseElement();
-    }
-
-    private static void RenderPayrollPeriod(RenderTreeBuilder builder, JsonElement data)
-    {
-        if (GetBool(data, "notFound")) return;
-        builder.OpenElement(30, "div");
-        builder.AddAttribute(31, "class", "ia-data-grid");
-        AddPill(builder, 32, "info", "Periodo", GetString(data, "periodName"));
-        AddPill(builder, 33, "info", "Empleados", GetInt(data, "employeeCount").ToString("N0"));
-        AddPill(builder, 34, "success", "Percepciones", FormatCurrency(GetDecimal(data, "grossAmount")));
-        AddPill(builder, 35, "danger", "Deducciones", FormatCurrency(GetDecimal(data, "deductionsAmount")));
-        AddPill(builder, 36, "success", "Neto a pagar", FormatCurrency(GetDecimal(data, "netAmount")));
-        AddPill(builder, 37, "info", "Pago programado", FormatDate(GetString(data, "paymentDate")));
-        builder.CloseElement();
-    }
-
-    private static void RenderCustomerBalance(RenderTreeBuilder builder, JsonElement data)
-    {
-        if (GetBool(data, "notFound")) return;
-        var rows = data.TryGetProperty("rows", out var rowsEl) && rowsEl.ValueKind == JsonValueKind.Array
-            ? rowsEl.EnumerateArray().ToList()
-            : new List<JsonElement>();
-        if (rows.Count == 0) return;
-
-        var name = GetString(data, "customerName");
-        if (!string.IsNullOrWhiteSpace(name))
+        if (data.TryGetProperty("byDepartment", out var depts) && depts.ValueKind == JsonValueKind.Array)
         {
-            var row = rows[0];
-            builder.OpenElement(40, "div");
-            builder.AddAttribute(41, "class", "ia-data-grid");
-            AddPill(builder, 42, "info", "Cliente", name);
-            AddPill(builder, 43, "info", "Cargos", FormatCurrency(GetDecimal(row, "totalCharges")));
-            AddPill(builder, 44, "success", "Créditos/Pagos", FormatCurrency(GetDecimal(row, "totalCredits")));
-            AddPill(builder, 45, "danger", "Saldo actual", FormatCurrency(GetDecimal(row, "currentBalance")));
-            builder.CloseElement();
+            RenderTable(b, 20,
+                new[] { "Departamento", "Empleados", "Sueldo del periodo" },
+                depts.EnumerateArray().Take(8).Select(r => new[]
+                {
+                    GetString(r, "departmentName"),
+                    GetInt(r, "employeeCount").ToString("N0"),
+                    FormatCurrency(GetDecimal(r, "totalSalary"))
+                }).ToList(),
+                new[] { false, true, true });
         }
-        else
-        {
-            builder.OpenElement(50, "div");
-            builder.AddAttribute(51, "class", "table-responsive");
-            builder.OpenElement(52, "table");
-            builder.AddAttribute(53, "class", "ia-data-table");
-            builder.AddMarkupContent(54, "<thead><tr><th>Cliente</th><th class='num'>Cargos</th><th class='num'>Créditos</th><th class='num'>Saldo</th></tr></thead>");
-            builder.OpenElement(55, "tbody");
-            var seq = 60;
-            foreach (var row in rows.Take(10))
+    }
+
+    private static void RenderEmployeeIncidents(RenderTreeBuilder b, JsonElement data)
+    {
+        var rows = GetArray(data, "rows");
+        if (rows.Count == 0) return;
+        RenderTable(b, 30,
+            new[] { "Empleado", "Departamento", "Incidencias", "Importe" },
+            rows.Take(15).Select(r => new[]
             {
-                builder.OpenElement(seq++, "tr");
-                builder.OpenElement(seq++, "td"); builder.AddContent(seq++, $"{GetString(row, "customerCode")} · {GetString(row, "customerName")}"); builder.CloseElement();
-                builder.OpenElement(seq++, "td"); builder.AddAttribute(seq++, "class", "num"); builder.AddContent(seq++, FormatCurrency(GetDecimal(row, "totalCharges"))); builder.CloseElement();
-                builder.OpenElement(seq++, "td"); builder.AddAttribute(seq++, "class", "num"); builder.AddContent(seq++, FormatCurrency(GetDecimal(row, "totalCredits"))); builder.CloseElement();
-                builder.OpenElement(seq++, "td"); builder.AddAttribute(seq++, "class", "num"); builder.AddContent(seq++, FormatCurrency(GetDecimal(row, "currentBalance"))); builder.CloseElement();
-                builder.CloseElement();
-            }
-            builder.CloseElement();
-            builder.CloseElement();
-            builder.CloseElement();
-        }
+                GetString(r, "employeeCode") + " · " + GetString(r, "employeeName"),
+                GetString(r, "departmentName"),
+                GetInt(r, "incidentCount").ToString("N0"),
+                FormatCurrency(GetDecimal(r, "totalAmount"))
+            }).ToList(),
+            new[] { false, false, true, true });
     }
 
-    private static void RenderOverdueCustomers(RenderTreeBuilder builder, JsonElement data)
+    private static void RenderEmployeesStatus(RenderTreeBuilder b, JsonElement data)
     {
-        var rows = data.TryGetProperty("rows", out var rowsEl) && rowsEl.ValueKind == JsonValueKind.Array
-            ? rowsEl.EnumerateArray().ToList()
-            : new List<JsonElement>();
+        var rows = GetArray(data, "rows");
         if (rows.Count == 0) return;
-
-        builder.OpenElement(70, "div");
-        builder.AddAttribute(71, "class", "ia-data-grid mb-2");
-        AddPill(builder, 72, "danger", "Total vencido", FormatCurrency(GetDecimal(data, "totalOverdue")));
-        AddPill(builder, 73, "info", "Clientes", rows.Count.ToString("N0"));
-        builder.CloseElement();
-
-        builder.OpenElement(80, "div");
-        builder.AddAttribute(81, "class", "table-responsive");
-        builder.OpenElement(82, "table");
-        builder.AddAttribute(83, "class", "ia-data-table");
-        builder.AddMarkupContent(84, "<thead><tr><th>Cliente</th><th class='num'>Documentos</th><th>Más antiguo</th><th class='num'>Vencido</th></tr></thead>");
-        builder.OpenElement(85, "tbody");
-        var seq = 90;
-        foreach (var row in rows.Take(15))
-        {
-            builder.OpenElement(seq++, "tr");
-            builder.OpenElement(seq++, "td"); builder.AddContent(seq++, $"{GetString(row, "customerCode")} · {GetString(row, "customerName")}"); builder.CloseElement();
-            builder.OpenElement(seq++, "td"); builder.AddAttribute(seq++, "class", "num"); builder.AddContent(seq++, GetInt(row, "overdueDocuments").ToString("N0")); builder.CloseElement();
-            builder.OpenElement(seq++, "td"); builder.AddContent(seq++, FormatDate(GetString(row, "oldestDueDate"))); builder.CloseElement();
-            builder.OpenElement(seq++, "td"); builder.AddAttribute(seq++, "class", "num"); builder.AddContent(seq++, FormatCurrency(GetDecimal(row, "overdueAmount"))); builder.CloseElement();
-            builder.CloseElement();
-        }
-        builder.CloseElement();
-        builder.CloseElement();
-        builder.CloseElement();
+        RenderTable(b, 40,
+            new[] { "Código", "Empleado", "Departamento", "Ingreso", "Sueldo periodo" },
+            rows.Take(15).Select(r => new[]
+            {
+                GetString(r, "employeeCode"),
+                GetString(r, "employeeName"),
+                GetString(r, "departmentName"),
+                FormatDate(GetString(r, "hireDate")),
+                FormatCurrency(GetDecimal(r, "periodSalary"))
+            }).ToList(),
+            new[] { false, false, false, false, true });
     }
 
-    private static void AddPill(RenderTreeBuilder builder, int seq, string variant, string label, string value)
+    private static void RenderEmployeeLoans(RenderTreeBuilder b, JsonElement data)
     {
-        builder.OpenElement(seq, "div");
-        builder.AddAttribute(seq + 1, "class", $"ia-data-pill {variant}");
-        builder.OpenElement(seq + 2, "div");
-        builder.AddAttribute(seq + 3, "class", "ia-data-pill-label");
-        builder.AddContent(seq + 4, label);
-        builder.CloseElement();
-        builder.OpenElement(seq + 5, "div");
-        builder.AddAttribute(seq + 6, "class", "ia-data-pill-value");
-        builder.AddContent(seq + 7, value);
-        builder.CloseElement();
-        builder.CloseElement();
+        var rows = GetArray(data, "rows");
+        if (rows.Count == 0) return;
+        RenderTable(b, 50,
+            new[] { "Empleado", "Préstamo", "Saldo", "Parcialidad", "Faltan" },
+            rows.Take(15).Select(r => new[]
+            {
+                GetString(r, "employeeCode") + " · " + GetString(r, "employeeName"),
+                GetString(r, "loanNumber"),
+                FormatCurrency(GetDecimal(r, "balanceAmount")),
+                FormatCurrency(GetDecimal(r, "installmentAmount")),
+                GetInt(r, "installmentsLeft").ToString("N0")
+            }).ToList(),
+            new[] { false, false, true, true, true });
+    }
+
+    private static void RenderDepartmentsCost(RenderTreeBuilder b, JsonElement data)
+    {
+        var rows = GetArray(data, "rows");
+        if (rows.Count == 0) return;
+        RenderTable(b, 60,
+            new[] { "Departamento", "Empleados", "Sueldo periodo" },
+            rows.Take(15).Select(r => new[]
+            {
+                GetString(r, "departmentCode") + " · " + GetString(r, "departmentName"),
+                GetInt(r, "employeeCount").ToString("N0"),
+                FormatCurrency(GetDecimal(r, "totalSalary"))
+            }).ToList(),
+            new[] { false, true, true });
+    }
+
+    private static void RenderConceptTotals(RenderTreeBuilder b, JsonElement data)
+    {
+        var rows = GetArray(data, "rows");
+        if (rows.Count == 0) return;
+        RenderTable(b, 70,
+            new[] { "Código", "Concepto", "Empleados", "Movimientos", "Importe" },
+            rows.Take(15).Select(r => new[]
+            {
+                GetString(r, "conceptCode"),
+                GetString(r, "conceptName"),
+                GetInt(r, "employeeCount").ToString("N0"),
+                GetInt(r, "incidentCount").ToString("N0"),
+                FormatCurrency(GetDecimal(r, "totalAmount"))
+            }).ToList(),
+            new[] { false, false, true, true, true });
+    }
+
+    private static void RenderMissingData(RenderTreeBuilder b, JsonElement data)
+    {
+        var rows = GetArray(data, "rows");
+        if (rows.Count == 0) return;
+        RenderTable(b, 80,
+            new[] { "Código", "Empleado", "Detalle" },
+            rows.Take(20).Select(r => new[]
+            {
+                GetString(r, "employeeCode"),
+                GetString(r, "employeeName"),
+                GetString(r, "detail")
+            }).ToList(),
+            new[] { false, false, false });
+    }
+
+    private static void RenderTraining(RenderTreeBuilder b, JsonElement data)
+    {
+        b.OpenElement(90, "div"); b.AddAttribute(91, "class", "nia-pill-grid");
+        AddPill(b, 92, "info", "Tema", GetString(data, "title"));
+        AddPill(b, 93, "info", "Módulo", GetString(data, "module").ToUpperInvariant());
+        if (!string.IsNullOrEmpty(GetString(data, "route")))
+        {
+            AddPill(b, 94, "warn", "Ruta", GetString(data, "route"));
+        }
+        b.CloseElement();
+    }
+
+    private static void RenderTable(RenderTreeBuilder b, int seqStart, string[] headers, List<string[]> rows, bool[] numericFlags)
+    {
+        b.OpenElement(seqStart, "div"); b.AddAttribute(seqStart + 1, "class", "table-responsive mt-2");
+        b.OpenElement(seqStart + 2, "table"); b.AddAttribute(seqStart + 3, "class", "nia-table");
+        var thead = "<thead><tr>" + string.Concat(headers.Select((h, i) => $"<th class=\"{(numericFlags[i] ? "text-end" : "")}\">{System.Web.HttpUtility.HtmlEncode(h)}</th>")) + "</tr></thead>";
+        b.AddMarkupContent(seqStart + 4, thead);
+        b.OpenElement(seqStart + 5, "tbody");
+        var s = seqStart + 10;
+        foreach (var r in rows)
+        {
+            b.OpenElement(s++, "tr");
+            for (int i = 0; i < r.Length; i++)
+            {
+                b.OpenElement(s++, "td");
+                if (numericFlags[i]) b.AddAttribute(s++, "class", "num");
+                b.AddContent(s++, r[i]);
+                b.CloseElement();
+            }
+            b.CloseElement();
+        }
+        b.CloseElement();
+        b.CloseElement();
+        b.CloseElement();
+    }
+
+    private static void AddPill(RenderTreeBuilder b, int seq, string variant, string label, string value)
+    {
+        b.OpenElement(seq, "div");
+        b.AddAttribute(seq + 1, "class", $"nia-pill {variant}");
+        b.OpenElement(seq + 2, "div"); b.AddAttribute(seq + 3, "class", "nia-pill-label"); b.AddContent(seq + 4, label); b.CloseElement();
+        b.OpenElement(seq + 5, "div"); b.AddAttribute(seq + 6, "class", "nia-pill-value"); b.AddContent(seq + 7, value); b.CloseElement();
+        b.CloseElement();
     }
 
     private static int GetInt(JsonElement data, string property)
@@ -491,8 +690,10 @@
     private static string GetString(JsonElement data, string property)
         => data.TryGetProperty(property, out var el) && el.ValueKind == JsonValueKind.String ? (el.GetString() ?? string.Empty) : string.Empty;
 
-    private static bool GetBool(JsonElement data, string property)
-        => data.TryGetProperty(property, out var el) && (el.ValueKind == JsonValueKind.True);
+    private static List<JsonElement> GetArray(JsonElement data, string property)
+        => data.TryGetProperty(property, out var el) && el.ValueKind == JsonValueKind.Array
+            ? el.EnumerateArray().ToList()
+            : new();
 
     private static string FormatCurrency(decimal value)
         => value.ToString("C2", System.Globalization.CultureInfo.GetCultureInfo("es-MX"));
@@ -507,13 +708,7 @@
     {
         public bool IsUser { get; set; }
         public string Text { get; set; } = string.Empty;
-        public AiAskResultDto? Result { get; set; }
-        public DateTime Timestamp { get; set; }
-    }
-
-    private sealed class HistoryItem
-    {
-        public string Question { get; set; } = string.Empty;
+        public AiChatResultDto? Result { get; set; }
         public DateTime Timestamp { get; set; }
     }
 }

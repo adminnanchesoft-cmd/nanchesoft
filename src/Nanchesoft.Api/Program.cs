@@ -1,3 +1,4 @@
+using Nanchesoft.Api.Ai;
 using Nanchesoft.Api.Endpoints;
 using Microsoft.EntityFrameworkCore;
 using Nanchesoft.Application.PayrollIncidentTypes;
@@ -254,6 +255,7 @@ app.MapPlanEndpoints();
 app.MapSubscriptionControlEndpoints();
 app.MapUniversalImportEndpoints();
 app.MapAiAssistantEndpoints();
+app.MapAiModuleEndpoints();
 
 app.Run();
 

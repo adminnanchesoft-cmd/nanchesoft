@@ -240,6 +240,9 @@ public sealed class NanchesoftDbContext : DbContext
     public DbSet<AccountsReceivableMovement> AccountsReceivableMovements => Set<AccountsReceivableMovement>();
     public DbSet<ReceiptApplication> ReceiptApplications => Set<ReceiptApplication>();
 
+    public DbSet<AiConversation> AiConversations => Set<AiConversation>();
+    public DbSet<AiMessage> AiMessages => Set<AiMessage>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(NanchesoftDbContext).Assembly);

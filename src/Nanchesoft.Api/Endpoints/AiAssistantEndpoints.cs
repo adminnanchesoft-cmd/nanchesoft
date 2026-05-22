@@ -1,15 +1,17 @@
-using System.Globalization;
-using System.Text;
 using Microsoft.EntityFrameworkCore;
 using Nanchesoft.Persistence.Context;
 
 namespace Nanchesoft.Api.Endpoints;
 
+/// <summary>
+/// Legacy read-only AI endpoints kept for backward compatibility with Fase 1.
+/// New chat orchestrator lives in <see cref="Nanchesoft.Api.Ai.AiEndpoints"/>.
+/// </summary>
 public static class AiAssistantEndpoints
 {
     public static IEndpointRouteBuilder MapAiAssistantEndpoints(this IEndpointRouteBuilder app)
     {
-        var group = app.MapGroup("/api/ia").WithTags("AI Assistant");
+        var group = app.MapGroup("/api/ia").WithTags("AI Assistant (legacy)");
 
         group.MapGet("/resumen-hoy", async (HttpContext http, NanchesoftDbContext db) =>
             Results.Ok(await BuildTodaySummaryAsync(http, db)));
@@ -25,8 +27,6 @@ public static class AiAssistantEndpoints
 
         group.MapGet("/clientes/saldos-vencidos", async (HttpContext http, NanchesoftDbContext db) =>
             Results.Ok(await BuildOverdueCustomersAsync(http, db)));
-
-        group.MapPost("/ask", AskAsync);
 
         return app;
     }
@@ -215,10 +215,7 @@ public static class AiAssistantEndpoints
             .Select(x => new { x.Id, x.Code, x.Name, x.StartDate, x.EndDate, x.PaymentDate, x.Status })
             .FirstOrDefaultAsync();
 
-        if (period is null)
-        {
-            return new AiPayrollPeriodSummaryDto { NotFound = true };
-        }
+        if (period is null) return new AiPayrollPeriodSummaryDto { NotFound = true };
 
         var adjustments = await db.PrePayrollAdjustments.AsNoTracking()
             .Where(x => x.PayrollPeriodId == period.Id)
@@ -318,264 +315,6 @@ public static class AiAssistantEndpoints
             Rows = aggregated
         };
     }
-
-    private static async Task<IResult> AskAsync(HttpContext http, NanchesoftDbContext db, AiAskRequest request)
-    {
-        if (request is null || string.IsNullOrWhiteSpace(request.Question))
-        {
-            return Results.Ok(new AiAskResponse
-            {
-                Intent = AiIntent.Unknown,
-                Answer = "No encontré esa información, intenta preguntar de otra forma.",
-                Echo = string.Empty,
-                Suggestions = AiIntentInterpreter.DefaultSuggestions
-            });
-        }
-
-        var question = request.Question.Trim();
-        var (intent, argument) = AiIntentInterpreter.Interpret(question);
-
-        switch (intent)
-        {
-            case AiIntent.TodaySummary:
-                {
-                    var data = await BuildTodaySummaryAsync(http, db);
-                    var answer = $"Hoy llevas {data.OrderCount} pedido(s) por {FormatCurrency(data.OrderTotal)} y {data.InvoiceCount} factura(s) por {FormatCurrency(data.InvoiceTotal)}.";
-                    return Results.Ok(new AiAskResponse
-                    {
-                        Intent = intent,
-                        Answer = answer,
-                        Echo = question,
-                        Endpoint = "GET /api/ia/resumen-hoy",
-                        Data = data
-                    });
-                }
-            case AiIntent.TodaySales:
-                {
-                    var data = await BuildTodaySalesAsync(http, db);
-                    var answer = data.InvoiceCount == 0
-                        ? "Aún no se han registrado ventas facturadas hoy."
-                        : $"Hoy se han vendido {FormatCurrency(data.Total)} en {data.InvoiceCount} factura(s) (subtotal {FormatCurrency(data.Subtotal)}, impuestos {FormatCurrency(data.Tax)}).";
-                    return Results.Ok(new AiAskResponse
-                    {
-                        Intent = intent,
-                        Answer = answer,
-                        Echo = question,
-                        Endpoint = "GET /api/ia/ventas-hoy",
-                        Data = data
-                    });
-                }
-            case AiIntent.CustomerBalance:
-                {
-                    var data = await BuildCustomerBalanceAsync(http, db, argument);
-                    string answer;
-                    if (data.NotFound)
-                    {
-                        answer = string.IsNullOrWhiteSpace(argument)
-                            ? "No encontré clientes registrados con saldo."
-                            : $"No encontré un cliente que coincida con \"{argument}\". Intenta con el nombre, código o RFC.";
-                    }
-                    else if (data.Rows.Count == 0)
-                    {
-                        answer = "No encontré saldos registrados para los clientes en este contexto.";
-                    }
-                    else if (!string.IsNullOrWhiteSpace(data.CustomerName))
-                    {
-                        var firstRow = data.Rows.FirstOrDefault();
-                        answer = firstRow is null
-                            ? $"El cliente {data.CustomerName} no tiene saldo registrado."
-                            : $"El saldo del cliente {data.CustomerName} es {FormatCurrency(firstRow.CurrentBalance)} (cargos {FormatCurrency(firstRow.TotalCharges)}, créditos {FormatCurrency(firstRow.TotalCredits)}).";
-                    }
-                    else
-                    {
-                        answer = $"Hay {data.Rows.Count} cliente(s) con saldo abierto por un total de {FormatCurrency(data.TotalBalance)}. Te muestro los principales.";
-                    }
-                    return Results.Ok(new AiAskResponse
-                    {
-                        Intent = intent,
-                        Answer = answer,
-                        Echo = question,
-                        Endpoint = "GET /api/ia/clientes/saldo",
-                        Data = data
-                    });
-                }
-            case AiIntent.PayrollOpenPeriod:
-                {
-                    var data = await BuildPayrollOpenPeriodAsync(http, db);
-                    var answer = data.NotFound
-                        ? "No hay periodos de nómina abiertos en este momento."
-                        : data.HasRuns
-                            ? $"En el periodo abierto {data.PeriodName} se pagará {FormatCurrency(data.NetAmount)} neto a {data.EmployeeCount} empleado(s) (percepciones {FormatCurrency(data.GrossAmount)}, deducciones {FormatCurrency(data.DeductionsAmount)})."
-                            : $"El periodo abierto es {data.PeriodName} ({data.StartDate:dd/MM/yyyy} - {data.EndDate:dd/MM/yyyy}). Aún no hay nómina procesada; con los ajustes capturados se proyecta un neto de {FormatCurrency(data.NetAmount)}.";
-                    return Results.Ok(new AiAskResponse
-                    {
-                        Intent = intent,
-                        Answer = answer,
-                        Echo = question,
-                        Endpoint = "GET /api/ia/nomina/resumen-periodo",
-                        Data = data
-                    });
-                }
-            case AiIntent.OverdueCustomers:
-                {
-                    var data = await BuildOverdueCustomersAsync(http, db);
-                    var answer = data.Rows.Count == 0
-                        ? "No hay clientes con saldo vencido."
-                        : $"Hay {data.Rows.Count} cliente(s) con saldo vencido por un total de {FormatCurrency(data.TotalOverdue)}. Te muestro los principales.";
-                    return Results.Ok(new AiAskResponse
-                    {
-                        Intent = intent,
-                        Answer = answer,
-                        Echo = question,
-                        Endpoint = "GET /api/ia/clientes/saldos-vencidos",
-                        Data = data
-                    });
-                }
-            default:
-                return Results.Ok(new AiAskResponse
-                {
-                    Intent = AiIntent.Unknown,
-                    Answer = "No encontré esa información, intenta preguntar de otra forma.",
-                    Echo = question,
-                    Suggestions = AiIntentInterpreter.DefaultSuggestions
-                });
-        }
-    }
-
-    private static string FormatCurrency(decimal value)
-    {
-        var culture = CultureInfo.GetCultureInfo("es-MX");
-        return value.ToString("C2", culture);
-    }
-}
-
-public enum AiIntent
-{
-    Unknown = 0,
-    TodaySummary = 1,
-    TodaySales = 2,
-    CustomerBalance = 3,
-    PayrollOpenPeriod = 4,
-    OverdueCustomers = 5
-}
-
-internal static class AiIntentInterpreter
-{
-    public static readonly string[] DefaultSuggestions =
-    {
-        "¿Cuántos pedidos tengo hoy?",
-        "¿Cuánto vendí hoy?",
-        "¿Cuál es el saldo del cliente <nombre o código>?",
-        "¿Cuánto se pagará de nómina en el periodo abierto?",
-        "¿Qué clientes tienen saldo vencido?"
-    };
-
-    public static (AiIntent Intent, string? Argument) Interpret(string question)
-    {
-        var normalized = Normalize(question);
-
-        if (ContainsAll(normalized, "saldo", "vencid") ||
-            ContainsAll(normalized, "cartera", "vencid") ||
-            ContainsAll(normalized, "cliente", "vencid") ||
-            normalized.Contains("morosos"))
-        {
-            return (AiIntent.OverdueCustomers, null);
-        }
-
-        if (normalized.Contains("nomina") &&
-            (ContainsAny(normalized, "periodo", "abierto", "pagar", "pago", "pagara")))
-        {
-            return (AiIntent.PayrollOpenPeriod, null);
-        }
-
-        if (normalized.Contains("saldo") &&
-            (normalized.Contains("cliente") || normalized.Contains(" del ") || normalized.Contains(" de ")))
-        {
-            var argument = ExtractCustomerArgument(question);
-            return (AiIntent.CustomerBalance, argument);
-        }
-
-        if (ContainsAny(normalized, "vendi", "venta", "ventas", "facturado", "facturacion") &&
-            ContainsAny(normalized, "hoy", "dia"))
-        {
-            return (AiIntent.TodaySales, null);
-        }
-
-        if (ContainsAny(normalized, "pedido", "pedidos", "orden", "ordenes", "resumen") &&
-            ContainsAny(normalized, "hoy", "dia"))
-        {
-            return (AiIntent.TodaySummary, null);
-        }
-
-        if (normalized.Contains("vend") && !normalized.Contains("ayer"))
-        {
-            return (AiIntent.TodaySales, null);
-        }
-
-        return (AiIntent.Unknown, null);
-    }
-
-    private static string ExtractCustomerArgument(string question)
-    {
-        var trimmed = question.Trim();
-
-        var anchors = new[]
-        {
-            "saldo del cliente ", "saldo de cliente ", "saldo del ", "saldo de ", "del cliente ", "cliente "
-        };
-
-        foreach (var anchor in anchors)
-        {
-            var idx = trimmed.IndexOf(anchor, StringComparison.OrdinalIgnoreCase);
-            if (idx >= 0)
-            {
-                var rest = trimmed[(idx + anchor.Length)..].Trim();
-                rest = rest.TrimEnd('?', '¿', '.', '!', '¡').Trim();
-                if (!string.IsNullOrWhiteSpace(rest))
-                {
-                    return rest;
-                }
-            }
-        }
-
-        return string.Empty;
-    }
-
-    private static bool ContainsAll(string text, params string[] tokens)
-        => tokens.All(t => text.Contains(t, StringComparison.OrdinalIgnoreCase));
-
-    private static bool ContainsAny(string text, params string[] tokens)
-        => tokens.Any(t => text.Contains(t, StringComparison.OrdinalIgnoreCase));
-
-    private static string Normalize(string value)
-    {
-        var lowered = value.ToLowerInvariant();
-        var formD = lowered.Normalize(NormalizationForm.FormD);
-        var sb = new StringBuilder(formD.Length);
-        foreach (var ch in formD)
-        {
-            if (CharUnicodeInfo.GetUnicodeCategory(ch) != UnicodeCategory.NonSpacingMark)
-            {
-                sb.Append(ch);
-            }
-        }
-        return sb.ToString();
-    }
-}
-
-public sealed class AiAskRequest
-{
-    public string Question { get; set; } = string.Empty;
-}
-
-public sealed class AiAskResponse
-{
-    public AiIntent Intent { get; set; }
-    public string Answer { get; set; } = string.Empty;
-    public string Echo { get; set; } = string.Empty;
-    public string Endpoint { get; set; } = string.Empty;
-    public object? Data { get; set; }
-    public IReadOnlyList<string> Suggestions { get; set; } = Array.Empty<string>();
 }
 
 public sealed class AiTodaySummaryDto
