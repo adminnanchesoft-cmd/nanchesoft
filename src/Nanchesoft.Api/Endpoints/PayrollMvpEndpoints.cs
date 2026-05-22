@@ -36,7 +36,7 @@ public static class PayrollMvpEndpoints
     // ──────────────────────────────────────────────────────────────
     // 1. IMPORTAR EMPLEADOS DESDE EXCEL
     // Columnas esperadas: NoEmpleado, Nombre, ApellidoPaterno, ApellidoMaterno,
-    //   RFC, CURP, Email, Telefono, FechaIngreso, SalarioDiario, SalarioDiarioIntegrado,
+    //   RFC, CURP, Email, Telefono, FechaIngreso, SueldoPeriodo, SalarioDiario, SalarioDiarioIntegrado,
     //   DepartamentoCodigo, PuestoCodigo
     // ──────────────────────────────────────────────────────────────
     private static async Task<IResult> ImportEmployeesFromExcelAsync(HttpContext httpContext, IFormFile file, NanchesoftDbContext db)
@@ -98,39 +98,41 @@ public static class PayrollMvpEndpoints
                 var email = GetCell(ws, row, headers, "Email").Trim();
                 var phone = GetCell(ws, row, headers, "Telefono").Trim();
                 var hireDateStr = GetCell(ws, row, headers, "FechaIngreso").Trim();
+                var periodSalaryStr = GetCellAny(ws, row, headers, "SueldoPeriodo", "SueldoDelPeriodo", "Sueldo del periodo", "Sueldo periodo", "Sueldo semanal").Trim();
                 var salaryStr = GetCell(ws, row, headers, "SalarioDiario").Trim();
                 var intSalaryStr = GetCell(ws, row, headers, "SalarioDiarioIntegrado").Trim();
                 var deptCode = GetCell(ws, row, headers, "DepartamentoCodigo").Trim().ToUpperInvariant();
                 var posCode = GetCell(ws, row, headers, "PuestoCodigo").Trim().ToUpperInvariant();
+                var isExisting = existingEmployees.TryGetValue(empNum, out var existing);
 
-                if (string.IsNullOrWhiteSpace(firstName) || string.IsNullOrWhiteSpace(lastName))
+                if (!isExisting && (string.IsNullOrWhiteSpace(firstName) || string.IsNullOrWhiteSpace(lastName)))
                 {
                     errors.Add($"Fila {row}: Nombre o apellido vacíos para No.{empNum}.");
                     continue;
                 }
 
                 _ = DateTime.TryParse(hireDateStr, out var hireDate);
-                if (hireDate == default) hireDate = DateTime.UtcNow.Date;
-
-                _ = decimal.TryParse(salaryStr, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var dailySalary);
-                _ = decimal.TryParse(intSalaryStr, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var intDailySalary);
-                if (intDailySalary == 0m) intDailySalary = dailySalary;
+                TryParseDecimalValue(periodSalaryStr, out var periodSalary);
+                TryParseDecimalValue(salaryStr, out var dailySalary);
+                TryParseDecimalValue(intSalaryStr, out var intDailySalary);
+                if (intDailySalary == 0m && dailySalary != 0m) intDailySalary = dailySalary;
 
                 Guid? deptId = !string.IsNullOrWhiteSpace(deptCode) && departments.TryGetValue(deptCode, out var did) ? did : null;
                 Guid? posId = !string.IsNullOrWhiteSpace(posCode) && positions.TryGetValue(posCode, out var pid) ? pid : null;
 
-                if (existingEmployees.TryGetValue(empNum, out var existing))
+                if (isExisting && existing is not null)
                 {
-                    existing.FirstName = firstName;
-                    existing.LastName = lastName;
-                    existing.MiddleName = middleName;
-                    existing.TaxId = taxId;
-                    existing.NationalId = nationalId;
-                    existing.Email = email;
-                    existing.Phone = phone;
-                    existing.HireDate = hireDate;
-                    existing.DailySalary = dailySalary;
-                    existing.IntegratedDailySalary = intDailySalary;
+                    if (!string.IsNullOrWhiteSpace(firstName)) existing.FirstName = firstName;
+                    if (!string.IsNullOrWhiteSpace(lastName)) existing.LastName = lastName;
+                    if (!string.IsNullOrWhiteSpace(middleName)) existing.MiddleName = middleName;
+                    if (!string.IsNullOrWhiteSpace(taxId)) existing.TaxId = taxId;
+                    if (!string.IsNullOrWhiteSpace(nationalId)) existing.NationalId = nationalId;
+                    if (!string.IsNullOrWhiteSpace(email)) existing.Email = email;
+                    if (!string.IsNullOrWhiteSpace(phone)) existing.Phone = phone;
+                    if (hireDate != default) existing.HireDate = hireDate;
+                    if (!string.IsNullOrWhiteSpace(periodSalaryStr)) existing.PeriodSalary = periodSalary;
+                    if (!string.IsNullOrWhiteSpace(salaryStr)) existing.DailySalary = dailySalary;
+                    if (!string.IsNullOrWhiteSpace(intSalaryStr)) existing.IntegratedDailySalary = intDailySalary;
                     if (deptId.HasValue) existing.DepartmentId = deptId;
                     if (posId.HasValue) existing.PositionId = posId;
                     existing.UpdatedAt = DateTime.UtcNow;
@@ -159,7 +161,8 @@ public static class PayrollMvpEndpoints
                         NationalId = nationalId,
                         Email = email,
                         Phone = phone,
-                        HireDate = hireDate,
+                        HireDate = hireDate == default ? DateTime.UtcNow.Date : hireDate,
+                        PeriodSalary = periodSalary,
                         DailySalary = dailySalary,
                         IntegratedDailySalary = intDailySalary,
                         Status = "active",
@@ -679,6 +682,13 @@ public static class PayrollMvpEndpoints
     private static string GetCsvField(List<string> row, Dictionary<string, int> headerMap, string key)
         => headerMap.TryGetValue(key, out var idx) && idx < row.Count ? row[idx] ?? string.Empty : string.Empty;
 
+    private static bool IsPayrollRunEditable(string? status)
+    {
+        var normalized = (status ?? string.Empty).Trim().ToLowerInvariant();
+        return string.IsNullOrWhiteSpace(normalized)
+            || normalized is "draft" or "borrador" or "open" or "abierto" or "captura" or "pending" or "pendiente";
+    }
+
     private sealed record PunchEmployeeRef(Guid Id, string FullName);
 
     public sealed class PunchImportPreviewRow
@@ -994,11 +1004,20 @@ public static class PayrollMvpEndpoints
         var autoIncidents = await db.EmployeeIncidents
             .Where(x => x.PayrollPeriodId == periodId && x.Notes == "auto-generado")
             .ToListAsync();
-        db.EmployeeIncidents.RemoveRange(autoIncidents);
+        foreach (var incident in autoIncidents)
+        {
+            incident.IsActive = false;
+            incident.IsDeleted = true;
+            incident.DeletedAt = DateTime.UtcNow;
+            incident.DeletedBy = "mvp-engine";
+        }
 
         int created = 0;
         var delayThreshold = Math.Clamp(delayIncidentThresholdMinutes ?? 15, 0, 240);
         var overtimeRate = Math.Clamp(overtimeMultiplier ?? 1.5m, 1m, 5m);
+        var incidentTypes = await db.NomPayrollIncidentTypes
+            .Where(x => x.CompanyId == period.CompanyId && x.IsActive && !x.IsDeleted)
+            .ToDictionaryAsync(x => x.Code);
         var grouped = summaries
             .GroupBy(x => x.EmployeeId)
             .ToList();
@@ -1019,10 +1038,12 @@ public static class PayrollMvpEndpoints
                 {
                     TenantId = period.TenantId,
                     CompanyId = period.CompanyId,
+                    BranchId = employee.BranchId,
                     EmployeeId = empId,
                     PayrollPeriodId = periodId,
+                    NomPayrollIncidentTypeId = ResolveIncidentTypeId(incidentTypes, "FALTA_INJUSTIFICADA"),
                     IncidentDate = period.StartDate,
-                    IncidentType = "falta",
+                    IncidentType = "FALTA_INJUSTIFICADA",
                     Quantity = absenceSum,
                     Amount = employee.DailySalary * absenceSum,
                     Status = "draft",
@@ -1040,10 +1061,12 @@ public static class PayrollMvpEndpoints
                 {
                     TenantId = period.TenantId,
                     CompanyId = period.CompanyId,
+                    BranchId = employee.BranchId,
                     EmployeeId = empId,
                     PayrollPeriodId = periodId,
+                    NomPayrollIncidentTypeId = ResolveIncidentTypeId(incidentTypes, "RETARDO"),
                     IncidentDate = period.StartDate,
-                    IncidentType = "retardo",
+                    IncidentType = "RETARDO",
                     Quantity = Math.Round(delayHours, 2),
                     Amount = Math.Round(employee.DailySalary / 8m * delayHours, 2),
                     Status = "draft",
@@ -1060,10 +1083,12 @@ public static class PayrollMvpEndpoints
                 {
                     TenantId = period.TenantId,
                     CompanyId = period.CompanyId,
+                    BranchId = employee.BranchId,
                     EmployeeId = empId,
                     PayrollPeriodId = periodId,
+                    NomPayrollIncidentTypeId = ResolveIncidentTypeId(incidentTypes, "HORAS_EXTRA"),
                     IncidentDate = period.StartDate,
-                    IncidentType = "hora_extra",
+                    IncidentType = "HORAS_EXTRA",
                     Quantity = Math.Round(overtimeSum, 2),
                     Amount = Math.Round(employee.DailySalary / 8m * overtimeRate * overtimeSum, 2),
                     Status = "draft",
@@ -1091,8 +1116,8 @@ public static class PayrollMvpEndpoints
         if (run is null)
             return Results.NotFound(new { message = "No se encontró la corrida de nómina." });
 
-        if (run.Status == "closed")
-            return Results.BadRequest(new { message = "La corrida ya está cerrada." });
+        if (!IsPayrollRunEditable(run.Status))
+            return Results.BadRequest(new { message = "La corrida ya fue calculada/autorizada/cerrada. Genera una nueva corrida o cancélala formalmente para hacer ajustes." });
 
         var period = run.PayrollPeriod!;
         int periodDays = (period.EndDate.Date - period.StartDate.Date).Days + 1;
@@ -1121,7 +1146,8 @@ public static class PayrollMvpEndpoints
         await EnsureDefaultConceptsAsync(db, run.CompanyId);
 
         var concepts = await db.PayrollConcepts.Where(x => x.CompanyId == run.CompanyId && x.IsActive).ToListAsync();
-        var conceptSal   = concepts.FirstOrDefault(x => x.Code == "SAL")
+        var conceptSal   = concepts.FirstOrDefault(IsWeeklySalaryConcept)
+                        ?? concepts.FirstOrDefault(x => x.Code == "SAL")
                         ?? concepts.FirstOrDefault(x => x.SatCode == "P-001" && x.ConceptType == "perception")
                         ?? concepts.FirstOrDefault(x => x.ConceptType == "perception");
         var conceptBon   = concepts.FirstOrDefault(x => x.Code == "BON")
@@ -1134,8 +1160,13 @@ public static class PayrollMvpEndpoints
                          ?? concepts.FirstOrDefault(x => x.SatCode == "D-002")
                          ?? concepts.FirstOrDefault(x => x.ConceptType == "deduction");
         var conceptDescto = concepts.FirstOrDefault(x => x.Code == "DESCTO")
-                         ?? concepts.FirstOrDefault(x => x.Code == "PRES")
+                         ?? concepts.FirstOrDefault(x => x.ConceptType == "deduction"
+                             && x.Code != "PRESTA"
+                             && x.Code != "PRES")
                          ?? conceptIsr;
+        var conceptLoan = concepts.FirstOrDefault(x => x.Code == "PRESTA")
+                       ?? concepts.FirstOrDefault(x => x.Code == "PRES")
+                       ?? concepts.FirstOrDefault(x => x.Code == "DESCTO");
 
         if (conceptSal is null)
             return Results.BadRequest(new { message = "No existe concepto de percepción (SAL) configurado." });
@@ -1191,10 +1222,11 @@ public static class PayrollMvpEndpoints
             })
             .ToDictionaryAsync(x => x.EmployeeId);
 
-        var incidentsByEmployee = await db.EmployeeIncidents
-            .Where(x => x.CompanyId == run.CompanyId && x.PayrollPeriodId == run.PayrollPeriodId && employeeIds.Contains(x.EmployeeId) && x.IsActive)
-            .GroupBy(x => x.EmployeeId)
-            .ToDictionaryAsync(g => g.Key, g => g.ToList());
+        var incidentRows = await db.EmployeeIncidents
+            .Include(x => x.PayrollIncidentType)
+            .Where(x => x.CompanyId == run.CompanyId && x.PayrollPeriodId == run.PayrollPeriodId && employeeIds.Contains(x.EmployeeId) && x.IsActive && !x.IsDeleted)
+            .ToListAsync();
+        var incidentsByEmployee = incidentRows.GroupBy(x => x.EmployeeId).ToDictionary(g => g.Key, g => g.ToList());
 
         var prePayrollAdjustments = await db.PrePayrollAdjustments
             .Where(x => x.CompanyId == run.CompanyId && x.PayrollPeriodId == run.PayrollPeriodId && employeeIds.Contains(x.EmployeeId) && x.IsActive && x.Status != "cancelled")
@@ -1209,12 +1241,17 @@ public static class PayrollMvpEndpoints
         var loanDeductionsToCreate = new List<EmployeeLoanDeduction>();
         var createdLines = 0;
 
-        // Pre-load installments already applied outside this run to avoid unique key conflicts
-        var paidInstallmentKeys = await db.EmployeeLoanDeductions
-            .Where(x => x.CompanyId == run.CompanyId && x.PayrollRunId != runId)
-            .Select(x => x.EmployeeLoanId.ToString() + ":" + x.InstallmentNumber.ToString())
+        // Pre-load installments already applied outside this run to avoid unique key conflicts.
+        // Some legacy loan records can have InstallmentsPaid out of sync with existing deductions,
+        // so we derive the next available installment number from the actual deduction rows.
+        var activeLoanIds = loansByEmployee.Select(x => x.Id).ToList();
+        var paidInstallments = await db.EmployeeLoanDeductions
+            .Where(x => activeLoanIds.Contains(x.EmployeeLoanId) && x.PayrollRunId != runId)
+            .Select(x => new { x.EmployeeLoanId, x.InstallmentNumber })
             .ToListAsync();
-        var paidInstallmentSet = paidInstallmentKeys.ToHashSet();
+        var paidInstallmentsByLoan = paidInstallments
+            .GroupBy(x => x.EmployeeLoanId)
+            .ToDictionary(g => g.Key, g => g.Select(x => x.InstallmentNumber).ToHashSet());
 
         // Load active recurring movements for this run date
         var allRecurring = await db.PayrollRecurringMovements
@@ -1233,51 +1270,77 @@ public static class PayrollMvpEndpoints
             summaryByEmployee.TryGetValue(employee.Id, out var summary);
             var absenceDays = summary?.TotalAbsenceUnits ?? 0m;
             var daysPaid = Math.Max(0m, periodDays - absenceDays);
+            var appliesFiscalConcepts = period.IsImssInsured && employee.IsImssRegistered;
 
-            // PeriodSalary: fixed amount regardless of days (absences still deducted separately)
+            // SUELDO SEMANAL comes strictly from the employee's Sueldo del periodo.
             var baseSalary = employee.PeriodSalary > 0m
                 ? employee.PeriodSalary
-                : Math.Round(employee.DailySalary * daysPaid, 2);
+                : 0m;
 
             // ── Incidencias ──
             decimal extraPerceptions = 0m;
             decimal extraDeductions = 0m;
             decimal incidentPerceptions = 0m;
             decimal incidentDeductions = 0m;
+            var incidentDetails = new List<(EmployeeIncident Incident, PayrollConcept Concept, decimal Qty, decimal Amt, bool IsDeduction, int Sort)>();
 
             incidentsByEmployee.TryGetValue(employee.Id, out var incidents);
             if (incidents is not null)
             {
                 foreach (var inc in incidents)
                 {
-                    switch (inc.IncidentType.ToLowerInvariant())
+                    var conceptType = ResolveIncidentConceptType(inc);
+                    var category = inc.PayrollIncidentType?.IncidentCategory ?? string.Empty;
+                    var affectType = inc.PayrollIncidentType?.AffectType ?? string.Empty;
+
+                    switch (conceptType)
                     {
-                        case "hora_extra":
+                        case "HORAS_EXTRA":
                             var overtimeAmount = Math.Round(employee.DailySalary / 8m * 1.5m * inc.Quantity, 2);
                             extraPerceptions += overtimeAmount;
                             incidentPerceptions += overtimeAmount;
+                            if (conceptBon is not null)
+                                incidentDetails.Add((inc, conceptBon, inc.Quantity <= 0m ? 1m : inc.Quantity, overtimeAmount, false, 40));
                             break;
-                        case "bono":
-                        case "percepcion":
+                        case "BONO":
+                        case "COMISION":
                             var perceptionAmount = Math.Round(inc.Amount > 0 ? inc.Amount : employee.DailySalary * inc.Quantity, 2);
                             extraPerceptions += perceptionAmount;
                             incidentPerceptions += perceptionAmount;
+                            if (conceptBon is not null)
+                                incidentDetails.Add((inc, conceptBon, inc.Quantity <= 0m ? 1m : inc.Quantity, perceptionAmount, false, 40));
                             break;
-                        case "falta":
-                            var absenceAmount = Math.Round(employee.DailySalary * inc.Quantity, 2);
+                        case "FALTA":
+                            var absenceAmount = Math.Round(inc.Amount > 0 ? inc.Amount : employee.DailySalary * inc.Quantity, 2);
                             extraDeductions += absenceAmount;
                             incidentDeductions += absenceAmount;
+                            if (conceptDescto is not null)
+                                incidentDetails.Add((inc, conceptDescto, inc.Quantity <= 0m ? 1m : inc.Quantity, absenceAmount, true, 85));
                             break;
-                        case "retardo":
-                            var delayAmount = Math.Round(employee.DailySalary / 8m * inc.Quantity, 2);
+                        case "RETARDO":
+                            var delayAmount = Math.Round(inc.Amount > 0 ? inc.Amount : employee.DailySalary / 8m * inc.Quantity, 2);
                             extraDeductions += delayAmount;
                             incidentDeductions += delayAmount;
+                            if (conceptDescto is not null)
+                                incidentDetails.Add((inc, conceptDescto, inc.Quantity <= 0m ? 1m : inc.Quantity, delayAmount, true, 85));
                             break;
-                        case "deduccion":
-                        case "descuento":
-                            var deductionAmount = Math.Round(inc.Amount > 0 ? inc.Amount : employee.DailySalary * inc.Quantity, 2);
-                            extraDeductions += deductionAmount;
-                            incidentDeductions += deductionAmount;
+                        default:
+                            if (category == "PERCEPCION" || affectType == "SUMA")
+                            {
+                                var genericPerceptionAmount = Math.Round(inc.Amount > 0 ? inc.Amount : employee.DailySalary * inc.Quantity, 2);
+                                extraPerceptions += genericPerceptionAmount;
+                                incidentPerceptions += genericPerceptionAmount;
+                                if (conceptBon is not null)
+                                    incidentDetails.Add((inc, conceptBon, inc.Quantity <= 0m ? 1m : inc.Quantity, genericPerceptionAmount, false, 40));
+                            }
+                            else if (category == "DEDUCCION" || affectType == "RESTA")
+                            {
+                                var genericDeductionAmount = Math.Round(inc.Amount > 0 ? inc.Amount : employee.DailySalary * inc.Quantity, 2);
+                                extraDeductions += genericDeductionAmount;
+                                incidentDeductions += genericDeductionAmount;
+                                if (conceptDescto is not null)
+                                    incidentDetails.Add((inc, conceptDescto, inc.Quantity <= 0m ? 1m : inc.Quantity, genericDeductionAmount, true, 85));
+                            }
                             break;
                     }
                 }
@@ -1332,14 +1395,19 @@ public static class PayrollMvpEndpoints
                     if (installment <= 0m) continue;
 
                     var nextInstallmentNo = loan.InstallmentsPaid + 1;
-                    // Skip if this installment was already applied in another run (avoids unique key violation)
-                    if (paidInstallmentSet.Contains(loan.Id.ToString() + ":" + nextInstallmentNo.ToString()))
+                    if (!paidInstallmentsByLoan.TryGetValue(loan.Id, out var paidNumbers))
                     {
-                        // Advance counter without creating a deduction (cross-run consistency)
-                        continue;
+                        paidNumbers = [];
+                        paidInstallmentsByLoan[loan.Id] = paidNumbers;
+                    }
+
+                    while (paidNumbers.Contains(nextInstallmentNo))
+                    {
+                        nextInstallmentNo++;
                     }
 
                     loanDeductionTotal += installment;
+                    paidNumbers.Add(nextInstallmentNo);
                     loanDeductionsToCreate.Add(new EmployeeLoanDeduction
                     {
                         TenantId = run.TenantId,
@@ -1361,7 +1429,7 @@ public static class PayrollMvpEndpoints
                     });
 
                     loan.BalanceAmount = Math.Max(0m, loan.BalanceAmount - installment);
-                    loan.InstallmentsPaid++;
+                    loan.InstallmentsPaid = Math.Max(loan.InstallmentsPaid + 1, nextInstallmentNo);
                     if (loan.BalanceAmount <= 0m) loan.Status = "paid";
                     loan.UpdatedAt = DateTime.UtcNow;
                     loan.UpdatedBy = "mvp-engine";
@@ -1369,14 +1437,16 @@ public static class PayrollMvpEndpoints
             }
 
             // ── ISR 2024 (Art. 96 LISR + Subsidio al Empleo) ──
-            decimal grossTaxable = baseSalary + extraPerceptions;
-            var (netIsrPeriod, subsidioPerception) = CalculateIsrAndSubsidio(grossTaxable, periodDays);
+            // SUELDO SEMANAL is used for new employees not yet registered with IMSS,
+            // so it is paid on the receipt but does not feed the ISR taxable base.
+            decimal grossTaxable = appliesFiscalConcepts ? extraPerceptions : 0m;
+            var (netIsrPeriod, subsidioPerception) = appliesFiscalConcepts
+                ? CalculateIsrAndSubsidio(grossTaxable, periodDays)
+                : (0m, 0m);
 
             // ── IMSS cuota obrera ──
-            var sbc = employee.SbcFija > 0
-                ? employee.SbcFija
-                : (employee.IntegratedDailySalary > 0 ? employee.IntegratedDailySalary : employee.DailySalary);
-            var imssAmount = conceptImss is not null ? CalculateImssCuotaObrera(sbc, periodDays) : 0m;
+            // SUELDO SEMANAL is for new employees not yet registered with IMSS.
+            var imssAmount = appliesFiscalConcepts ? 0m : 0m;
 
             decimal grossAmount = baseSalary + extraPerceptions + subsidioPerception;
             decimal deductionsAmount = extraDeductions + imssAmount + netIsrPeriod + loanDeductionTotal;
@@ -1423,18 +1493,21 @@ public static class PayrollMvpEndpoints
             int sortOrder = 10;
 
             // Percepciones
-            // SAL siempre primero (sortOrder=10). Etiqueta visible: "Sueldo del periodo".
+            // SUELDO SEMANAL siempre primero (sortOrder=10).
+            // El importe sale directo del campo Employee.PeriodSalary (Sueldo del periodo).
             if (baseSalary > 0m)
             {
                 var salDetail = BuildDetail(run, line, employee, conceptSal, daysPaid, baseSalary, sortOrder);
-                salDetail.ConceptName = "Sueldo del periodo";
+                salDetail.ConceptCode = string.IsNullOrWhiteSpace(conceptSal.Code) ? "SAL" : conceptSal.Code;
+                salDetail.ConceptName = "SUELDO SEMANAL";
+                salDetail.ConceptType = "perception";
                 db.PayrollRunLineDetails.Add(salDetail);
                 sortOrder += 10;
             }
 
-            if (incidentPerceptions > 0m && conceptBon is not null)
+            foreach (var (inc, incConcept, incQty, incAmt, _, _) in incidentDetails.Where(x => !x.IsDeduction))
             {
-                db.PayrollRunLineDetails.Add(BuildDetail(run, line, employee, conceptBon, 1m, incidentPerceptions, sortOrder));
+                db.PayrollRunLineDetails.Add(BuildIncidentDetail(run, line, employee, incConcept, inc, incQty, incAmt, sortOrder, isDeduction: false));
                 sortOrder += 10;
             }
 
@@ -1445,9 +1518,11 @@ public static class PayrollMvpEndpoints
             }
 
             // Deducciones
-            if (incidentDeductions > 0m && conceptDescto is not null)
+            var incidentDeductionSort = 85;
+            foreach (var (inc, incConcept, incQty, incAmt, _, _) in incidentDetails.Where(x => x.IsDeduction))
             {
-                db.PayrollRunLineDetails.Add(BuildDetail(run, line, employee, conceptDescto, 1m, incidentDeductions, 85, isDeduction: true));
+                db.PayrollRunLineDetails.Add(BuildIncidentDetail(run, line, employee, incConcept, inc, incQty, incAmt, incidentDeductionSort, isDeduction: true));
+                incidentDeductionSort++;
             }
 
             foreach (var (ppConcept, ppQty, ppAmt, ppIsDeduction, ppSort) in prePayrollDetails)
@@ -1467,7 +1542,7 @@ public static class PayrollMvpEndpoints
             {
                 foreach (var loan in activeLoans)
                 {
-                    var loanConcept = concepts.FirstOrDefault(x => x.Id == loan.PayrollConceptId) ?? conceptIsr;
+                    var loanConcept = concepts.FirstOrDefault(x => x.Id == loan.PayrollConceptId) ?? conceptLoan ?? conceptDescto;
                     if (loanConcept is null) continue;
                     var installment = loanDeductionsToCreate.FirstOrDefault(x => x.EmployeeLoanId == loan.Id)?.Amount ?? 0m;
                     if (installment > 0m)
@@ -1478,6 +1553,34 @@ public static class PayrollMvpEndpoints
             // Movimientos periódicos (detalles por concepto individual)
             foreach (var (mvConcept, mvQty, mvAmt, mvIsDeduction, mvSort) in recurringDetails)
                 db.PayrollRunLineDetails.Add(BuildDetail(run, line, employee, mvConcept, mvQty, mvAmt, mvSort, isDeduction: mvIsDeduction));
+        }
+
+        if (loanDeductionsToCreate.Count > 0)
+        {
+            var loanIdsToCreate = loanDeductionsToCreate.Select(x => x.EmployeeLoanId).Distinct().ToList();
+            var usedInstallments = (await db.EmployeeLoanDeductions
+                    .AsNoTracking()
+                    .Where(x => loanIdsToCreate.Contains(x.EmployeeLoanId))
+                    .Select(x => new { x.EmployeeLoanId, x.InstallmentNumber })
+                    .ToListAsync())
+                .GroupBy(x => x.EmployeeLoanId)
+                .ToDictionary(g => g.Key, g => g.Select(x => x.InstallmentNumber).ToHashSet());
+
+            foreach (var deduction in loanDeductionsToCreate)
+            {
+                if (!usedInstallments.TryGetValue(deduction.EmployeeLoanId, out var usedNumbers))
+                {
+                    usedNumbers = [];
+                    usedInstallments[deduction.EmployeeLoanId] = usedNumbers;
+                }
+
+                while (usedNumbers.Contains(deduction.InstallmentNumber))
+                    deduction.InstallmentNumber++;
+
+                usedNumbers.Add(deduction.InstallmentNumber);
+                if (deduction.RemainingBalance <= 0m)
+                    deduction.Status = "applied";
+            }
         }
 
         db.EmployeeLoanDeductions.AddRange(loanDeductionsToCreate);
@@ -1603,14 +1706,31 @@ public static class PayrollMvpEndpoints
     // ──────────────────────────────────────────────────────────────
     // 7. SEMBRAR CONCEPTOS PREDETERMINADOS
     // ──────────────────────────────────────────────────────────────
-    private static async Task<IResult> SeedDefaultConceptsAsync(NanchesoftDbContext db)
+    private static async Task<IResult> SeedDefaultConceptsAsync(HttpContext httpContext, NanchesoftDbContext db)
     {
-        var company = await db.Companies.OrderBy(x => x.CreatedAt).FirstOrDefaultAsync();
+        var ctxCompanyId = ApiTenantScope.ResolveCompanyId(httpContext);
+        var ctxTenantId = ApiTenantScope.ResolveTenantId(httpContext);
+
+        Company? company = null;
+        if (ctxCompanyId.HasValue)
+        {
+            company = await db.Companies.FirstOrDefaultAsync(x => x.Id == ctxCompanyId.Value && x.IsActive);
+            if (company is not null && ctxTenantId.HasValue && company.TenantId != ctxTenantId.Value)
+                return Results.BadRequest(new { message = "La empresa seleccionada no pertenece al tenant actual." });
+        }
+        else if (ctxTenantId.HasValue)
+        {
+            company = await db.Companies
+                .Where(x => x.TenantId == ctxTenantId.Value && x.IsActive)
+                .OrderBy(x => x.CreatedAt)
+                .FirstOrDefaultAsync();
+        }
+
         if (company is null)
-            return Results.BadRequest(new { message = "No existe empresa configurada." });
+            return Results.BadRequest(new { message = "No existe contexto de tenant/empresa para crear conceptos de nómina." });
 
         var (created, skipped) = await EnsureDefaultConceptsAsync(db, company.Id);
-        return Results.Ok(new { success = true, created, skipped });
+        return Results.Ok(new { success = true, companyId = company.Id, tenantId = company.TenantId, created, skipped });
     }
 
     private static async Task<(int Created, int Skipped)> EnsureDefaultConceptsAsync(NanchesoftDbContext db, Guid companyId)
@@ -1621,7 +1741,7 @@ public static class PayrollMvpEndpoints
 
         var seed = new[]
         {
-            new { Code = "SAL",   Name = "Sueldo",               ConceptType = "perception", CalculationType = "days_salary",   SatCode = "P-001", SatAgrupador = "HorasExtra",  TaxableType = "taxable",     TaxablePercent = 100m, ExemptPercent = 0m,   IsRecurring = true,  IsAutomatic = true,  SortOrder = 10 },
+            new { Code = "SAL",   Name = "SUELDO SEMANAL",       ConceptType = "perception", CalculationType = "period_salary", SatCode = "P-001", SatAgrupador = "Sueldos",     TaxableType = "taxable",     TaxablePercent = 100m, ExemptPercent = 0m,   IsRecurring = true,  IsAutomatic = true,  SortOrder = 10 },
             new { Code = "BON",   Name = "Bonificación",          ConceptType = "perception", CalculationType = "manual",        SatCode = "P-016", SatAgrupador = "OtrosPagos",  TaxableType = "taxable",     TaxablePercent = 100m, ExemptPercent = 0m,   IsRecurring = false, IsAutomatic = false, SortOrder = 20 },
             new { Code = "HEORD", Name = "Horas Extra Ordinarias",ConceptType = "perception", CalculationType = "hours",         SatCode = "P-019", SatAgrupador = "HorasExtra",  TaxableType = "mixed",       TaxablePercent = 50m,  ExemptPercent = 50m,  IsRecurring = false, IsAutomatic = false, SortOrder = 30 },
             new { Code = "PV",    Name = "Prima Vacacional",      ConceptType = "perception", CalculationType = "manual",        SatCode = "P-021", SatAgrupador = "Prima",       TaxableType = "mixed",       TaxablePercent = 60m,  ExemptPercent = 40m,  IsRecurring = false, IsAutomatic = false, SortOrder = 40 },
@@ -1636,8 +1756,18 @@ public static class PayrollMvpEndpoints
         int created = 0, skipped = 0;
         foreach (var s in seed)
         {
-            if (await db.PayrollConcepts.AnyAsync(x => x.CompanyId == company.Id && x.Code == s.Code))
+            var existingConcept = await db.PayrollConcepts.FirstOrDefaultAsync(x => x.CompanyId == company.Id && x.Code == s.Code);
+            if (existingConcept is not null)
             {
+                // Mantener el concepto base alineado con la nómina semanal.
+                if (s.Code == "SAL" && !IsWeeklySalaryConcept(existingConcept))
+                {
+                    existingConcept.Name = "SUELDO SEMANAL";
+                    existingConcept.CalculationType = "period_salary";
+                    existingConcept.SatAgrupador = "Sueldos";
+                    existingConcept.UpdatedAt = DateTime.UtcNow;
+                    existingConcept.UpdatedBy = "mvp-engine";
+                }
                 skipped++;
                 continue;
             }
@@ -1665,6 +1795,35 @@ public static class PayrollMvpEndpoints
         }
         await db.SaveChangesAsync();
         return (created, skipped);
+    }
+
+    private static bool IsWeeklySalaryConcept(PayrollConcept concept)
+        => string.Equals(NormalizePayrollConceptText(concept.Name), "SUELDO SEMANAL", StringComparison.Ordinal)
+        || string.Equals(NormalizePayrollConceptText(concept.Code), "SAL", StringComparison.Ordinal);
+
+    private static string NormalizePayrollConceptText(string? value)
+        => string.Join(' ', (value ?? string.Empty)
+            .Trim()
+            .ToUpperInvariant()
+            .Split(' ', StringSplitOptions.RemoveEmptyEntries));
+
+    private static Guid? ResolveIncidentTypeId(Dictionary<string, NomPayrollIncidentType> incidentTypes, string code)
+        => incidentTypes.TryGetValue(code, out var incidentType) ? incidentType.Id : null;
+
+    private static string ResolveIncidentConceptType(EmployeeIncident incident)
+    {
+        if (!string.IsNullOrWhiteSpace(incident.PayrollIncidentType?.PayrollConceptType))
+            return incident.PayrollIncidentType.PayrollConceptType.ToUpperInvariant();
+
+        return (incident.IncidentType ?? string.Empty).Trim().ToLowerInvariant() switch
+        {
+            "hora_extra" or "horas_extra" => "HORAS_EXTRA",
+            "bono" or "bonus" or "percepcion" => "BONO",
+            "falta" or "falta_injustificada" => "FALTA",
+            "retardo" => "RETARDO",
+            "deduccion" or "descuento" => "DESCUENTO_DANOS",
+            _ => "OTRO"
+        };
     }
 
     // ── ISR 2024 tarifa Art. 96 LISR (importes mensuales) ──
@@ -1773,6 +1932,35 @@ public static class PayrollMvpEndpoints
         };
     }
 
+    private static PayrollRunLineDetail BuildIncidentDetail(
+        PayrollRun run, PayrollRunLine line, Employee employee,
+        PayrollConcept baseConcept, EmployeeIncident incident,
+        decimal quantity, decimal amount, int sortOrder, bool isDeduction)
+    {
+        var detail = BuildDetail(run, line, employee, baseConcept, quantity, amount, sortOrder, isDeduction);
+        var incidentType = incident.PayrollIncidentType;
+        if (incidentType is not null)
+        {
+            if (!string.IsNullOrWhiteSpace(incidentType.Code))
+                detail.ConceptCode = TrimPayrollDetailText(incidentType.Code.ToUpperInvariant(), 32);
+            if (!string.IsNullOrWhiteSpace(incidentType.Name))
+                detail.ConceptName = TrimPayrollDetailText(incidentType.Name, 256);
+            if (!string.IsNullOrWhiteSpace(incidentType.SatCode))
+                detail.SatCode = incidentType.SatCode;
+        }
+
+        if (!string.IsNullOrWhiteSpace(incident.Notes))
+            detail.Notes = TrimPayrollDetailText(incident.Notes, 1024);
+
+        return detail;
+    }
+
+    private static string TrimPayrollDetailText(string value, int maxLength)
+    {
+        var text = value.Trim();
+        return text.Length <= maxLength ? text : text[..maxLength];
+    }
+
     private static (decimal Taxable, decimal Exempt) SplitTaxable(string taxableType, decimal amount) =>
         taxableType?.ToLowerInvariant() switch
         {
@@ -1806,6 +1994,25 @@ public static class PayrollMvpEndpoints
         return cell.IsEmpty() ? string.Empty : cell.GetString();
     }
 
+    private static string GetCellAny(IXLWorksheet ws, int row, Dictionary<string, int> headers, params string[] names)
+    {
+        foreach (var name in names)
+        {
+            var value = GetCell(ws, row, headers, name);
+            if (!string.IsNullOrWhiteSpace(value))
+                return value;
+        }
+
+        return string.Empty;
+    }
+
+    private static bool TryParseDecimalValue(string raw, out decimal value)
+    {
+        if (decimal.TryParse(raw, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out value))
+            return true;
+        return decimal.TryParse(raw, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.GetCultureInfo("es-MX"), out value);
+    }
+
     // ──────────────────────────────────────────────────────────────
     // PLANTILLA EXCEL PARA IMPORTAR EMPLEADOS
     // ──────────────────────────────────────────────────────────────
@@ -1821,7 +2028,7 @@ public static class PayrollMvpEndpoints
             "Email", "Telefono", "TelefonoEmergencia",
             "FechaIngreso", "FechaNacimiento",
             "Sexo", "EstadoCivil", "TipoSangre",
-            "SalarioDiario", "SalarioDiarioIntegrado",
+            "SueldoPeriodo", "SalarioDiario", "SalarioDiarioIntegrado",
             "DepartamentoCodigo", "PuestoCodigo",
             "TipoContrato", "PeriodoNomina",
             "ClaveReloj", "ClaveNOI",
@@ -1855,24 +2062,25 @@ public static class PayrollMvpEndpoints
         ws.Cell(2, 13).Value = "M";
         ws.Cell(2, 14).Value = "soltero";
         ws.Cell(2, 15).Value = "O+";
-        ws.Cell(2, 16).Value = 300.00;
-        ws.Cell(2, 17).Value = 320.00;
-        ws.Cell(2, 18).Value = "PROD";
-        ws.Cell(2, 19).Value = "OPER";
-        ws.Cell(2, 20).Value = "indefinite";
-        ws.Cell(2, 21).Value = "semanal";
-        ws.Cell(2, 22).Value = "001";
-        ws.Cell(2, 23).Value = "";
-        ws.Cell(2, 24).Value = "Av. Principal 123";
-        ws.Cell(2, 25).Value = "Centro";
-        ws.Cell(2, 26).Value = "Monterrey";
-        ws.Cell(2, 27).Value = "NL";
-        ws.Cell(2, 28).Value = "64000";
-        ws.Cell(2, 29).Value = "BBVA";
-        ws.Cell(2, 30).Value = "";
+        ws.Cell(2, 16).Value = 2100.00;
+        ws.Cell(2, 17).Value = 300.00;
+        ws.Cell(2, 18).Value = 320.00;
+        ws.Cell(2, 19).Value = "PROD";
+        ws.Cell(2, 20).Value = "OPER";
+        ws.Cell(2, 21).Value = "indefinite";
+        ws.Cell(2, 22).Value = "semanal";
+        ws.Cell(2, 23).Value = "001";
+        ws.Cell(2, 24).Value = "";
+        ws.Cell(2, 25).Value = "Av. Principal 123";
+        ws.Cell(2, 26).Value = "Centro";
+        ws.Cell(2, 27).Value = "Monterrey";
+        ws.Cell(2, 28).Value = "NL";
+        ws.Cell(2, 29).Value = "64000";
+        ws.Cell(2, 30).Value = "BBVA";
         ws.Cell(2, 31).Value = "";
-        ws.Cell(2, 32).Value = "Y1234567890";
-        ws.Cell(2, 33).Value = "A";
+        ws.Cell(2, 32).Value = "";
+        ws.Cell(2, 33).Value = "Y1234567890";
+        ws.Cell(2, 34).Value = "A";
 
         ws.Columns().AdjustToContents();
 
@@ -1888,12 +2096,22 @@ public static class PayrollMvpEndpoints
     // ──────────────────────────────────────────────────────────────
     // PREVIEW DE IMPORTACIÓN (sin guardar en BD)
     // ──────────────────────────────────────────────────────────────
-    private static async Task<IResult> PreviewImportFromExcelAsync(IFormFile file, NanchesoftDbContext db)
+    private static async Task<IResult> PreviewImportFromExcelAsync(HttpContext httpContext, IFormFile file, NanchesoftDbContext db)
     {
         if (file is null || file.Length == 0)
             return Results.BadRequest(new { message = "El archivo está vacío." });
 
-        var company = await db.Companies.OrderBy(x => x.CreatedAt).FirstOrDefaultAsync();
+        var ctxTenantId = ApiTenantScope.ResolveTenantId(httpContext);
+        var ctxCompanyId = ApiTenantScope.ResolveCompanyId(httpContext);
+
+        Company? company = null;
+        if (ctxCompanyId.HasValue)
+            company = await db.Companies.FirstOrDefaultAsync(x => x.Id == ctxCompanyId.Value);
+        else if (ctxTenantId.HasValue)
+            company = await db.Companies.Where(x => x.TenantId == ctxTenantId.Value && x.IsActive).OrderBy(x => x.CreatedAt).FirstOrDefaultAsync();
+        else
+            company = await db.Companies.OrderBy(x => x.CreatedAt).FirstOrDefaultAsync();
+
         if (company is null)
             return Results.BadRequest(new { message = "No existe empresa configurada." });
 
@@ -1934,21 +2152,25 @@ public static class PayrollMvpEndpoints
             var email = GetCell(ws, r, headers, "Email").Trim();
             var phone = GetCell(ws, r, headers, "Telefono").Trim();
             var hireDateStr = GetCell(ws, r, headers, "FechaIngreso").Trim();
+            var periodSalaryStr = GetCellAny(ws, r, headers, "SueldoPeriodo", "SueldoDelPeriodo", "Sueldo del periodo", "Sueldo periodo", "Sueldo semanal").Trim();
             var salaryStr = GetCell(ws, r, headers, "SalarioDiario").Trim();
             var deptCode = GetCell(ws, r, headers, "DepartamentoCodigo").Trim().ToUpperInvariant();
             var posCode = GetCell(ws, r, headers, "PuestoCodigo").Trim().ToUpperInvariant();
 
             var rowErrors = new List<string>();
+            var isUpdate = existingNumbers.Contains(empNum);
 
-            if (string.IsNullOrWhiteSpace(firstName)) rowErrors.Add("Nombre vacío");
-            if (string.IsNullOrWhiteSpace(lastName)) rowErrors.Add("Apellido paterno vacío");
+            if (!isUpdate && string.IsNullOrWhiteSpace(firstName)) rowErrors.Add("Nombre vacío");
+            if (!isUpdate && string.IsNullOrWhiteSpace(lastName)) rowErrors.Add("Apellido paterno vacío");
 
             _ = DateTime.TryParse(hireDateStr, out var hireDate);
             if (hireDate == default && !string.IsNullOrWhiteSpace(hireDateStr))
                 rowErrors.Add($"Fecha ingreso inválida: '{hireDateStr}'");
 
-            _ = decimal.TryParse(salaryStr, System.Globalization.NumberStyles.Any,
-                System.Globalization.CultureInfo.InvariantCulture, out var salary);
+            if (!TryParseDecimalValue(salaryStr, out var salary) && !string.IsNullOrWhiteSpace(salaryStr))
+                rowErrors.Add($"Salario diario inválido: '{salaryStr}'");
+            if (!TryParseDecimalValue(periodSalaryStr, out var periodSalary) && !string.IsNullOrWhiteSpace(periodSalaryStr))
+                rowErrors.Add($"Sueldo del periodo inválido: '{periodSalaryStr}'");
 
             var deptName = !string.IsNullOrWhiteSpace(deptCode) && departments.TryGetValue(deptCode, out var dn) ? dn : "";
             if (!string.IsNullOrWhiteSpace(deptCode) && string.IsNullOrWhiteSpace(deptName))
@@ -1958,7 +2180,6 @@ public static class PayrollMvpEndpoints
             if (!string.IsNullOrWhiteSpace(posCode) && string.IsNullOrWhiteSpace(posName))
                 rowErrors.Add($"Puesto '{posCode}' no encontrado");
 
-            var isUpdate = existingNumbers.Contains(empNum);
             var status = rowErrors.Count > 0 ? "error" : isUpdate ? "update" : "new";
 
             rows.Add(new EmployeeImportPreviewRow
@@ -1972,6 +2193,7 @@ public static class PayrollMvpEndpoints
                 Email = email,
                 Phone = phone,
                 HireDate = hireDate == default ? null : hireDate.Date,
+                PeriodSalary = periodSalary,
                 DailySalary = salary,
                 DepartmentCode = deptCode,
                 DepartmentName = deptName,
@@ -2006,6 +2228,7 @@ public static class PayrollMvpEndpoints
         public string Email { get; set; } = string.Empty;
         public string Phone { get; set; } = string.Empty;
         public DateTime? HireDate { get; set; }
+        public decimal PeriodSalary { get; set; }
         public decimal DailySalary { get; set; }
         public string DepartmentCode { get; set; } = string.Empty;
         public string DepartmentName { get; set; } = string.Empty;

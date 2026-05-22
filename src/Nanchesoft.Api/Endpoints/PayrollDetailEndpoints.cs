@@ -54,6 +54,22 @@ public static class PayrollDetailEndpoints
     private static string NormalizeLower(string? value, string fallback = "")
         => string.IsNullOrWhiteSpace(value) ? fallback : value.Trim().ToLowerInvariant();
 
+    private static bool IsPayrollRunEditable(string? status)
+    {
+        var normalized = NormalizeLower(status, "draft");
+        return normalized is "draft" or "borrador" or "open" or "abierto" or "captura" or "pending" or "pendiente";
+    }
+
+    private static async Task<IResult?> ValidateEditablePayrollRunAsync(Guid runId, NanchesoftDbContext db)
+    {
+        var run = await db.PayrollRuns.AsNoTracking().FirstOrDefaultAsync(x => x.Id == runId);
+        if (run is null)
+            return Results.NotFound(new { message = "No se encontró la corrida de nómina." });
+        if (!IsPayrollRunEditable(run.Status))
+            return Results.BadRequest(new { message = "La corrida ya fue calculada/autorizada/cerrada. No se pueden modificar sus conceptos." });
+        return null;
+    }
+
     private static (decimal Taxable, decimal Exempt) SplitTaxableAmount(string taxableType, decimal amount)
     {
         var normalized = NormalizeLower(taxableType, "taxable");
@@ -123,6 +139,9 @@ public static class PayrollDetailEndpoints
         if (!request.PayrollRunId.HasValue || !request.PayrollRunLineId.HasValue || !request.EmployeeId.HasValue || !request.PayrollConceptId.HasValue)
             return Results.BadRequest(new { message = "Proceso, línea, colaborador y concepto son obligatorios." });
 
+        var locked = await ValidateEditablePayrollRunAsync(request.PayrollRunId.Value, db);
+        if (locked is not null) return locked;
+
         var concept = await db.PayrollConcepts.AsNoTracking().FirstOrDefaultAsync(x => x.Id == request.PayrollConceptId.Value);
         if (concept is null)
             return Results.BadRequest(new { message = "No se encontró el concepto de nómina enviado." });
@@ -174,6 +193,9 @@ public static class PayrollDetailEndpoints
         if (entity is null)
             return Results.NotFound(new { message = "No se encontró el detalle de nómina." });
 
+        var locked = await ValidateEditablePayrollRunAsync(entity.PayrollRunId, db);
+        if (locked is not null) return locked;
+
         var conceptId = request.PayrollConceptId ?? entity.PayrollConceptId;
         var concept = await db.PayrollConcepts.AsNoTracking().FirstOrDefaultAsync(x => x.Id == conceptId);
 
@@ -219,6 +241,9 @@ public static class PayrollDetailEndpoints
         if (entity is null)
             return Results.NotFound(new { message = "No se encontró el detalle de nómina." });
 
+        var locked = await ValidateEditablePayrollRunAsync(entity.PayrollRunId, db);
+        if (locked is not null) return locked;
+
         var runId = entity.PayrollRunId;
         db.PayrollRunLineDetails.Remove(entity);
         await db.SaveChangesAsync();
@@ -231,6 +256,8 @@ public static class PayrollDetailEndpoints
         var run = await db.PayrollRuns.FirstOrDefaultAsync(x => x.Id == runId);
         if (run is null)
             return Results.NotFound(new { message = "No se encontró la corrida de nómina." });
+        if (!IsPayrollRunEditable(run.Status))
+            return Results.BadRequest(new { message = "La corrida ya fue calculada/autorizada/cerrada. No se pueden regenerar sus conceptos." });
 
         var lines = await db.PayrollRunLines.Where(x => x.PayrollRunId == runId).OrderBy(x => x.CreatedAt).ToListAsync();
         if (lines.Count == 0)
@@ -379,6 +406,8 @@ public static class PayrollDetailEndpoints
     {
         var run = await db.PayrollRuns.FirstOrDefaultAsync(x => x.Id == runId);
         if (run is null)
+            return;
+        if (!IsPayrollRunEditable(run.Status))
             return;
 
         var lines = await db.PayrollRunLines.Where(x => x.PayrollRunId == runId).ToListAsync();

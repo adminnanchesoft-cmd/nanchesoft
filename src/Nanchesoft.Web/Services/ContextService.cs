@@ -44,11 +44,14 @@ public sealed class ContextService
             return Task.FromResult(result);
         }
 
-        result.Add(new TenantOption
+        if (_authState.TenantId.HasValue)
         {
-            Id = Guid.Parse("11111111-1111-1111-1111-111111111111"),
-            Name = "NANCHESOFT_DEMO"
-        });
+            result.Add(new TenantOption
+            {
+                Id = _authState.TenantId.Value,
+                Name = ResolveTenantName(_authState.TenantId.Value)
+            });
+        }
 
         return Task.FromResult(result);
     }

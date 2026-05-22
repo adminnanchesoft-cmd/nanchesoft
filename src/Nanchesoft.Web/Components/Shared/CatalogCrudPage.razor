@@ -85,7 +85,7 @@
         </div>
 
         <div class="ns-kpi-grid">
-            <div class="ns-kpi-card">
+            <div class="ns-kpi-card ns-kpi-card-total">
                 <div class="ns-kpi-label">Total</div>
                 <div class="ns-kpi-value">@_definition.TotalCount</div>
             </div>
@@ -100,10 +100,25 @@
                 <div class="ns-kpi-value">@_definition.InactiveCount</div>
             </div>
 
-            <div class="ns-kpi-card">
-                <div class="ns-kpi-label">Catálogo</div>
-                <div class="ns-kpi-value ns-kpi-value-small">@_definition.CatalogKey</div>
-            </div>
+            @if (IsIncidentCatalog)
+            {
+                <div class="ns-kpi-card ns-kpi-card-danger">
+                    <div class="ns-kpi-label">Descuentos</div>
+                    <div class="ns-kpi-value">@GetMetadataInt("DiscountCount")</div>
+                </div>
+
+                <div class="ns-kpi-card ns-kpi-card-info">
+                    <div class="ns-kpi-label">Percepciones</div>
+                    <div class="ns-kpi-value">@GetMetadataInt("PerceptionCount")</div>
+                </div>
+            }
+            else
+            {
+                <div class="ns-kpi-card">
+                    <div class="ns-kpi-label">Catálogo</div>
+                    <div class="ns-kpi-value ns-kpi-value-small">@_definition.CatalogKey</div>
+                </div>
+            }
         </div>
 
         <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin:18px 0 14px 0;">
@@ -282,6 +297,7 @@
     private string _jsonHref = "#";
     private string _printHref = "#";
     private string _importTemplateHref = "#";
+    private bool IsIncidentCatalog => string.Equals(_definition?.CatalogKey, "hr-incidents", StringComparison.OrdinalIgnoreCase);
 
     // Import state
     private bool _showImport;
@@ -412,7 +428,7 @@
                 "service-catalog" or "customer-service-rates" or "service-notes" => await ServiceBillingApiService.DeleteAsync(CatalogKey, key),
                 "tenants" => await TenantApiService.DeleteAsync(key),
                 "plans" => await PlanApiService.DeleteAsync(key),
-                "hr-departments" or "hr-positions" or "hr-employees" or "hr-incidents" or "employee-contracts" or "payroll-period-types" or "payroll-periods" or "payroll-concepts" or "payroll-runs" or "payroll-run-lines" or "payroll-run-line-details" => await HumanResourcesApiService.DeleteAsync(CatalogKey, key),
+                "hr-departments" or "hr-positions" or "hr-employees" or "hr-incidents" or "hr-recurring-incidents" or "employee-contracts" or "payroll-incident-types" or "payroll-period-types" or "payroll-periods" or "payroll-concepts" or "payroll-runs" or "payroll-run-lines" or "payroll-run-line-details" => await HumanResourcesApiService.DeleteAsync(CatalogKey, key),
                 "time-clock" or "attendance-daily-summaries" or "payroll-recurring-movements" or "prepayroll-adjustments" or "prepayroll-cutoffs" or "employee-loans" or "employee-loan-deductions" or
                 "payroll-source-applications" or "payroll-receipt-control" or "payroll-run-closings" or "payroll-dispersion-batches" or "payroll-dispersion-lines" or
                 "payroll-accounting-postings" or "payroll-tax-accumulators" or "payroll-employer-obligations" or "payroll-fiscal-reconciliations" => await PayrollOperationsApiService.DeleteAsync(CatalogKey, key),
@@ -458,7 +474,18 @@
                     var rowCode = GetRowString(r, "Code") ?? "";
                     var rowName = GetRowString(r, "Name") ?? rowCode;
                     var display = string.IsNullOrEmpty(rowCode) ? rowName : $"{rowCode} · {rowName}";
-                    return new CatalogLookupItem { Id = id, Name = display };
+                    return new CatalogLookupItem
+                    {
+                        Id = id,
+                        Name = display,
+                        Group = GetRowString(r, "IncidentCategory") ?? GetRowString(r, "Group") ?? "",
+                        Color = GetRowString(r, "Color") ?? "",
+                        Icon = GetRowString(r, "Icon") ?? "",
+                        Description = GetRowString(r, "Description") ?? "",
+                        Code = GetRowString(r, "Code") ?? "",
+                        AffectType = GetRowString(r, "AffectType") ?? "",
+                        IsActive = !bool.TryParse(GetRowString(r, "IsActive"), out var active) || active
+                    };
                 })
                 .Where(x => !string.IsNullOrEmpty(x.Id))
                 .OrderBy(x => x.Name)
@@ -486,7 +513,7 @@
     private Task<CatalogViewDefinition> RouteQuickInsertAsync(string catalogKey, JsonElement payload)
         => catalogKey switch
         {
-            "hr-departments" or "hr-positions" or "hr-employees" or "hr-incidents" or "employee-contracts"
+            "hr-departments" or "hr-positions" or "hr-employees" or "hr-incidents" or "hr-recurring-incidents" or "employee-contracts" or "payroll-incident-types"
             or "payroll-period-types" or "payroll-periods" or "payroll-concepts" or "payroll-runs" or "payroll-run-lines" or "payroll-run-line-details"
                 => HumanResourcesApiService.InsertAsync(catalogKey, payload),
             "time-clock" or "attendance-daily-summaries" or "payroll-recurring-movements" or "prepayroll-adjustments"
@@ -571,7 +598,7 @@
             "service-catalog" or "customer-service-rates" or "service-notes" => action == "insert" ? await ServiceBillingApiService.InsertAsync(CatalogKey, row) : await ServiceBillingApiService.UpdateAsync(CatalogKey, key!, row),
             "tenants" => action == "insert" ? await TenantApiService.InsertAsync(row) : await TenantApiService.UpdateAsync(key!, row),
             "plans" => action == "insert" ? await PlanApiService.InsertAsync(row) : await PlanApiService.UpdateAsync(key!, row),
-            "hr-departments" or "hr-positions" or "hr-employees" or "hr-incidents" or "employee-contracts" or "payroll-period-types" or "payroll-periods" or "payroll-concepts" or "payroll-runs" or "payroll-run-lines" or "payroll-run-line-details" => action == "insert" ? await HumanResourcesApiService.InsertAsync(CatalogKey, row) : await HumanResourcesApiService.UpdateAsync(CatalogKey, key!, row),
+            "hr-departments" or "hr-positions" or "hr-employees" or "hr-incidents" or "hr-recurring-incidents" or "employee-contracts" or "payroll-incident-types" or "payroll-period-types" or "payroll-periods" or "payroll-concepts" or "payroll-runs" or "payroll-run-lines" or "payroll-run-line-details" => action == "insert" ? await HumanResourcesApiService.InsertAsync(CatalogKey, row) : await HumanResourcesApiService.UpdateAsync(CatalogKey, key!, row),
             "time-clock" or "attendance-daily-summaries" or "payroll-recurring-movements" or "prepayroll-adjustments" or "prepayroll-cutoffs" or "employee-loans" or "employee-loan-deductions" or
             "payroll-source-applications" or "payroll-receipt-control" or "payroll-run-closings" or "payroll-dispersion-batches" or "payroll-dispersion-lines" or
             "payroll-accounting-postings" or "payroll-tax-accumulators" or "payroll-employer-obligations" or "payroll-fiscal-reconciliations" => action == "insert" ? await PayrollOperationsApiService.InsertAsync(CatalogKey, row) : await PayrollOperationsApiService.UpdateAsync(CatalogKey, key!, row),
@@ -605,7 +632,7 @@
             "service-catalog" or "customer-service-rates" or "service-notes" => ServiceBillingApiService.GetCatalogAsync(CatalogKey),
             "tenants" => TenantApiService.GetCatalogAsync(),
             "plans" => PlanApiService.GetCatalogAsync(),
-            "hr-departments" or "hr-positions" or "hr-employees" or "hr-incidents" or "employee-contracts" or "payroll-period-types" or "payroll-periods" or "payroll-concepts" or "payroll-runs" or "payroll-run-lines" or "payroll-run-line-details" => HumanResourcesApiService.GetCatalogAsync(CatalogKey),
+            "hr-departments" or "hr-positions" or "hr-employees" or "hr-incidents" or "hr-recurring-incidents" or "employee-contracts" or "payroll-incident-types" or "payroll-period-types" or "payroll-periods" or "payroll-concepts" or "payroll-runs" or "payroll-run-lines" or "payroll-run-line-details" => HumanResourcesApiService.GetCatalogAsync(CatalogKey),
             "time-clock" or "attendance-daily-summaries" or "payroll-recurring-movements" or "prepayroll-adjustments" or "prepayroll-cutoffs" or "employee-loans" or "employee-loan-deductions" or
             "payroll-source-applications" or "payroll-receipt-control" or "payroll-run-closings" or "payroll-dispersion-batches" or "payroll-dispersion-lines" or
             "payroll-accounting-postings" or "payroll-tax-accumulators" or "payroll-employer-obligations" or "payroll-fiscal-reconciliations" => PayrollOperationsApiService.GetCatalogAsync(CatalogKey),
@@ -1019,6 +1046,22 @@
 
     private string GetExportFileName(string extension)
         => $"{SanitizeFileName(_definition?.CatalogKey ?? CatalogKey)}-{DateTime.Now:yyyyMMdd-HHmmss}.{extension}";
+
+    private int GetMetadataInt(string key)
+    {
+        if (_definition?.Metadata is null || !_definition.Metadata.TryGetValue(key, out var value) || value is null)
+            return 0;
+        return value switch
+        {
+            int i => i,
+            long l => (int)l,
+            decimal d => (int)d,
+            double dbl => (int)dbl,
+            JsonElement e when e.ValueKind == JsonValueKind.Number && e.TryGetInt32(out var parsed) => parsed,
+            _ when int.TryParse(value.ToString(), out var parsed) => parsed,
+            _ => 0
+        };
+    }
 
     private static string SanitizeFileName(string value)
     {

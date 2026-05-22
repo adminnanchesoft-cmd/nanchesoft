@@ -1,8 +1,10 @@
 using Nanchesoft.Api.Endpoints;
 using Microsoft.EntityFrameworkCore;
-using Nanchesoft.Api.Endpoints;
+using Nanchesoft.Application.PayrollIncidentTypes;
 using Nanchesoft.Persistence.Context;
+using Nanchesoft.Persistence.Repositories;
 using Nanchesoft.Persistence.Seed;
+using Nanchesoft.Persistence.Services;
 using Npgsql;
 QuestPDF.Settings.License = QuestPDF.Infrastructure.LicenseType.Community;
 AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
@@ -32,6 +34,8 @@ var defaultConnection = Environment.GetEnvironmentVariable("NANCHESOFT_TEST_DB")
 
 builder.Services.AddDbContext<NanchesoftDbContext>(options =>
     options.UseNpgsql(defaultConnection));
+builder.Services.AddScoped<INomPayrollIncidentTypeRepository, NomPayrollIncidentTypeRepository>();
+builder.Services.AddScoped<INomPayrollIncidentTypeService, NomPayrollIncidentTypeService>();
 
 var app = builder.Build();
 
@@ -80,6 +84,7 @@ using (var scope = app.Services.CreateScope())
     await CfdiSeeder.SeedAsync(dbContext);
     await AccountingSeeder.SeedAsync(dbContext);
     //await HumanResourcesSeeder.SeedAsync(dbContext);
+    await NomPayrollIncidentTypeSeeder.SeedAsync(dbContext);
     await PayrollAdvancedSeeder.SeedAsync(dbContext);
     await HumanResourcesEnterpriseSeeder.SeedAsync(dbContext);
     await HumanResourcesLifecycleSeeder.SeedAsync(dbContext);
@@ -218,6 +223,7 @@ app.MapAccountingEndpoints();
 app.MapFinanceEndpoints();
 app.MapHumanResourcesEndpoints();
 app.MapHumanResourcesCatalogsEndpoints();
+app.MapNomPayrollIncidentTypeEndpoints();
 app.MapPayrollDetailEndpoints();
 app.MapPayrollAdvancedEndpoints();
 app.MapHumanResourcesEnterpriseEndpoints();
@@ -247,6 +253,7 @@ app.MapTenantEndpoints();
 app.MapPlanEndpoints();
 app.MapSubscriptionControlEndpoints();
 app.MapUniversalImportEndpoints();
+app.MapAiAssistantEndpoints();
 
 app.Run();
 

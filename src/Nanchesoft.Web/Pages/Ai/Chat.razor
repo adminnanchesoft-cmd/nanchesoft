@@ -1,0 +1,519 @@
+@page "/ia/chat"
+@using System.Text.Json
+@using Microsoft.AspNetCore.Components.Rendering
+@using Microsoft.AspNetCore.Components.Web
+@using Nanchesoft.Web.Services.Ai
+@inject AiAssistantApiService AiApi
+@inject IJSRuntime JS
+
+<PageTitle>Nanchesoft IA | Asistente</PageTitle>
+
+<style>
+    .ia-shell { display: grid; grid-template-columns: 320px 1fr; gap: 16px; }
+    @@media (max-width: 992px) { .ia-shell { grid-template-columns: 1fr; } }
+    .ia-card { background: #fff; border: 1px solid #e5e7eb; border-radius: 14px; box-shadow: 0 1px 3px rgba(15,23,42,.06); }
+    .ia-card-header { padding: 14px 18px; border-bottom: 1px solid #f1f5f9; }
+    .ia-card-body { padding: 16px 18px; }
+    .ia-eyebrow { text-transform: uppercase; letter-spacing: .04em; font-size: .72rem; color: #64748b; font-weight: 700; }
+    .ia-title { font-size: 1.25rem; font-weight: 800; color: #0f172a; margin: 0; }
+    .ia-subtitle { font-size: .9rem; color: #64748b; margin-top: 2px; }
+    .ia-suggestions { display: flex; flex-direction: column; gap: 8px; }
+    .ia-suggestion-btn {
+        background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px;
+        padding: 10px 12px; text-align: left; font-size: .88rem; color: #1e293b;
+        transition: all .15s ease; cursor: pointer;
+    }
+    .ia-suggestion-btn:hover { border-color: #6366f1; background: #eef2ff; color: #312e81; }
+    .ia-suggestion-btn:disabled { opacity: .6; cursor: not-allowed; }
+    .ia-history { display: flex; flex-direction: column; gap: 4px; max-height: 320px; overflow-y: auto; }
+    .ia-history-item {
+        display: flex; align-items: flex-start; gap: 8px;
+        padding: 8px 10px; border-radius: 8px;
+        font-size: .82rem; color: #475569; cursor: pointer;
+        background: transparent; border: 1px solid transparent;
+    }
+    .ia-history-item:hover { background: #f8fafc; border-color: #e2e8f0; }
+    .ia-history-bullet { width: 6px; height: 6px; border-radius: 50%; background: #6366f1; margin-top: 6px; flex-shrink: 0; }
+    .ia-chat { display: flex; flex-direction: column; min-height: 60vh; }
+    .ia-chat-body { flex: 1; padding: 18px; overflow-y: auto; max-height: 60vh; }
+    .ia-empty { text-align: center; color: #64748b; padding: 60px 20px; }
+    .ia-empty-icon { font-size: 2.4rem; margin-bottom: 12px; }
+    .ia-msg { display: flex; gap: 10px; margin-bottom: 14px; }
+    .ia-msg-avatar {
+        width: 34px; height: 34px; border-radius: 50%; flex-shrink: 0;
+        display: flex; align-items: center; justify-content: center;
+        font-weight: 800; font-size: .85rem; color: #fff;
+    }
+    .ia-msg-avatar-user { background: linear-gradient(135deg, #6366f1, #4338ca); }
+    .ia-msg-avatar-bot { background: linear-gradient(135deg, #10b981, #047857); }
+    .ia-msg-content {
+        background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px;
+        padding: 10px 14px; max-width: 80%; font-size: .92rem; color: #0f172a;
+        white-space: pre-wrap; word-break: break-word;
+    }
+    .ia-msg-user .ia-msg-content { background: #eef2ff; border-color: #c7d2fe; }
+    .ia-msg-bot .ia-msg-content { background: #ecfdf5; border-color: #a7f3d0; }
+    .ia-msg-time { font-size: .72rem; color: #94a3b8; margin-top: 4px; }
+    .ia-data-card {
+        margin-top: 10px; background: #fff; border: 1px solid #e2e8f0; border-radius: 10px;
+        padding: 10px 12px; font-size: .82rem;
+    }
+    .ia-data-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 8px; }
+    .ia-data-pill {
+        background: #f1f5f9; border-radius: 8px; padding: 8px 10px;
+        display: flex; flex-direction: column;
+    }
+    .ia-data-pill-label { font-size: .68rem; color: #64748b; text-transform: uppercase; letter-spacing: .04em; }
+    .ia-data-pill-value { font-size: 1rem; font-weight: 700; color: #0f172a; margin-top: 2px; }
+    .ia-data-pill.success .ia-data-pill-value { color: #047857; }
+    .ia-data-pill.danger .ia-data-pill-value { color: #b91c1c; }
+    .ia-data-pill.info .ia-data-pill-value { color: #1d4ed8; }
+    .ia-data-table { width: 100%; font-size: .82rem; }
+    .ia-data-table th, .ia-data-table td { padding: 6px 8px; border-bottom: 1px solid #f1f5f9; }
+    .ia-data-table th { text-align: left; color: #64748b; font-weight: 600; }
+    .ia-data-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
+    .ia-input-bar { border-top: 1px solid #f1f5f9; padding: 12px 14px; display: flex; gap: 8px; background: #fff; border-bottom-left-radius: 14px; border-bottom-right-radius: 14px; }
+    .ia-input {
+        flex: 1; border: 1px solid #cbd5e1; border-radius: 10px; padding: 10px 14px;
+        font-size: .95rem; outline: none; transition: border-color .15s;
+    }
+    .ia-input:focus { border-color: #6366f1; box-shadow: 0 0 0 3px rgba(99,102,241,.18); }
+    .ia-send-btn {
+        background: linear-gradient(135deg, #6366f1, #4338ca);
+        color: #fff; border: 0; border-radius: 10px; padding: 0 18px; font-weight: 700; cursor: pointer;
+        transition: opacity .15s;
+    }
+    .ia-send-btn:disabled { opacity: .5; cursor: not-allowed; }
+    .ia-roadmap { display: flex; flex-direction: column; gap: 8px; }
+    .ia-roadmap-item { display: flex; align-items: center; gap: 8px; font-size: .82rem; color: #475569; }
+    .ia-roadmap-dot { width: 8px; height: 8px; border-radius: 50%; background: #cbd5e1; }
+    .ia-roadmap-item.active .ia-roadmap-dot { background: #10b981; }
+    .ia-badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: .68rem; font-weight: 700; letter-spacing: .03em; }
+    .ia-badge-fase1 { background: #eef2ff; color: #4338ca; }
+    .ia-badge-soon { background: #fef3c7; color: #b45309; }
+</style>
+
+<div class="container-fluid py-3">
+    <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+        <div>
+            <div class="ia-eyebrow">Nanchesoft ERP · Inteligencia artificial</div>
+            <h1 class="ia-title">Nanchesoft IA <span class="ia-badge ia-badge-fase1">Fase 1</span></h1>
+            <p class="ia-subtitle">Pregúntale al asistente sobre tu operación. Las respuestas usan datos reales de tu tenant.</p>
+        </div>
+        <div class="text-end">
+            <span class="badge bg-secondary">@_history.Count consulta(s)</span>
+            <button class="btn btn-outline-secondary btn-sm ms-2" @onclick="ClearHistory" disabled="@(_history.Count == 0 || _busy)">Limpiar</button>
+        </div>
+    </div>
+
+    <div class="ia-shell">
+        <div class="d-flex flex-column gap-3">
+            <div class="ia-card">
+                <div class="ia-card-header">
+                    <div class="ia-eyebrow">Preguntas frecuentes</div>
+                    <div class="fw-semibold mt-1" style="font-size:.95rem;">Toca para ejecutar</div>
+                </div>
+                <div class="ia-card-body">
+                    <div class="ia-suggestions">
+                        @foreach (var sug in _suggestions)
+                        {
+                            <button class="ia-suggestion-btn" type="button" @onclick="@(() => AskAsync(sug))" disabled="@_busy">@sug</button>
+                        }
+                    </div>
+                </div>
+            </div>
+
+            <div class="ia-card">
+                <div class="ia-card-header">
+                    <div class="ia-eyebrow">Historial</div>
+                    <div class="fw-semibold mt-1" style="font-size:.95rem;">Últimas consultas</div>
+                </div>
+                <div class="ia-card-body">
+                    @if (_history.Count == 0)
+                    {
+                        <div class="text-muted small">Aún no has realizado preguntas.</div>
+                    }
+                    else
+                    {
+                        <div class="ia-history">
+                            @foreach (var item in _history.AsEnumerable().Reverse())
+                            {
+                                <div class="ia-history-item" @onclick="@(() => AskAsync(item.Question))" title="Volver a preguntar">
+                                    <div class="ia-history-bullet"></div>
+                                    <div>
+                                        <div class="fw-semibold" style="color:#1e293b;">@item.Question</div>
+                                        <div style="font-size:.72rem;color:#94a3b8;">@item.Timestamp.ToString("HH:mm:ss")</div>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <div class="ia-card">
+                <div class="ia-card-header">
+                    <div class="ia-eyebrow">Roadmap IA</div>
+                    <div class="fw-semibold mt-1" style="font-size:.95rem;">Próximas fases</div>
+                </div>
+                <div class="ia-card-body">
+                    <div class="ia-roadmap">
+                        <div class="ia-roadmap-item active"><div class="ia-roadmap-dot"></div>Fase 1 · Consultas operativas <span class="ia-badge ia-badge-fase1 ms-1">Activa</span></div>
+                        <div class="ia-roadmap-item"><div class="ia-roadmap-dot"></div>Fase 2 · Guía del sistema <span class="ia-badge ia-badge-soon ms-1">Próx.</span></div>
+                        <div class="ia-roadmap-item"><div class="ia-roadmap-dot"></div>Fase 3 · Reportes automáticos</div>
+                        <div class="ia-roadmap-item"><div class="ia-roadmap-dot"></div>Fase 4 · Dashboards conversacionales</div>
+                        <div class="ia-roadmap-item"><div class="ia-roadmap-dot"></div>Fase 5 · Acciones con confirmación</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="ia-card ia-chat">
+            <div class="ia-card-header d-flex justify-content-between align-items-center">
+                <div>
+                    <div class="ia-eyebrow">Asistente</div>
+                    <div class="fw-semibold mt-1" style="font-size:.95rem;">Conversación</div>
+                </div>
+                <div class="text-end">
+                    @if (_busy)
+                    {
+                        <span class="badge bg-primary"><span class="spinner-border spinner-border-sm me-1" style="width:.75rem;height:.75rem;"></span>Consultando...</span>
+                    }
+                    else
+                    {
+                        <span class="badge bg-success-subtle text-success">Listo</span>
+                    }
+                </div>
+            </div>
+            <div class="ia-chat-body" @ref="_chatBodyRef">
+                @if (_messages.Count == 0)
+                {
+                    <div class="ia-empty">
+                        <div class="ia-empty-icon">[IA]</div>
+                        <div class="fw-bold mb-1" style="color:#0f172a;">Bienvenido al asistente de Nanchesoft</div>
+                        <div>Selecciona una pregunta frecuente o escribe la tuya abajo. Las respuestas respetan el tenant, empresa y sucursal de tu sesión.</div>
+                    </div>
+                }
+                else
+                {
+                    @foreach (var msg in _messages)
+                    {
+                        <div class="ia-msg @(msg.IsUser ? "ia-msg-user" : "ia-msg-bot")">
+                            @if (msg.IsUser)
+                            {
+                                <div class="ia-msg-avatar ia-msg-avatar-user">TU</div>
+                            }
+                            else
+                            {
+                                <div class="ia-msg-avatar ia-msg-avatar-bot">IA</div>
+                            }
+                            <div>
+                                <div class="ia-msg-content">@msg.Text</div>
+                                @if (!msg.IsUser && msg.Result is not null)
+                                {
+                                    @RenderResultData(msg.Result)
+                                }
+                                <div class="ia-msg-time">@msg.Timestamp.ToString("HH:mm:ss")@(msg.IsUser ? string.Empty : $" · {msg.Result?.Endpoint}")</div>
+                            </div>
+                        </div>
+                    }
+                }
+            </div>
+            <div class="ia-input-bar">
+                <input @ref="_inputRef" class="ia-input" placeholder="Ej. ¿Cuánto vendí hoy?"
+                       @bind="_input" @bind:event="oninput" @onkeydown="HandleKeyDown" disabled="@_busy" />
+                <button class="ia-send-btn" @onclick="SendCurrentAsync" disabled="@(_busy || string.IsNullOrWhiteSpace(_input))">
+                    @(_busy ? "Enviando..." : "Enviar")
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private readonly List<ChatMessage> _messages = new();
+    private readonly List<HistoryItem> _history = new();
+
+    private readonly List<string> _suggestions = new()
+    {
+        "¿Cuántos pedidos tengo hoy?",
+        "¿Cuánto vendí hoy?",
+        "¿Cuál es el saldo de mis clientes?",
+        "¿Cuánto se pagará de nómina en el periodo abierto?",
+        "¿Qué clientes tienen saldo vencido?"
+    };
+
+    private string _input = string.Empty;
+    private bool _busy;
+    private ElementReference _chatBodyRef;
+    private ElementReference _inputRef;
+
+    private async Task HandleKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && !e.ShiftKey)
+        {
+            await SendCurrentAsync();
+        }
+    }
+
+    private async Task SendCurrentAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_input)) return;
+        var question = _input.Trim();
+        _input = string.Empty;
+        await AskAsync(question);
+    }
+
+    private async Task AskAsync(string question)
+    {
+        if (_busy || string.IsNullOrWhiteSpace(question)) return;
+
+        _busy = true;
+        var now = DateTime.Now;
+        _messages.Add(new ChatMessage { IsUser = true, Text = question, Timestamp = now });
+        _history.Add(new HistoryItem { Question = question, Timestamp = now });
+        StateHasChanged();
+        await ScrollChatToBottom();
+
+        try
+        {
+            var result = await AiApi.AskAsync(question);
+            _messages.Add(new ChatMessage
+            {
+                IsUser = false,
+                Text = string.IsNullOrWhiteSpace(result.Answer)
+                    ? "No encontré esa información, intenta preguntar de otra forma."
+                    : result.Answer,
+                Result = result,
+                Timestamp = DateTime.Now
+            });
+        }
+        catch (Exception ex)
+        {
+            _messages.Add(new ChatMessage
+            {
+                IsUser = false,
+                Text = $"Ocurrió un error al consultar al asistente: {ex.Message}",
+                Timestamp = DateTime.Now
+            });
+        }
+        finally
+        {
+            _busy = false;
+            StateHasChanged();
+            await ScrollChatToBottom();
+        }
+    }
+
+    private async Task ScrollChatToBottom()
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("eval",
+                "(function(){var el=document.querySelector('.ia-chat-body'); if(el){el.scrollTop=el.scrollHeight;}})()");
+        }
+        catch { }
+    }
+
+    private void ClearHistory()
+    {
+        _messages.Clear();
+        _history.Clear();
+    }
+
+    private RenderFragment RenderResultData(AiAskResultDto result) => builder =>
+    {
+        if (result.Data is null || result.Data.Value.ValueKind == JsonValueKind.Null)
+        {
+            return;
+        }
+
+        builder.OpenElement(0, "div");
+        builder.AddAttribute(1, "class", "ia-data-card");
+
+        switch (result.Intent)
+        {
+            case AiIntentDto.TodaySummary:
+                RenderTodaySummary(builder, result.Data.Value);
+                break;
+            case AiIntentDto.TodaySales:
+                RenderTodaySales(builder, result.Data.Value);
+                break;
+            case AiIntentDto.CustomerBalance:
+                RenderCustomerBalance(builder, result.Data.Value);
+                break;
+            case AiIntentDto.PayrollOpenPeriod:
+                RenderPayrollPeriod(builder, result.Data.Value);
+                break;
+            case AiIntentDto.OverdueCustomers:
+                RenderOverdueCustomers(builder, result.Data.Value);
+                break;
+        }
+
+        builder.CloseElement();
+    };
+
+    private static void RenderTodaySummary(RenderTreeBuilder builder, JsonElement data)
+    {
+        builder.OpenElement(10, "div");
+        builder.AddAttribute(11, "class", "ia-data-grid");
+        AddPill(builder, 12, "info", "Pedidos hoy", GetInt(data, "orderCount").ToString("N0"));
+        AddPill(builder, 13, "info", "Total pedidos", FormatCurrency(GetDecimal(data, "orderTotal")));
+        AddPill(builder, 14, "success", "Facturas hoy", GetInt(data, "invoiceCount").ToString("N0"));
+        AddPill(builder, 15, "success", "Total facturado", FormatCurrency(GetDecimal(data, "invoiceTotal")));
+        builder.CloseElement();
+    }
+
+    private static void RenderTodaySales(RenderTreeBuilder builder, JsonElement data)
+    {
+        builder.OpenElement(20, "div");
+        builder.AddAttribute(21, "class", "ia-data-grid");
+        AddPill(builder, 22, "info", "Facturas", GetInt(data, "invoiceCount").ToString("N0"));
+        AddPill(builder, 23, "info", "Subtotal", FormatCurrency(GetDecimal(data, "subtotal")));
+        AddPill(builder, 24, "info", "Impuestos", FormatCurrency(GetDecimal(data, "tax")));
+        AddPill(builder, 25, "success", "Total vendido", FormatCurrency(GetDecimal(data, "total")));
+        builder.CloseElement();
+    }
+
+    private static void RenderPayrollPeriod(RenderTreeBuilder builder, JsonElement data)
+    {
+        if (GetBool(data, "notFound")) return;
+        builder.OpenElement(30, "div");
+        builder.AddAttribute(31, "class", "ia-data-grid");
+        AddPill(builder, 32, "info", "Periodo", GetString(data, "periodName"));
+        AddPill(builder, 33, "info", "Empleados", GetInt(data, "employeeCount").ToString("N0"));
+        AddPill(builder, 34, "success", "Percepciones", FormatCurrency(GetDecimal(data, "grossAmount")));
+        AddPill(builder, 35, "danger", "Deducciones", FormatCurrency(GetDecimal(data, "deductionsAmount")));
+        AddPill(builder, 36, "success", "Neto a pagar", FormatCurrency(GetDecimal(data, "netAmount")));
+        AddPill(builder, 37, "info", "Pago programado", FormatDate(GetString(data, "paymentDate")));
+        builder.CloseElement();
+    }
+
+    private static void RenderCustomerBalance(RenderTreeBuilder builder, JsonElement data)
+    {
+        if (GetBool(data, "notFound")) return;
+        var rows = data.TryGetProperty("rows", out var rowsEl) && rowsEl.ValueKind == JsonValueKind.Array
+            ? rowsEl.EnumerateArray().ToList()
+            : new List<JsonElement>();
+        if (rows.Count == 0) return;
+
+        var name = GetString(data, "customerName");
+        if (!string.IsNullOrWhiteSpace(name))
+        {
+            var row = rows[0];
+            builder.OpenElement(40, "div");
+            builder.AddAttribute(41, "class", "ia-data-grid");
+            AddPill(builder, 42, "info", "Cliente", name);
+            AddPill(builder, 43, "info", "Cargos", FormatCurrency(GetDecimal(row, "totalCharges")));
+            AddPill(builder, 44, "success", "Créditos/Pagos", FormatCurrency(GetDecimal(row, "totalCredits")));
+            AddPill(builder, 45, "danger", "Saldo actual", FormatCurrency(GetDecimal(row, "currentBalance")));
+            builder.CloseElement();
+        }
+        else
+        {
+            builder.OpenElement(50, "div");
+            builder.AddAttribute(51, "class", "table-responsive");
+            builder.OpenElement(52, "table");
+            builder.AddAttribute(53, "class", "ia-data-table");
+            builder.AddMarkupContent(54, "<thead><tr><th>Cliente</th><th class='num'>Cargos</th><th class='num'>Créditos</th><th class='num'>Saldo</th></tr></thead>");
+            builder.OpenElement(55, "tbody");
+            var seq = 60;
+            foreach (var row in rows.Take(10))
+            {
+                builder.OpenElement(seq++, "tr");
+                builder.OpenElement(seq++, "td"); builder.AddContent(seq++, $"{GetString(row, "customerCode")} · {GetString(row, "customerName")}"); builder.CloseElement();
+                builder.OpenElement(seq++, "td"); builder.AddAttribute(seq++, "class", "num"); builder.AddContent(seq++, FormatCurrency(GetDecimal(row, "totalCharges"))); builder.CloseElement();
+                builder.OpenElement(seq++, "td"); builder.AddAttribute(seq++, "class", "num"); builder.AddContent(seq++, FormatCurrency(GetDecimal(row, "totalCredits"))); builder.CloseElement();
+                builder.OpenElement(seq++, "td"); builder.AddAttribute(seq++, "class", "num"); builder.AddContent(seq++, FormatCurrency(GetDecimal(row, "currentBalance"))); builder.CloseElement();
+                builder.CloseElement();
+            }
+            builder.CloseElement();
+            builder.CloseElement();
+            builder.CloseElement();
+        }
+    }
+
+    private static void RenderOverdueCustomers(RenderTreeBuilder builder, JsonElement data)
+    {
+        var rows = data.TryGetProperty("rows", out var rowsEl) && rowsEl.ValueKind == JsonValueKind.Array
+            ? rowsEl.EnumerateArray().ToList()
+            : new List<JsonElement>();
+        if (rows.Count == 0) return;
+
+        builder.OpenElement(70, "div");
+        builder.AddAttribute(71, "class", "ia-data-grid mb-2");
+        AddPill(builder, 72, "danger", "Total vencido", FormatCurrency(GetDecimal(data, "totalOverdue")));
+        AddPill(builder, 73, "info", "Clientes", rows.Count.ToString("N0"));
+        builder.CloseElement();
+
+        builder.OpenElement(80, "div");
+        builder.AddAttribute(81, "class", "table-responsive");
+        builder.OpenElement(82, "table");
+        builder.AddAttribute(83, "class", "ia-data-table");
+        builder.AddMarkupContent(84, "<thead><tr><th>Cliente</th><th class='num'>Documentos</th><th>Más antiguo</th><th class='num'>Vencido</th></tr></thead>");
+        builder.OpenElement(85, "tbody");
+        var seq = 90;
+        foreach (var row in rows.Take(15))
+        {
+            builder.OpenElement(seq++, "tr");
+            builder.OpenElement(seq++, "td"); builder.AddContent(seq++, $"{GetString(row, "customerCode")} · {GetString(row, "customerName")}"); builder.CloseElement();
+            builder.OpenElement(seq++, "td"); builder.AddAttribute(seq++, "class", "num"); builder.AddContent(seq++, GetInt(row, "overdueDocuments").ToString("N0")); builder.CloseElement();
+            builder.OpenElement(seq++, "td"); builder.AddContent(seq++, FormatDate(GetString(row, "oldestDueDate"))); builder.CloseElement();
+            builder.OpenElement(seq++, "td"); builder.AddAttribute(seq++, "class", "num"); builder.AddContent(seq++, FormatCurrency(GetDecimal(row, "overdueAmount"))); builder.CloseElement();
+            builder.CloseElement();
+        }
+        builder.CloseElement();
+        builder.CloseElement();
+        builder.CloseElement();
+    }
+
+    private static void AddPill(RenderTreeBuilder builder, int seq, string variant, string label, string value)
+    {
+        builder.OpenElement(seq, "div");
+        builder.AddAttribute(seq + 1, "class", $"ia-data-pill {variant}");
+        builder.OpenElement(seq + 2, "div");
+        builder.AddAttribute(seq + 3, "class", "ia-data-pill-label");
+        builder.AddContent(seq + 4, label);
+        builder.CloseElement();
+        builder.OpenElement(seq + 5, "div");
+        builder.AddAttribute(seq + 6, "class", "ia-data-pill-value");
+        builder.AddContent(seq + 7, value);
+        builder.CloseElement();
+        builder.CloseElement();
+    }
+
+    private static int GetInt(JsonElement data, string property)
+        => data.TryGetProperty(property, out var el) && el.ValueKind == JsonValueKind.Number ? el.GetInt32() : 0;
+
+    private static decimal GetDecimal(JsonElement data, string property)
+        => data.TryGetProperty(property, out var el) && el.ValueKind == JsonValueKind.Number ? el.GetDecimal() : 0m;
+
+    private static string GetString(JsonElement data, string property)
+        => data.TryGetProperty(property, out var el) && el.ValueKind == JsonValueKind.String ? (el.GetString() ?? string.Empty) : string.Empty;
+
+    private static bool GetBool(JsonElement data, string property)
+        => data.TryGetProperty(property, out var el) && (el.ValueKind == JsonValueKind.True);
+
+    private static string FormatCurrency(decimal value)
+        => value.ToString("C2", System.Globalization.CultureInfo.GetCultureInfo("es-MX"));
+
+    private static string FormatDate(string raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw)) return string.Empty;
+        return DateTime.TryParse(raw, out var dt) ? dt.ToString("dd/MM/yyyy") : raw;
+    }
+
+    private sealed class ChatMessage
+    {
+        public bool IsUser { get; set; }
+        public string Text { get; set; } = string.Empty;
+        public AiAskResultDto? Result { get; set; }
+        public DateTime Timestamp { get; set; }
+    }
+
+    private sealed class HistoryItem
+    {
+        public string Question { get; set; } = string.Empty;
+        public DateTime Timestamp { get; set; }
+    }
+}

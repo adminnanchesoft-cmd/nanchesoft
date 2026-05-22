@@ -129,9 +129,15 @@ public static class PayrollAdvancedSeeder
 
         if (run is not null && period is not null)
         {
+            var incidentType = await dbContext.NomPayrollIncidentTypes
+                .Where(x => x.TenantId == company.TenantId && x.CompanyId == company.Id && x.IsActive && !x.IsDeleted)
+                .OrderByDescending(x => x.IncidentCategory == "INFORMATIVA")
+                .ThenBy(x => x.SortOrder)
+                .FirstOrDefaultAsync();
+
             foreach (var employee in employees)
             {
-                if (!await dbContext.EmployeeIncidents.AnyAsync(x => x.EmployeeId == employee.Id && x.PayrollPeriodId == period.Id && x.IncidentType == "attendance_review"))
+                if (incidentType is not null && !await dbContext.EmployeeIncidents.AnyAsync(x => x.EmployeeId == employee.Id && x.PayrollPeriodId == period.Id && x.IncidentType == incidentType.Code))
                 {
                     dbContext.EmployeeIncidents.Add(new EmployeeIncident
                     {
@@ -140,7 +146,8 @@ public static class PayrollAdvancedSeeder
                         EmployeeId = employee.Id,
                         PayrollPeriodId = period.Id,
                         IncidentDate = now.Date,
-                        IncidentType = "attendance_review",
+                        PayrollIncidentTypeId = incidentType.Id,
+                        IncidentType = incidentType.Code,
                         Quantity = 1m,
                         Amount = 0m,
                         Notes = "Incidencia demo generada para revisar el reloj checador.",
@@ -191,6 +198,28 @@ public static class PayrollAdvancedSeeder
 
     private static async Task EnsureSchemaAsync(NanchesoftDbContext dbContext)
     {
+        await dbContext.Database.ExecuteSqlRawAsync(@"
+ALTER TABLE payroll.payroll_concepts ADD COLUMN IF NOT EXISTS formula character varying(2000) NOT NULL DEFAULT '';
+ALTER TABLE payroll.payroll_concepts ADD COLUMN IF NOT EXISTS taxable_formula character varying(2000) NOT NULL DEFAULT '';
+ALTER TABLE payroll.payroll_concepts ADD COLUMN IF NOT EXISTS exempt_formula character varying(2000) NOT NULL DEFAULT '';
+ALTER TABLE payroll.payroll_concepts ADD COLUMN IF NOT EXISTS imss_taxable_formula character varying(2000) NOT NULL DEFAULT '';
+ALTER TABLE payroll.payroll_concepts ADD COLUMN IF NOT EXISTS sat_tipo_percepcion_code character varying(20) NOT NULL DEFAULT '';
+ALTER TABLE payroll.payroll_concepts ADD COLUMN IF NOT EXISTS sat_tipo_deduccion_code character varying(20) NOT NULL DEFAULT '';
+ALTER TABLE payroll.payroll_concepts ADD COLUMN IF NOT EXISTS sat_tipo_otro_pago_code character varying(20) NOT NULL DEFAULT '';
+ALTER TABLE payroll.payroll_concepts ADD COLUMN IF NOT EXISTS sat_agrupador character varying(40) NOT NULL DEFAULT '';
+ALTER TABLE payroll.payroll_concepts ADD COLUMN IF NOT EXISTS automatic_on_global_run boolean NOT NULL DEFAULT false;
+ALTER TABLE payroll.payroll_concepts ADD COLUMN IF NOT EXISTS automatic_on_termination boolean NOT NULL DEFAULT false;
+ALTER TABLE payroll.payroll_concepts ADD COLUMN IF NOT EXISTS is_in_kind boolean NOT NULL DEFAULT false;
+ALTER TABLE payroll.payroll_concepts ADD COLUMN IF NOT EXISTS affects_seventh_day boolean NOT NULL DEFAULT false;
+ALTER TABLE payroll.payroll_concepts ADD COLUMN IF NOT EXISTS affects_holiday_pay boolean NOT NULL DEFAULT false;
+ALTER TABLE payroll.payroll_concepts ADD COLUMN IF NOT EXISTS affects_imss boolean NOT NULL DEFAULT true;
+ALTER TABLE payroll.payroll_concepts ADD COLUMN IF NOT EXISTS affects_isr boolean NOT NULL DEFAULT true;
+ALTER TABLE payroll.payroll_concepts ADD COLUMN IF NOT EXISTS affects_accumulators boolean NOT NULL DEFAULT true;
+ALTER TABLE payroll.payroll_concepts ADD COLUMN IF NOT EXISTS requires_sat_stamping boolean NOT NULL DEFAULT true;
+ALTER TABLE payroll.payroll_concepts ADD COLUMN IF NOT EXISTS min_amount numeric(18,2) NOT NULL DEFAULT 0;
+ALTER TABLE payroll.payroll_concepts ADD COLUMN IF NOT EXISTS max_amount numeric(18,2) NOT NULL DEFAULT 0;
+");
+
         await dbContext.Database.ExecuteSqlRawAsync(@"
 CREATE TABLE IF NOT EXISTS hr.hr_attendance_punches (
     id uuid PRIMARY KEY,

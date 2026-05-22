@@ -90,6 +90,14 @@ public static class HumanResourcesEndpoints
         incidents.MapPut("/{id:guid}", UpdateEmployeeIncidentAsync);
         incidents.MapDelete("/{id:guid}", DeleteEmployeeIncidentAsync);
 
+        var recurringIncidents = app.MapGroup("/api/hr/recurring-incidents").WithTags("HrRecurringIncidents");
+        recurringIncidents.MapGet("/", GetRecurringIncidentRulesAsync);
+        recurringIncidents.MapPost("/", CreateRecurringIncidentRuleAsync);
+        recurringIncidents.MapPut("/{id:guid}", UpdateRecurringIncidentRuleAsync);
+        recurringIncidents.MapDelete("/{id:guid}", DeleteRecurringIncidentRuleAsync);
+        recurringIncidents.MapPost("/preview", PreviewRecurringIncidentsAsync);
+        recurringIncidents.MapPost("/generate", GenerateRecurringIncidentsAsync);
+
         var contracts = app.MapGroup("/api/contracts/employee-contracts").WithTags("EmployeeContracts");
         contracts.MapGet("/", GetEmployeeContractsAsync);
         contracts.MapPost("/", CreateEmployeeContractAsync);
@@ -108,7 +116,7 @@ public static class HumanResourcesEndpoints
         {
             var entity = await db.PayrollPeriods.AsNoTracking().Include(x => x.Company).FirstOrDefaultAsync(x => x.Id == id);
             if (entity is null) return Results.NotFound(new { message = "No se encontró el periodo." });
-            return Results.Ok(new PayrollPeriodDto { PayrollPeriodId = entity.Id, TenantId = entity.TenantId, CompanyId = entity.CompanyId, CompanyName = entity.Company != null ? entity.Company.Name : string.Empty, Code = entity.Code, Name = entity.Name, PeriodType = entity.PeriodType, StartDate = entity.StartDate, EndDate = entity.EndDate, PaymentDate = entity.PaymentDate, Status = entity.Status, IsClosed = entity.IsClosed, IsActive = entity.IsActive });
+            return Results.Ok(new PayrollPeriodDto { PayrollPeriodId = entity.Id, TenantId = entity.TenantId, CompanyId = entity.CompanyId, CompanyName = entity.Company != null ? entity.Company.Name : string.Empty, Code = entity.Code, Name = entity.Name, PeriodType = entity.PeriodType, StartDate = entity.StartDate, EndDate = entity.EndDate, PaymentDate = entity.PaymentDate, Status = entity.Status, IsImssInsured = entity.IsImssInsured, IsClosed = entity.IsClosed, IsActive = entity.IsActive });
         });
         periods.MapPost("/", CreatePayrollPeriodAsync);
         periods.MapPut("/{id:guid}", UpdatePayrollPeriodAsync);
@@ -144,10 +152,9 @@ public static class HumanResourcesEndpoints
     private static async Task<(Guid? TenantId, Guid? CompanyId, Guid? BranchId)> ResolveDefaultContextAsync(HttpContext httpContext, NanchesoftDbContext db)
     {
         // Headers sent by ApiTenantScopeHandler always take priority
-        var tenantId = ApiTenantScope.ResolveTenantId(httpContext);
-        var companyId = ApiTenantScope.ResolveCompanyId(httpContext);
-        var branchId = ApiTenantScope.ResolveBranchId(httpContext);
-
+var tenantId = ApiTenantScope.ResolveTenantId(httpContext);
+var companyId = ApiTenantScope.ResolveCompanyId(httpContext);
+var branchId = ApiTenantScope.ResolveBranchId(httpContext);
         if (companyId.HasValue)
         {
             if (!tenantId.HasValue)
@@ -398,11 +405,12 @@ public static class HumanResourcesEndpoints
     {
         var tenantId = ApiTenantScope.ResolveTenantId(httpContext);
         var companyId = ApiTenantScope.ResolveCompanyId(httpContext);
+        var branchId = ApiTenantScope.ResolveBranchId(httpContext);
 
         var rows = await db.Employees.AsNoTracking()
-            .Where(x => (!tenantId.HasValue && !companyId.HasValue)
-                     || (x.TenantId == tenantId)
-                     || (!tenantId.HasValue && x.CompanyId == companyId))
+            .Where(x => (!tenantId.HasValue || x.TenantId == tenantId.Value)
+                     && (!companyId.HasValue || x.CompanyId == companyId.Value))
+            .Where(x => !branchId.HasValue || !x.BranchId.HasValue || x.BranchId == branchId.Value)
             .Include(x => x.Company)
             .Include(x => x.Branch)
             .Include(x => x.Department)
@@ -494,9 +502,9 @@ public static class HumanResourcesEndpoints
     private static async Task<IResult> CreateEmployeeAsync(HttpContext httpContext, EmployeeRequest request, NanchesoftDbContext db)
     {
         var context = await ResolveDefaultContextAsync(httpContext, db);
-        var tenantId = request.TenantId ?? context.TenantId;
-        var companyId = request.CompanyId ?? context.CompanyId;
-        var branchId = request.BranchId ?? context.BranchId;
+        var tenantId = request.TenantId ?? ApiTenantScope.ResolveTenantId(httpContext) ?? context.TenantId;
+        var companyId = request.CompanyId ?? ApiTenantScope.ResolveCompanyId(httpContext) ?? context.CompanyId;
+        var branchId = request.BranchId ?? ApiTenantScope.ResolveBranchId(httpContext) ?? context.BranchId;
 
         if (!tenantId.HasValue || !companyId.HasValue)
             return Results.BadRequest(new { message = "No existe contexto de tenant/empresa para el colaborador." });
@@ -842,9 +850,9 @@ public static class HumanResourcesEndpoints
     private static async Task<IResult> CreateEmployeeContractAsync(HttpContext httpContext, EmployeeContractRequest request, NanchesoftDbContext db)
     {
         var context = await ResolveDefaultContextAsync(httpContext, db);
-        var tenantId = request.TenantId ?? context.TenantId;
-        var companyId = request.CompanyId ?? context.CompanyId;
-        var branchId = request.BranchId ?? context.BranchId;
+        var tenantId = request.TenantId ?? ApiTenantScope.ResolveTenantId(httpContext) ?? context.TenantId;
+        var companyId = request.CompanyId ?? ApiTenantScope.ResolveCompanyId(httpContext) ?? context.CompanyId;
+        var branchId = request.BranchId ?? ApiTenantScope.ResolveBranchId(httpContext) ?? context.BranchId;
 
         if (!tenantId.HasValue || !companyId.HasValue)
             return Results.BadRequest(new { message = "No existe contexto de tenant/empresa para el contrato." });
@@ -930,14 +938,18 @@ public static class HumanResourcesEndpoints
     {
         var tenantId = ApiTenantScope.ResolveTenantId(httpContext);
         var companyId = ApiTenantScope.ResolveCompanyId(httpContext);
+        var branchId = ApiTenantScope.ResolveBranchId(httpContext);
 
         var rows = await db.EmployeeIncidents.AsNoTracking()
-            .Where(x => (!tenantId.HasValue && !companyId.HasValue)
-                     || (x.TenantId == tenantId)
-                     || (!tenantId.HasValue && x.CompanyId == companyId))
+            .Where(x => (!tenantId.HasValue || x.TenantId == tenantId.Value)
+                     && (!companyId.HasValue || x.CompanyId == companyId.Value))
+            .Where(x => !branchId.HasValue || !x.BranchId.HasValue || x.BranchId == branchId.Value)
+            .Where(x => !x.IsDeleted)
             .Include(x => x.Company)
+            .Include(x => x.Branch)
             .Include(x => x.Employee)
             .Include(x => x.PayrollPeriod)
+            .Include(x => x.PayrollIncidentType)
             .OrderByDescending(x => x.IncidentDate)
             .Select(x => new EmployeeIncidentDto
             {
@@ -945,10 +957,21 @@ public static class HumanResourcesEndpoints
                 TenantId = x.TenantId,
                 CompanyId = x.CompanyId,
                 CompanyName = x.Company != null ? x.Company.Name : string.Empty,
+                BranchId = x.BranchId,
+                BranchName = x.Branch != null ? x.Branch.Name : string.Empty,
                 EmployeeId = x.EmployeeId,
                 EmployeeName = x.Employee != null ? x.Employee.GetFullName() : string.Empty,
                 PayrollPeriodId = x.PayrollPeriodId,
                 PayrollPeriodName = x.PayrollPeriod != null ? x.PayrollPeriod.Name : string.Empty,
+                PayrollIncidentTypeId = x.PayrollIncidentTypeId,
+                NomPayrollIncidentTypeId = x.PayrollIncidentTypeId,
+                NomPayrollIncidentTypeCode = x.PayrollIncidentType != null ? x.PayrollIncidentType.Code : string.Empty,
+                NomPayrollIncidentTypeName = x.PayrollIncidentType != null ? x.PayrollIncidentType.Name : string.Empty,
+                IncidentCategory = x.PayrollIncidentType != null ? x.PayrollIncidentType.IncidentCategory : string.Empty,
+                AffectType = x.PayrollIncidentType != null ? x.PayrollIncidentType.AffectType : string.Empty,
+                PayrollConceptType = x.PayrollIncidentType != null ? x.PayrollIncidentType.PayrollConceptType : string.Empty,
+                Color = x.PayrollIncidentType != null ? x.PayrollIncidentType.Color : string.Empty,
+                Icon = x.PayrollIncidentType != null ? x.PayrollIncidentType.Icon : string.Empty,
                 IncidentDate = x.IncidentDate,
                 IncidentType = x.IncidentType,
                 Quantity = x.Quantity,
@@ -971,23 +994,37 @@ public static class HumanResourcesEndpoints
         if (!tenantId.HasValue || !companyId.HasValue)
             return Results.BadRequest(new { message = "No existe contexto de tenant/empresa para la incidencia." });
 
-        if (!request.EmployeeId.HasValue || !await db.Employees.AnyAsync(x => x.Id == request.EmployeeId.Value))
-            return Results.BadRequest(new { message = "No se encontró el colaborador enviado." });
+        var branchId = request.BranchId ?? context.BranchId;
 
-        if (request.PayrollPeriodId.HasValue && !await db.PayrollPeriods.AnyAsync(x => x.Id == request.PayrollPeriodId.Value))
-            return Results.BadRequest(new { message = "No se encontró el periodo de nómina enviado." });
+        var validation = ValidateIncidentRequiredFields(request);
+        if (validation is not null)
+            return Results.BadRequest(new { message = validation });
 
-        if (string.IsNullOrWhiteSpace(request.IncidentType))
-            return Results.BadRequest(new { message = "El tipo de incidencia es obligatorio." });
+        validation = await ValidateIncidentScopeAsync(db, tenantId.Value, companyId.Value, branchId, request.EmployeeId, request.PayrollPeriodId);
+        if (validation is not null)
+            return Results.BadRequest(new { message = validation });
+
+        var incidentTypeId = request.PayrollIncidentTypeId ?? request.NomPayrollIncidentTypeId;
+        if (!incidentTypeId.HasValue || incidentTypeId.Value == Guid.Empty)
+            return Results.BadRequest(new { message = "payroll_incident_type_id es obligatorio." });
+
+        var incidentType = await ResolveIncidentTypeAsync(db, tenantId.Value, companyId.Value, incidentTypeId.Value);
+        if (incidentType is null)
+            return Results.BadRequest(new { message = "El tipo de incidencia debe existir en el catálogo formal." });
+        validation = ValidateIncidentAmounts(incidentType, request.Amount, request.Quantity);
+        if (validation is not null)
+            return Results.BadRequest(new { message = validation });
 
         var entity = new EmployeeIncident
         {
             TenantId = tenantId.Value,
             CompanyId = companyId.Value,
+            BranchId = branchId,
             EmployeeId = request.EmployeeId.Value,
             PayrollPeriodId = request.PayrollPeriodId,
+            PayrollIncidentTypeId = incidentType.Id,
             IncidentDate = request.IncidentDate?.Date ?? DateTime.UtcNow.Date,
-            IncidentType = NormalizeStatus(request.IncidentType, "other"),
+            IncidentType = incidentType.Code,
             Quantity = request.Quantity,
             Amount = request.Amount,
             Notes = NormalizeText(request.Notes),
@@ -1007,16 +1044,32 @@ public static class HumanResourcesEndpoints
         if (entity is null)
             return Results.NotFound(new { message = "No se encontró la incidencia." });
 
-        if (!request.EmployeeId.HasValue || !await db.Employees.AnyAsync(x => x.Id == request.EmployeeId.Value))
-            return Results.BadRequest(new { message = "No se encontró el colaborador enviado." });
+        var branchId = request.BranchId ?? entity.BranchId;
+        var validation = ValidateIncidentRequiredFields(request);
+        if (validation is not null)
+            return Results.BadRequest(new { message = validation });
 
-        if (request.PayrollPeriodId.HasValue && !await db.PayrollPeriods.AnyAsync(x => x.Id == request.PayrollPeriodId.Value))
-            return Results.BadRequest(new { message = "No se encontró el periodo de nómina enviado." });
+        validation = await ValidateIncidentScopeAsync(db, entity.TenantId, entity.CompanyId, branchId, request.EmployeeId, request.PayrollPeriodId);
+        if (validation is not null)
+            return Results.BadRequest(new { message = validation });
 
+        var incidentTypeId = request.PayrollIncidentTypeId ?? request.NomPayrollIncidentTypeId;
+        if (!incidentTypeId.HasValue || incidentTypeId.Value == Guid.Empty)
+            return Results.BadRequest(new { message = "payroll_incident_type_id es obligatorio." });
+
+        var incidentType = await ResolveIncidentTypeAsync(db, entity.TenantId, entity.CompanyId, incidentTypeId.Value);
+        if (incidentType is null)
+            return Results.BadRequest(new { message = "El tipo de incidencia debe existir en el catálogo formal." });
+        validation = ValidateIncidentAmounts(incidentType, request.Amount, request.Quantity);
+        if (validation is not null)
+            return Results.BadRequest(new { message = validation });
+
+        entity.BranchId = branchId;
         entity.EmployeeId = request.EmployeeId.Value;
         entity.PayrollPeriodId = request.PayrollPeriodId;
+        entity.PayrollIncidentTypeId = incidentType.Id;
         entity.IncidentDate = request.IncidentDate?.Date ?? entity.IncidentDate;
-        entity.IncidentType = NormalizeStatus(request.IncidentType, entity.IncidentType);
+        entity.IncidentType = incidentType.Code;
         entity.Quantity = request.Quantity;
         entity.Amount = request.Amount;
         entity.Notes = NormalizeText(request.Notes, entity.Notes);
@@ -1035,20 +1088,384 @@ public static class HumanResourcesEndpoints
         if (entity is null)
             return Results.NotFound(new { message = "No se encontró la incidencia." });
 
-        db.EmployeeIncidents.Remove(entity);
+        entity.IsActive = false;
+        entity.IsDeleted = true;
+        entity.DeletedAt = DateTime.UtcNow;
+        entity.DeletedBy = "web-api";
+        entity.UpdatedAt = DateTime.UtcNow;
+        entity.UpdatedBy = "web-api";
         await db.SaveChangesAsync();
         return Results.Ok(new { success = true });
+    }
+
+    private static async Task<NomPayrollIncidentType?> ResolveIncidentTypeAsync(NanchesoftDbContext db, Guid tenantId, Guid companyId, Guid incidentTypeId)
+    {
+        return await db.NomPayrollIncidentTypes.FirstOrDefaultAsync(x =>
+            x.Id == incidentTypeId
+            && x.TenantId == tenantId
+            && x.CompanyId == companyId
+            && x.IsActive
+            && !x.IsDeleted);
+    }
+
+    private static async Task<string?> ValidateIncidentScopeAsync(NanchesoftDbContext db, Guid tenantId, Guid companyId, Guid? branchId, Guid? employeeId, Guid? payrollPeriodId)
+    {
+        if (branchId.HasValue && !await db.Branches.AnyAsync(x =>
+                x.Id == branchId.Value
+                && x.TenantId == tenantId
+                && x.CompanyId == companyId
+                && x.IsActive))
+            return "La sucursal no pertenece al tenant/empresa actual o está inactiva.";
+
+        if (!employeeId.HasValue)
+            return "El colaborador es obligatorio.";
+
+        var employee = await db.Employees.AsNoTracking().FirstOrDefaultAsync(x =>
+            x.Id == employeeId.Value
+            && x.TenantId == tenantId
+            && x.CompanyId == companyId
+            && x.IsActive);
+        if (employee is null)
+            return "El colaborador no pertenece al tenant/empresa actual o está inactivo.";
+        if (branchId.HasValue && employee.BranchId.HasValue && employee.BranchId.Value != branchId.Value)
+            return "El colaborador no pertenece a la sucursal seleccionada.";
+
+        if (!payrollPeriodId.HasValue)
+            return null;
+
+        var period = await db.PayrollPeriods.AsNoTracking().FirstOrDefaultAsync(x =>
+            x.Id == payrollPeriodId.Value
+            && x.TenantId == tenantId
+            && x.CompanyId == companyId
+            && x.IsActive);
+        if (period is null)
+            return "El periodo de nómina no pertenece al tenant/empresa actual.";
+        if (!IsOpenPayrollPeriod(period))
+            return "No se permiten incidencias en periodos cerrados, timbrados, cancelados o bloqueados.";
+
+        return null;
+    }
+
+    private static string? ValidateIncidentAmounts(NomPayrollIncidentType incidentType, decimal amount, decimal quantity)
+    {
+        if (quantity < 0m)
+            return "La cantidad debe ser mayor o igual a 0.";
+        if (amount < 0m)
+            return "El importe debe ser mayor o igual a 0.";
+        if (incidentType.RequiresAmount && amount <= 0m)
+            return "El tipo de incidencia requiere importe mayor a cero.";
+        if (incidentType.RequiresQuantity && quantity <= 0m)
+            return "El tipo de incidencia requiere cantidad mayor a cero.";
+        return null;
+    }
+
+    private static string? ValidateIncidentRequiredFields(EmployeeIncidentRequest request)
+    {
+        if (!request.EmployeeId.HasValue || request.EmployeeId.Value == Guid.Empty)
+            return "El colaborador es obligatorio.";
+        var incidentTypeId = request.PayrollIncidentTypeId ?? request.NomPayrollIncidentTypeId;
+        if (!incidentTypeId.HasValue || incidentTypeId.Value == Guid.Empty)
+            return "El tipo de incidencia es obligatorio.";
+        if (!request.IncidentDate.HasValue)
+            return "La fecha es obligatoria.";
+        if (request.Quantity < 0m)
+            return "La cantidad debe ser mayor o igual a 0.";
+        if (request.Amount < 0m)
+            return "El importe debe ser mayor o igual a 0.";
+        return null;
+    }
+
+    private static bool IsOpenPayrollPeriod(PayrollPeriod period)
+    {
+        if (!period.IsActive || period.IsClosed)
+            return false;
+        var status = NormalizeStatus(period.Status, "open");
+        return status is "open" or "abierto" or "draft" or "captura" or "active" or "activo";
+    }
+
+    private static bool IsPayrollRunEditable(string? status)
+    {
+        var normalized = NormalizeStatus(status, "draft");
+        return normalized is "draft" or "borrador" or "open" or "abierto" or "captura" or "pending" or "pendiente";
+    }
+
+    private static async Task<IResult> GetRecurringIncidentRulesAsync(HttpContext httpContext, NanchesoftDbContext db)
+    {
+        var tenantId = ApiTenantScope.ResolveTenantId(httpContext);
+        var companyId = ApiTenantScope.ResolveCompanyId(httpContext);
+
+        var rows = await db.HrRecurringIncidentRules.AsNoTracking()
+            .Where(x => (!tenantId.HasValue && !companyId.HasValue)
+                     || (x.TenantId == tenantId)
+                     || (!tenantId.HasValue && x.CompanyId == companyId))
+            .Where(x => !x.IsDeleted)
+            .Include(x => x.Company)
+            .Include(x => x.Branch)
+            .Include(x => x.Employee)
+            .Include(x => x.NomPayrollIncidentType)
+            .OrderBy(x => x.Employee != null ? x.Employee.LastName : string.Empty)
+            .ThenBy(x => x.StartDate)
+            .Select(x => new HrRecurringIncidentRuleDto
+            {
+                HrRecurringIncidentRuleId = x.Id,
+                TenantId = x.TenantId,
+                CompanyId = x.CompanyId,
+                CompanyName = x.Company != null ? x.Company.Name : string.Empty,
+                BranchId = x.BranchId,
+                BranchName = x.Branch != null ? x.Branch.Name : string.Empty,
+                EmployeeId = x.EmployeeId,
+                EmployeeName = x.Employee != null ? x.Employee.GetFullName() : string.Empty,
+                NomPayrollIncidentTypeId = x.NomPayrollIncidentTypeId,
+                NomPayrollIncidentTypeName = x.NomPayrollIncidentType != null ? x.NomPayrollIncidentType.Code + " · " + x.NomPayrollIncidentType.Name : string.Empty,
+                IncidentCategory = x.NomPayrollIncidentType != null ? x.NomPayrollIncidentType.IncidentCategory : string.Empty,
+                AffectType = x.NomPayrollIncidentType != null ? x.NomPayrollIncidentType.AffectType : string.Empty,
+                Amount = x.Amount,
+                Quantity = x.Quantity,
+                StartDate = x.StartDate,
+                EndDate = x.EndDate,
+                Frequency = x.Frequency,
+                Notes = x.Notes,
+                RequiresAuthorization = x.RequiresAuthorization,
+                AuthorizedBy = x.AuthorizedBy,
+                AuthorizedAt = x.AuthorizedAt,
+                IsActive = x.IsActive
+            })
+            .ToListAsync();
+
+        return Results.Ok(rows);
+    }
+
+    private static async Task<IResult> CreateRecurringIncidentRuleAsync(HttpContext httpContext, HrRecurringIncidentRuleRequest request, NanchesoftDbContext db)
+    {
+        var context = await ResolveDefaultContextAsync(httpContext, db);
+        var tenantId = request.TenantId ?? context.TenantId;
+        var companyId = request.CompanyId ?? context.CompanyId;
+        var branchId = request.BranchId ?? context.BranchId;
+
+        if (!tenantId.HasValue || !companyId.HasValue)
+            return Results.BadRequest(new { message = "No existe contexto de tenant/empresa para la regla recurrente." });
+
+        var validation = await ValidateIncidentScopeAsync(db, tenantId.Value, companyId.Value, branchId, request.EmployeeId, null);
+        if (validation is not null)
+            return Results.BadRequest(new { message = validation });
+
+        if (!request.NomPayrollIncidentTypeId.HasValue || request.NomPayrollIncidentTypeId.Value == Guid.Empty)
+            return Results.BadRequest(new { message = "payroll_incident_type_id es obligatorio." });
+        var incidentType = await ResolveIncidentTypeAsync(db, tenantId.Value, companyId.Value, request.NomPayrollIncidentTypeId.Value);
+        if (incidentType is null)
+            return Results.BadRequest(new { message = "El tipo de incidencia debe existir y estar activo." });
+        validation = ValidateIncidentAmounts(incidentType, request.Amount, request.Quantity);
+        if (validation is not null)
+            return Results.BadRequest(new { message = validation });
+
+        var frequency = NormalizeFrequency(request.Frequency);
+        if (frequency is null)
+            return Results.BadRequest(new { message = "Frecuencia inválida." });
+
+        var entity = new HrRecurringIncidentRule
+        {
+            TenantId = tenantId.Value,
+            CompanyId = companyId.Value,
+            BranchId = branchId,
+            EmployeeId = request.EmployeeId!.Value,
+            NomPayrollIncidentTypeId = incidentType.Id,
+            Amount = request.Amount,
+            Quantity = request.Quantity <= 0m ? 1m : request.Quantity,
+            StartDate = request.StartDate?.Date ?? DateTime.UtcNow.Date,
+            EndDate = request.EndDate?.Date,
+            Frequency = frequency,
+            Notes = NormalizeText(request.Notes),
+            RequiresAuthorization = request.RequiresAuthorization || incidentType.RequiresAuthorization,
+            AuthorizedBy = NormalizeText(request.AuthorizedBy),
+            AuthorizedAt = request.AuthorizedAt,
+            IsActive = request.IsActive,
+            CreatedBy = "web-api"
+        };
+
+        db.HrRecurringIncidentRules.Add(entity);
+        await db.SaveChangesAsync();
+        return Results.Ok(new { success = true, id = entity.Id });
+    }
+
+    private static async Task<IResult> UpdateRecurringIncidentRuleAsync(Guid id, HrRecurringIncidentRuleRequest request, NanchesoftDbContext db)
+    {
+        var entity = await db.HrRecurringIncidentRules.FirstOrDefaultAsync(x => x.Id == id && !x.IsDeleted);
+        if (entity is null)
+            return Results.NotFound(new { message = "No se encontró la regla recurrente." });
+
+        var branchId = request.BranchId ?? entity.BranchId;
+        var validation = await ValidateIncidentScopeAsync(db, entity.TenantId, entity.CompanyId, branchId, request.EmployeeId, null);
+        if (validation is not null)
+            return Results.BadRequest(new { message = validation });
+
+        if (!request.NomPayrollIncidentTypeId.HasValue || request.NomPayrollIncidentTypeId.Value == Guid.Empty)
+            return Results.BadRequest(new { message = "payroll_incident_type_id es obligatorio." });
+        var incidentType = await ResolveIncidentTypeAsync(db, entity.TenantId, entity.CompanyId, request.NomPayrollIncidentTypeId.Value);
+        if (incidentType is null)
+            return Results.BadRequest(new { message = "El tipo de incidencia debe existir y estar activo." });
+        validation = ValidateIncidentAmounts(incidentType, request.Amount, request.Quantity);
+        if (validation is not null)
+            return Results.BadRequest(new { message = validation });
+
+        var frequency = NormalizeFrequency(request.Frequency);
+        if (frequency is null)
+            return Results.BadRequest(new { message = "Frecuencia inválida." });
+
+        entity.BranchId = branchId;
+        entity.EmployeeId = request.EmployeeId!.Value;
+        entity.NomPayrollIncidentTypeId = incidentType.Id;
+        entity.Amount = request.Amount;
+        entity.Quantity = request.Quantity <= 0m ? 1m : request.Quantity;
+        entity.StartDate = request.StartDate?.Date ?? entity.StartDate;
+        entity.EndDate = request.EndDate?.Date;
+        entity.Frequency = frequency;
+        entity.Notes = NormalizeText(request.Notes, entity.Notes);
+        entity.RequiresAuthorization = request.RequiresAuthorization || incidentType.RequiresAuthorization;
+        entity.AuthorizedBy = NormalizeText(request.AuthorizedBy);
+        entity.AuthorizedAt = request.AuthorizedAt;
+        entity.IsActive = request.IsActive;
+        entity.UpdatedAt = DateTime.UtcNow;
+        entity.UpdatedBy = "web-api";
+
+        await db.SaveChangesAsync();
+        return Results.Ok(new { success = true });
+    }
+
+    private static async Task<IResult> DeleteRecurringIncidentRuleAsync(Guid id, NanchesoftDbContext db)
+    {
+        var entity = await db.HrRecurringIncidentRules.FirstOrDefaultAsync(x => x.Id == id);
+        if (entity is null)
+            return Results.NotFound(new { message = "No se encontró la regla recurrente." });
+
+        entity.IsActive = false;
+        entity.IsDeleted = true;
+        entity.DeletedAt = DateTime.UtcNow;
+        entity.DeletedBy = "web-api";
+        entity.UpdatedAt = DateTime.UtcNow;
+        entity.UpdatedBy = "web-api";
+        await db.SaveChangesAsync();
+        return Results.Ok(new { success = true });
+    }
+
+    private static async Task<IResult> PreviewRecurringIncidentsAsync(HttpContext httpContext, RecurringIncidentGenerationRequest request, NanchesoftDbContext db)
+        => Results.Ok(await BuildRecurringIncidentGenerationAsync(httpContext, db, request, persist: false));
+
+    private static async Task<IResult> GenerateRecurringIncidentsAsync(HttpContext httpContext, RecurringIncidentGenerationRequest request, NanchesoftDbContext db)
+        => Results.Ok(await BuildRecurringIncidentGenerationAsync(httpContext, db, request, persist: true));
+
+    private static async Task<RecurringIncidentGenerationResult> BuildRecurringIncidentGenerationAsync(HttpContext httpContext, NanchesoftDbContext db, RecurringIncidentGenerationRequest request, bool persist)
+    {
+        var context = await ResolveDefaultContextAsync(httpContext, db);
+        var tenantId = request.TenantId ?? context.TenantId;
+        var companyId = request.CompanyId ?? context.CompanyId;
+        if (!tenantId.HasValue || !companyId.HasValue)
+            return new() { Success = false, Message = "No existe contexto de tenant/empresa." };
+
+        var period = await db.PayrollPeriods.AsNoTracking().FirstOrDefaultAsync(x =>
+            x.Id == request.PayrollPeriodId
+            && x.TenantId == tenantId.Value
+            && x.CompanyId == companyId.Value
+            && x.IsActive);
+        if (period is null || !IsOpenPayrollPeriod(period))
+            return new() { Success = false, Message = "El periodo no existe o no está abierto." };
+
+        var rules = await db.HrRecurringIncidentRules
+            .Include(x => x.Employee)
+            .Include(x => x.NomPayrollIncidentType)
+            .Where(x => x.TenantId == tenantId.Value && x.CompanyId == companyId.Value && x.IsActive && !x.IsDeleted)
+            .Where(x => !request.RuleId.HasValue || x.Id == request.RuleId.Value)
+            .Where(x => x.StartDate.Date <= period.EndDate.Date && (!x.EndDate.HasValue || x.EndDate.Value.Date >= period.StartDate.Date))
+            .ToListAsync();
+
+        var result = new RecurringIncidentGenerationResult { Success = true, PayrollPeriodId = period.Id, PayrollPeriodName = period.Name };
+        foreach (var rule in rules)
+        {
+            var type = rule.NomPayrollIncidentType;
+            if (rule.Employee is null || type is null)
+            {
+                result.Omitted++;
+                result.Items.Add(new() { RuleId = rule.Id, EmployeeName = "", IncidentTypeName = "", Action = "omitida", Reason = "Regla incompleta." });
+                continue;
+            }
+            if (rule.RequiresAuthorization && string.IsNullOrWhiteSpace(rule.AuthorizedBy))
+            {
+                result.Omitted++;
+                result.Items.Add(new() { RuleId = rule.Id, EmployeeName = rule.Employee.GetFullName(), IncidentTypeName = type.Name, Action = "omitida", Reason = "Requiere autorización." });
+                continue;
+            }
+            if (await db.EmployeeIncidents.AnyAsync(x => x.RecurrentRuleId == rule.Id && x.PayrollPeriodId == period.Id && !x.IsDeleted))
+            {
+                result.Omitted++;
+                result.Items.Add(new() { RuleId = rule.Id, EmployeeName = rule.Employee.GetFullName(), IncidentTypeName = type.Name, Action = "omitida", Reason = "Ya existe incidencia generada para este periodo." });
+                continue;
+            }
+
+            result.EmployeesAffected++;
+            if (type.IncidentCategory == "DEDUCCION") result.TotalDeductions += rule.Amount;
+            if (type.IncidentCategory == "PERCEPCION") result.TotalPerceptions += rule.Amount;
+            result.Generated++;
+            result.Items.Add(new() { RuleId = rule.Id, EmployeeName = rule.Employee.GetFullName(), IncidentTypeName = type.Name, Action = persist ? "generada" : "vista_previa", Reason = "" });
+
+            if (persist)
+            {
+                db.EmployeeIncidents.Add(new EmployeeIncident
+                {
+                    TenantId = rule.TenantId,
+                    CompanyId = rule.CompanyId,
+                    BranchId = rule.BranchId ?? rule.Employee.BranchId,
+                    EmployeeId = rule.EmployeeId,
+                    PayrollPeriodId = period.Id,
+                    NomPayrollIncidentTypeId = rule.NomPayrollIncidentTypeId,
+                    RecurrentRuleId = rule.Id,
+                    IncidentDate = period.StartDate.Date,
+                    IncidentType = type.Code,
+                    Quantity = rule.Quantity,
+                    Amount = rule.Amount,
+                    Notes = string.IsNullOrWhiteSpace(rule.Notes) ? "Generada desde regla recurrente." : rule.Notes,
+                    Status = "generated",
+                    IsActive = true,
+                    CreatedBy = "recurring-rule"
+                });
+            }
+        }
+
+        if (persist)
+            await db.SaveChangesAsync();
+
+        return result;
+    }
+
+    private static string? NormalizeFrequency(string? value)
+    {
+        var frequency = NormalizeStatus(value, "cada_periodo");
+        return frequency is "semanal" or "quincenal" or "mensual" or "cada_periodo" ? frequency : null;
     }
 
     private static async Task<IResult> GetPayrollPeriodsAsync(HttpContext httpContext, NanchesoftDbContext db)
     {
         var tenantId = ApiTenantScope.ResolveTenantId(httpContext);
         var companyId = ApiTenantScope.ResolveCompanyId(httpContext);
+        var onlyOpen = string.Equals(httpContext.Request.Query["status"].ToString(), "open", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(httpContext.Request.Query["onlyOpen"].ToString(), "true", StringComparison.OrdinalIgnoreCase);
 
-        var rows = await db.PayrollPeriods.AsNoTracking()
-            .Where(x => (!tenantId.HasValue && !companyId.HasValue)
-                     || (x.TenantId == tenantId)
-                     || (!tenantId.HasValue && x.CompanyId == companyId))
+        var query = db.PayrollPeriods.AsNoTracking()
+            .Where(x => (!tenantId.HasValue || x.TenantId == tenantId.Value)
+                     && (!companyId.HasValue || x.CompanyId == companyId.Value));
+
+        if (onlyOpen)
+        {
+            query = query.Where(x =>
+                x.IsActive
+                && !x.IsClosed
+                && (x.Status == "open"
+                    || x.Status == "abierto"
+                    || x.Status == "draft"
+                    || x.Status == "captura"
+                    || x.Status == "active"
+                    || x.Status == "activo"));
+        }
+
+        var rows = await query
             .Include(x => x.Company)
             .OrderByDescending(x => x.StartDate)
             .Select(x => new PayrollPeriodDto
@@ -1064,6 +1481,7 @@ public static class HumanResourcesEndpoints
                 EndDate = x.EndDate,
                 PaymentDate = x.PaymentDate,
                 Status = x.Status,
+                IsImssInsured = x.IsImssInsured,
                 IsClosed = x.IsClosed,
                 IsActive = x.IsActive
             })
@@ -1101,6 +1519,7 @@ public static class HumanResourcesEndpoints
             EndDate = request.EndDate?.Date ?? DateTime.UtcNow.Date,
             PaymentDate = request.PaymentDate?.Date ?? DateTime.UtcNow.Date,
             Status = NormalizeStatus(request.Status, "draft"),
+            IsImssInsured = request.IsImssInsured,
             IsClosed = request.IsClosed,
             IsActive = request.IsActive,
             CreatedBy = "web-api"
@@ -1128,6 +1547,7 @@ public static class HumanResourcesEndpoints
         entity.EndDate = request.EndDate?.Date ?? entity.EndDate;
         entity.PaymentDate = request.PaymentDate?.Date ?? entity.PaymentDate;
         entity.Status = NormalizeStatus(request.Status, entity.Status);
+        entity.IsImssInsured = request.IsImssInsured;
         entity.IsClosed = request.IsClosed;
         entity.IsActive = request.IsActive;
         entity.UpdatedAt = DateTime.UtcNow;
@@ -1467,16 +1887,28 @@ public static class HumanResourcesEndpoints
 
     private static async Task<IResult> CreatePayrollRunAsync(HttpContext httpContext, PayrollRunRequest request, NanchesoftDbContext db)
     {
-        var context = await ResolveDefaultContextAsync(httpContext, db);
-        var tenantId = request.TenantId ?? context.TenantId;
-        var companyId = request.CompanyId ?? context.CompanyId;
-        var branchId = request.BranchId ?? context.BranchId;
-
-        if (!tenantId.HasValue || !companyId.HasValue)
-            return Results.BadRequest(new { message = "No existe contexto de tenant/empresa para la nómina." });
-
-        if (!request.PayrollPeriodId.HasValue || !await db.PayrollPeriods.AnyAsync(x => x.Id == request.PayrollPeriodId.Value))
+        if (!request.PayrollPeriodId.HasValue)
             return Results.BadRequest(new { message = "No se encontró el periodo de nómina enviado." });
+
+        var period = await db.PayrollPeriods.AsNoTracking().FirstOrDefaultAsync(x => x.Id == request.PayrollPeriodId.Value);
+        if (period is null)
+            return Results.BadRequest(new { message = "No se encontró el periodo de nómina enviado." });
+
+        // Fuente de verdad: el periodo. Así la corrida no cae al tenant/company/branch DEMO.
+        var tenantId = period.TenantId;
+        var companyId = period.CompanyId;
+        var context = await ResolveDefaultContextAsync(httpContext, db);
+        var requestedBranchId = request.BranchId ?? context.BranchId;
+        Guid? branchId = null;
+
+        if (requestedBranchId.HasValue && await db.Branches.AnyAsync(x => x.Id == requestedBranchId.Value && x.CompanyId == companyId && x.IsActive))
+            branchId = requestedBranchId.Value;
+        else
+            branchId = await db.Branches
+                .Where(x => x.CompanyId == companyId && x.IsActive)
+                .OrderBy(x => x.CreatedAt)
+                .Select(x => (Guid?)x.Id)
+                .FirstOrDefaultAsync();
 
         var folio = NormalizeUpper(request.Folio);
         if (string.IsNullOrWhiteSpace(folio))
@@ -1487,8 +1919,8 @@ public static class HumanResourcesEndpoints
 
         var entity = new PayrollRun
         {
-            TenantId = tenantId.Value,
-            CompanyId = companyId.Value,
+            TenantId = tenantId,
+            CompanyId = companyId,
             BranchId = branchId,
             PayrollPeriodId = request.PayrollPeriodId.Value,
             Folio = folio,
@@ -1514,22 +1946,27 @@ public static class HumanResourcesEndpoints
         if (entity is null)
             return Results.NotFound(new { message = "No se encontró el proceso de nómina." });
 
+        var locked = !IsPayrollRunEditable(entity.Status);
         var folio = NormalizeUpper(request.Folio, entity.Folio);
-        if (await db.PayrollRuns.AnyAsync(x => x.Id != id && x.CompanyId == entity.CompanyId && x.Folio == folio))
+        if (!locked && await db.PayrollRuns.AnyAsync(x => x.Id != id && x.CompanyId == entity.CompanyId && x.Folio == folio))
             return Results.BadRequest(new { message = "Ya existe otro proceso de nómina con ese folio." });
 
-        if (!request.PayrollPeriodId.HasValue || !await db.PayrollPeriods.AnyAsync(x => x.Id == request.PayrollPeriodId.Value))
+        if (!locked && (!request.PayrollPeriodId.HasValue || !await db.PayrollPeriods.AnyAsync(x => x.Id == request.PayrollPeriodId.Value)))
             return Results.BadRequest(new { message = "No se encontró el periodo de nómina enviado." });
 
-        entity.BranchId = request.BranchId;
-        entity.PayrollPeriodId = request.PayrollPeriodId.Value;
-        entity.Folio = folio;
-        entity.RunDate = request.RunDate?.Date ?? entity.RunDate;
+        if (!locked)
+        {
+            entity.BranchId = request.BranchId;
+            entity.PayrollPeriodId = request.PayrollPeriodId!.Value;
+            entity.Folio = folio;
+            entity.RunDate = request.RunDate?.Date ?? entity.RunDate;
+            entity.EmployeeCount = request.EmployeeCount;
+            entity.GrossAmount = request.GrossAmount;
+            entity.DeductionsAmount = request.DeductionsAmount;
+            entity.NetAmount = request.NetAmount;
+        }
+
         entity.Status = NormalizeStatus(request.Status, entity.Status);
-        entity.EmployeeCount = request.EmployeeCount;
-        entity.GrossAmount = request.GrossAmount;
-        entity.DeductionsAmount = request.DeductionsAmount;
-        entity.NetAmount = request.NetAmount;
         entity.Notes = NormalizeText(request.Notes, entity.Notes);
         entity.IsActive = request.IsActive;
         entity.UpdatedAt = DateTime.UtcNow;
@@ -1544,6 +1981,9 @@ public static class HumanResourcesEndpoints
         var entity = await db.PayrollRuns.FirstOrDefaultAsync(x => x.Id == id);
         if (entity is null)
             return Results.NotFound(new { message = "No se encontró el proceso de nómina." });
+
+        if (!IsPayrollRunEditable(entity.Status))
+            return Results.BadRequest(new { message = "No puedes eliminar una corrida calculada/autorizada/cerrada." });
 
         if (await db.PayrollRunLines.AnyAsync(x => x.PayrollRunId == id))
             return Results.BadRequest(new { message = "No puedes eliminar un proceso con recibos relacionados." });
@@ -1604,8 +2044,14 @@ public static class HumanResourcesEndpoints
         if (!tenantId.HasValue || !companyId.HasValue)
             return Results.BadRequest(new { message = "No existe contexto de tenant/empresa para el recibo." });
 
-        if (!request.PayrollRunId.HasValue || !await db.PayrollRuns.AnyAsync(x => x.Id == request.PayrollRunId.Value))
+        if (!request.PayrollRunId.HasValue)
             return Results.BadRequest(new { message = "No se encontró el proceso de nómina enviado." });
+
+        var run = await db.PayrollRuns.AsNoTracking().FirstOrDefaultAsync(x => x.Id == request.PayrollRunId.Value);
+        if (run is null)
+            return Results.BadRequest(new { message = "No se encontró el proceso de nómina enviado." });
+        if (!IsPayrollRunEditable(run.Status))
+            return Results.BadRequest(new { message = "La corrida ya fue calculada/autorizada/cerrada. No se pueden agregar recibos." });
 
         if (!request.EmployeeId.HasValue || !await db.Employees.AnyAsync(x => x.Id == request.EmployeeId.Value))
             return Results.BadRequest(new { message = "No se encontró el colaborador enviado." });
@@ -1642,8 +2088,18 @@ public static class HumanResourcesEndpoints
         if (entity is null)
             return Results.NotFound(new { message = "No se encontró el recibo." });
 
-        if (!request.PayrollRunId.HasValue || !await db.PayrollRuns.AnyAsync(x => x.Id == request.PayrollRunId.Value))
+        var currentRun = await db.PayrollRuns.AsNoTracking().FirstOrDefaultAsync(x => x.Id == entity.PayrollRunId);
+        if (currentRun is not null && !IsPayrollRunEditable(currentRun.Status))
+            return Results.BadRequest(new { message = "La corrida ya fue calculada/autorizada/cerrada. No se puede modificar el recibo." });
+
+        if (!request.PayrollRunId.HasValue)
             return Results.BadRequest(new { message = "No se encontró el proceso de nómina enviado." });
+
+        var targetRun = await db.PayrollRuns.AsNoTracking().FirstOrDefaultAsync(x => x.Id == request.PayrollRunId.Value);
+        if (targetRun is null)
+            return Results.BadRequest(new { message = "No se encontró el proceso de nómina enviado." });
+        if (!IsPayrollRunEditable(targetRun.Status))
+            return Results.BadRequest(new { message = "La corrida destino ya fue calculada/autorizada/cerrada. No se puede modificar el recibo." });
 
         if (!request.EmployeeId.HasValue || !await db.Employees.AnyAsync(x => x.Id == request.EmployeeId.Value))
             return Results.BadRequest(new { message = "No se encontró el colaborador enviado." });
@@ -1679,6 +2135,10 @@ public static class HumanResourcesEndpoints
         var entity = await db.PayrollRunLines.FirstOrDefaultAsync(x => x.Id == id);
         if (entity is null)
             return Results.NotFound(new { message = "No se encontró el recibo." });
+
+        var run = await db.PayrollRuns.AsNoTracking().FirstOrDefaultAsync(x => x.Id == entity.PayrollRunId);
+        if (run is not null && !IsPayrollRunEditable(run.Status))
+            return Results.BadRequest(new { message = "La corrida ya fue calculada/autorizada/cerrada. No se puede eliminar el recibo." });
 
         db.PayrollRunLines.Remove(entity);
         await db.SaveChangesAsync();
@@ -1834,8 +2294,11 @@ public class EmployeeIncidentRequest
 {
     public Guid? TenantId { get; set; }
     public Guid? CompanyId { get; set; }
+    public Guid? BranchId { get; set; }
     public Guid? EmployeeId { get; set; }
     public Guid? PayrollPeriodId { get; set; }
+    public Guid? PayrollIncidentTypeId { get; set; }
+    public Guid? NomPayrollIncidentTypeId { get; set; }
     public DateTime? IncidentDate { get; set; }
     public string? IncidentType { get; set; }
     public decimal Quantity { get; set; }
@@ -1849,8 +2312,77 @@ public sealed class EmployeeIncidentDto : EmployeeIncidentRequest
 {
     public Guid EmployeeIncidentId { get; set; }
     public string CompanyName { get; set; } = string.Empty;
+    public string BranchName { get; set; } = string.Empty;
     public string EmployeeName { get; set; } = string.Empty;
     public string PayrollPeriodName { get; set; } = string.Empty;
+    public string NomPayrollIncidentTypeCode { get; set; } = string.Empty;
+    public string NomPayrollIncidentTypeName { get; set; } = string.Empty;
+    public string IncidentCategory { get; set; } = string.Empty;
+    public string AffectType { get; set; } = string.Empty;
+    public string PayrollConceptType { get; set; } = string.Empty;
+    public string Color { get; set; } = string.Empty;
+    public string Icon { get; set; } = string.Empty;
+}
+
+public class HrRecurringIncidentRuleRequest
+{
+    public Guid? TenantId { get; set; }
+    public Guid? CompanyId { get; set; }
+    public Guid? BranchId { get; set; }
+    public Guid? EmployeeId { get; set; }
+    public Guid? NomPayrollIncidentTypeId { get; set; }
+    public decimal Amount { get; set; }
+    public decimal Quantity { get; set; } = 1m;
+    public DateTime? StartDate { get; set; }
+    public DateTime? EndDate { get; set; }
+    public string? Frequency { get; set; }
+    public string? Notes { get; set; }
+    public bool RequiresAuthorization { get; set; }
+    public string? AuthorizedBy { get; set; }
+    public DateTime? AuthorizedAt { get; set; }
+    public bool IsActive { get; set; } = true;
+}
+
+public sealed class HrRecurringIncidentRuleDto : HrRecurringIncidentRuleRequest
+{
+    public Guid HrRecurringIncidentRuleId { get; set; }
+    public string CompanyName { get; set; } = string.Empty;
+    public string BranchName { get; set; } = string.Empty;
+    public string EmployeeName { get; set; } = string.Empty;
+    public string NomPayrollIncidentTypeName { get; set; } = string.Empty;
+    public string IncidentCategory { get; set; } = string.Empty;
+    public string AffectType { get; set; } = string.Empty;
+}
+
+public sealed class RecurringIncidentGenerationRequest
+{
+    public Guid? TenantId { get; set; }
+    public Guid? CompanyId { get; set; }
+    public Guid PayrollPeriodId { get; set; }
+    public Guid? RuleId { get; set; }
+}
+
+public sealed class RecurringIncidentGenerationResult
+{
+    public bool Success { get; set; }
+    public string Message { get; set; } = string.Empty;
+    public Guid PayrollPeriodId { get; set; }
+    public string PayrollPeriodName { get; set; } = string.Empty;
+    public int EmployeesAffected { get; set; }
+    public decimal TotalPerceptions { get; set; }
+    public decimal TotalDeductions { get; set; }
+    public int Generated { get; set; }
+    public int Omitted { get; set; }
+    public List<RecurringIncidentGenerationItem> Items { get; set; } = [];
+}
+
+public sealed class RecurringIncidentGenerationItem
+{
+    public Guid RuleId { get; set; }
+    public string EmployeeName { get; set; } = string.Empty;
+    public string IncidentTypeName { get; set; } = string.Empty;
+    public string Action { get; set; } = string.Empty;
+    public string Reason { get; set; } = string.Empty;
 }
 
 public class PayrollPeriodRequest
@@ -1864,6 +2396,7 @@ public class PayrollPeriodRequest
     public DateTime? EndDate { get; set; }
     public DateTime? PaymentDate { get; set; }
     public string? Status { get; set; }
+    public bool IsImssInsured { get; set; } = true;
     public bool IsClosed { get; set; }
     public bool IsActive { get; set; } = true;
 }

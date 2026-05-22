@@ -123,7 +123,17 @@
       "Bash(apt-get install *)",
       "Bash(iconv -f ISO-8859-1 -t UTF-8 \"/opt/nanchesoft/Nanchesoft/Silvasoft/Primero y último\\(20260501-20260516\\).csv\")",
       "Bash(awk -F',' '{print $1}')",
-      "Bash(systemctl cat *)"
+      "Bash(systemctl cat *)",
+      "Bash(npx -y playwright --version)",
+      "Bash(npx playwright *)",
+      "Bash(npx -y playwright install chromium)",
+      "Bash(tee /tmp/nanchesoft-api.log)",
+      "Bash(tee /tmp/nanchesoft-web.log)",
+      "Bash(npm init *)",
+      "Bash(npm i *)",
+      "Bash(node test-ia-chat.mjs)",
+      "Bash(npx -y playwright install-deps chromium)",
+      "Bash(pkill -f \"dotnet run.*Nanchesoft\")"
     ]
   }
 }

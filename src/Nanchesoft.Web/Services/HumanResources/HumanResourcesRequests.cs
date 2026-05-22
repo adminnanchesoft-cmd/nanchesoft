@@ -104,9 +104,13 @@ public sealed class EmployeeRequest
 
 public sealed class EmployeeIncidentRequest
 {
+    public Guid? TenantId { get; set; }
     public Guid? CompanyId { get; set; }
+    public Guid? BranchId { get; set; }
     public Guid? EmployeeId { get; set; }
     public Guid? PayrollPeriodId { get; set; }
+    public Guid? PayrollIncidentTypeId { get; set; }
+    public Guid? NomPayrollIncidentTypeId { get; set; }
     public DateTime? IncidentDate { get; set; }
     public string IncidentType { get; set; } = string.Empty;
     public decimal Quantity { get; set; }
@@ -135,6 +139,7 @@ public sealed class EmployeeContractRequest
 
 public sealed class PayrollPeriodRequest
 {
+    public Guid? TenantId { get; set; }
     public Guid? CompanyId { get; set; }
     public string Code { get; set; } = string.Empty;
     public string Name { get; set; } = string.Empty;
@@ -143,6 +148,7 @@ public sealed class PayrollPeriodRequest
     public DateTime? EndDate { get; set; }
     public DateTime? PaymentDate { get; set; }
     public string Status { get; set; } = string.Empty;
+    public bool IsImssInsured { get; set; } = true;
     public bool IsClosed { get; set; }
     public bool IsActive { get; set; } = true;
 }

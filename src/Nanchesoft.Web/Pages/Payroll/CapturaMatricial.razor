@@ -30,10 +30,17 @@
         @if (_matrix is not null)
         {
             <div class="d-flex gap-2">
-                <span class="badge bg-warning text-dark align-self-center">@_changedCount cambio(s) pendiente(s)</span>
-                <button class="btn btn-primary" @onclick="SaveChangesAsync" disabled="@(_busy || _changedCount == 0)">
-                    @(_busy ? "Guardando..." : "Guardar cambios")
-                </button>
+                @if (_matrix.IsEditable)
+                {
+                    <span class="badge bg-warning text-dark align-self-center">@_changedCount cambio(s) pendiente(s)</span>
+                    <button class="btn btn-primary" @onclick="SaveChangesAsync" disabled="@(_busy || _changedCount == 0)">
+                        @(_busy ? "Guardando..." : "Guardar cambios")
+                    </button>
+                }
+                else
+                {
+                    <span class="badge bg-secondary align-self-center">Solo lectura · @_matrix.Status</span>
+                }
                 <a class="btn btn-outline-secondary" href="/payroll/reporte">Volver</a>
             </div>
         }
@@ -126,6 +133,7 @@
                                     <input type="number" min="0" step="0.01"
                                            value="@(currentAmt > 0 ? currentAmt.ToString("F2") : "")"
                                            placeholder="0"
+                                           disabled="@(!_matrix.IsEditable)"
                                            @onchange="e => OnCellChanged(runLineId, conceptId, e)" />
                                 </td>
                             }
@@ -188,6 +196,8 @@
 
     private void OnCellChanged(Guid lineId, Guid conceptId, ChangeEventArgs e)
     {
+        if (_matrix?.IsEditable != true) return;
+
         if (decimal.TryParse(e.Value?.ToString(), out var val) && val >= 0m)
             _changes[(lineId, conceptId)] = val;
         else
@@ -197,6 +207,13 @@
     private async Task SaveChangesAsync()
     {
         if (_changes.Count == 0 || RunId == Guid.Empty) return;
+        if (_matrix?.IsEditable != true)
+        {
+            _msg = "La corrida ya fue calculada/autorizada/cerrada. La captura matricial queda en solo lectura.";
+            _isError = true;
+            return;
+        }
+
         _busy = true;
         _msg = null;
         try

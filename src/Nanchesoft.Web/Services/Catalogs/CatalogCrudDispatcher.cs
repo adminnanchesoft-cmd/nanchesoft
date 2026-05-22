@@ -56,6 +56,7 @@ public sealed class CatalogCrudDispatcher
             "hr-employee-movements",
             "hr-employees",
             "hr-incidents",
+            "hr-recurring-incidents",
             "hr-leave-types",
             "hr-onboarding-checklists",
             "hr-performance-reviews",
@@ -84,6 +85,7 @@ public sealed class CatalogCrudDispatcher
             "models",
             "payroll-accounting-postings",
             "payroll-concepts",
+            "payroll-incident-types",
             "payroll-dispersion-batches",
             "payroll-dispersion-lines",
             "payroll-employer-obligations",
@@ -212,7 +214,7 @@ public sealed class CatalogCrudDispatcher
             "sales-quotes" or "sales-orders" or "sales-shipments" or "sales-invoices" or "sales-returns" or "credit-notes"
                 => Resolve<SalesApiService>().GetCatalogAsync(normalized),
             "service-catalog" or "customer-service-rates" or "service-notes" => Resolve<ServiceBillingApiService>().GetCatalogAsync(normalized),
-            "hr-departments" or "hr-positions" or "hr-employees" or "hr-incidents" or "employee-contracts" or "payroll-periods" or "payroll-concepts" or "payroll-runs" or "payroll-run-lines" or "payroll-run-line-details"
+            "hr-departments" or "hr-positions" or "hr-employees" or "hr-incidents" or "hr-recurring-incidents" or "employee-contracts" or "payroll-incident-types" or "payroll-periods" or "payroll-concepts" or "payroll-runs" or "payroll-run-lines" or "payroll-run-line-details"
                 => Resolve<HumanResourcesApiService>().GetCatalogAsync(normalized),
             "time-clock" or "attendance-daily-summaries" or "payroll-recurring-movements" or "prepayroll-adjustments" or "prepayroll-cutoffs" or "employee-loans" or "employee-loan-deductions" or "payroll-source-applications" or "payroll-receipt-control" or "payroll-run-closings" or "payroll-dispersion-batches" or "payroll-dispersion-lines" or "payroll-accounting-postings" or "payroll-tax-accumulators" or "payroll-employer-obligations" or "payroll-fiscal-reconciliations"
                 => Resolve<PayrollOperationsApiService>().GetCatalogAsync(normalized),
@@ -260,7 +262,7 @@ public sealed class CatalogCrudDispatcher
             "sales-quotes" or "sales-orders" or "sales-shipments" or "sales-invoices" or "sales-returns" or "credit-notes"
                 => action == "insert" ? Resolve<SalesApiService>().InsertAsync(normalized, row) : Resolve<SalesApiService>().UpdateAsync(normalized, key!, row),
             "service-catalog" or "customer-service-rates" or "service-notes" => action == "insert" ? Resolve<ServiceBillingApiService>().InsertAsync(normalized, row) : Resolve<ServiceBillingApiService>().UpdateAsync(normalized, key!, row),
-            "hr-departments" or "hr-positions" or "hr-employees" or "hr-incidents" or "employee-contracts" or "payroll-periods" or "payroll-concepts" or "payroll-runs" or "payroll-run-lines" or "payroll-run-line-details"
+            "hr-departments" or "hr-positions" or "hr-employees" or "hr-incidents" or "hr-recurring-incidents" or "employee-contracts" or "payroll-incident-types" or "payroll-periods" or "payroll-concepts" or "payroll-runs" or "payroll-run-lines" or "payroll-run-line-details"
                 => action == "insert" ? Resolve<HumanResourcesApiService>().InsertAsync(normalized, row) : Resolve<HumanResourcesApiService>().UpdateAsync(normalized, key!, row),
             "time-clock" or "attendance-daily-summaries" or "payroll-recurring-movements" or "prepayroll-adjustments" or "prepayroll-cutoffs" or "employee-loans" or "employee-loan-deductions" or "payroll-source-applications" or "payroll-receipt-control" or "payroll-run-closings" or "payroll-dispersion-batches" or "payroll-dispersion-lines" or "payroll-accounting-postings" or "payroll-tax-accumulators" or "payroll-employer-obligations" or "payroll-fiscal-reconciliations"
                 => action == "insert" ? Resolve<PayrollOperationsApiService>().InsertAsync(normalized, row) : Resolve<PayrollOperationsApiService>().UpdateAsync(normalized, key!, row),
@@ -308,7 +310,7 @@ public sealed class CatalogCrudDispatcher
             "sales-quotes" or "sales-orders" or "sales-shipments" or "sales-invoices" or "sales-returns" or "credit-notes"
                 => Resolve<SalesApiService>().DeleteAsync(normalized, key),
             "service-catalog" or "customer-service-rates" or "service-notes" => Resolve<ServiceBillingApiService>().DeleteAsync(normalized, key),
-            "hr-departments" or "hr-positions" or "hr-employees" or "hr-incidents" or "employee-contracts" or "payroll-periods" or "payroll-concepts" or "payroll-runs" or "payroll-run-lines" or "payroll-run-line-details"
+            "hr-departments" or "hr-positions" or "hr-employees" or "hr-incidents" or "hr-recurring-incidents" or "employee-contracts" or "payroll-incident-types" or "payroll-periods" or "payroll-concepts" or "payroll-runs" or "payroll-run-lines" or "payroll-run-line-details"
                 => Resolve<HumanResourcesApiService>().DeleteAsync(normalized, key),
             "time-clock" or "attendance-daily-summaries" or "payroll-recurring-movements" or "prepayroll-adjustments" or "prepayroll-cutoffs" or "employee-loans" or "employee-loan-deductions" or "payroll-source-applications" or "payroll-receipt-control" or "payroll-run-closings" or "payroll-dispersion-batches" or "payroll-dispersion-lines" or "payroll-accounting-postings" or "payroll-tax-accumulators" or "payroll-employer-obligations" or "payroll-fiscal-reconciliations"
                 => Resolve<PayrollOperationsApiService>().DeleteAsync(normalized, key),

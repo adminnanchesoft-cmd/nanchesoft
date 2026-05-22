@@ -152,6 +152,7 @@ public sealed class PayrollOperationsApiService
             Folio = x.Folio,
             PayrollPeriodName = x.PayrollPeriodName,
             RunDate = x.RunDate,
+            Status = x.Status,
             IsActive = x.IsActive
         }).ToList();
     }
@@ -2229,7 +2230,7 @@ public sealed class PayrollOperationsApiService
     private sealed class EmployeeLookupDto { public Guid EmployeeId { get; set; } public string EmployeeNumber { get; set; } = string.Empty; public string FullName { get; set; } = string.Empty; public bool IsActive { get; set; } }
     private sealed class PayrollConceptLookupDto { public Guid PayrollConceptId { get; set; } public string Code { get; set; } = string.Empty; public string Name { get; set; } = string.Empty; public bool IsActive { get; set; } }
     private sealed class PayrollPeriodLookupDto { public Guid PayrollPeriodId { get; set; } public string Code { get; set; } = string.Empty; public string Name { get; set; } = string.Empty; public DateTime StartDate { get; set; } public bool IsActive { get; set; } }
-    private sealed class PayrollRunLookupDto { public Guid PayrollRunId { get; set; } public string Folio { get; set; } = string.Empty; public string PayrollPeriodName { get; set; } = string.Empty; public DateTime RunDate { get; set; } public bool IsActive { get; set; } }
+    private sealed class PayrollRunLookupDto { public Guid PayrollRunId { get; set; } public string Folio { get; set; } = string.Empty; public string PayrollPeriodName { get; set; } = string.Empty; public DateTime RunDate { get; set; } public string Status { get; set; } = string.Empty; public bool IsActive { get; set; } }
     private sealed class PayrollConceptSimpleDto { public Guid PayrollConceptId { get; set; } public string Code { get; set; } = string.Empty; public string Name { get; set; } = string.Empty; public string ConceptType { get; set; } = string.Empty; public bool IsActive { get; set; } }
 }
 
@@ -2239,6 +2240,7 @@ public sealed class PayrollRunSummaryItem
     public string Folio { get; set; } = string.Empty;
     public string PayrollPeriodName { get; set; } = string.Empty;
     public DateTime RunDate { get; set; }
+    public string Status { get; set; } = string.Empty;
     public bool IsActive { get; set; }
 }
 
@@ -2284,6 +2286,8 @@ public sealed class PayrollRunLineHeader
     public Guid PayrollRunLineId { get; set; }
     public Guid PayrollRunId { get; set; }
     public string Folio { get; set; } = string.Empty;
+    public string Status { get; set; } = string.Empty;
+    public bool IsEditable { get; set; }
     public string CompanyName { get; set; } = string.Empty;
     public string PeriodName { get; set; } = string.Empty;
     public DateTime PeriodStart { get; set; }
@@ -2329,6 +2333,8 @@ public sealed class PayrollRunMatrixData
 {
     public Guid PayrollRunId { get; set; }
     public string Folio { get; set; } = string.Empty;
+    public string Status { get; set; } = string.Empty;
+    public bool IsEditable { get; set; }
     public string PeriodName { get; set; } = string.Empty;
     public List<MatrixConceptItem> Concepts { get; set; } = [];
     public List<MatrixLineItem> Lines { get; set; } = [];

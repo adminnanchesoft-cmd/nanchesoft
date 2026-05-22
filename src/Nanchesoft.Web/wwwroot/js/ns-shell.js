@@ -439,5 +439,59 @@ window.nsImport = {
                 console.error('nsImport drop error:', err);
             }
         }, true);
+    },
+
+    initBinaryFileDropZone: function (elementId, dotNetRef) {
+        const zone = document.getElementById(elementId);
+        if (!zone || zone._nsBinaryImportInit) return;
+        zone._nsBinaryImportInit = true;
+
+        const readFile = async file => {
+            if (!file) return;
+            const buffer = await file.arrayBuffer();
+            const bytes = new Uint8Array(buffer);
+            let binary = "";
+            const chunkSize = 0x8000;
+            for (let i = 0; i < bytes.length; i += chunkSize) {
+                binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunkSize));
+            }
+            await dotNetRef.invokeMethodAsync(
+                "HandleDroppedFile",
+                file.name || "",
+                file.type || "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                btoa(binary));
+        };
+
+        zone.addEventListener("dragenter", e => { e.preventDefault(); }, true);
+        zone.addEventListener("dragover", e => {
+            e.preventDefault();
+            zone.classList.add("ns-import-dz-over");
+        }, true);
+        zone.addEventListener("dragleave", e => {
+            if (!zone.contains(e.relatedTarget)) {
+                zone.classList.remove("ns-import-dz-over");
+            }
+        }, true);
+        zone.addEventListener("drop", async e => {
+            e.preventDefault();
+            e.stopPropagation();
+            zone.classList.remove("ns-import-dz-over");
+            const file = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+            try {
+                await readFile(file);
+            } catch (err) {
+                console.error("nsImport binary drop error:", err);
+            }
+        }, true);
+        zone.addEventListener("paste", async e => {
+            const file = e.clipboardData && e.clipboardData.files && e.clipboardData.files[0];
+            if (!file) return;
+            e.preventDefault();
+            try {
+                await readFile(file);
+            } catch (err) {
+                console.error("nsImport binary paste error:", err);
+            }
+        }, true);
     }
 };

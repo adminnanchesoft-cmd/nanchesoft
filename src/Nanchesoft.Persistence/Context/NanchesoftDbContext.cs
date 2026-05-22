@@ -110,8 +110,10 @@ public sealed class NanchesoftDbContext : DbContext
     public DbSet<HrEmployerRegistration> HrEmployerRegistrations => Set<HrEmployerRegistration>();
     public DbSet<EmployeeContract> EmployeeContracts => Set<EmployeeContract>();
     public DbSet<EmployeeIncident> EmployeeIncidents => Set<EmployeeIncident>();
+    public DbSet<HrRecurringIncidentRule> HrRecurringIncidentRules => Set<HrRecurringIncidentRule>();
     public DbSet<PayrollPeriodType> PayrollPeriodTypes => Set<PayrollPeriodType>();
     public DbSet<PayrollPeriod> PayrollPeriods => Set<PayrollPeriod>();
+    public DbSet<NomPayrollIncidentType> NomPayrollIncidentTypes => Set<NomPayrollIncidentType>();
     public DbSet<PayrollConcept> PayrollConcepts => Set<PayrollConcept>();
     public DbSet<PayrollRun> PayrollRuns => Set<PayrollRun>();
     public DbSet<PayrollRunLine> PayrollRunLines => Set<PayrollRunLine>();

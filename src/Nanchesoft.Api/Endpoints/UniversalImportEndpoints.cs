@@ -544,7 +544,7 @@ file static class Schema
                 new() { Key="TaxId",                Name="RFC",               DataType="text",    Required=false, Aliases=A("rfc","tax id","taxid","registro fiscal") },
                 new() { Key="Curp",                 Name="CURP",              DataType="text",    Required=false, Aliases=A("curp","clave unica") },
                 new() { Key="Nss",                  Name="NSS",               DataType="text",    Required=false, Aliases=A("nss","numero seguro","seguro social","imss numero","no seguridad") },
-                new() { Key="PeriodSalary",         Name="Sueldo del periodo",DataType="decimal", Required=false, Aliases=A("salario","sueldo","salarioquincenal","salario quincenal","salariomensual","salario mensual","salariosemanale","salario semanal","salary","pay","pago") },
+                new() { Key="PeriodSalary",         Name="Sueldo del periodo",DataType="decimal", Required=false, Aliases=A("sueldo del periodo","sueldo periodo","sueldodelperiodo","sueldo semanal","sueldosemanal","salario semanal","salariosemanal","sueldo semana","sueldo","salario","salarioquincenal","salario quincenal","salariomensual","salario mensual","salary","pay","pago") },
                 new() { Key="DailySalary",          Name="Salario diario",    DataType="decimal", Required=false, Aliases=A("salariodiario","salario diario","daily salary","sueldo diario") },
                 new() { Key="PaymentForm",          Name="Forma de pago",     DataType="text",    Required=false, Aliases=A("formadepago","forma pago","forma de pago","payment","payment form","tipo pago") },
                 new() { Key="BankAccount",          Name="Cuenta bancaria",   DataType="text",    Required=false, Aliases=A("cuenta","cuentadeposito","cuenta deposito","cuenta bancaria","bank account","account","bankaccount") },
@@ -571,6 +571,7 @@ file static class Schema
                 Guid? FkGuid(string k) => v.TryGetValue(k, out var x) && x is Guid g ? g : null;
                 decimal Dec(string k) => v.TryGetValue(k, out var x) && x is decimal d ? d : 0;
                 DateTime? Dt(string k) => v.TryGetValue(k, out var x) && x is DateTime dt ? dt : null;
+                bool Bool(string k) => v.TryGetValue(k, out var x) && x is bool b && b;
 
                 var firstName    = Str("FirstName")?.Trim() ?? "";
                 var lastName     = Str("LastName")?.Trim() ?? "";
@@ -622,7 +623,7 @@ file static class Schema
                     HireDate       = Dt("HireDate") ?? DateTime.UtcNow,
                     BirthDate      = Dt("BirthDate"),
                     ImssRegistrationDate = Dt("ImssRegistrationDate"),
-                    IsImssRegistered = v.TryGetValue("ImssRegistrationDate", out var iDate) && iDate is DateTime,
+                    IsImssRegistered = Bool("IsImssRegistered") || v.TryGetValue("ImssRegistrationDate", out var iDate) && iDate is DateTime,
                     ContractType   = Str("ContractType") ?? "indefinite",
                     CotizationBase = "fixed",
                     TaxRegime      = "sueldos_salarios",

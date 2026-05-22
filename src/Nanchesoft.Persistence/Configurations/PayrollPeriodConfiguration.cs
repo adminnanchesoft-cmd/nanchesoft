@@ -15,6 +15,7 @@ public sealed class PayrollPeriodConfiguration : IEntityTypeConfiguration<Payrol
         builder.Property(x => x.Name).HasMaxLength(160).IsRequired();
         builder.Property(x => x.PeriodType).HasMaxLength(30).IsRequired();
         builder.Property(x => x.Status).HasMaxLength(30).IsRequired();
+        builder.Property(x => x.IsImssInsured).HasDefaultValue(true);
 
         builder.HasIndex(x => new { x.CompanyId, x.Code }).IsUnique();
 

@@ -70,6 +70,50 @@ window.nsCrudGrid = (() => {
         return pick(item, camel, pascal, fallback);
     }
 
+    function normalizeLookupItem(x) {
+        return {
+            id: getLookupItemValue(x, "id", "Id", ""),
+            name: getLookupItemValue(x, "name", "Name", ""),
+            group: getLookupItemValue(x, "group", "Group", ""),
+            color: getLookupItemValue(x, "color", "Color", ""),
+            icon: getLookupItemValue(x, "icon", "Icon", ""),
+            description: getLookupItemValue(x, "description", "Description", ""),
+            code: getLookupItemValue(x, "code", "Code", ""),
+            affectType: getLookupItemValue(x, "affectType", "AffectType", ""),
+            isActive: getLookupItemValue(x, "isActive", "IsActive", true)
+        };
+    }
+
+    function renderLookupVisual(container, item) {
+        const wrapper = document.createElement("div");
+        wrapper.className = item?.description || item?.affectType || item?.code ? "ns-lookup-card" : "ns-lookup-chip";
+        const color = item?.color || "#64748b";
+        const icon = item?.icon || "";
+        const dot = document.createElement("span");
+        dot.className = wrapper.className === "ns-lookup-card" ? "ns-lookup-card__dot" : "ns-lookup-chip__dot";
+        dot.style.background = color;
+        const text = document.createElement("span");
+        text.className = wrapper.className === "ns-lookup-card" ? "ns-lookup-card__body" : "ns-lookup-chip__text";
+        if (wrapper.className === "ns-lookup-card") {
+            const title = document.createElement("span");
+            title.className = "ns-lookup-card__title";
+            title.textContent = `${icon ? icon + " " : ""}${item?.name || ""}`;
+            const meta = document.createElement("span");
+            meta.className = "ns-lookup-card__meta";
+            meta.textContent = [item?.group, item?.affectType, item?.isActive === false ? "Inactivo" : "Activo"].filter(Boolean).join(" · ");
+            const desc = document.createElement("span");
+            desc.className = "ns-lookup-card__desc";
+            desc.textContent = item?.description || "";
+            text.append(title, meta);
+            if (item?.description) text.append(desc);
+        } else {
+            text.textContent = `${icon ? icon + " " : ""}${item?.name || ""}`;
+        }
+        wrapper.title = item?.group ? `${item.group} · ${item.name}` : item?.name || "";
+        wrapper.append(dot, text);
+        container.appendChild(wrapper);
+    }
+
     function getResultSuccess(result) {
         return pick(result, "success", "Success", false);
     }
@@ -82,8 +126,35 @@ window.nsCrudGrid = (() => {
         return pick(result, "definition", "Definition", null);
     }
 
+    function getResultNewId(result) {
+        return pick(result, "newId", "NewId", "");
+    }
+
+    function getResultAllItems(result) {
+        return pick(result, "allItems", "AllItems", []);
+    }
+
     function normalizeId(value) {
         return String(value ?? "").trim().toLowerCase();
+    }
+
+    function readAny(obj, names) {
+        if (!obj) return undefined;
+        for (const name of names) {
+            if (obj[name] !== undefined) return obj[name];
+        }
+        return undefined;
+    }
+
+    function writeFormValue(form, fieldName, value) {
+        if (!form || !fieldName) return;
+        if (typeof form.updateData === "function") {
+            form.updateData(fieldName, value ?? null);
+        }
+
+        const formData = form.option?.("formData") || {};
+        formData[fieldName] = value ?? null;
+        form.option?.("formData", formData);
     }
 
     function parseDateValue(value) {
@@ -359,7 +430,7 @@ window.nsCrudGrid = (() => {
                 form: {
                     colCount: 2,
                     labelLocation: "top",
-                    items: editableColumns.map(col => buildFormItem(col, definition, dotNetRef)),
+                    items: buildFormItems(editableColumns, definition, dotNetRef),
                     onFieldDataChanged(e) {
                         refreshDependentLookups(e.component, definition);
                         applyServiceNoteDefaults(e.component, definition, false, e.dataField);
@@ -503,14 +574,21 @@ window.nsCrudGrid = (() => {
                 }
 
                 if (useLookup && Array.isArray(lookupItems) && lookupItems.length > 0) {
+                    const normalizedLookupItems = lookupItems.map(normalizeLookupItem);
                     dxColumn.lookup = {
-                        dataSource: lookupItems.map(x => ({
-                            id: getLookupItemValue(x, "id", "Id", ""),
-                            name: getLookupItemValue(x, "name", "Name", "")
-                        })),
+                        dataSource: normalizedLookupItems,
                         valueExpr: "id",
                         displayExpr: "name"
                     };
+                    if (normalizedLookupItems.some(x => x.color || x.icon || x.group)) {
+                        dxColumn.cellTemplate = function(container, options) {
+                            const el = container instanceof HTMLElement ? container : container?.[0];
+                            if (!el) return;
+                            const item = normalizedLookupItems.find(x => x.id === options.value);
+                            if (item) renderLookupVisual(el, item);
+                            else el.textContent = options.displayValue || "";
+                        };
+                    }
                 }
 
                 return dxColumn;
@@ -548,6 +626,30 @@ window.nsCrudGrid = (() => {
         return mapped;
     }
 
+    function buildFormItems(editableColumns, definition, dotNetRef) {
+        if (getCatalogKey(definition) !== "hr-incidents") {
+            return editableColumns.map(col => buildFormItem(col, definition, dotNetRef));
+        }
+
+        const byField = new Map(editableColumns.map(col => [getColumnValue(col, "dataField", "DataField", ""), col]));
+        const item = field => byField.has(field) ? buildFormItem(byField.get(field), definition, dotNetRef) : null;
+        const group = (caption, cssClass, fields, colCount = 2) => ({
+            itemType: "group",
+            caption,
+            cssClass,
+            colCount,
+            colSpan: 2,
+            items: fields.map(item).filter(Boolean)
+        });
+
+        return [
+            group("Datos principales", "ns-form-group ns-form-group-primary", ["CompanyId", "BranchId", "EmployeeId", "PayrollIncidentTypeId", "IncidentDate", "Status"]),
+            group("Nómina", "ns-form-group ns-form-group-blue", ["PayrollPeriodId"]),
+            group("Importes", "ns-form-group ns-form-group-green", ["Quantity", "Amount"]),
+            group("Observaciones", "ns-form-group ns-form-group-slate", ["Notes", "IsActive"])
+        ].filter(x => x.items.length > 0);
+    }
+
     function buildFormItem(col, definition, dotNetRef) {
         const caption = getColumnValue(col, "caption", "Caption", "");
         const dataField = getColumnValue(col, "dataField", "DataField", "");
@@ -564,81 +666,50 @@ window.nsCrudGrid = (() => {
         };
 
         if (useLookup && Array.isArray(lookupItems)) {
-            const normalizedItems = lookupItems.map(x => ({
-                id: getLookupItemValue(x, "id", "Id", ""),
-                name: getLookupItemValue(x, "name", "Name", "")
-            }));
+            const normalizedItems = lookupItems.map(normalizeLookupItem);
+
+            item.editorType = "dxSelectBox";
+            item.editorOptions = {
+                dataSource: normalizedItems,
+                valueExpr: "id",
+                displayExpr: "name",
+                searchEnabled: true,
+                searchExpr: ["name", "group", "code", "affectType", "description"],
+                showClearButton: !required,
+                deferRendering: false,
+                itemTemplate(itemData, _, itemElement) {
+                    const el = itemElement instanceof HTMLElement ? itemElement : itemElement?.[0];
+                    if (el) renderLookupVisual(el, itemData);
+                }
+            };
 
             if (quickCreateKey && dotNetRef) {
-                // Custom template: dxSelectBox + "+" button
-                item.template = function(data, itemElement) {
-                    const wrapper = document.createElement("div");
-                    wrapper.className = "ns-qc-wrapper";
-
-                    const selectDiv = document.createElement("div");
-
-                    const itemsRef = [...normalizedItems];
-
-                    const currentVal = (data.component?.option?.("formData") ?? {})[dataField] ?? null;
-
-                    const sb = new DevExpress.ui.dxSelectBox(selectDiv, {
-                        dataSource: itemsRef,
-                        valueExpr: "id",
-                        displayExpr: "name",
-                        searchEnabled: true,
-                        showClearButton: !required,
-                        deferRendering: false,
-                        value: currentVal,
-                        onValueChanged(e) {
-                            data.component?.updateData?.(dataField, e.value ?? null);
-                        }
-                    });
-
-                    const btn = document.createElement("button");
-                    btn.type = "button";
-                    btn.className = "ns-qc-plus-btn";
-                    btn.title = `Crear ${caption}`;
-                    btn.textContent = "+";
-
-                    btn.addEventListener("click", function(e) {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        showQuickCreateDialog(`Nuevo: ${caption}`, async function(code, name) {
-                            const result = await dotNetRef.invokeMethodAsync("HandleQuickCreate", quickCreateKey, code, name);
-                            if (!result.success) throw new Error(result.error || "Error al crear.");
-                            const newItems = (result.allItems || []).map(x => ({
-                                id: x.id || x.Id || "",
-                                name: x.name || x.Name || ""
-                            }));
-                            // Update column definition so refreshes also see new items
-                            if (col.LookupItems) col.LookupItems = result.allItems;
-                            if (col.lookupItems) col.lookupItems = result.allItems;
-                            itemsRef.length = 0;
-                            newItems.forEach(x => itemsRef.push(x));
-                            sb.option("dataSource", [...newItems]);
-                            if (result.newId) {
-                                sb.option("value", result.newId);
-                                data.component?.updateData?.(dataField, result.newId);
+                item.editorOptions.buttons = [
+                    "dropDown",
+                    {
+                        name: "quickCreate",
+                        location: "after",
+                        options: {
+                            icon: "plus",
+                            hint: `Crear ${caption}`,
+                            stylingMode: "text",
+                            onClick(e) {
+                                const editor = e.component;
+                                showQuickCreateDialog(`Nuevo: ${caption}`, async function(code, name) {
+                                    const result = await dotNetRef.invokeMethodAsync("HandleQuickCreate", quickCreateKey, code, name);
+                                    if (!getResultSuccess(result)) throw new Error(getResultError(result) || "Error al crear.");
+                                    const allItems = getResultAllItems(result);
+                                    const newItems = (allItems || []).map(normalizeLookupItem);
+                                    if (col.LookupItems) col.LookupItems = allItems;
+                                    if (col.lookupItems) col.lookupItems = allItems;
+                                    editor.option("dataSource", newItems);
+                                    const newId = getResultNewId(result);
+                                    if (newId) editor.option("value", newId);
+                                });
                             }
-                        });
-                    });
-
-                    wrapper.appendChild(selectDiv);
-                    wrapper.appendChild(btn);
-
-                    const el = itemElement instanceof HTMLElement ? itemElement : itemElement?.[0];
-                    if (el) el.appendChild(wrapper);
-                };
-            } else {
-                item.editorType = "dxSelectBox";
-                item.editorOptions = {
-                    dataSource: normalizedItems,
-                    valueExpr: "id",
-                    displayExpr: "name",
-                    searchEnabled: true,
-                    showClearButton: false,
-                    deferRendering: false
-                };
+                        }
+                    }
+                ];
             }
         } else if (String(dataType).toLowerCase() === "boolean") {
             item.editorType = "dxSwitch";
@@ -646,7 +717,8 @@ window.nsCrudGrid = (() => {
             item.editorType = "dxNumberBox";
             item.editorOptions = {
                 showSpinButtons: true,
-                format: "#,##0.00"
+                format: "#,##0.00",
+                ...(getCatalogKey(definition) === "hr-incidents" && ["Quantity", "Amount"].includes(dataField) ? { min: 0 } : {})
             };
         } else if (String(dataType).toLowerCase() === "time") {
             item.editorType = "dxTextBox";
@@ -663,6 +735,17 @@ window.nsCrudGrid = (() => {
                 {
                     type: "required",
                     message: `${caption} es obligatorio.`
+                }
+            ];
+        }
+
+        if (getCatalogKey(definition) === "hr-incidents" && ["Quantity", "Amount"].includes(dataField)) {
+            item.validationRules = [
+                ...(item.validationRules || []),
+                {
+                    type: "range",
+                    min: 0,
+                    message: `${caption} debe ser mayor o igual a 0.`
                 }
             ];
         }
@@ -827,43 +910,52 @@ window.nsCrudGrid = (() => {
 
     async function handleSave(containerId, dotNetRef, change) {
         let result = null;
+        const instance = instances[containerId];
+        const definition = instance?.definition;
 
-        switch (change.type) {
-            case "insert": {
-                const insertData = change.data || {};
-                result = await dotNetRef.invokeMethodAsync("HandleInsert", insertData);
-                break;
+        try {
+            switch (change.type) {
+                case "insert": {
+                    const insertData = mergeOpenFormData(change.data || {});
+                    validateIncidentPayload(definition, insertData);
+                    result = await dotNetRef.invokeMethodAsync("HandleInsert", insertData);
+                    break;
+                }
+
+                case "update": {
+                    const mergedData = {
+                        ...(change.oldData || {}),
+                        ...mergeOpenFormData(change.data || {})
+                    };
+
+                    validateIncidentPayload(definition, mergedData);
+                    result = await dotNetRef.invokeMethodAsync(
+                        "HandleUpdate",
+                        String(change.key),
+                        mergedData
+                    );
+                    break;
+                }
+
+                case "remove": {
+                    result = await dotNetRef.invokeMethodAsync("HandleDelete", String(change.key));
+                    break;
+                }
+
+                default:
+                    return;
             }
-
-            case "update": {
-                const mergedData = {
-                    ...(change.oldData || {}),
-                    ...(change.data || {})
-                };
-
-                result = await dotNetRef.invokeMethodAsync(
-                    "HandleUpdate",
-                    String(change.key),
-                    mergedData
-                );
-                break;
-            }
-
-            case "remove": {
-                result = await dotNetRef.invokeMethodAsync("HandleDelete", String(change.key));
-                break;
-            }
-
-            default:
-                return;
+        } catch (err) {
+            notify(err?.message || "No se pudo guardar el registro.", "error");
+            return;
         }
 
         const success = getResultSuccess(result);
         const error = getResultError(result);
-        const definition = getResultDefinition(result);
+        const resultDefinition = getResultDefinition(result);
 
-        if (definition) {
-            renderCrudGrid(containerId, definition, dotNetRef);
+        if (resultDefinition) {
+            renderCrudGrid(containerId, resultDefinition, dotNetRef);
         }
 
         if (!success) {
@@ -882,6 +974,62 @@ window.nsCrudGrid = (() => {
                 notify("Registro eliminado correctamente.", "success");
                 break;
         }
+    }
+
+    function mergeOpenFormData(data) {
+        const merged = { ...(data || {}) };
+
+        const formElement = document.querySelector(".ns-crud-popup-wrapper .dx-form");
+        const form = formElement && DevExpress?.ui?.dxForm?.getInstance
+            ? DevExpress.ui.dxForm.getInstance(formElement)
+            : null;
+        const formData = form?.option?.("formData") || {};
+        Object.assign(merged, formData);
+
+        document.querySelectorAll(".ns-crud-popup-wrapper .ns-qc-wrapper[data-field]").forEach(wrapper => {
+            const field = wrapper.dataset.field;
+            const value = wrapper.dataset.value;
+            if (field && value) {
+                merged[field] = value;
+            }
+        });
+
+        return merged;
+    }
+
+    function validateIncidentPayload(definition, data) {
+        if (!definition || getCatalogKey(definition) !== "hr-incidents") {
+            return;
+        }
+
+        normalizeIncidentPayload(data);
+
+        const missing = [];
+        if (!readAny(data, ["EmployeeId", "employeeId"])) missing.push("Colaborador");
+        if (!readAny(data, ["PayrollIncidentTypeId", "payrollIncidentTypeId", "NomPayrollIncidentTypeId", "nomPayrollIncidentTypeId", "payroll_incident_type_id"])) missing.push("Tipo");
+        if (!readAny(data, ["IncidentDate", "incidentDate"])) missing.push("Fecha");
+        if (missing.length > 0) {
+            throw new Error(`${missing.join(", ")} ${missing.length === 1 ? "es obligatorio" : "son obligatorios"}.`);
+        }
+
+        const quantity = toNumber(readAny(data, ["Quantity", "quantity"]));
+        const amount = toNumber(readAny(data, ["Amount", "amount"]));
+        if (quantity !== null && quantity < 0) throw new Error("Cantidad debe ser mayor o igual a 0.");
+        if (amount !== null && amount < 0) throw new Error("Importe debe ser mayor o igual a 0.");
+    }
+
+    function normalizeIncidentPayload(data) {
+        if (!data) return;
+        const typeId = readAny(data, ["PayrollIncidentTypeId", "payrollIncidentTypeId", "NomPayrollIncidentTypeId", "nomPayrollIncidentTypeId", "payroll_incident_type_id"]);
+        if (typeId) {
+            data.PayrollIncidentTypeId = typeId;
+            data.NomPayrollIncidentTypeId = typeId;
+            data.payroll_incident_type_id = typeId;
+        }
+    }
+
+    function pascalToCamel(value) {
+        return value ? value.charAt(0).toLowerCase() + value.slice(1) : value;
     }
 
     function notify(message, type) {

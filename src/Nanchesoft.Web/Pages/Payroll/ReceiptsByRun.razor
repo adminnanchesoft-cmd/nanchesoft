@@ -9,7 +9,7 @@
             <h1>Recibos individuales</h1>
             <p class="text-secondary mb-0">Imprime el recibo de cada colaborador y aplica movimientos automáticos del periodo.</p>
         </div>
-        <button class="btn btn-primary" @onclick="ApplySourcesAsync" disabled="@_applying">@(_applying ? "Aplicando..." : "Aplicar movimientos programados")</button>
+        <button class="btn btn-primary" @onclick="ApplySourcesAsync" disabled="@(_applying || !CanEditRun)">@(_applying ? "Aplicando..." : "Aplicar movimientos programados")</button>
     </div>
 
     @if (!string.IsNullOrWhiteSpace(_message))
@@ -33,7 +33,10 @@
                             <td>@row.DeductionsAmount</td>
                             <td>@row.NetAmount</td>
                             <td class="text-end d-flex gap-1 justify-content-end">
-                                <a class="btn btn-sm btn-outline-secondary" href="/payroll/captura-recibo/@row.PayrollRunLineId">Editar</a>
+                                @if (CanEditRun)
+                                {
+                                    <a class="btn btn-sm btn-outline-secondary" href="/payroll/captura-recibo/@row.PayrollRunLineId">Editar</a>
+                                }
                                 <a class="btn btn-sm btn-outline-primary" target="_blank" href="/payroll/print/receipt/@row.PayrollRunLineId">Imprimir</a>
                             </td>
                         </tr>
@@ -48,8 +51,10 @@
 @code {
     [Parameter] public Guid RunId { get; set; }
     private List<Nanchesoft.Web.Services.HumanResources.PayrollReceiptLineRow> _rows = [];
+    private Nanchesoft.Web.Services.HumanResources.PayrollRunSummaryItem? _run;
     private bool _applying;
     private string? _message;
+    private bool CanEditRun => IsRunEditable(_run?.Status);
 
     protected override async Task OnParametersSetAsync()
     {
@@ -58,11 +63,18 @@
 
     private async Task LoadAsync()
     {
+        _run = (await PayrollOperationsApiService.GetPayrollRunsListAsync()).FirstOrDefault(x => x.PayrollRunId == RunId);
         _rows = await PayrollOperationsApiService.GetPayrollReceiptLinesAsync(RunId);
     }
 
     private async Task ApplySourcesAsync()
     {
+        if (!CanEditRun)
+        {
+            _message = "La corrida ya fue calculada/autorizada/cerrada. Los recibos quedan en solo lectura.";
+            return;
+        }
+
         _applying = true;
         _message = null;
         try
@@ -79,5 +91,12 @@
         {
             _applying = false;
         }
+    }
+
+    private static bool IsRunEditable(string? status)
+    {
+        var normalized = (status ?? string.Empty).Trim().ToLowerInvariant();
+        return string.IsNullOrWhiteSpace(normalized)
+            || normalized is "draft" or "borrador" or "open" or "abierto" or "captura" or "pending" or "pendiente";
     }
 }

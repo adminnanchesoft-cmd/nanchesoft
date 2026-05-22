@@ -94,6 +94,25 @@ public static class PayrollAdvancedEndpoints
     private static string NormalizeText(string? value, string fallback = "")
         => string.IsNullOrWhiteSpace(value) ? fallback : value.Trim();
 
+    private static bool IsPayrollRunEditable(string? status)
+    {
+        var normalized = (status ?? string.Empty).Trim().ToLowerInvariant();
+        return string.IsNullOrWhiteSpace(normalized)
+            || normalized is "draft" or "borrador" or "open" or "abierto" or "captura" or "pending" or "pendiente";
+    }
+
+    private static async Task<IResult?> ValidateEditablePayrollRunAsync(Guid runId, NanchesoftDbContext db)
+    {
+        var run = await db.PayrollRuns.AsNoTracking().FirstOrDefaultAsync(x => x.Id == runId);
+        if (run is null)
+            return Results.NotFound(new { message = "No se encontró la corrida de nómina." });
+        if (!IsPayrollRunEditable(run.Status))
+            return Results.BadRequest(new { message = "La corrida ya fue calculada/autorizada/cerrada. No se pueden aplicar fuentes avanzadas." });
+        if (!IsPayrollRunEditable(run.Status))
+            return Results.BadRequest(new { message = "La corrida ya fue calculada/autorizada/cerrada. No se pueden modificar sus conceptos." });
+        return null;
+    }
+
     private static string NormalizeUpper(string? value, string fallback = "")
         => string.IsNullOrWhiteSpace(value) ? fallback : value.Trim().ToUpperInvariant();
 
@@ -718,6 +737,8 @@ public static class PayrollAdvancedEndpoints
             PayrollRunLineId = line.Id,
             PayrollRunId = line.PayrollRunId,
             Folio = line.PayrollRun?.Folio ?? string.Empty,
+            Status = line.PayrollRun?.Status ?? string.Empty,
+            IsEditable = IsPayrollRunEditable(line.PayrollRun?.Status),
             CompanyName = line.PayrollRun?.Company?.Name ?? string.Empty,
             PeriodName = line.PayrollRun?.PayrollPeriod?.Name ?? string.Empty,
             PeriodStart = line.PayrollRun?.PayrollPeriod?.StartDate ?? default,
@@ -770,6 +791,9 @@ public static class PayrollAdvancedEndpoints
         if (line is null)
             return Results.NotFound(new { message = "No se encontró la línea de nómina." });
 
+        var locked = await ValidateEditablePayrollRunAsync(line.PayrollRunId, db);
+        if (locked is not null) return locked;
+
         var concept = await db.PayrollConcepts.AsNoTracking().FirstOrDefaultAsync(x => x.Id == request.PayrollConceptId);
         if (concept is null)
             return Results.BadRequest(new { message = "No se encontró el concepto de nómina." });
@@ -816,6 +840,9 @@ public static class PayrollAdvancedEndpoints
         if (detail is null)
             return Results.NotFound(new { message = "No se encontró el detalle." });
 
+        var locked = await ValidateEditablePayrollRunAsync(detail.PayrollRunId, db);
+        if (locked is not null) return locked;
+
         if (request.Amount < 0m)
             return Results.BadRequest(new { message = "El importe no puede ser negativo." });
 
@@ -842,6 +869,9 @@ public static class PayrollAdvancedEndpoints
         var detail = await db.PayrollRunLineDetails.FirstOrDefaultAsync(x => x.Id == detailId);
         if (detail is null)
             return Results.NotFound(new { message = "No se encontró el detalle." });
+
+        var locked = await ValidateEditablePayrollRunAsync(detail.PayrollRunId, db);
+        if (locked is not null) return locked;
 
         var runId = detail.PayrollRunId;
         db.PayrollRunLineDetails.Remove(detail);
@@ -918,6 +948,8 @@ public static class PayrollAdvancedEndpoints
         {
             PayrollRunId = run.Id,
             Folio = run.Folio,
+            Status = run.Status,
+            IsEditable = IsPayrollRunEditable(run.Status),
             PeriodName = run.PayrollPeriod?.Name ?? string.Empty,
             Concepts = concepts,
             Lines = matrixLines
@@ -926,8 +958,8 @@ public static class PayrollAdvancedEndpoints
 
     private static async Task<IResult> SavePayrollRunMatrixAsync(Guid runId, MatrixSaveRequest request, NanchesoftDbContext db)
     {
-        if (!await db.PayrollRuns.AnyAsync(x => x.Id == runId))
-            return Results.NotFound(new { message = "No se encontró la corrida de nómina." });
+        var locked = await ValidateEditablePayrollRunAsync(runId, db);
+        if (locked is not null) return locked;
 
         var updated = 0;
         var created = 0;
@@ -1101,6 +1133,8 @@ public static class PayrollAdvancedEndpoints
     {
         var run = await db.PayrollRuns.FirstOrDefaultAsync(x => x.Id == runId);
         if (run is null)
+            return;
+        if (!IsPayrollRunEditable(run.Status))
             return;
 
         var lines = await db.PayrollRunLines.Where(x => x.PayrollRunId == runId).ToListAsync();
@@ -1547,6 +1581,8 @@ public sealed class PayrollRunLineHeaderDto
     public Guid PayrollRunLineId { get; set; }
     public Guid PayrollRunId { get; set; }
     public string Folio { get; set; } = string.Empty;
+    public string Status { get; set; } = string.Empty;
+    public bool IsEditable { get; set; }
     public string CompanyName { get; set; } = string.Empty;
     public string PeriodName { get; set; } = string.Empty;
     public DateTime PeriodStart { get; set; }
@@ -1627,6 +1663,8 @@ public sealed class PayrollRunMatrixDto
 {
     public Guid PayrollRunId { get; set; }
     public string Folio { get; set; } = string.Empty;
+    public string Status { get; set; } = string.Empty;
+    public bool IsEditable { get; set; }
     public string PeriodName { get; set; } = string.Empty;
     public List<MatrixConceptDto> Concepts { get; set; } = [];
     public List<MatrixLineDto> Lines { get; set; } = [];

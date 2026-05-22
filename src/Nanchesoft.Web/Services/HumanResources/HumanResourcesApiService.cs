@@ -25,7 +25,9 @@ public sealed class HumanResourcesApiService
             "hr-positions" => GetPositionsAsync(),
             "hr-employees" => GetEmployeesAsync(),
             "hr-incidents" => GetIncidentsAsync(),
+            "hr-recurring-incidents" => GetRecurringIncidentsAsync(),
             "employee-contracts" => GetContractsAsync(),
+            "payroll-incident-types" => GetPayrollIncidentTypesAsync(),
             "hr-banks" => GetHrBanksAsync(),
             "hr-termination-reasons" => GetTerminationReasonsAsync(),
             "hr-employer-registrations" => GetEmployerRegistrationsAsync(),
@@ -48,7 +50,9 @@ public sealed class HumanResourcesApiService
             "hr-positions" => await client.PostAsJsonAsync("/api/hr/positions", MapPositionRequest(payload)),
             "hr-employees" => await client.PostAsJsonAsync("/api/hr/employees", MapEmployeeRequest(payload)),
             "hr-incidents" => await client.PostAsJsonAsync("/api/hr/incidents", MapIncidentRequest(payload)),
+            "hr-recurring-incidents" => await client.PostAsJsonAsync("/api/hr/recurring-incidents", MapRecurringIncidentRuleRequest(payload)),
             "employee-contracts" => await client.PostAsJsonAsync("/api/contracts/employee-contracts", MapContractRequest(payload)),
+            "payroll-incident-types" => await client.PostAsJsonAsync("/api/payroll/incident-types", MapIncidentTypeRequest(payload)),
             "hr-banks" => await client.PostAsJsonAsync("/api/hr/banks", MapHrBankRequest(payload)),
             "hr-termination-reasons" => await client.PostAsJsonAsync("/api/hr/termination-reasons", MapTerminationReasonRequest(payload)),
             "hr-employer-registrations" => await client.PostAsJsonAsync("/api/hr/employer-registrations", MapEmployerRegistrationRequest(payload)),
@@ -75,7 +79,9 @@ public sealed class HumanResourcesApiService
             "hr-positions" => await client.PutAsJsonAsync($"/api/hr/positions/{key}", MapPositionRequest(payload)),
             "hr-employees" => await client.PutAsJsonAsync($"/api/hr/employees/{key}", MapEmployeeRequest(payload)),
             "hr-incidents" => await client.PutAsJsonAsync($"/api/hr/incidents/{key}", MapIncidentRequest(payload)),
+            "hr-recurring-incidents" => await client.PutAsJsonAsync($"/api/hr/recurring-incidents/{key}", MapRecurringIncidentRuleRequest(payload)),
             "employee-contracts" => await client.PutAsJsonAsync($"/api/contracts/employee-contracts/{key}", MapContractRequest(payload)),
+            "payroll-incident-types" => await client.PutAsJsonAsync($"/api/payroll/incident-types/{key}", MapIncidentTypeRequest(payload)),
             "hr-banks" => await client.PutAsJsonAsync($"/api/hr/banks/{key}", MapHrBankRequest(payload)),
             "hr-termination-reasons" => await client.PutAsJsonAsync($"/api/hr/termination-reasons/{key}", MapTerminationReasonRequest(payload)),
             "hr-employer-registrations" => await client.PutAsJsonAsync($"/api/hr/employer-registrations/{key}", MapEmployerRegistrationRequest(payload)),
@@ -102,7 +108,9 @@ public sealed class HumanResourcesApiService
             "hr-positions" => $"/api/hr/positions/{key}",
             "hr-employees" => $"/api/hr/employees/{key}",
             "hr-incidents" => $"/api/hr/incidents/{key}",
+            "hr-recurring-incidents" => $"/api/hr/recurring-incidents/{key}",
             "employee-contracts" => $"/api/contracts/employee-contracts/{key}",
+            "payroll-incident-types" => $"/api/payroll/incident-types/{key}",
             "hr-banks" => $"/api/hr/banks/{key}",
             "hr-termination-reasons" => $"/api/hr/termination-reasons/{key}",
             "hr-employer-registrations" => $"/api/hr/employer-registrations/{key}",
@@ -362,10 +370,12 @@ public sealed class HumanResourcesApiService
         var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
         var rows = await client.GetFromJsonAsync<List<EmployeeIncidentDto>>("/api/hr/incidents") ?? [];
         var companies = await GetCompanyLookupsAsync();
+        var branches = await GetBranchLookupsAsync(onlyCurrentBranch: true);
         var employees = await GetEmployeeLookupsAsync();
-        var periods = await GetPayrollPeriodLookupsAsync();
+        var periods = await GetPayrollPeriodLookupsAsync(onlyOpen: true);
+        var incidentTypes = await GetPayrollIncidentTypeLookupsAsync();
 
-        return BuildView(
+        var view = BuildView(
             "hr-incidents",
             "Incidencias",
             "Incidencias operativas que alimentan el cálculo de nómina.",
@@ -373,29 +383,156 @@ public sealed class HumanResourcesApiService
             [
                 TextColumn("EmployeeIncidentId", "Incident ID", allowEditing: false, width: 220),
                 SmartLookupColumn("CompanyId", "Empresa", companies, required: true, width: 220),
+                SmartLookupColumn("BranchId", "Sucursal", branches, width: 180),
                 LookupColumn("EmployeeId", "Colaborador", employees, required: true, width: 240),
-                LookupColumn("PayrollPeriodId", "Periodo nómina", periods, width: 220, quickCreateKey: "payroll-periods"),
+                LookupColumn("PayrollPeriodId", "Periodo nómina", periods, width: 220),
                 DateColumn("IncidentDate", "Fecha", required: true, width: 120),
-                TextColumn("IncidentType", "Tipo", required: true, width: 120),
+                LookupColumn("PayrollIncidentTypeId", "Tipo", incidentTypes, required: true, width: 300, quickCreateKey: "payroll-incident-types"),
+                ReadOnlyLookupColumn("IncidentCategory", "Categoría", IncidentCategories(), width: 130),
+                TextColumn("AffectType", "Afecta", allowEditing: false, width: 110),
+                TextColumn("PayrollConceptType", "Concepto", allowEditing: false, width: 140),
                 NumberColumn("Quantity", "Cantidad", width: 110),
                 NumberColumn("Amount", "Importe", width: 110),
                 TextColumn("Notes", "Notas", width: 260),
-                TextColumn("Status", "Estatus", width: 110),
+                LookupColumn("Status", "Estatus", IncidentStatuses(), width: 130),
                 BoolColumn("IsActive", "Activo", width: 90)
             ],
             rows.Select(x => Row(
                 ("EmployeeIncidentId", x.EmployeeIncidentId.ToString("D")),
                 ("CompanyId", x.CompanyId?.ToString("D")),
+                ("BranchId", x.BranchId?.ToString("D")),
                 ("EmployeeId", x.EmployeeId?.ToString("D")),
                 ("PayrollPeriodId", x.PayrollPeriodId?.ToString("D")),
                 ("IncidentDate", x.IncidentDate),
-                ("IncidentType", x.IncidentType),
+                ("PayrollIncidentTypeId", (x.PayrollIncidentTypeId ?? x.NomPayrollIncidentTypeId)?.ToString("D")),
+                ("NomPayrollIncidentTypeId", (x.PayrollIncidentTypeId ?? x.NomPayrollIncidentTypeId)?.ToString("D")),
+                ("IncidentCategory", x.IncidentCategory),
+                ("AffectType", x.AffectType),
+                ("PayrollConceptType", x.PayrollConceptType),
                 ("Quantity", x.Quantity),
                 ("Amount", x.Amount),
                 ("Notes", x.Notes),
                 ("Status", x.Status),
                 ("IsActive", x.IsActive)))
             .ToList());
+
+        view.Metadata["DiscountCount"] = rows.Count(x => IsIncidentCategory(x.IncidentCategory, "DEDUCCION"));
+        view.Metadata["PerceptionCount"] = rows.Count(x => IsIncidentCategory(x.IncidentCategory, "PERCEPCION"));
+        view.Metadata["InformativeCount"] = rows.Count(x => IsIncidentCategory(x.IncidentCategory, "INFORMATIVA"));
+        return view;
+    }
+
+    private async Task<CatalogViewDefinition> GetRecurringIncidentsAsync()
+    {
+        var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
+        var rows = await client.GetFromJsonAsync<List<HrRecurringIncidentRuleDto>>("/api/hr/recurring-incidents") ?? [];
+        var companies = await GetCompanyLookupsAsync();
+        var branches = await GetBranchLookupsAsync(onlyCurrentBranch: true);
+        var employees = await GetEmployeeLookupsAsync();
+        var incidentTypes = await GetPayrollIncidentTypeLookupsAsync();
+
+        return BuildView(
+            "hr-recurring-incidents",
+            "Incidencias recurrentes",
+            "Reglas de incidencias que se generan para periodos abiertos sin duplicar.",
+            "HrRecurringIncidentRuleId",
+            [
+                TextColumn("HrRecurringIncidentRuleId", "Rule ID", allowEditing: false, width: 220),
+                SmartLookupColumn("CompanyId", "Empresa", companies, required: true, width: 220),
+                SmartLookupColumn("BranchId", "Sucursal", branches, width: 180),
+                LookupColumn("EmployeeId", "Colaborador", employees, required: true, width: 240),
+                LookupColumn("NomPayrollIncidentTypeId", "Tipo", incidentTypes, required: true, width: 300, quickCreateKey: "payroll-incident-types"),
+                NumberColumn("Amount", "Importe", width: 120),
+                NumberColumn("Quantity", "Cantidad", width: 120),
+                DateColumn("StartDate", "Inicio", required: true, width: 120),
+                DateColumn("EndDate", "Fin", width: 120),
+                LookupColumn("Frequency", "Frecuencia", RecurringFrequencies(), required: true, width: 150),
+                TextColumn("Notes", "Notas", width: 260),
+                BoolColumn("RequiresAuthorization", "Autoriza", width: 95),
+                TextColumn("AuthorizedBy", "Autorizó", width: 150),
+                DateColumn("AuthorizedAt", "Fecha autorización", width: 150),
+                BoolColumn("IsActive", "Activo", width: 90)
+            ],
+            rows.Select(x => Row(
+                ("HrRecurringIncidentRuleId", x.HrRecurringIncidentRuleId.ToString("D")),
+                ("CompanyId", x.CompanyId?.ToString("D")),
+                ("BranchId", x.BranchId?.ToString("D")),
+                ("EmployeeId", x.EmployeeId?.ToString("D")),
+                ("NomPayrollIncidentTypeId", x.NomPayrollIncidentTypeId?.ToString("D")),
+                ("Amount", x.Amount),
+                ("Quantity", x.Quantity),
+                ("StartDate", x.StartDate),
+                ("EndDate", x.EndDate),
+                ("Frequency", x.Frequency),
+                ("Notes", x.Notes),
+                ("RequiresAuthorization", x.RequiresAuthorization),
+                ("AuthorizedBy", x.AuthorizedBy),
+                ("AuthorizedAt", x.AuthorizedAt),
+                ("IsActive", x.IsActive)))
+            .ToList());
+    }
+
+    private async Task<CatalogViewDefinition> GetPayrollIncidentTypesAsync()
+    {
+        var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
+        var rows = await client.GetFromJsonAsync<List<NomPayrollIncidentTypeDto>>("/api/payroll/incident-types?includeInactive=true") ?? [];
+        var companies = await GetCompanyLookupsAsync();
+        var branches = await GetBranchLookupsAsync();
+
+        return BuildView(
+            "payroll-incident-types",
+            "Tipos de incidencia de nómina",
+            "Catálogo formal para clasificar incidencias de RH y su efecto en nómina.",
+            "NomPayrollIncidentTypeId",
+            [
+                TextColumn("NomPayrollIncidentTypeId", "ID", allowEditing: false, width: 220),
+                SmartLookupColumn("CompanyId", "Empresa", companies, required: true, width: 220),
+                SmartLookupColumn("BranchId", "Sucursal", branches, width: 180),
+                TextColumn("Code", "Código", required: true, width: 150),
+                TextColumn("Name", "Nombre", required: true, width: 240),
+                TextColumn("Description", "Descripción", width: 280),
+                LookupColumn("IncidentCategory", "Categoría", IncidentCategories(), required: true, width: 150),
+                LookupColumn("AffectType", "Afectación", AffectTypes(), required: true, width: 130),
+                LookupColumn("PayrollConceptType", "Tipo nómina", PayrollConceptTypes(), required: true, width: 170),
+                TextColumn("SatCode", "SAT", width: 100),
+                TextColumn("Color", "Color", width: 110),
+                TextColumn("Icon", "Icono", width: 140),
+                NumberColumn("SortOrder", "Orden", width: 90),
+                BoolColumn("IsDiscount", "Descuento", width: 105),
+                BoolColumn("IsPerception", "Percepción", width: 105),
+                BoolColumn("IsInformative", "Informativa", width: 105),
+                BoolColumn("RequiresAmount", "Importe", width: 90),
+                BoolColumn("RequiresQuantity", "Cantidad", width: 95),
+                BoolColumn("RequiresAuthorization", "Autoriza", width: 95),
+                BoolColumn("AppliesToPayroll", "Nómina", width: 90),
+                BoolColumn("IsSystem", "Sistema", width: 90),
+                BoolColumn("IsActive", "Activo", width: 90)
+            ],
+            rows.Select(x => Row(
+                ("NomPayrollIncidentTypeId", x.NomPayrollIncidentTypeId.ToString("D")),
+                ("CompanyId", x.CompanyId?.ToString("D")),
+                ("BranchId", x.BranchId?.ToString("D")),
+                ("Code", x.Code),
+                ("Name", x.Name),
+                ("Description", x.Description),
+                ("IncidentCategory", x.IncidentCategory),
+                ("AffectType", x.AffectType),
+                ("PayrollConceptType", x.PayrollConceptType),
+                ("SatCode", x.SatCode),
+                ("Color", x.Color),
+                ("Icon", x.Icon),
+                ("SortOrder", x.SortOrder),
+                ("IsDiscount", x.IsDiscount),
+                ("IsPerception", x.IsPerception),
+                ("IsInformative", x.IsInformative),
+                ("RequiresAmount", x.RequiresAmount),
+                ("RequiresQuantity", x.RequiresQuantity),
+                ("RequiresAuthorization", x.RequiresAuthorization),
+                ("AppliesToPayroll", x.AppliesToPayroll),
+                ("IsSystem", x.IsSystem),
+                ("IsActive", x.IsActive)))
+            .ToList(),
+            allowImport: true);
     }
 
     private async Task<CatalogViewDefinition> GetHrBanksAsync()
@@ -544,6 +681,50 @@ public sealed class HumanResourcesApiService
         new() { Id = "obligacion",  Name = "Obligación" },
     ];
 
+    private static List<CatalogLookupItem> IncidentCategories() =>
+    [
+        new() { Id = "DEDUCCION", Name = "Deducción", Color = "#DC2626", Icon = "minus-circle", Group = "Nómina" },
+        new() { Id = "PERCEPCION", Name = "Percepción", Color = "#16A34A", Icon = "plus-circle", Group = "Nómina" },
+        new() { Id = "INFORMATIVA", Name = "Informativa", Color = "#2563EB", Icon = "info", Group = "Control" },
+    ];
+
+    private static List<CatalogLookupItem> IncidentStatuses() =>
+    [
+        new() { Id = "draft", Name = "Borrador", Color = "#64748B", Icon = "edit-3" },
+        new() { Id = "active", Name = "Activa", Color = "#16A34A", Icon = "check-circle" },
+        new() { Id = "applied", Name = "Aplicada", Color = "#2563EB", Icon = "badge-check" },
+        new() { Id = "cancelled", Name = "Cancelada", Color = "#DC2626", Icon = "x-circle" },
+    ];
+
+    private static List<CatalogLookupItem> AffectTypes() =>
+    [
+        new() { Id = "SUMA", Name = "Suma", Color = "#16A34A", Icon = "plus" },
+        new() { Id = "RESTA", Name = "Resta", Color = "#DC2626", Icon = "minus" },
+        new() { Id = "NO_AFECTA", Name = "No afecta", Color = "#2563EB", Icon = "equal" },
+    ];
+
+    private static List<CatalogLookupItem> PayrollConceptTypes() =>
+    [
+        new() { Id = "FALTA", Name = "Falta", Group = "Asistencia" },
+        new() { Id = "RETARDO", Name = "Retardo", Group = "Asistencia" },
+        new() { Id = "HORAS_EXTRA", Name = "Horas extra", Group = "Percepciones" },
+        new() { Id = "BONO", Name = "Bono", Group = "Percepciones" },
+        new() { Id = "COMISION", Name = "Comisión", Group = "Percepciones" },
+        new() { Id = "VACACIONES", Name = "Vacaciones", Group = "Ausencias" },
+        new() { Id = "INCAPACIDAD", Name = "Incapacidad", Group = "Ausencias" },
+        new() { Id = "PRESTAMO", Name = "Préstamo", Group = "Deducciones" },
+        new() { Id = "DESCUENTO_DANOS", Name = "Descuento daños", Group = "Deducciones" },
+        new() { Id = "OTRO", Name = "Otro", Group = "General" },
+    ];
+
+    private static List<CatalogLookupItem> RecurringFrequencies() =>
+    [
+        new() { Id = "semanal", Name = "Semanal", Group = "Calendario" },
+        new() { Id = "quincenal", Name = "Quincenal", Group = "Calendario" },
+        new() { Id = "mensual", Name = "Mensual", Group = "Calendario" },
+        new() { Id = "cada_periodo", Name = "Cada periodo", Group = "Nómina" },
+    ];
+
     private static List<CatalogLookupItem> PeriodTypes() =>
     [
         new() { Id = "semanal",    Name = "Semanal (7 días)" },
@@ -632,6 +813,17 @@ public sealed class HumanResourcesApiService
         new() { Id = "closed",    Name = "Cerrado" },
     ];
 
+    private static List<CatalogLookupItem> PayrollRunStatuses() =>
+    [
+        new() { Id = "draft",      Name = "Borrador", Color = "#64748B", Icon = "edit-3" },
+        new() { Id = "open",       Name = "Abierta", Color = "#2563EB", Icon = "unlock" },
+        new() { Id = "calculated", Name = "Calculada", Color = "#0891B2", Icon = "calculator" },
+        new() { Id = "authorized", Name = "Autorizada", Color = "#16A34A", Icon = "badge-check" },
+        new() { Id = "approved",   Name = "Aprobada", Color = "#16A34A", Icon = "check-circle" },
+        new() { Id = "closed",     Name = "Cerrada", Color = "#334155", Icon = "lock" },
+        new() { Id = "cancelled",  Name = "Cancelada", Color = "#DC2626", Icon = "x-circle" },
+    ];
+
     private async Task<CatalogViewDefinition> GetPayrollPeriodTypesAsync()
     {
         var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
@@ -688,6 +880,7 @@ public sealed class HumanResourcesApiService
                 DateColumn("StartDate", "Fecha inicio", required: true, width: 130),
                 DateColumn("EndDate", "Fecha fin", required: true, width: 130),
                 DateColumn("PaymentDate", "Fecha pago", required: true, width: 130),
+                BoolColumn("IsImssInsured", "Asegurados IMSS", width: 130),
                 LookupColumn("Status", "Estatus", periodStatuses, width: 130),
                 BoolColumn("IsClosed", "Cerrado", width: 90),
                 BoolColumn("IsActive", "Activo", width: 90)
@@ -701,6 +894,7 @@ public sealed class HumanResourcesApiService
                 ("StartDate", x.StartDate),
                 ("EndDate", x.EndDate),
                 ("PaymentDate", x.PaymentDate),
+                ("IsImssInsured", x.IsImssInsured),
                 ("Status", x.Status),
                 ("IsClosed", x.IsClosed),
                 ("IsActive", x.IsActive)))
@@ -764,6 +958,7 @@ public sealed class HumanResourcesApiService
         var companies = await GetCompanyLookupsAsync();
         var branches = await GetBranchLookupsAsync();
         var periods = await GetPayrollPeriodLookupsAsync();
+        var statuses = PayrollRunStatuses();
 
         return BuildView(
             "payroll-runs",
@@ -777,7 +972,7 @@ public sealed class HumanResourcesApiService
                 LookupColumn("PayrollPeriodId", "Periodo nómina", periods, required: true, width: 220, quickCreateKey: "payroll-periods"),
                 TextColumn("Folio", "Folio", required: true, width: 120),
                 DateColumn("RunDate", "Fecha", required: true, width: 120),
-                TextColumn("Status", "Estatus", width: 110),
+                LookupColumn("Status", "Estatus", statuses, required: true, width: 140),
                 NumberColumn("EmployeeCount", "Empleados", width: 100),
                 NumberColumn("GrossAmount", "Bruto", width: 110),
                 NumberColumn("DeductionsAmount", "Deducciones", width: 120),
@@ -934,14 +1129,25 @@ public sealed class HumanResourcesApiService
         }).ToList();
     }
 
-    private async Task<List<CatalogLookupItem>> GetBranchLookupsAsync()
+    private async Task<List<CatalogLookupItem>> GetBranchLookupsAsync(bool onlyCurrentBranch = false)
     {
         var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
         var rows = await client.GetFromJsonAsync<List<BranchLookupDto>>("/api/organization/branches") ?? [];
+        var tenantId = _appState.CurrentTenantId ?? _authState.TenantId;
+        var companyId = _appState.CurrentCompanyId ?? _authState.CompanyId;
+        var branchId = _appState.CurrentBranchId ?? _authState.BranchId;
+        if (tenantId.HasValue)
+            rows = rows.Where(x => x.TenantId == tenantId.Value).ToList();
+        if (companyId.HasValue)
+            rows = rows.Where(x => x.CompanyId == companyId.Value).ToList();
+        if (onlyCurrentBranch && branchId.HasValue)
+            rows = rows.Where(x => x.BranchId == branchId.Value).ToList();
         return rows.Where(x => x.IsActive).OrderBy(x => x.Name).Select(x => new CatalogLookupItem
         {
             Id = x.BranchId.ToString("D"),
-            Name = $"{x.Name} · {x.CompanyName}"
+            Name = $"{x.Name} · {x.CompanyName}",
+            Group = x.CompanyName,
+            IsActive = x.IsActive
         }).ToList();
     }
 
@@ -982,6 +1188,9 @@ public sealed class HumanResourcesApiService
     {
         var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
         var rows = await client.GetFromJsonAsync<List<EmployeeDto>>("/api/hr/employees") ?? [];
+        var branchId = _appState.CurrentBranchId ?? _authState.BranchId;
+        if (branchId.HasValue)
+            rows = rows.Where(x => !x.BranchId.HasValue || x.BranchId == branchId.Value).ToList();
         return rows.Where(x => x.IsActive).OrderBy(x => x.FullName).Select(x => new CatalogLookupItem
         {
             Id = x.EmployeeId.ToString("D"),
@@ -989,14 +1198,23 @@ public sealed class HumanResourcesApiService
         }).ToList();
     }
 
-    private async Task<List<CatalogLookupItem>> GetPayrollPeriodLookupsAsync()
+    private async Task<List<CatalogLookupItem>> GetPayrollPeriodLookupsAsync(bool onlyOpen = false)
     {
         var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
-        var rows = await client.GetFromJsonAsync<List<PayrollPeriodDto>>("/api/payroll/periods") ?? [];
-        return rows.Where(x => x.IsActive).OrderByDescending(x => x.StartDate).Select(x => new CatalogLookupItem
+        var endpoint = onlyOpen ? "/api/payroll/periods?onlyOpen=true" : "/api/payroll/periods";
+        var rows = await client.GetFromJsonAsync<List<PayrollPeriodDto>>(endpoint) ?? [];
+        var tenantId = _appState.CurrentTenantId ?? _authState.TenantId;
+        var companyId = _appState.CurrentCompanyId ?? _authState.CompanyId;
+        if (tenantId.HasValue)
+            rows = rows.Where(x => x.TenantId == tenantId.Value).ToList();
+        if (companyId.HasValue)
+            rows = rows.Where(x => x.CompanyId == companyId.Value).ToList();
+        return rows.Where(x => x.IsActive && (!onlyOpen || IsOpenPayrollPeriod(x))).OrderByDescending(x => x.StartDate).Select(x => new CatalogLookupItem
         {
             Id = x.PayrollPeriodId.ToString("D"),
-            Name = $"{x.Code} · {x.Name}"
+            Name = $"{x.Code} · {x.Name}",
+            Group = x.Status,
+            IsActive = x.IsActive
         }).ToList();
     }
 
@@ -1020,6 +1238,50 @@ public sealed class HumanResourcesApiService
             Id = x.PayrollConceptId.ToString("D"),
             Name = $"{x.Code} · {x.Name}"
         }).ToList();
+    }
+
+    private async Task<List<CatalogLookupItem>> GetPayrollIncidentTypeLookupsAsync()
+    {
+        var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
+        var rows = await client.GetFromJsonAsync<List<NomPayrollIncidentTypeDto>>("/api/payroll/incident-types") ?? [];
+        var tenantId = _appState.CurrentTenantId ?? _authState.TenantId;
+        var companyId = _appState.CurrentCompanyId ?? _authState.CompanyId;
+        if (tenantId.HasValue)
+            rows = rows.Where(x => x.TenantId == tenantId.Value).ToList();
+        if (companyId.HasValue)
+            rows = rows.Where(x => x.CompanyId == companyId.Value).ToList();
+        var branchId = _appState.CurrentBranchId ?? _authState.BranchId;
+        if (branchId.HasValue)
+            rows = rows.Where(x => !x.BranchId.HasValue || x.BranchId == branchId.Value).ToList();
+
+        return rows.Where(x => x.IsActive)
+            .GroupBy(x => x.Code.Trim().ToUpperInvariant())
+            .Select(g => g
+                .OrderByDescending(x => branchId.HasValue && x.BranchId == branchId.Value)
+                .ThenByDescending(x => companyId.HasValue && x.CompanyId == companyId.Value)
+                .ThenBy(x => x.BranchId.HasValue)
+                .ThenBy(x => x.Name)
+                .First())
+            .OrderBy(x => x.IncidentCategory).ThenBy(x => x.SortOrder).ThenBy(x => x.Code).Select(x => new CatalogLookupItem
+        {
+            Id = x.NomPayrollIncidentTypeId.ToString("D"),
+            Name = $"{x.Code} · {x.Name}",
+            Group = x.IncidentCategory,
+            Color = string.IsNullOrWhiteSpace(x.Color) ? CategoryColor(x.IncidentCategory) : x.Color,
+            Icon = x.Icon,
+            Description = x.Description,
+            Code = x.Code,
+            AffectType = x.AffectType,
+            IsActive = x.IsActive
+        }).ToList();
+    }
+
+    private static bool IsOpenPayrollPeriod(PayrollPeriodDto period)
+    {
+        if (!period.IsActive || period.IsClosed)
+            return false;
+        var status = (period.Status ?? string.Empty).Trim().ToLowerInvariant();
+        return status is "open" or "abierto" or "draft" or "captura" or "active" or "activo";
     }
 
     private async Task<List<CatalogLookupItem>> GetPayrollRunLineLookupsAsync()
@@ -1124,19 +1386,81 @@ public sealed class HumanResourcesApiService
         IsActive = ReadBool(payload, "IsActive", true)
     };
 
-    private static EmployeeIncidentRequest MapIncidentRequest(JsonElement payload) => new()
+    private EmployeeIncidentRequest MapIncidentRequest(JsonElement payload) => new()
     {
-        CompanyId = ReadGuid(payload, "CompanyId"),
+        TenantId = _appState.CurrentTenantId ?? _authState.TenantId ?? ReadGuid(payload, "TenantId"),
+        CompanyId = _appState.CurrentCompanyId ?? _authState.CompanyId ?? ReadGuid(payload, "CompanyId"),
+        BranchId = ReadGuid(payload, "BranchId"),
         EmployeeId = ReadGuid(payload, "EmployeeId"),
         PayrollPeriodId = ReadGuid(payload, "PayrollPeriodId"),
+        PayrollIncidentTypeId = ReadGuid(payload, "PayrollIncidentTypeId") ?? ReadGuid(payload, "payrollIncidentTypeId") ?? ReadGuid(payload, "NomPayrollIncidentTypeId") ?? ReadGuid(payload, "nomPayrollIncidentTypeId") ?? ReadGuid(payload, "payroll_incident_type_id"),
+        NomPayrollIncidentTypeId = ReadGuid(payload, "PayrollIncidentTypeId") ?? ReadGuid(payload, "payrollIncidentTypeId") ?? ReadGuid(payload, "NomPayrollIncidentTypeId") ?? ReadGuid(payload, "nomPayrollIncidentTypeId") ?? ReadGuid(payload, "payroll_incident_type_id"),
         IncidentDate = ReadDate(payload, "IncidentDate"),
-        IncidentType = ReadString(payload, "IncidentType"),
+        IncidentType = string.Empty,
         Quantity = ReadDecimal(payload, "Quantity"),
         Amount = ReadDecimal(payload, "Amount"),
         Notes = ReadString(payload, "Notes"),
         Status = ReadString(payload, "Status"),
         IsActive = ReadBool(payload, "IsActive", true)
     };
+
+    private HrRecurringIncidentRuleRequest MapRecurringIncidentRuleRequest(JsonElement payload) => new()
+    {
+        TenantId = _appState.CurrentTenantId ?? _authState.TenantId ?? ReadGuid(payload, "TenantId"),
+        CompanyId = _appState.CurrentCompanyId ?? _authState.CompanyId ?? ReadGuid(payload, "CompanyId"),
+        BranchId = ReadGuid(payload, "BranchId"),
+        EmployeeId = ReadGuid(payload, "EmployeeId"),
+        NomPayrollIncidentTypeId = ReadGuid(payload, "NomPayrollIncidentTypeId"),
+        Amount = ReadDecimal(payload, "Amount"),
+        Quantity = ReadDecimal(payload, "Quantity", 1m),
+        StartDate = ReadDate(payload, "StartDate"),
+        EndDate = ReadDate(payload, "EndDate"),
+        Frequency = ReadString(payload, "Frequency", "cada_periodo"),
+        Notes = ReadString(payload, "Notes"),
+        RequiresAuthorization = ReadBool(payload, "RequiresAuthorization"),
+        AuthorizedBy = ReadString(payload, "AuthorizedBy"),
+        AuthorizedAt = ReadDate(payload, "AuthorizedAt"),
+        IsActive = ReadBool(payload, "IsActive", true)
+    };
+
+    private NomPayrollIncidentTypeRequest MapIncidentTypeRequest(JsonElement payload)
+    {
+        var code = ReadString(payload, "Code");
+        var category = ReadString(payload, "IncidentCategory", InferIncidentCategory(code));
+        var affectType = ReadString(payload, "AffectType", category switch
+        {
+            "DEDUCCION" => "RESTA",
+            "PERCEPCION" => "SUMA",
+            _ => "NO_AFECTA"
+        });
+        var payrollConceptType = ReadString(payload, "PayrollConceptType", InferPayrollConceptType(code));
+
+        return new NomPayrollIncidentTypeRequest
+        {
+            TenantId = _appState.CurrentTenantId ?? _authState.TenantId ?? ReadGuid(payload, "TenantId"),
+            CompanyId = ReadGuid(payload, "CompanyId") ?? _appState.CurrentCompanyId ?? _authState.CompanyId,
+            BranchId = ReadGuid(payload, "BranchId"),
+            Code = code,
+            Name = ReadString(payload, "Name"),
+            Description = ReadString(payload, "Description"),
+            IncidentCategory = category,
+            AffectType = affectType,
+            PayrollConceptType = payrollConceptType,
+            SatCode = ReadString(payload, "SatCode"),
+            Color = ReadString(payload, "Color", CategoryColor(category)),
+            Icon = ReadString(payload, "Icon", CategoryIcon(category, payrollConceptType)),
+            SortOrder = ReadInt(payload, "SortOrder"),
+            IsDiscount = ReadBool(payload, "IsDiscount", category == "DEDUCCION"),
+            IsPerception = ReadBool(payload, "IsPerception", category == "PERCEPCION"),
+            IsInformative = ReadBool(payload, "IsInformative", category == "INFORMATIVA"),
+            RequiresAmount = ReadBool(payload, "RequiresAmount", category != "INFORMATIVA"),
+            RequiresQuantity = ReadBool(payload, "RequiresQuantity"),
+            RequiresAuthorization = ReadBool(payload, "RequiresAuthorization"),
+            AppliesToPayroll = ReadBool(payload, "AppliesToPayroll", category != "INFORMATIVA"),
+            IsSystem = ReadBool(payload, "IsSystem"),
+            IsActive = ReadBool(payload, "IsActive", true)
+        };
+    }
 
     private static EmployeeContractRequest MapContractRequest(JsonElement payload) => new()
     {
@@ -1196,9 +1520,10 @@ public sealed class HumanResourcesApiService
         IsActive = ReadBool(payload, "IsActive", true)
     };
 
-    private static PayrollPeriodRequest MapPayrollPeriodRequest(JsonElement payload) => new()
+    private PayrollPeriodRequest MapPayrollPeriodRequest(JsonElement payload) => new()
     {
-        CompanyId = ReadGuid(payload, "CompanyId"),
+        TenantId = _appState.CurrentTenantId ?? _authState.TenantId ?? ReadGuid(payload, "TenantId"),
+        CompanyId = ReadGuid(payload, "CompanyId") ?? _appState.CurrentCompanyId ?? _authState.CompanyId,
         Code = ReadString(payload, "Code"),
         Name = ReadString(payload, "Name"),
         PeriodType = ReadString(payload, "PeriodType"),
@@ -1206,6 +1531,7 @@ public sealed class HumanResourcesApiService
         EndDate = ReadDate(payload, "EndDate"),
         PaymentDate = ReadDate(payload, "PaymentDate"),
         Status = ReadString(payload, "Status"),
+        IsImssInsured = ReadBool(payload, "IsImssInsured", true),
         IsClosed = ReadBool(payload, "IsClosed"),
         IsActive = ReadBool(payload, "IsActive", true)
     };
@@ -1342,6 +1668,18 @@ public sealed class HumanResourcesApiService
             QuickCreateKey = quickCreateKey
         };
 
+    private static CatalogColumnDefinition ReadOnlyLookupColumn(string field, string caption, List<CatalogLookupItem> lookupItems, int width = 180)
+        => new()
+        {
+            DataField = field,
+            Caption = caption,
+            DataType = "string",
+            AllowEditing = false,
+            Width = width,
+            UseLookup = true,
+            LookupItems = lookupItems
+        };
+
     private static CatalogColumnDefinition SmartLookupColumn(string field, string caption, List<CatalogLookupItem> lookupItems, bool required = false, int width = 180)
         => lookupItems.Count <= 1
             ? new() { DataField = field, Caption = caption, DataType = "string", Visible = false, ShowInGrid = false, AllowEditing = false, Width = width, UseLookup = true, LookupItems = lookupItems }
@@ -1452,6 +1790,56 @@ public sealed class HumanResourcesApiService
         return false;
     }
 
+    private static string InferIncidentCategory(string code)
+    {
+        var normalized = (code ?? string.Empty).Trim().ToUpperInvariant();
+        if (normalized.Contains("FALTA") || normalized.Contains("RETARDO") || normalized.Contains("DESCUENTO") || normalized.Contains("DANO") || normalized.Contains("PRESTAMO"))
+            return "DEDUCCION";
+        if (normalized.Contains("HORA") || normalized.Contains("BONO") || normalized.Contains("COMISION"))
+            return "PERCEPCION";
+        return "INFORMATIVA";
+    }
+
+    private static string InferPayrollConceptType(string code)
+    {
+        var normalized = (code ?? string.Empty).Trim().ToUpperInvariant();
+        if (normalized.Contains("FALTA")) return "FALTA";
+        if (normalized.Contains("RETARDO")) return "RETARDO";
+        if (normalized.Contains("HORA")) return "HORAS_EXTRA";
+        if (normalized.Contains("BONO")) return "BONO";
+        if (normalized.Contains("COMISION")) return "COMISION";
+        if (normalized.Contains("VACACION")) return "VACACIONES";
+        if (normalized.Contains("INCAPAC")) return "INCAPACIDAD";
+        if (normalized.Contains("PRESTAMO")) return "PRESTAMO";
+        if (normalized.Contains("DESCUENTO") || normalized.Contains("DANO")) return "DESCUENTO_DANOS";
+        return "OTRO";
+    }
+
+    private static string CategoryColor(string? category) => (category ?? string.Empty).Trim().ToUpperInvariant() switch
+    {
+        "DEDUCCION" => "#DC2626",
+        "PERCEPCION" => "#16A34A",
+        "INFORMATIVA" => "#2563EB",
+        _ => "#64748B"
+    };
+
+    private static bool IsIncidentCategory(string? value, string expected)
+        => string.Equals((value ?? string.Empty).Trim(), expected, StringComparison.OrdinalIgnoreCase);
+
+    private static string CategoryIcon(string? category, string? payrollConceptType) => (payrollConceptType ?? string.Empty).Trim().ToUpperInvariant() switch
+    {
+        "FALTA" => "calendar-x",
+        "RETARDO" => "clock-alert",
+        "HORAS_EXTRA" => "clock-plus",
+        "BONO" => "badge-dollar-sign",
+        "COMISION" => "percent",
+        "VACACIONES" => "plane",
+        "INCAPACIDAD" => "shield-alert",
+        "PRESTAMO" => "hand-coins",
+        "DESCUENTO_DANOS" => "triangle-alert",
+        _ => (category ?? string.Empty).Trim().ToUpperInvariant() == "INFORMATIVA" ? "info" : "circle-dot"
+    };
+
     private static async Task EnsureSuccessAsync(HttpResponseMessage response)
     {
         if (response.IsSuccessStatusCode)
@@ -1486,6 +1874,8 @@ public sealed class CompanyLookupDto
 public sealed class BranchLookupDto
 {
     public Guid BranchId { get; set; }
+    public Guid TenantId { get; set; }
+    public Guid CompanyId { get; set; }
     public string Name { get; set; } = string.Empty;
     public string CompanyName { get; set; } = string.Empty;
     public bool IsActive { get; set; }
@@ -1614,10 +2004,21 @@ public sealed class EmployeeIncidentDto
     public Guid? TenantId { get; set; }
     public Guid? CompanyId { get; set; }
     public string CompanyName { get; set; } = string.Empty;
+    public Guid? BranchId { get; set; }
+    public string BranchName { get; set; } = string.Empty;
     public Guid? EmployeeId { get; set; }
     public string EmployeeName { get; set; } = string.Empty;
     public Guid? PayrollPeriodId { get; set; }
     public string PayrollPeriodName { get; set; } = string.Empty;
+    public Guid? PayrollIncidentTypeId { get; set; }
+    public Guid? NomPayrollIncidentTypeId { get; set; }
+    public string NomPayrollIncidentTypeCode { get; set; } = string.Empty;
+    public string NomPayrollIncidentTypeName { get; set; } = string.Empty;
+    public string IncidentCategory { get; set; } = string.Empty;
+    public string AffectType { get; set; } = string.Empty;
+    public string PayrollConceptType { get; set; } = string.Empty;
+    public string Color { get; set; } = string.Empty;
+    public string Icon { get; set; } = string.Empty;
     public DateTime? IncidentDate { get; set; }
     public string IncidentType { get; set; } = string.Empty;
     public decimal Quantity { get; set; }
@@ -1625,6 +2026,70 @@ public sealed class EmployeeIncidentDto
     public string Notes { get; set; } = string.Empty;
     public string Status { get; set; } = string.Empty;
     public bool IsActive { get; set; }
+}
+
+public class HrRecurringIncidentRuleRequest
+{
+    public Guid? TenantId { get; set; }
+    public Guid? CompanyId { get; set; }
+    public Guid? BranchId { get; set; }
+    public Guid? EmployeeId { get; set; }
+    public Guid? NomPayrollIncidentTypeId { get; set; }
+    public decimal Amount { get; set; }
+    public decimal Quantity { get; set; } = 1m;
+    public DateTime? StartDate { get; set; }
+    public DateTime? EndDate { get; set; }
+    public string Frequency { get; set; } = "cada_periodo";
+    public string Notes { get; set; } = string.Empty;
+    public bool RequiresAuthorization { get; set; }
+    public string AuthorizedBy { get; set; } = string.Empty;
+    public DateTime? AuthorizedAt { get; set; }
+    public bool IsActive { get; set; } = true;
+}
+
+public sealed class HrRecurringIncidentRuleDto : HrRecurringIncidentRuleRequest
+{
+    public Guid HrRecurringIncidentRuleId { get; set; }
+    public string CompanyName { get; set; } = string.Empty;
+    public string BranchName { get; set; } = string.Empty;
+    public string EmployeeName { get; set; } = string.Empty;
+    public string NomPayrollIncidentTypeName { get; set; } = string.Empty;
+    public string IncidentCategory { get; set; } = string.Empty;
+    public string AffectType { get; set; } = string.Empty;
+}
+
+public class NomPayrollIncidentTypeRequest
+{
+    public Guid? TenantId { get; set; }
+    public Guid? CompanyId { get; set; }
+    public Guid? BranchId { get; set; }
+    public string Code { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
+    public string Description { get; set; } = string.Empty;
+    public string IncidentCategory { get; set; } = string.Empty;
+    public string AffectType { get; set; } = string.Empty;
+    public string PayrollConceptType { get; set; } = string.Empty;
+    public string SatCode { get; set; } = string.Empty;
+    public string Color { get; set; } = string.Empty;
+    public string Icon { get; set; } = string.Empty;
+    public int SortOrder { get; set; }
+    public bool IsDiscount { get; set; }
+    public bool IsPerception { get; set; }
+    public bool IsInformative { get; set; }
+    public bool RequiresAmount { get; set; }
+    public bool RequiresQuantity { get; set; }
+    public bool RequiresAuthorization { get; set; }
+    public bool AppliesToPayroll { get; set; } = true;
+    public bool IsSystem { get; set; }
+    public bool IsActive { get; set; } = true;
+}
+
+public sealed class NomPayrollIncidentTypeDto : NomPayrollIncidentTypeRequest
+{
+    public Guid NomPayrollIncidentTypeId { get; set; }
+    public string CompanyName { get; set; } = string.Empty;
+    public string BranchName { get; set; } = string.Empty;
+    public bool IsDeleted { get; set; }
 }
 
 public sealed class EmployeeContractDto
@@ -1688,6 +2153,7 @@ public sealed class PayrollPeriodDto
     public DateTime? EndDate { get; set; }
     public DateTime? PaymentDate { get; set; }
     public string Status { get; set; } = string.Empty;
+    public bool IsImssInsured { get; set; } = true;
     public bool IsClosed { get; set; }
     public bool IsActive { get; set; }
 }

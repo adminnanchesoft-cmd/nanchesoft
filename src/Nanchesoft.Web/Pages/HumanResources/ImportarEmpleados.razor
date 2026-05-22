@@ -2,6 +2,8 @@
 @using System.Net.Http.Headers
 @inject IHttpClientFactory HttpClientFactory
 @inject NavigationManager Nav
+@inject IJSRuntime JS
+@implements IAsyncDisposable
 
 <PageTitle>Importar Empleados | Nanchesoft</PageTitle>
 
@@ -40,17 +42,28 @@
             <strong>Paso 1 — Seleccionar archivo Excel</strong>
         </div>
         <div class="card-body">
-            <div class="row align-items-center g-3">
+            <div class="row align-items-stretch g-3">
                 <div class="col-12 col-md-6">
-                    <label class="form-label fw-semibold">Archivo .xlsx</label>
-                    <InputFile OnChange="OnFileSelected" accept=".xlsx" class="form-control" disabled="@_loading" />
-                    <div class="form-text">Columnas requeridas: NoEmpleado, Nombre, ApellidoPaterno, FechaIngreso.</div>
+                    <div id="@_dropZoneId" class="border rounded-3 p-3 h-100 bg-light d-flex flex-column justify-content-center"
+                         tabindex="0" style="border-style:dashed !important;">
+                        <label class="form-label fw-semibold">Archivo .xlsx</label>
+                        <InputFile OnChange="OnFileSelected" accept=".xlsx" class="form-control" disabled="@_loading" />
+                        <div class="form-text">
+                            Arrastra o pega el Excel aquí. Columnas requeridas: NoEmpleado, Nombre, ApellidoPaterno, FechaIngreso.
+                        </div>
+                        @if (!string.IsNullOrWhiteSpace(_selectedFileName))
+                        {
+                            <div class="small text-primary fw-semibold mt-2">
+                                <span class="bi bi-file-earmark-excel me-1"></span>@_selectedFileName
+                            </div>
+                        }
+                    </div>
                 </div>
                 <div class="col-12 col-md-auto d-flex gap-2 align-items-end mt-3 mt-md-0" style="padding-top:1.6rem;">
                     <button class="btn btn-outline-secondary" @onclick="DownloadTemplate" disabled="@_loading">
                         <span class="bi bi-download me-1"></span> Descargar plantilla
                     </button>
-                    <button class="btn btn-primary" @onclick="PreviewImport" disabled="@(_selectedFile == null || _loading)">
+                    <button class="btn btn-primary" @onclick="PreviewImport" disabled="@(!HasSelectedFile || _loading)">
                         @if (_loading && _phase == "preview")
                         {
                             <span class="spinner-border spinner-border-sm me-1"></span>
@@ -115,7 +128,8 @@
                                 <th>Nombre completo</th>
                                 <th>RFC</th>
                                 <th style="width:100px;">Ingreso</th>
-                                <th style="width:100px;">Salario</th>
+                                <th style="width:120px;">Sueldo periodo</th>
+                                <th style="width:100px;">Salario diario</th>
                                 <th>Departamento</th>
                                 <th>Puesto</th>
                                 <th style="width:120px;">Estado</th>
@@ -131,6 +145,7 @@
                                     <td>@row.FullName</td>
                                     <td class="text-muted small">@row.TaxId</td>
                                     <td class="small">@(row.HireDate.HasValue ? row.HireDate.Value.ToString("dd/MM/yyyy") : "-")</td>
+                                    <td class="small text-end">@(row.PeriodSalary > 0 ? row.PeriodSalary.ToString("N2") : "-")</td>
                                     <td class="small text-end">@(row.DailySalary > 0 ? row.DailySalary.ToString("N2") : "-")</td>
                                     <td class="small">@(string.IsNullOrEmpty(row.DepartmentName) ? row.DepartmentCode : row.DepartmentName)</td>
                                     <td class="small">@(string.IsNullOrEmpty(row.PositionName) ? row.PositionCode : row.PositionName)</td>
@@ -193,13 +208,20 @@
 </div>
 
 @code {
-    private IBrowserFile? _selectedFile;
+    private const long MaxFileSize = 10 * 1024 * 1024;
+    private readonly string _dropZoneId = $"employee-import-dropzone-{Guid.NewGuid():N}";
+    private DotNetObjectReference<ImportarEmpleados>? _dotNetRef;
+    private bool _dropZoneReady;
+    private byte[]? _selectedFileBytes;
+    private string _selectedFileName = string.Empty;
+    private string _selectedFileContentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
     private PreviewResult? _preview;
     private string _filter = "all";
     private bool _loading;
     private string _phase = string.Empty;
     private string _globalError = string.Empty;
     private string _successMessage = string.Empty;
+    private bool HasSelectedFile => _selectedFileBytes is { Length: > 0 };
 
     private IEnumerable<PreviewRow> FilteredRows => _preview?.Rows == null
         ? []
@@ -215,11 +237,79 @@
         _ => "table-secondary"
     };
 
-    private void OnFileSelected(InputFileChangeEventArgs e)
+    protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        _selectedFile = e.File;
-        _preview = null;
+        if ((firstRender || !_dropZoneReady) && _dotNetRef is null)
+            _dotNetRef = DotNetObjectReference.Create(this);
+
+        if (firstRender || !_dropZoneReady)
+        {
+            try
+            {
+                await JS.InvokeVoidAsync("nsImport.initBinaryFileDropZone", _dropZoneId, _dotNetRef);
+                _dropZoneReady = true;
+            }
+            catch { }
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        _dotNetRef?.Dispose();
+        await Task.CompletedTask;
+    }
+
+    private async Task OnFileSelected(InputFileChangeEventArgs e)
+    {
+        if (e.File is null) return;
+        await SetSelectedFileAsync(e.File);
+    }
+
+    private async Task SetSelectedFileAsync(IBrowserFile file)
+    {
         _globalError = string.Empty;
+        if (!file.Name.EndsWith(".xlsx", StringComparison.OrdinalIgnoreCase))
+        {
+            _globalError = "Solo se aceptan archivos .xlsx.";
+            return;
+        }
+
+        using var ms = new System.IO.MemoryStream();
+        await using var stream = file.OpenReadStream(maxAllowedSize: MaxFileSize);
+        await stream.CopyToAsync(ms);
+        SetSelectedFile(file.Name, file.ContentType, ms.ToArray());
+    }
+
+    [JSInvokable]
+    public Task HandleDroppedFile(string fileName, string contentType, string base64)
+    {
+        _globalError = string.Empty;
+        if (!fileName.EndsWith(".xlsx", StringComparison.OrdinalIgnoreCase))
+        {
+            _globalError = "Solo se aceptan archivos .xlsx.";
+            return InvokeAsync(StateHasChanged);
+        }
+
+        try
+        {
+            SetSelectedFile(fileName, contentType, Convert.FromBase64String(base64));
+        }
+        catch (Exception ex)
+        {
+            _globalError = $"Error al leer archivo: {ex.Message}";
+        }
+
+        return InvokeAsync(StateHasChanged);
+    }
+
+    private void SetSelectedFile(string fileName, string contentType, byte[] bytes)
+    {
+        _selectedFileBytes = bytes;
+        _selectedFileName = fileName;
+        _selectedFileContentType = string.IsNullOrWhiteSpace(contentType)
+            ? "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            : contentType;
+        _preview = null;
         _successMessage = string.Empty;
         _filter = "all";
     }
@@ -243,7 +333,7 @@
 
     private async Task PreviewImport()
     {
-        if (_selectedFile is null) return;
+        if (!HasSelectedFile) return;
         _loading = true;
         _phase = "preview";
         _globalError = string.Empty;
@@ -251,15 +341,10 @@
 
         try
         {
-            using var ms = new System.IO.MemoryStream();
-            await using var stream = _selectedFile.OpenReadStream(maxAllowedSize: 10 * 1024 * 1024);
-            await stream.CopyToAsync(ms);
-            ms.Position = 0;
-
             using var content = new MultipartFormDataContent();
-            var fileContent = new ByteArrayContent(ms.ToArray());
-            fileContent.Headers.ContentType = new MediaTypeHeaderValue("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-            content.Add(fileContent, "file", _selectedFile.Name);
+            var fileContent = new ByteArrayContent(_selectedFileBytes!);
+            fileContent.Headers.ContentType = new MediaTypeHeaderValue(_selectedFileContentType);
+            content.Add(fileContent, "file", _selectedFileName);
 
             var client = HttpClientFactory.CreateClient("Nanchesoft.Api");
             var response = await client.PostAsync("/api/hr/employees/import/preview", content);
@@ -285,7 +370,7 @@
 
     private async Task ExecuteImport()
     {
-        if (_selectedFile is null) return;
+        if (!HasSelectedFile) return;
         _loading = true;
         _phase = "import";
         _globalError = string.Empty;
@@ -293,15 +378,10 @@
 
         try
         {
-            using var ms = new System.IO.MemoryStream();
-            await using var stream = _selectedFile.OpenReadStream(maxAllowedSize: 10 * 1024 * 1024);
-            await stream.CopyToAsync(ms);
-            ms.Position = 0;
-
             using var content = new MultipartFormDataContent();
-            var fileContent = new ByteArrayContent(ms.ToArray());
-            fileContent.Headers.ContentType = new MediaTypeHeaderValue("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-            content.Add(fileContent, "file", _selectedFile.Name);
+            var fileContent = new ByteArrayContent(_selectedFileBytes!);
+            fileContent.Headers.ContentType = new MediaTypeHeaderValue(_selectedFileContentType);
+            content.Add(fileContent, "file", _selectedFileName);
 
             var client = HttpClientFactory.CreateClient("Nanchesoft.Api");
             var response = await client.PostAsync("/api/hr/employees/import", content);
@@ -319,7 +399,8 @@
                 if (result.Errors?.Count > 0)
                     _successMessage += $" {result.Errors.Count} error(es).";
                 _preview = null;
-                _selectedFile = null;
+                _selectedFileBytes = null;
+                _selectedFileName = string.Empty;
             }
         }
         catch (Exception ex)
@@ -355,6 +436,7 @@
         public string Email { get; set; } = string.Empty;
         public string Phone { get; set; } = string.Empty;
         public DateTime? HireDate { get; set; }
+        public decimal PeriodSalary { get; set; }
         public decimal DailySalary { get; set; }
         public string DepartmentCode { get; set; } = string.Empty;
         public string DepartmentName { get; set; } = string.Empty;

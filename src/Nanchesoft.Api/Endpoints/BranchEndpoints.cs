@@ -31,10 +31,12 @@ public static class BranchEndpoints
             .Include(x => x.Company)
             .AsQueryable();
 
-        if (!isPlatformOwner && tenantId.HasValue)
+        if (tenantId.HasValue)
             query = query.Where(x => x.TenantId == tenantId.Value);
-        if (!isPlatformOwner && companyId.HasValue)
+        if (companyId.HasValue)
             query = query.Where(x => x.CompanyId == companyId.Value);
+
+        query = query.Where(x => x.IsActive);
 
         var branches = await query.OrderBy(x => x.Name).Select(x => new BranchListItemDto
         {

@@ -2,7 +2,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Nanchesoft.Application\Nanchesoft.Application.csproj" />
-    <ProjectReference Include="..\Nanchesoft.Infrastructure\Nanchesoft.Infrastructure.csproj" />
     <ProjectReference Include="..\Nanchesoft.Persistence\Nanchesoft.Persistence.csproj" />
   </ItemGroup>
 
