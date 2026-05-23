@@ -35,7 +35,7 @@
         </div>
     }
 
-    <!-- Paso 1: Cargar archivo -->
+    <!-- Paso 1: Cargar archivo + modo de conflicto -->
     <div class="card shadow-sm mb-4">
         <div class="card-header bg-primary text-white d-flex align-items-center gap-2">
             <span class="bi bi-file-earmark-excel fs-5"></span>
@@ -59,36 +59,146 @@
                         }
                     </div>
                 </div>
+                <div class="col-12 col-md-4">
+                    <label class="form-label fw-semibold">Si el empleado ya existe en la base…</label>
+                    <div class="d-flex flex-column gap-2">
+                        <label class="form-check d-flex align-items-start gap-2 p-2 border rounded">
+                            <input class="form-check-input mt-1" type="radio" name="conflictMode" value="update"
+                                   checked="@(_conflictMode == "update")" @onchange='() => _conflictMode = "update"' />
+                            <span><strong>Actualizar</strong><br /><span class="small text-muted">Sobrescribe nombre, RFC, sueldos, departamento, etc.</span></span>
+                        </label>
+                        <label class="form-check d-flex align-items-start gap-2 p-2 border rounded">
+                            <input class="form-check-input mt-1" type="radio" name="conflictMode" value="skip"
+                                   checked="@(_conflictMode == "skip")" @onchange='() => _conflictMode = "skip"' />
+                            <span><strong>Omitir</strong><br /><span class="small text-muted">No toca el registro existente.</span></span>
+                        </label>
+                        <label class="form-check d-flex align-items-start gap-2 p-2 border rounded">
+                            <input class="form-check-input mt-1" type="radio" name="conflictMode" value="error"
+                                   checked="@(_conflictMode == "error")" @onchange='() => _conflictMode = "error"' />
+                            <span><strong>Marcar como duplicado</strong><br /><span class="small text-muted">Rechaza esas filas y aborta si encuentra alguna.</span></span>
+                        </label>
+                    </div>
+                </div>
                 <div class="col-12 col-md-auto d-flex gap-2 align-items-end mt-3 mt-md-0" style="padding-top:1.6rem;">
                     <button class="btn btn-outline-secondary" @onclick="DownloadTemplate" disabled="@_loading">
-                        <span class="bi bi-download me-1"></span> Descargar plantilla
+                        <span class="bi bi-download me-1"></span> Plantilla
                     </button>
                     <button class="btn btn-primary" @onclick="PreviewImport" disabled="@(!HasSelectedFile || _loading)">
                         @if (_loading && _phase == "preview")
                         {
                             <span class="spinner-border spinner-border-sm me-1"></span>
                         }
-                        <span class="bi bi-search me-1"></span> Validar y previsualizar
+                        <span class="bi bi-search me-1"></span> Validar
                     </button>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Paso 2: Resumen de validación -->
+    <!-- Paso 2: Resumen de validación + tarjetas KPI -->
     @if (_preview != null)
     {
+        <div class="card shadow-sm mb-3">
+            <div class="card-header bg-white d-flex align-items-center gap-2">
+                <span class="bi bi-diagram-3 text-primary"></span>
+                <strong>Asignación detectada de campos</strong>
+            </div>
+            <div class="card-body p-0">
+                <div style="overflow-x:auto;">
+                    <table class="table table-sm mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Campo destino</th>
+                                <th>Columna origen</th>
+                                <th style="width:110px;">Requerido</th>
+                                <th style="width:110px;">Estado</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var mapping in _preview.Mappings)
+                            {
+                                <tr>
+                                    <td class="fw-semibold">@mapping.Label</td>
+                                    <td>@(string.IsNullOrWhiteSpace(mapping.SourceColumn) ? "-" : mapping.SourceColumn)</td>
+                                    <td>@(mapping.Required ? "Sí" : "No")</td>
+                                    <td>
+                                        @if (mapping.Found)
+                                        {
+                                            <span class="badge bg-success">OK</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge bg-danger">Falta</span>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="row g-3 mb-3">
+            <div class="col-6 col-md-2">
+                <div class="card text-center border-success h-100">
+                    <div class="card-body p-2">
+                        <div class="display-6 fw-bold text-success mb-0">@_preview.NewCount</div>
+                        <div class="small text-muted">A insertar</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-6 col-md-2">
+                <div class="card text-center border-warning h-100">
+                    <div class="card-body p-2">
+                        <div class="display-6 fw-bold text-warning mb-0">@_preview.UpdateCount</div>
+                        <div class="small text-muted">A actualizar</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-6 col-md-2">
+                <div class="card text-center border-danger h-100">
+                    <div class="card-body p-2">
+                        <div class="display-6 fw-bold text-danger mb-0">@_preview.ErrorCount</div>
+                        <div class="small text-muted">Errores</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-6 col-md-2">
+                <div class="card text-center border-info h-100">
+                    <div class="card-body p-2">
+                        <div class="display-6 fw-bold text-info mb-0">@_preview.DuplicateCount</div>
+                        <div class="small text-muted">Duplicados</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-6 col-md-2">
+                <div class="card text-center border-secondary h-100">
+                    <div class="card-body p-2">
+                        <div class="display-6 fw-bold text-secondary mb-0">@_preview.SkipCount</div>
+                        <div class="small text-muted">Omitidos</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-6 col-md-2">
+                <div class="card text-center h-100">
+                    <div class="card-body p-2">
+                        <div class="display-6 fw-bold mb-0">@_preview.Total</div>
+                        <div class="small text-muted">Total filas</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <div class="card shadow-sm mb-4">
             <div class="card-header bg-white d-flex align-items-center justify-content-between">
                 <div class="d-flex align-items-center gap-2">
                     <span class="bi bi-clipboard-check text-primary fs-5"></span>
-                    <strong>Paso 2 — Resumen de validación</strong>
+                    <strong>Paso 2 — Detalle por fila</strong>
                 </div>
-                <div class="d-flex gap-2 flex-wrap">
-                    <span class="badge bg-success fs-6">@_preview.NewCount nuevos</span>
-                    <span class="badge bg-warning text-dark fs-6">@_preview.UpdateCount actualizaciones</span>
-                    <span class="badge bg-danger fs-6">@_preview.ErrorCount errores</span>
-                    <span class="badge bg-secondary fs-6">@_preview.SkipCount omitidos</span>
+                <div class="d-flex gap-2 flex-wrap small text-muted">
+                    <span>Modo de conflicto:</span>
+                    <span class="badge bg-dark text-uppercase">@_preview.ConflictMode</span>
                 </div>
             </div>
             <div class="card-body p-0">
@@ -110,6 +220,13 @@
                             @onclick='() => _filter = "error"'>
                         Errores (@_preview.ErrorCount)
                     </button>
+                    @if (_preview.DuplicateCount > 0)
+                    {
+                        <button class="btn btn-sm @(_filter == "duplicate" ? "btn-info" : "btn-outline-info")"
+                                @onclick='() => _filter = "duplicate"'>
+                            Duplicados (@_preview.DuplicateCount)
+                        </button>
+                    }
                     @if (_preview.SkipCount > 0)
                     {
                         <button class="btn btn-sm @(_filter == "skip" ? "btn-secondary" : "btn-outline-secondary")"
@@ -124,12 +241,14 @@
                         <thead class="table-light sticky-top">
                             <tr>
                                 <th style="width:60px;">Fila</th>
+                                <th style="width:100px;">Código</th>
                                 <th style="width:100px;">No. Emp.</th>
                                 <th>Nombre completo</th>
                                 <th>RFC</th>
                                 <th style="width:100px;">Ingreso</th>
                                 <th style="width:120px;">Sueldo periodo</th>
                                 <th style="width:100px;">Salario diario</th>
+                                <th>Sucursal</th>
                                 <th>Departamento</th>
                                 <th>Puesto</th>
                                 <th style="width:120px;">Estado</th>
@@ -141,30 +260,34 @@
                             {
                                 <tr class="@RowClass(row.Status)">
                                     <td class="text-muted small">@row.RowNumber</td>
+                                    <td class="fw-semibold text-secondary">@row.Code</td>
                                     <td class="fw-semibold">@row.EmployeeNumber</td>
                                     <td>@row.FullName</td>
                                     <td class="text-muted small">@row.TaxId</td>
                                     <td class="small">@(row.HireDate.HasValue ? row.HireDate.Value.ToString("dd/MM/yyyy") : "-")</td>
                                     <td class="small text-end">@(row.PeriodSalary > 0 ? row.PeriodSalary.ToString("N2") : "-")</td>
                                     <td class="small text-end">@(row.DailySalary > 0 ? row.DailySalary.ToString("N2") : "-")</td>
+                                    <td class="small">@(string.IsNullOrEmpty(row.BranchName) ? row.BranchCode : row.BranchName)</td>
                                     <td class="small">@(string.IsNullOrEmpty(row.DepartmentName) ? row.DepartmentCode : row.DepartmentName)</td>
                                     <td class="small">@(string.IsNullOrEmpty(row.PositionName) ? row.PositionCode : row.PositionName)</td>
                                     <td>
-                                        @if (row.Status == "new")
+                                        @switch (row.Status)
                                         {
-                                            <span class="badge bg-success">Nuevo</span>
-                                        }
-                                        else if (row.Status == "update")
-                                        {
-                                            <span class="badge bg-warning text-dark">Actualizar</span>
-                                        }
-                                        else if (row.Status == "error")
-                                        {
-                                            <span class="badge bg-danger">Error</span>
-                                        }
-                                        else
-                                        {
-                                            <span class="badge bg-secondary">Omitido</span>
+                                            case "new":
+                                                <span class="badge bg-success">Nuevo</span>
+                                                break;
+                                            case "update":
+                                                <span class="badge bg-warning text-dark">Actualizar</span>
+                                                break;
+                                            case "error":
+                                                <span class="badge bg-danger">Error</span>
+                                                break;
+                                            case "duplicate":
+                                                <span class="badge bg-info text-dark">Duplicado</span>
+                                                break;
+                                            default:
+                                                <span class="badge bg-secondary">Omitido</span>
+                                                break;
                                         }
                                     </td>
                                     <td class="small @(row.Status == "error" ? "text-danger" : "text-muted")">
@@ -217,6 +340,7 @@
     private string _selectedFileContentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
     private PreviewResult? _preview;
     private string _filter = "all";
+    private string _conflictMode = "update"; // update | skip | error
     private bool _loading;
     private string _phase = string.Empty;
     private string _globalError = string.Empty;
@@ -234,6 +358,7 @@
         "error" => "table-danger",
         "update" => "table-warning",
         "new" => "table-success",
+        "duplicate" => "table-info",
         _ => "table-secondary"
     };
 
@@ -347,7 +472,7 @@
             content.Add(fileContent, "file", _selectedFileName);
 
             var client = HttpClientFactory.CreateClient("Nanchesoft.Api");
-            var response = await client.PostAsync("/api/hr/employees/import/preview", content);
+            var response = await client.PostAsync($"/api/hr/employees/import/preview?conflict_mode={_conflictMode}", content);
             if (!response.IsSuccessStatusCode)
             {
                 _globalError = $"Error del servidor: {response.StatusCode}";
@@ -384,7 +509,7 @@
             content.Add(fileContent, "file", _selectedFileName);
 
             var client = HttpClientFactory.CreateClient("Nanchesoft.Api");
-            var response = await client.PostAsync("/api/hr/employees/import", content);
+            var response = await client.PostAsync($"/api/hr/employees/import?conflict_mode={_conflictMode}", content);
 
             if (!response.IsSuccessStatusCode)
             {
@@ -395,9 +520,7 @@
             var result = await response.Content.ReadFromJsonAsync<ImportResult>();
             if (result != null)
             {
-                _successMessage = $"Importación completada: {result.Created} nuevos, {result.Updated} actualizados, {result.Skipped} omitidos.";
-                if (result.Errors?.Count > 0)
-                    _successMessage += $" {result.Errors.Count} error(es).";
+                _successMessage = $"Importación completada: {result.Created} nuevos, {result.Updated} actualizados, {result.Skipped} omitidos, {result.Duplicates} duplicados, {result.Errors} errores. ({result.DurationMs} ms)";
                 _preview = null;
                 _selectedFileBytes = null;
                 _selectedFileName = string.Empty;
@@ -422,12 +545,25 @@
         public int UpdateCount { get; set; }
         public int ErrorCount { get; set; }
         public int SkipCount { get; set; }
+        public int DuplicateCount { get; set; }
+        public string ConflictMode { get; set; } = "update";
+        public List<FieldMapping> Mappings { get; set; } = [];
         public List<PreviewRow> Rows { get; set; } = [];
+    }
+
+    private sealed class FieldMapping
+    {
+        public string TargetField { get; set; } = string.Empty;
+        public string Label { get; set; } = string.Empty;
+        public string SourceColumn { get; set; } = string.Empty;
+        public bool Required { get; set; }
+        public bool Found { get; set; }
     }
 
     private sealed class PreviewRow
     {
         public int RowNumber { get; set; }
+        public string Code { get; set; } = string.Empty;
         public string EmployeeNumber { get; set; } = string.Empty;
         public string FullName { get; set; } = string.Empty;
         public string TaxId { get; set; } = string.Empty;
@@ -438,6 +574,8 @@
         public DateTime? HireDate { get; set; }
         public decimal PeriodSalary { get; set; }
         public decimal DailySalary { get; set; }
+        public string BranchCode { get; set; } = string.Empty;
+        public string BranchName { get; set; } = string.Empty;
         public string DepartmentCode { get; set; } = string.Empty;
         public string DepartmentName { get; set; } = string.Empty;
         public string PositionCode { get; set; } = string.Empty;
@@ -452,6 +590,9 @@
         public int Created { get; set; }
         public int Updated { get; set; }
         public int Skipped { get; set; }
-        public List<string>? Errors { get; set; }
+        public int Duplicates { get; set; }
+        public int Errors { get; set; }
+        public Guid? LogId { get; set; }
+        public int DurationMs { get; set; }
     }
 }

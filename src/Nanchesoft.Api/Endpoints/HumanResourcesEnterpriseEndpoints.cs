@@ -206,9 +206,8 @@ public static class HumanResourcesEnterpriseEndpoints
         var companyId = ApiTenantScope.ResolveCompanyId(httpContext);
 
         var rows = await db.WorkSchedules.AsNoTracking()
-            .Where(x => (!tenantId.HasValue && !companyId.HasValue)
-                     || (x.TenantId == tenantId)
-                     || (!tenantId.HasValue && x.CompanyId == companyId))
+            .Where(x => tenantId.HasValue && x.TenantId == tenantId.Value
+                     && (!companyId.HasValue || x.CompanyId == companyId.Value))
             .Include(x => x.Company)
             .Include(x => x.WorkShift)
             .OrderBy(x => x.Code)
@@ -434,9 +433,8 @@ public static class HumanResourcesEnterpriseEndpoints
         var companyId = ApiTenantScope.ResolveCompanyId(httpContext);
 
         var rows = await db.TimeClockDevices.AsNoTracking()
-            .Where(x => (!tenantId.HasValue && !companyId.HasValue)
-                     || (x.TenantId == tenantId)
-                     || (!tenantId.HasValue && x.CompanyId == companyId))
+            .Where(x => tenantId.HasValue && x.TenantId == tenantId.Value
+                     && (!companyId.HasValue || x.CompanyId == companyId.Value))
             .Include(x => x.Company)
             .Include(x => x.Branch)
             .OrderBy(x => x.Code)
@@ -554,9 +552,8 @@ public static class HumanResourcesEnterpriseEndpoints
         var companyId = ApiTenantScope.ResolveCompanyId(httpContext);
 
         var rows = await db.LeaveTypes.AsNoTracking()
-            .Where(x => (!tenantId.HasValue && !companyId.HasValue)
-                     || (x.TenantId == tenantId)
-                     || (!tenantId.HasValue && x.CompanyId == companyId))
+            .Where(x => tenantId.HasValue && x.TenantId == tenantId.Value
+                     && (!companyId.HasValue || x.CompanyId == companyId.Value))
             .Include(x => x.Company)
             .Include(x => x.PayrollConcept)
             .OrderBy(x => x.Code)
@@ -665,9 +662,8 @@ public static class HumanResourcesEnterpriseEndpoints
         var companyId = ApiTenantScope.ResolveCompanyId(httpContext);
 
         var rows = await db.VacationRequests.AsNoTracking()
-            .Where(x => (!tenantId.HasValue && !companyId.HasValue)
-                     || (x.TenantId == tenantId)
-                     || (!tenantId.HasValue && x.CompanyId == companyId))
+            .Where(x => tenantId.HasValue && x.TenantId == tenantId.Value
+                     && (!companyId.HasValue || x.CompanyId == companyId.Value))
             .Include(x => x.Company)
             .Include(x => x.Branch)
             .Include(x => x.Employee)

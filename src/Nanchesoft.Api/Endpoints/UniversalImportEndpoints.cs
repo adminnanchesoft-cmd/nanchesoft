@@ -25,7 +25,8 @@ public static class UniversalImportEndpoints
     // ── POST /api/import/analyze ─────────────────────────────────────
     private static IResult AnalyzeAsync(AnalyzeRequest req)
     {
-        var headers = (req.Headers ?? []).Select(Normalize).ToList();
+        var rawHeaders = req.Headers ?? [];
+        var headers = rawHeaders.Select(Normalize).ToList();
 
         // Score each entity by how many of its field aliases appear in the headers
         EntityDef? best = null;
@@ -46,7 +47,7 @@ public static class UniversalImportEndpoints
         if (best is null || bestScore == 0)
             return Results.Ok(new AnalyzeResult(null, null, [], 0));
 
-        var mappings = BuildMappings(best, headers);
+        var mappings = BuildMappings(best, rawHeaders);
         return Results.Ok(new AnalyzeResult(best.Key, best.Name, mappings, bestScore));
     }
 
@@ -63,14 +64,11 @@ public static class UniversalImportEndpoints
         var companyId = ApiTenantScope.ResolveCompanyId(httpContext);
         var tenantId  = ApiTenantScope.ResolveTenantId(httpContext);
 
-        // Resolve company/tenant if not provided via headers
+        // Nunca caer por default a la primera empresa; el importador debe respetar el contexto activo.
         if (!companyId.HasValue)
-        {
-            var company = await db.Companies.OrderBy(x => x.CreatedAt).FirstOrDefaultAsync();
-            companyId = company?.Id;
-            tenantId  = company?.TenantId;
-        }
-        else if (!tenantId.HasValue)
+            return Results.BadRequest(new { message = "No se pudo resolver la empresa activa. Selecciona el tenant/empresa antes de importar." });
+
+        if (!tenantId.HasValue)
         {
             tenantId = await db.Companies
                 .Where(x => x.Id == companyId.Value)
@@ -79,15 +77,41 @@ public static class UniversalImportEndpoints
         }
 
         if (!companyId.HasValue || !tenantId.HasValue)
-            return Results.BadRequest(new { message = "No se pudo resolver empresa/tenant." });
+            return Results.BadRequest(new { message = "No se pudo resolver el tenant/empresa activos para la importación." });
 
         // Build confirmed mapping: csvHeader → FieldDef
-        var colMap = new Dictionary<string, FieldDef>(StringComparer.OrdinalIgnoreCase);
+        var colMap = new Dictionary<int, FieldDef>();
         foreach (var m in req.Mappings ?? [])
         {
             var field = entity.Fields.FirstOrDefault(f => f.Key == m.FieldKey);
-            if (field is not null)
-                colMap[m.CsvColumn] = field;
+            if (field is not null && m.ColumnIndex >= 0)
+                colMap[m.ColumnIndex] = field;
+        }
+
+        // Completar en servidor los encabezados obvios del CSV aunque el cliente no haya
+        // confirmado el mapeo correctamente. Esto evita perder campos como Sueldo semanal.
+        var mappedFieldKeys = colMap.Values
+            .Select(x => x.Key)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var inferred in BuildMappings(entity, req.Headers ?? []))
+        {
+            if (string.IsNullOrWhiteSpace(inferred.FieldKey))
+                continue;
+
+            if (mappedFieldKeys.Contains(inferred.FieldKey))
+                continue;
+
+            var field = entity.Fields.FirstOrDefault(f => f.Key == inferred.FieldKey);
+            if (field is null)
+                continue;
+
+            var inferredIndex = inferred.ColumnIndex;
+            if (inferredIndex < 0 || colMap.ContainsKey(inferredIndex))
+                continue;
+
+            colMap[inferredIndex] = field;
+            mappedFieldKeys.Add(field.Key);
         }
 
         // ── 1. Pre-resolve / auto-create FK catalogs ─────────────────
@@ -95,11 +119,11 @@ public static class UniversalImportEndpoints
         foreach (var field in entity.Fields.Where(f => f.FkEntity is not null))
         {
             // Find which csv column maps to this field
-            var csvCol = colMap.FirstOrDefault(kv => kv.Value.Key == field.Key).Key;
-            if (csvCol is null) continue;
+            var colEntry = colMap.FirstOrDefault(kv => kv.Value.Key == field.Key);
+            if (colEntry.Value is null) continue;
 
             // Collect all unique raw values in this column from the CSV
-            var colIdx = (req.Headers ?? []).FindIndex(h => string.Equals(h, csvCol, StringComparison.OrdinalIgnoreCase));
+            var colIdx = colEntry.Key;
             if (colIdx < 0) continue;
 
             var rawValues = (req.Rows ?? [])
@@ -114,7 +138,7 @@ public static class UniversalImportEndpoints
 
         // ── 2. Import rows ────────────────────────────────────────────
         var results = new List<RowResult>();
-        int ok = 0, dup = 0, failed = 0;
+        int created = 0, updated = 0, dup = 0, failed = 0;
 
         // Existing codes/names for dup check
         var existingCodes = await entity.GetExistingCodesAsync(db, companyId.Value);
@@ -146,6 +170,18 @@ public static class UniversalImportEndpoints
                 var code = values.TryGetValue("Code", out var c) ? c?.ToString()?.Trim() ?? "" : "";
                 var name = values.TryGetValue("Name", out var n) ? n?.ToString()?.Trim() ?? "" : "";
 
+                if (entity.UpdateAsync is not null)
+                {
+                    var updatedExisting = await entity.UpdateAsync(db, values);
+                    if (updatedExisting)
+                    {
+                        var updateMessage = values.TryGetValue("__ImportMessage", out var updateMsg) ? updateMsg?.ToString() ?? "Actualizado" : "Actualizado";
+                        results.Add(new RowResult(idx + 1, "updated", updateMessage));
+                        updated++;
+                        continue;
+                    }
+                }
+
                 if ((!string.IsNullOrEmpty(code) && existingCodes.Contains(code)) ||
                     (!string.IsNullOrEmpty(name)  && existingNames.Contains(name)))
                 {
@@ -159,8 +195,9 @@ public static class UniversalImportEndpoints
                 {
                     if (!string.IsNullOrEmpty(code)) existingCodes.Add(code);
                     if (!string.IsNullOrEmpty(name))  existingNames.Add(name);
-                    results.Add(new RowResult(idx + 1, "ok", "Importado"));
-                    ok++;
+                    var createMessage = values.TryGetValue("__ImportMessage", out var createMsg) ? createMsg?.ToString() ?? "Importado" : "Importado";
+                    results.Add(new RowResult(idx + 1, "created", createMessage));
+                    created++;
                 }
                 else
                 {
@@ -178,7 +215,9 @@ public static class UniversalImportEndpoints
         return Results.Ok(new
         {
             total = results.Count,
-            imported = ok,
+            imported = created + updated,
+            created,
+            updated,
             duplicates = dup,
             failed,
             rows = results
@@ -187,15 +226,18 @@ public static class UniversalImportEndpoints
 
     // ── Helpers ──────────────────────────────────────────────────────
 
-    private static List<ColumnMapping> BuildMappings(EntityDef entity, List<string> normalizedHeaders)
+    private static List<ColumnMapping> BuildMappings(EntityDef entity, List<string> rawHeaders)
     {
         var mappings = new List<ColumnMapping>();
         var used = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-        foreach (var csvHeader in normalizedHeaders)
+        for (int i = 0; i < rawHeaders.Count; i++)
         {
-            var matched = entity.Fields.FirstOrDefault(f => f.Aliases.Contains(csvHeader));
+            var csvHeader = rawHeaders[i];
+            var normalizedCsvHeader = Normalize(csvHeader);
+            var matched = entity.Fields.FirstOrDefault(f => f.Aliases.Any(a => Normalize(a) == normalizedCsvHeader));
             mappings.Add(new ColumnMapping(
+                ColumnIndex: i,
                 CsvColumn: csvHeader,
                 FieldKey: matched?.Key,
                 FieldName: matched?.Name,
@@ -214,14 +256,14 @@ public static class UniversalImportEndpoints
         EntityDef entity,
         List<string> headers,
         List<string?> cells,
-        Dictionary<string, FieldDef> colMap,
+        Dictionary<int, FieldDef> colMap,
         Dictionary<string, Dictionary<string, Guid>> fkCache)
     {
         var values = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
 
         for (int i = 0; i < headers.Count; i++)
         {
-            if (!colMap.TryGetValue(headers[i], out var field)) continue;
+            if (!colMap.TryGetValue(i, out var field)) continue;
             var raw = (i < cells.Count ? cells[i] : null)?.Trim() ?? "";
 
             if (raw == "ND" || raw == "N/D" || raw == "N.D." || raw == "-")
@@ -251,6 +293,22 @@ public static class UniversalImportEndpoints
 
         switch (fkEntityKey)
         {
+            case "branches":
+                var branches = await db.Branches.Where(x => x.CompanyId == companyId).ToListAsync();
+                foreach (var v in rawValues)
+                {
+                    var existing = branches.FirstOrDefault(b =>
+                        string.Equals(b.Name, v, StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(b.Code, v, StringComparison.OrdinalIgnoreCase));
+                    if (existing is not null) { result[v] = existing.Id; continue; }
+                    var created = new Branch { TenantId = tenantId, CompanyId = companyId, Code = Slug(v), Name = v.ToUpperInvariant(), IsActive = true, CreatedBy = "import" };
+                    db.Branches.Add(created);
+                    await db.SaveChangesAsync();
+                    branches.Add(created);
+                    result[v] = created.Id;
+                }
+                break;
+
             case "hr-departments":
                 var depts = await db.Departments.Where(x => x.CompanyId == companyId).ToListAsync();
                 foreach (var v in rawValues)
@@ -396,9 +454,51 @@ public static class UniversalImportEndpoints
     private static decimal? ParseDecimal(string raw)
     {
         if (string.IsNullOrWhiteSpace(raw) || raw == "ND") return null;
-        var clean = raw.Replace("$", "").Replace(",", "").Trim();
-        return decimal.TryParse(clean, System.Globalization.NumberStyles.Any,
-            System.Globalization.CultureInfo.InvariantCulture, out var d) ? d : null;
+        var clean = raw
+            .Replace("$", "")
+            .Replace("MXN", "", StringComparison.OrdinalIgnoreCase)
+            .Replace("USD", "", StringComparison.OrdinalIgnoreCase)
+            .Trim();
+
+        clean = new string(clean.Where(c => !char.IsWhiteSpace(c)).ToArray());
+
+        if (string.IsNullOrWhiteSpace(clean))
+            return null;
+
+        // 1,234.56 -> 1234.56
+        if (clean.Contains(',') && clean.Contains('.'))
+        {
+            var lastComma = clean.LastIndexOf(',');
+            var lastDot = clean.LastIndexOf('.');
+
+            if (lastComma > lastDot)
+            {
+                // 1.234,56 -> 1234.56
+                clean = clean.Replace(".", "").Replace(",", ".");
+            }
+            else
+            {
+                // 1,234.56 -> 1234.56
+                clean = clean.Replace(",", "");
+            }
+        }
+        else if (clean.Contains(','))
+        {
+            var commaIndex = clean.LastIndexOf(',');
+            var decimals = clean.Length - commaIndex - 1;
+
+            clean = decimals is 1 or 2
+                ? clean.Replace(",", ".")
+                : clean.Replace(",", "");
+        }
+
+        return decimal.TryParse(
+            clean,
+            System.Globalization.NumberStyles.Any,
+            System.Globalization.CultureInfo.InvariantCulture,
+            out var d)
+            ? d
+            : null;
     }
 
     private static DateTime? ParseDate(string raw)
@@ -435,9 +535,9 @@ public static class UniversalImportEndpoints
     // DTOs
     private sealed record AnalyzeRequest(List<string>? Headers, List<List<string?>>? FirstRows);
     private sealed record AnalyzeResult(string? EntityKey, string? EntityName, List<ColumnMapping> Mappings, int Score);
-    private sealed record ColumnMapping(string CsvColumn, string? FieldKey, string? FieldName, string? DataType, bool IsFk, string? FkEntity, bool IsRequired);
+    private sealed record ColumnMapping(int ColumnIndex, string CsvColumn, string? FieldKey, string? FieldName, string? DataType, bool IsFk, string? FkEntity, bool IsRequired);
     private sealed record ExecuteRequest(string EntityKey, List<string>? Headers, List<List<string?>>? Rows, List<MappingEntry>? Mappings);
-    private sealed record MappingEntry(string CsvColumn, string FieldKey);
+    private sealed record MappingEntry(int ColumnIndex, string CsvColumn, string FieldKey);
     private sealed record RowResult(int Row, string Status, string Message);
 }
 
@@ -532,6 +632,7 @@ file static class Schema
                 new() { Key="MiddleName",           Name="Segundo nombre",    DataType="text",    Required=false, Aliases=A("segundonombre","segundo nombre","middle name","middlename") },
                 new() { Key="BirthDate",            Name="Fecha nacimiento",  DataType="date",    Required=false, Aliases=A("nacimiento","fechanacimiento","fecha nacimiento","fecha de nacimiento","fnac","birthdate","birth date","dateofbirth") },
                 new() { Key="HireDate",             Name="Fecha alta",        DataType="date",    Required=true,  Aliases=A("alta","fechaalta","fecha alta","fecha de alta","ingreso","fechaingreso","hiredate","hire date","startdate") },
+                new() { Key="BranchId",             Name="Sucursal",          DataType="fk",      Required=false, FkEntity="branches", Aliases=A("sucursal","branch","branchid","suc","sucursalcodigo","sucursal codigo","codigo sucursal") },
                 new() { Key="DepartmentId",         Name="Departamento",      DataType="fk",      Required=false, FkEntity="hr-departments", Aliases=A("departamento","area","depto","dept","department") },
                 new() { Key="PositionId",           Name="Puesto",            DataType="fk",      Required=false, FkEntity="hr-positions",   Aliases=A("puesto","cargo","posicion","position","job title","jobtitle","rol") },
                 new() { Key="WorkScheduleId",       Name="Horario",           DataType="fk",      Required=false, FkEntity="hr-work-schedules", Aliases=A("horario","turno","jornada","schedule","horario laboral","workschedule") },
@@ -540,16 +641,21 @@ file static class Schema
                 new() { Key="MaritalStatus",        Name="Estado civil",      DataType="text",    Required=false, Aliases=A("estadocivil","estado civil","civil","marital","marital status") },
                 new() { Key="PlaceOfBirth",         Name="Lugar nacimiento",  DataType="text",    Required=false, Aliases=A("lugardenacimiento","lugar nacimiento","lugar de nacimiento","birthplace","lugar") },
                 new() { Key="Phone",                Name="Teléfono",          DataType="text",    Required=false, Aliases=A("telefono","cel","celular","movil","phone","tel","fono") },
+                new() { Key="EmergencyPhone",       Name="Teléfono emergencia",DataType="text",   Required=false, Aliases=A("telefonoemergencia","telefono emergencia","tel emergencia","emergencyphone","emergency phone","tel emerg") },
                 new() { Key="Email",                Name="Email",             DataType="text",    Required=false, Aliases=A("email","correo","correo electronico","mail","e-mail") },
                 new() { Key="TaxId",                Name="RFC",               DataType="text",    Required=false, Aliases=A("rfc","tax id","taxid","registro fiscal") },
+                new() { Key="NationalId",           Name="CURP/ID",           DataType="text",    Required=false, Aliases=A("curpid","curp id","identificacion","national id","nationalid") },
                 new() { Key="Curp",                 Name="CURP",              DataType="text",    Required=false, Aliases=A("curp","clave unica") },
                 new() { Key="Nss",                  Name="NSS",               DataType="text",    Required=false, Aliases=A("nss","numero seguro","seguro social","imss numero","no seguridad") },
-                new() { Key="PeriodSalary",         Name="Sueldo del periodo",DataType="decimal", Required=false, Aliases=A("sueldo del periodo","sueldo periodo","sueldodelperiodo","sueldo semanal","sueldosemanal","salario semanal","salariosemanal","sueldo semana","sueldo","salario","salarioquincenal","salario quincenal","salariomensual","salario mensual","salary","pay","pago") },
+                new() { Key="PeriodSalary",         Name="Sueldo del periodo",DataType="decimal", Required=false, Aliases=A("sueldo del periodo","sueldo periodo","sueldodelperiodo","sueldo semanal","sueldo_semanal","sueldosemanal","salario semanal","salario_semanal","salariosemanal","sueldo semana","sueldo","salario","salarioquincenal","salario quincenal","salariomensual","salario mensual","salary","pay","pago") },
                 new() { Key="DailySalary",          Name="Salario diario",    DataType="decimal", Required=false, Aliases=A("salariodiario","salario diario","daily salary","sueldo diario") },
+                new() { Key="IntegratedDailySalary",Name="Salario diario integrado",DataType="decimal", Required=false, Aliases=A("salariodiariointegrado","salario diario integrado","sdi","integrated daily salary") },
+                new() { Key="SbcFija",              Name="SBC fija",          DataType="decimal", Required=false, Aliases=A("sbcfija","sbc fija","sbc","sbc_fija") },
                 new() { Key="PaymentForm",          Name="Forma de pago",     DataType="text",    Required=false, Aliases=A("formadepago","forma pago","forma de pago","payment","payment form","tipo pago") },
                 new() { Key="BankAccount",          Name="Cuenta bancaria",   DataType="text",    Required=false, Aliases=A("cuenta","cuentadeposito","cuenta deposito","cuenta bancaria","bank account","account","bankaccount") },
                 new() { Key="Clabe",                Name="CLABE",             DataType="text",    Required=false, Aliases=A("clabe","interbancaria","cuenta clabe","clabe interbancaria") },
                 new() { Key="BankCode",             Name="Banco",             DataType="text",    Required=false, Aliases=A("banco","bank","bankcode","clave banco") },
+                new() { Key="BankBranch",           Name="Sucursal banco",    DataType="text",    Required=false, Aliases=A("sucursal banco","sucursalbanco","bank branch","bankbranch","plaza bancaria") },
                 new() { Key="AddressStreet",        Name="Calle y número",    DataType="text",    Required=false, Aliases=A("calle","calleynumero","calle y numero","calleinumero","street","address","domicilio","direccion") },
                 new() { Key="AddressColony",        Name="Colonia",           DataType="text",    Required=false, Aliases=A("colonia","colony","neighborhood","asentamiento") },
                 new() { Key="AddressCity",          Name="Ciudad / Municipio",DataType="text",    Required=false, Aliases=A("ciudad","municipio","poblacion","city","municipality","localidad") },
@@ -558,9 +664,15 @@ file static class Schema
                 new() { Key="FatherName",           Name="Nombre del padre",  DataType="text",    Required=false, Aliases=A("padre","nombr padre","father","fathername","nombre padre") },
                 new() { Key="MotherName",           Name="Nombre de la madre",DataType="text",    Required=false, Aliases=A("madre","nombre madre","mother","mothername") },
                 new() { Key="ContractType",         Name="Tipo de contrato",  DataType="text",    Required=false, Aliases=A("contrato","tipodecontrato","tipo contrato","tipo de contrato","contract","contracttype") },
+                new() { Key="ImssRegId",            Name="Registro patronal", DataType="text",    Required=false, Aliases=A("regpatronal","registro patronal","imssregid","registro imss") },
                 new() { Key="ImssRegistrationDate", Name="Fecha alta IMSS",   DataType="date",    Required=false, Aliases=A("fechaimss","fecha imss","alta imss","imss","imss alta","imss date") },
                 new() { Key="IsImssRegistered",     Name="IMSS registrado",   DataType="bool",    Required=false, Aliases=A("imss registrado","isimss","tieneimss","con imss") },
                 new() { Key="PayrollPeriodType",    Name="Tipo nómina",       DataType="text",    Required=false, Aliases=A("periodonomina","periodo nomina","tipo nomina","payroll type","frecuencia") },
+                new() { Key="Afore",                Name="AFORE",             DataType="text",    Required=false, Aliases=A("afore") },
+                new() { Key="Fonacot",              Name="FONACOT",           DataType="text",    Required=false, Aliases=A("fonacot") },
+                new() { Key="Infonavit",            Name="INFONAVIT",         DataType="text",    Required=false, Aliases=A("infonavit") },
+                new() { Key="ImmediateSupervisor",  Name="Jefe directo",      DataType="text",    Required=false, Aliases=A("jefe directo","jefedirecto","supervisor","immediate supervisor") },
+                new() { Key="Category",             Name="Categoría",         DataType="text",    Required=false, Aliases=A("categoria","categoría","category") },
                 new() { Key="Notes",                Name="Notas",             DataType="text",    Required=false, Aliases=A("notas","notes","observaciones","comentarios","expediente","obs") },
             ],
             GetExistingCodesAsync = async (db, cid) => (await db.Employees.Where(x => x.CompanyId == cid).Select(x => x.Code).ToListAsync()).ToHashSet(StringComparer.OrdinalIgnoreCase),
@@ -598,6 +710,7 @@ file static class Schema
                     Phone        = Str("Phone") ?? "",
                     EmergencyPhone = Str("EmergencyPhone"),
                     TaxId        = Str("TaxId") ?? "",
+                    NationalId   = Str("NationalId") ?? Str("Curp") ?? "",
                     Curp         = Str("Curp") ?? "",
                     Nss          = Str("Nss") ?? "",
                     ImssRegId    = Str("ImssRegId") ?? "",
@@ -613,6 +726,7 @@ file static class Schema
                     AddressCity    = Str("AddressCity"),
                     AddressState   = Str("AddressState"),
                     AddressZipCode = Str("AddressZipCode"),
+                    BranchId       = FkGuid("BranchId"),
                     DepartmentId   = FkGuid("DepartmentId"),
                     PositionId     = FkGuid("PositionId"),
                     WorkScheduleId = FkGuid("WorkScheduleId"),
@@ -634,14 +748,149 @@ file static class Schema
                     BankCode       = Str("BankCode") ?? "",
                     BankAccount    = Str("BankAccount") ?? "",
                     Clabe          = Str("Clabe") ?? "",
+                    BankBranch     = Str("BankBranch") ?? "",
+                    Afore          = Str("Afore") ?? "",
+                    Fonacot        = Str("Fonacot") ?? "",
+                    Infonavit      = Str("Infonavit") ?? "",
+                    ImmediateSupervisor = Str("ImmediateSupervisor"),
+                    Category       = Str("Category"),
                     Notes          = Str("Notes"),
                     Status         = "active",
                     PrintReceipt   = true,
                     IsActive       = true,
                     CreatedBy      = "import"
                 };
+                v["__ImportMessage"] = $"Creado {e.Code} · {e.FirstName} {e.LastName}".Trim();
                 db.Employees.Add(e);
                 await db.SaveChangesAsync();
+                return true;
+            },
+            UpdateAsync = async (db, v) =>
+            {
+                string? Str(string k) => v.TryGetValue(k, out var x) ? x?.ToString() : null;
+                Guid? FkGuid(string k) => v.TryGetValue(k, out var x) && x is Guid g ? g : null;
+                decimal? Dec(string k) => v.TryGetValue(k, out var x) && x is decimal d ? d : null;
+                DateTime? Dt(string k) => v.TryGetValue(k, out var x) && x is DateTime dt ? dt : null;
+                bool? Bool(string k) => v.TryGetValue(k, out var x) && x is bool b ? b : null;
+                var changes = new List<string>();
+
+                void TrackString(string label, string? current, string? incoming, Action<string?> apply)
+                {
+                    if (string.IsNullOrWhiteSpace(incoming) || string.Equals(current ?? "", incoming ?? "", StringComparison.Ordinal))
+                        return;
+                    changes.Add($"{label}: '{current ?? ""}' -> '{incoming}'");
+                    apply(incoming);
+                }
+
+                void TrackGuid(string label, Guid? current, Guid? incoming, Action<Guid?> apply)
+                {
+                    if (!incoming.HasValue || current == incoming)
+                        return;
+                    changes.Add($"{label}: {current?.ToString("D") ?? "(vacío)"} -> {incoming.Value:D}");
+                    apply(incoming);
+                }
+
+                void TrackDecimal(string label, decimal? current, decimal? incoming, Action<decimal> apply)
+                {
+                    if (!incoming.HasValue || current == incoming.Value)
+                        return;
+                    changes.Add($"{label}: {current?.ToString("0.##") ?? "0"} -> {incoming.Value:0.##}");
+                    apply(incoming.Value);
+                }
+
+                void TrackDate(string label, DateTime? current, DateTime? incoming, Action<DateTime?> apply)
+                {
+                    if (!incoming.HasValue || current == incoming.Value)
+                        return;
+                    changes.Add($"{label}: {current?.ToString("yyyy-MM-dd") ?? "(vacío)"} -> {incoming.Value:yyyy-MM-dd}");
+                    apply(incoming);
+                }
+
+                void TrackBool(string label, bool current, bool? incoming, Action<bool> apply)
+                {
+                    if (!incoming.HasValue || current == incoming.Value)
+                        return;
+                    changes.Add($"{label}: {(current ? "Sí" : "No")} -> {(incoming.Value ? "Sí" : "No")}");
+                    apply(incoming.Value);
+                }
+
+                var companyId = (Guid)v["CompanyId"]!;
+                var code = Str("Code")?.Trim();
+                var employeeNumber = Str("EmployeeNumber")?.Trim();
+                var clockKey = Str("ClockKey")?.Trim();
+
+                var existing = await db.Employees.FirstOrDefaultAsync(x =>
+                    x.CompanyId == companyId &&
+                    ((!string.IsNullOrWhiteSpace(code) && x.Code == code) ||
+                     (!string.IsNullOrWhiteSpace(employeeNumber) && x.EmployeeNumber == employeeNumber) ||
+                     (!string.IsNullOrWhiteSpace(clockKey) && x.ClockKey == clockKey)));
+
+                if (existing is null)
+                    return false;
+
+                TrackString("Número empleado", existing.EmployeeNumber, employeeNumber, x => existing.EmployeeNumber = x ?? existing.EmployeeNumber);
+                TrackString("Clave reloj", existing.ClockKey, clockKey, x => existing.ClockKey = x);
+                TrackString("Clave NOI", existing.NoiKey, Str("NoiKey"), x => existing.NoiKey = x);
+                TrackString("Nombre", existing.FirstName, Str("FirstName"), x => existing.FirstName = x ?? existing.FirstName);
+                TrackString("Apellido paterno", existing.LastName, Str("LastName"), x => existing.LastName = x ?? existing.LastName);
+                TrackString("Apellido materno", existing.SecondLastName, Str("SecondLastName"), x => existing.SecondLastName = x);
+                TrackString("Segundo nombre", existing.MiddleName, Str("MiddleName"), x => existing.MiddleName = x ?? existing.MiddleName);
+                TrackString("Email", existing.Email, Str("Email"), x => existing.Email = x ?? existing.Email);
+                TrackString("Teléfono", existing.Phone, Str("Phone"), x => existing.Phone = x ?? existing.Phone);
+                TrackString("Tel. emergencia", existing.EmergencyPhone, Str("EmergencyPhone"), x => existing.EmergencyPhone = x);
+                TrackString("RFC", existing.TaxId, Str("TaxId"), x => existing.TaxId = x ?? existing.TaxId);
+                TrackString("CURP/ID", existing.NationalId, Str("NationalId"), x => existing.NationalId = x ?? existing.NationalId);
+                TrackString("CURP", existing.Curp, Str("Curp"), x => existing.Curp = x ?? existing.Curp);
+                TrackString("NSS", existing.Nss, Str("Nss"), x => existing.Nss = x ?? existing.Nss);
+                TrackString("Registro patronal", existing.ImssRegId, Str("ImssRegId"), x => existing.ImssRegId = x ?? existing.ImssRegId);
+                TrackString("Sexo", existing.Gender, Str("Gender"), x => existing.Gender = x);
+                TrackString("Tipo de sangre", existing.BloodType, Str("BloodType"), x => existing.BloodType = x);
+                TrackString("Estado civil", existing.MaritalStatus, Str("MaritalStatus"), x => existing.MaritalStatus = x);
+                TrackString("Lugar nacimiento", existing.PlaceOfBirth, Str("PlaceOfBirth"), x => existing.PlaceOfBirth = x);
+                TrackString("Nacionalidad", existing.Nationality, Str("Nationality"), x => existing.Nationality = x);
+                TrackString("Nombre del padre", existing.FatherName, Str("FatherName"), x => existing.FatherName = x);
+                TrackString("Nombre de la madre", existing.MotherName, Str("MotherName"), x => existing.MotherName = x);
+                TrackString("Calle y número", existing.AddressStreet, Str("AddressStreet"), x => existing.AddressStreet = x);
+                TrackString("Colonia", existing.AddressColony, Str("AddressColony"), x => existing.AddressColony = x);
+                TrackString("Ciudad", existing.AddressCity, Str("AddressCity"), x => existing.AddressCity = x);
+                TrackString("Estado", existing.AddressState, Str("AddressState"), x => existing.AddressState = x);
+                TrackString("Código postal", existing.AddressZipCode, Str("AddressZipCode"), x => existing.AddressZipCode = x);
+                TrackGuid("Sucursal", existing.BranchId, FkGuid("BranchId"), x => existing.BranchId = x);
+                TrackGuid("Departamento", existing.DepartmentId, FkGuid("DepartmentId"), x => existing.DepartmentId = x);
+                TrackGuid("Puesto", existing.PositionId, FkGuid("PositionId"), x => existing.PositionId = x);
+                TrackGuid("Horario", existing.WorkScheduleId, FkGuid("WorkScheduleId"), x => existing.WorkScheduleId = x);
+                TrackDecimal("Sueldo del periodo", existing.PeriodSalary, Dec("PeriodSalary"), x => existing.PeriodSalary = x);
+                TrackDecimal("Salario diario", existing.DailySalary, Dec("DailySalary"), x => existing.DailySalary = x);
+                TrackDecimal("Salario diario integrado", existing.IntegratedDailySalary, Dec("IntegratedDailySalary"), x => existing.IntegratedDailySalary = x);
+                TrackDecimal("SBC fija", existing.SbcFija, Dec("SbcFija"), x => existing.SbcFija = x);
+                TrackDate("Fecha alta", existing.HireDate, Dt("HireDate"), x => existing.HireDate = x ?? existing.HireDate);
+                TrackDate("Fecha nacimiento", existing.BirthDate, Dt("BirthDate"), x => existing.BirthDate = x);
+                TrackDate("Fecha alta IMSS", existing.ImssRegistrationDate, Dt("ImssRegistrationDate"), x => existing.ImssRegistrationDate = x);
+                TrackBool("IMSS registrado", existing.IsImssRegistered, Bool("IsImssRegistered"), x => existing.IsImssRegistered = x);
+                TrackString("Tipo contrato", existing.ContractType, Str("ContractType"), x => existing.ContractType = x);
+                TrackString("Forma de pago", existing.PaymentForm, Str("PaymentForm"), x => existing.PaymentForm = x);
+                TrackString("Periodo nómina", existing.PayrollPeriodType, Str("PayrollPeriodType"), x => existing.PayrollPeriodType = x);
+                TrackString("Banco", existing.BankCode, Str("BankCode"), x => existing.BankCode = x ?? existing.BankCode);
+                TrackString("Cuenta bancaria", existing.BankAccount, Str("BankAccount"), x => existing.BankAccount = x ?? existing.BankAccount);
+                TrackString("CLABE", existing.Clabe, Str("Clabe"), x => existing.Clabe = x ?? existing.Clabe);
+                TrackString("Sucursal banco", existing.BankBranch, Str("BankBranch"), x => existing.BankBranch = x);
+                TrackString("AFORE", existing.Afore, Str("Afore"), x => existing.Afore = x);
+                TrackString("FONACOT", existing.Fonacot, Str("Fonacot"), x => existing.Fonacot = x);
+                TrackString("INFONAVIT", existing.Infonavit, Str("Infonavit"), x => existing.Infonavit = x);
+                TrackString("Jefe directo", existing.ImmediateSupervisor, Str("ImmediateSupervisor"), x => existing.ImmediateSupervisor = x);
+                TrackString("Categoría", existing.Category, Str("Category"), x => existing.Category = x);
+                TrackString("Notas", existing.Notes, Str("Notes"), x => existing.Notes = x);
+
+                if (changes.Count == 0)
+                {
+                    v["__ImportMessage"] = $"Sin cambios en {existing.Code} · {existing.FirstName} {existing.LastName}".Trim();
+                    return true;
+                }
+
+                existing.UpdatedAt = DateTime.UtcNow;
+                existing.UpdatedBy = "import";
+                await db.SaveChangesAsync();
+                v["__ImportMessage"] = $"Actualizado {existing.Code} · {existing.FirstName} {existing.LastName}. Cambios: {string.Join("; ", changes)}";
                 return true;
             }
         },
@@ -880,6 +1129,7 @@ internal sealed class EntityDef
     public Func<NanchesoftDbContext, Guid, Task<HashSet<string>>> GetExistingCodesAsync { get; set; } = (_, _) => Task.FromResult(new HashSet<string>());
     public Func<NanchesoftDbContext, Guid, Task<HashSet<string>>> GetExistingNamesAsync  { get; set; } = (_, _) => Task.FromResult(new HashSet<string>());
     public Func<NanchesoftDbContext, Dictionary<string, object?>, Task<bool>> InsertAsync { get; set; } = (_, _) => Task.FromResult(false);
+    public Func<NanchesoftDbContext, Dictionary<string, object?>, Task<bool>>? UpdateAsync { get; set; }
 }
 
 internal sealed class FieldDef

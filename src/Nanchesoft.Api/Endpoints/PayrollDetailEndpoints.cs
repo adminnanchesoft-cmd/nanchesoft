@@ -84,9 +84,14 @@ public static class PayrollDetailEndpoints
         };
     }
 
-    private static async Task<IResult> GetPayrollRunLineDetailsAsync(NanchesoftDbContext db)
+    private static async Task<IResult> GetPayrollRunLineDetailsAsync(HttpContext httpContext, NanchesoftDbContext db)
     {
+        var scope = ApiTenantScope.RequireScope(httpContext);
+        if (!scope.IsValid) return scope.Error!;
+
         var rows = await db.PayrollRunLineDetails.AsNoTracking()
+            .Where(x => x.TenantId == scope.TenantId
+                     && (!scope.CompanyId.HasValue || x.CompanyId == scope.CompanyId.Value))
             .Include(x => x.Company)
             .Include(x => x.PayrollRun)
             .Include(x => x.Employee)

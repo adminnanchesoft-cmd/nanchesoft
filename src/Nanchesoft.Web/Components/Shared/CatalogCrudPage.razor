@@ -43,6 +43,9 @@
 @inject PlanApiService PlanApiService
 @inject Nanchesoft.Web.Services.Production.ProductionApiService ProductionApiService
 @inject TreasuryApiService TreasuryApiService
+@inject Nanchesoft.Web.Services.AuthService AuthService
+@inject Nanchesoft.Web.State.AppState AppState
+@inject Nanchesoft.Web.State.AuthState AuthState
 
 <div class="ns-catalog-page">
     @if (!string.IsNullOrWhiteSpace(_clientError))
@@ -128,14 +131,21 @@
             <a class="ns-secondary-btn" href="@_printHref" target="_blank">Imprimir catálogo</a>
             @if (_definition.AllowImport)
             {
-                <button class="ns-secondary-btn" @onclick="() => { _showImport = !_showImport; _dropZoneReady = false; }">
-                    @(_showImport ? "Cerrar importación" : "Importar CSV")
-                </button>
-                <a class="ns-secondary-btn" href="@_importTemplateHref" download="@($"plantilla_{_definition.CatalogKey}.csv")">Descargar plantilla</a>
+                @if (UsesUniversalImportPage)
+                {
+                    <button class="ns-secondary-btn" @onclick="OpenUniversalImportPage">Importar CSV</button>
+                }
+                else
+                {
+                    <button class="ns-secondary-btn" @onclick="() => { _showImport = !_showImport; _dropZoneReady = false; }">
+                        @(_showImport ? "Cerrar importación" : "Importar CSV")
+                    </button>
+                    <a class="ns-secondary-btn" href="@_importTemplateHref" download="@($"plantilla_{_definition.CatalogKey}.csv")">Descargar plantilla</a>
+                }
             }
         </div>
 
-        @if (_definition.AllowImport && _showImport)
+        @if (_definition.AllowImport && _showImport && !UsesUniversalImportPage)
         {
             var _importableCols = _definition.Columns
                 .Where(x => x.AllowEditing && x.DataField != _definition.KeyExpr && x.Visible
@@ -180,6 +190,34 @@
                     <InputFile OnChange="OnImportFileSelected" accept=".csv"
                                style="position:absolute;top:0;left:0;width:100%;height:100%;opacity:0;cursor:pointer;" />
                 </div>
+
+                @if (_importMappings.Count > 0)
+                {
+                    <div style="margin:12px 0;overflow-x:auto;border:1px solid #bfdbfe;border-radius:8px;background:#fff;">
+                        <table style="border-collapse:collapse;font-size:.8rem;width:100%;">
+                            <thead>
+                                <tr style="background:#eff6ff;">
+                                    <th style="padding:6px 10px;border-bottom:1px solid #bfdbfe;">Columna CSV</th>
+                                    <th style="padding:6px 10px;border-bottom:1px solid #bfdbfe;">Campo Nanchesoft</th>
+                                    <th style="padding:6px 10px;border-bottom:1px solid #bfdbfe;">Estado</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var mapping in _importMappings)
+                                {
+                                    var rowBg = mapping.Found ? "#f8fafc" : "#fff7ed";
+                                    <tr style="background:@rowBg;">
+                                        <td style="padding:6px 10px;border-bottom:1px solid #e2e8f0;font-weight:600;">@mapping.SourceHeader</td>
+                                        <td style="padding:6px 10px;border-bottom:1px solid #e2e8f0;">@(string.IsNullOrWhiteSpace(mapping.TargetLabel) ? "-" : mapping.TargetLabel)</td>
+                                        <td style="padding:6px 10px;border-bottom:1px solid #e2e8f0;color:@(mapping.Found ? "#166534" : "#b45309");">
+                                            @(mapping.Found ? "Mapeado" : "Sin asignar")
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
 
                 @if (_importRows.Count > 0)
                 {
@@ -314,12 +352,23 @@
     private int _importCodeDisplayIdx = -1;
     private List<bool> _importAutoCode = [];
     private List<string> _importEditCodes = [];
+    private List<ImportHeaderMapping> _importMappings = [];
+    private bool UsesUniversalImportPage => string.Equals(CatalogKey, "hr-employees", StringComparison.OrdinalIgnoreCase);
 
-    protected override async Task OnInitializedAsync()
+    protected override Task OnInitializedAsync()
+    {
+        // La carga real se posterga a OnAfterRenderAsync para que MainLayout pueda
+        // restaurar la sesión desde localStorage (JS interop) y AppState/AuthState
+        // tengan el TenantId antes de hacer las llamadas a la API.
+        return Task.CompletedTask;
+    }
+
+    private async Task LoadDefinitionAsync()
     {
         try
         {
             _clientError = null;
+            Console.WriteLine($"[CatalogCrudPage] LoadDefinitionAsync key={CatalogKey} appStateHash={AppState.GetHashCode()} authStateHash={AuthState.GetHashCode()} tenant={AppState.CurrentTenantId ?? AuthState.TenantId} company={AppState.CurrentCompanyId ?? AuthState.CompanyId}");
             _definition = await GetDefinitionAsync();
             RebuildExportArtifacts();
         }
@@ -328,10 +377,19 @@
             _clientError = ex.Message;
             _definition = null;
         }
+        await InvokeAsync(StateHasChanged);
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
+        if (firstRender)
+        {
+            // Asegurar que la sesión está restaurada antes de cargar el catálogo.
+            try { await AuthService.RestoreSessionAsync(); } catch (Exception ex) { Console.WriteLine($"[CatalogCrudPage] RestoreSession failed: {ex.Message}"); }
+            Console.WriteLine($"[CatalogCrudPage] after restore key={CatalogKey} tenant={AppState.CurrentTenantId ?? AuthState.TenantId} authenticated={AuthState.IsAuthenticated}");
+            await LoadDefinitionAsync();
+        }
+
         if (_definition is null)
             return;
 
@@ -572,6 +630,12 @@
         await InvokeAsync(StateHasChanged);
     }
 
+    private void OpenUniversalImportPage()
+    {
+        Nav.NavigateTo("/administration/universal-import?entity=hr-employees&returnUrl=%2Fhuman-resources%2Femployees");
+    }
+
+
     public async ValueTask DisposeAsync()
     {
         try { await JS.InvokeVoidAsync("nsCrudGrid.disposeCrudGrid", _containerId); } catch { }
@@ -738,6 +802,7 @@
         _importCodeDisplayIdx = -1;
         _importDone = 0;
         _importOk = 0;
+        _importMappings.Clear();
 
         var lines = content.Split('\n', StringSplitOptions.RemoveEmptyEntries)
                            .Select(l => l.TrimEnd('\r'))
@@ -762,6 +827,13 @@
             var col = FindImportColDef(rawHeaders[h], importCols);
             if (col?.DataField == "Code") _importCsvCodeIdx = h;
             if (col?.DataField == "Name") _importCsvNameIdx = h;
+            _importMappings.Add(new ImportHeaderMapping
+            {
+                SourceHeader = rawHeaders[h],
+                TargetField = col?.DataField ?? string.Empty,
+                TargetLabel = col?.Caption ?? string.Empty,
+                Found = col is not null
+            });
         }
 
         _importHasCodeCol = _importCsvCodeIdx >= 0;
@@ -1018,6 +1090,14 @@
         }
         result.Add(sb.ToString());
         return result;
+    }
+
+    private sealed class ImportHeaderMapping
+    {
+        public string SourceHeader { get; set; } = string.Empty;
+        public string TargetField { get; set; } = string.Empty;
+        public string TargetLabel { get; set; } = string.Empty;
+        public bool Found { get; set; }
     }
 
     private static string GetDisplayValue(CatalogColumnDefinition column, Dictionary<string, object?> row)

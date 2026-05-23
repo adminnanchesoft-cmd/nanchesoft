@@ -3,6 +3,7 @@
 @using Nanchesoft.Web.State
 @implements IDisposable
 @inject AuthState AuthState
+@inject Nanchesoft.Web.Services.AuthService AuthService
 @inject NavigationManager Navigation
 
 <PageTitle>Seleccionar tenant</PageTitle>
@@ -66,9 +67,9 @@
     private bool IsCurrent(Nanchesoft.Web.State.TenantOption option)
         => AuthState.TenantId.HasValue && AuthState.TenantId.Value == option.TenantId;
 
-    private void OnTenantSelected(Nanchesoft.Web.State.TenantOption option)
+    private async Task OnTenantSelected(Nanchesoft.Web.State.TenantOption option)
     {
-        AuthState.SetTenantContext(option);
+        await AuthService.SetTenantContextAsync(option);
         Navigation.NavigateTo("/", forceLoad: false);
     }
 

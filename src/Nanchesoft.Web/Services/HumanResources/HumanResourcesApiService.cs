@@ -18,6 +18,30 @@ public sealed class HumanResourcesApiService
         _authState = authState;
     }
 
+    // El IHttpClientFactory resuelve los DelegatingHandler en su propio scope DI,
+    // distinto del circuito Blazor, así que el ApiTenantScopeHandler ve un AppState
+    // vacío. Aquí ponemos los headers en DefaultRequestHeaders del HttpClient
+    // (cada CreateClient devuelve una instancia nueva con sus headers propios)
+    // usando el AppState/AuthState reales del circuito.
+    private HttpClient CreateScopedClient()
+    {
+        var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
+        Set("X-Tenant-Id", _appState.CurrentTenantId ?? _authState.TenantId);
+        Set("X-Company-Id", _appState.CurrentCompanyId ?? _authState.CompanyId);
+        Set("X-Branch-Id", _appState.CurrentBranchId ?? _authState.BranchId);
+        Set("X-User-Id", _authState.UserId);
+        client.DefaultRequestHeaders.Remove("X-Is-Platform-Owner");
+        client.DefaultRequestHeaders.Add("X-Is-Platform-Owner", _authState.IsPlatformOwner ? "true" : "false");
+        return client;
+
+        void Set(string header, Guid? value)
+        {
+            client.DefaultRequestHeaders.Remove(header);
+            if (value.HasValue && value.Value != Guid.Empty)
+                client.DefaultRequestHeaders.Add(header, value.Value.ToString("D"));
+        }
+    }
+
     public Task<CatalogViewDefinition> GetCatalogAsync(string catalogKey)
         => catalogKey.ToLowerInvariant() switch
         {
@@ -42,7 +66,7 @@ public sealed class HumanResourcesApiService
 
     public async Task<CatalogViewDefinition> InsertAsync(string catalogKey, JsonElement payload)
     {
-        var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
+        var client = CreateScopedClient();
 
         var response = catalogKey.ToLowerInvariant() switch
         {
@@ -71,7 +95,7 @@ public sealed class HumanResourcesApiService
 
     public async Task<CatalogViewDefinition> UpdateAsync(string catalogKey, string key, JsonElement payload)
     {
-        var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
+        var client = CreateScopedClient();
 
         var response = catalogKey.ToLowerInvariant() switch
         {
@@ -100,7 +124,7 @@ public sealed class HumanResourcesApiService
 
     public async Task<CatalogViewDefinition> DeleteAsync(string catalogKey, string key)
     {
-        var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
+        var client = CreateScopedClient();
 
         var endpoint = catalogKey.ToLowerInvariant() switch
         {
@@ -130,7 +154,7 @@ public sealed class HumanResourcesApiService
 
     private async Task<CatalogViewDefinition> GetDepartmentsAsync()
     {
-        var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
+        var client = CreateScopedClient();
         var rows = await client.GetFromJsonAsync<List<DepartmentDto>>("/api/hr/departments") ?? [];
         var companies = await GetCompanyLookupsAsync();
 
@@ -160,7 +184,7 @@ public sealed class HumanResourcesApiService
 
     private async Task<CatalogViewDefinition> GetPositionsAsync()
     {
-        var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
+        var client = CreateScopedClient();
         var rows = await client.GetFromJsonAsync<List<PositionDto>>("/api/hr/positions") ?? [];
         var companies = await GetCompanyLookupsAsync();
         var departments = await GetDepartmentLookupsAsync();
@@ -197,7 +221,7 @@ public sealed class HumanResourcesApiService
 
     private async Task<CatalogViewDefinition> GetEmployeesAsync()
     {
-        var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
+        var client = CreateScopedClient();
         var rows = await client.GetFromJsonAsync<List<EmployeeDto>>("/api/hr/employees") ?? [];
         var companies = await GetCompanyLookupsAsync();
         var branches = await GetBranchLookupsAsync();
@@ -367,7 +391,7 @@ public sealed class HumanResourcesApiService
 
     private async Task<CatalogViewDefinition> GetIncidentsAsync()
     {
-        var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
+        var client = CreateScopedClient();
         var rows = await client.GetFromJsonAsync<List<EmployeeIncidentDto>>("/api/hr/incidents") ?? [];
         var companies = await GetCompanyLookupsAsync();
         var branches = await GetBranchLookupsAsync(onlyCurrentBranch: true);
@@ -424,7 +448,7 @@ public sealed class HumanResourcesApiService
 
     private async Task<CatalogViewDefinition> GetRecurringIncidentsAsync()
     {
-        var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
+        var client = CreateScopedClient();
         var rows = await client.GetFromJsonAsync<List<HrRecurringIncidentRuleDto>>("/api/hr/recurring-incidents") ?? [];
         var companies = await GetCompanyLookupsAsync();
         var branches = await GetBranchLookupsAsync(onlyCurrentBranch: true);
@@ -474,7 +498,7 @@ public sealed class HumanResourcesApiService
 
     private async Task<CatalogViewDefinition> GetPayrollIncidentTypesAsync()
     {
-        var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
+        var client = CreateScopedClient();
         var rows = await client.GetFromJsonAsync<List<NomPayrollIncidentTypeDto>>("/api/payroll/incident-types?includeInactive=true") ?? [];
         var companies = await GetCompanyLookupsAsync();
         var branches = await GetBranchLookupsAsync();
@@ -537,7 +561,7 @@ public sealed class HumanResourcesApiService
 
     private async Task<CatalogViewDefinition> GetHrBanksAsync()
     {
-        var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
+        var client = CreateScopedClient();
         var rows = await client.GetFromJsonAsync<List<HrBankDto>>("/api/hr/banks") ?? [];
 
         return BuildView(
@@ -565,7 +589,7 @@ public sealed class HumanResourcesApiService
 
     private async Task<CatalogViewDefinition> GetTerminationReasonsAsync()
     {
-        var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
+        var client = CreateScopedClient();
         var rows = await client.GetFromJsonAsync<List<HrTerminationReasonDto>>("/api/hr/termination-reasons") ?? [];
         var companies = await GetCompanyLookupsAsync();
 
@@ -594,7 +618,7 @@ public sealed class HumanResourcesApiService
 
     private async Task<CatalogViewDefinition> GetEmployerRegistrationsAsync()
     {
-        var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
+        var client = CreateScopedClient();
         var rows = await client.GetFromJsonAsync<List<HrEmployerRegistrationDto>>("/api/hr/employer-registrations") ?? [];
         var companies = await GetCompanyLookupsAsync();
 
@@ -629,7 +653,7 @@ public sealed class HumanResourcesApiService
 
     private async Task<CatalogViewDefinition> GetContractsAsync()
     {
-        var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
+        var client = CreateScopedClient();
         var rows = await client.GetFromJsonAsync<List<EmployeeContractDto>>("/api/contracts/employee-contracts") ?? [];
         var companies = await GetCompanyLookupsAsync();
         var branches = await GetBranchLookupsAsync();
@@ -826,7 +850,7 @@ public sealed class HumanResourcesApiService
 
     private async Task<CatalogViewDefinition> GetPayrollPeriodTypesAsync()
     {
-        var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
+        var client = CreateScopedClient();
         var rows = await client.GetFromJsonAsync<List<PayrollPeriodTypeDto>>("/api/payroll/period-types") ?? [];
         var companies = await GetCompanyLookupsAsync();
 
@@ -860,7 +884,7 @@ public sealed class HumanResourcesApiService
 
     private async Task<CatalogViewDefinition> GetPayrollPeriodsAsync()
     {
-        var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
+        var client = CreateScopedClient();
         var rows = await client.GetFromJsonAsync<List<PayrollPeriodDto>>("/api/payroll/periods") ?? [];
         var companies = await GetCompanyLookupsAsync();
         var periodTypes = PeriodTypes();
@@ -903,7 +927,7 @@ public sealed class HumanResourcesApiService
 
     private async Task<CatalogViewDefinition> GetPayrollConceptsAsync()
     {
-        var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
+        var client = CreateScopedClient();
         var rows = await client.GetFromJsonAsync<List<PayrollConceptDto>>("/api/payroll/concepts") ?? [];
         var companies = await GetCompanyLookupsAsync();
 
@@ -953,7 +977,7 @@ public sealed class HumanResourcesApiService
 
     private async Task<CatalogViewDefinition> GetPayrollRunsAsync()
     {
-        var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
+        var client = CreateScopedClient();
         var rows = await client.GetFromJsonAsync<List<PayrollRunDto>>("/api/payroll/runs") ?? [];
         var companies = await GetCompanyLookupsAsync();
         var branches = await GetBranchLookupsAsync();
@@ -999,7 +1023,7 @@ public sealed class HumanResourcesApiService
 
     private async Task<CatalogViewDefinition> GetPayrollRunLinesAsync()
     {
-        var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
+        var client = CreateScopedClient();
         var rows = await client.GetFromJsonAsync<List<PayrollRunLineDto>>("/api/payroll/run-lines") ?? [];
         var companies = await GetCompanyLookupsAsync();
         var runs = await GetPayrollRunLookupsAsync();
@@ -1046,7 +1070,7 @@ public sealed class HumanResourcesApiService
 
     private async Task<CatalogViewDefinition> GetPayrollRunLineDetailsAsync()
     {
-        var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
+        var client = CreateScopedClient();
         var rows = await client.GetFromJsonAsync<List<PayrollRunLineDetailDto>>("/api/payroll/run-line-details") ?? [];
         var companies = await GetCompanyLookupsAsync();
         var runs = await GetPayrollRunLookupsAsync();
@@ -1114,7 +1138,7 @@ public sealed class HumanResourcesApiService
         if (!tenantId.HasValue && !companyId.HasValue)
             return [];
 
-        var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
+        var client = CreateScopedClient();
         var rows = await client.GetFromJsonAsync<List<CompanyLookupDto>>("/api/organization/companies") ?? [];
 
         if (tenantId.HasValue)
@@ -1131,7 +1155,7 @@ public sealed class HumanResourcesApiService
 
     private async Task<List<CatalogLookupItem>> GetBranchLookupsAsync(bool onlyCurrentBranch = false)
     {
-        var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
+        var client = CreateScopedClient();
         var rows = await client.GetFromJsonAsync<List<BranchLookupDto>>("/api/organization/branches") ?? [];
         var tenantId = _appState.CurrentTenantId ?? _authState.TenantId;
         var companyId = _appState.CurrentCompanyId ?? _authState.CompanyId;
@@ -1153,7 +1177,7 @@ public sealed class HumanResourcesApiService
 
     private async Task<List<CatalogLookupItem>> GetDepartmentLookupsAsync()
     {
-        var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
+        var client = CreateScopedClient();
         var rows = await client.GetFromJsonAsync<List<DepartmentDto>>("/api/hr/departments") ?? [];
         return rows.Where(x => x.IsActive).OrderBy(x => x.Name).Select(x => new CatalogLookupItem
         {
@@ -1164,7 +1188,7 @@ public sealed class HumanResourcesApiService
 
     private async Task<List<CatalogLookupItem>> GetPositionLookupsAsync()
     {
-        var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
+        var client = CreateScopedClient();
         var rows = await client.GetFromJsonAsync<List<PositionDto>>("/api/hr/positions") ?? [];
         return rows.Where(x => x.IsActive).OrderBy(x => x.Name).Select(x => new CatalogLookupItem
         {
@@ -1175,7 +1199,7 @@ public sealed class HumanResourcesApiService
 
     private async Task<List<CatalogLookupItem>> GetWorkScheduleLookupsAsync()
     {
-        var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
+        var client = CreateScopedClient();
         var rows = await client.GetFromJsonAsync<List<WorkScheduleLookupDto>>("/api/hr/work-schedules") ?? [];
         return rows.Where(x => x.IsActive).OrderBy(x => x.Name).Select(x => new CatalogLookupItem
         {
@@ -1186,7 +1210,7 @@ public sealed class HumanResourcesApiService
 
     private async Task<List<CatalogLookupItem>> GetEmployeeLookupsAsync()
     {
-        var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
+        var client = CreateScopedClient();
         var rows = await client.GetFromJsonAsync<List<EmployeeDto>>("/api/hr/employees") ?? [];
         var branchId = _appState.CurrentBranchId ?? _authState.BranchId;
         if (branchId.HasValue)
@@ -1200,7 +1224,7 @@ public sealed class HumanResourcesApiService
 
     private async Task<List<CatalogLookupItem>> GetPayrollPeriodLookupsAsync(bool onlyOpen = false)
     {
-        var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
+        var client = CreateScopedClient();
         var endpoint = onlyOpen ? "/api/payroll/periods?onlyOpen=true" : "/api/payroll/periods";
         var rows = await client.GetFromJsonAsync<List<PayrollPeriodDto>>(endpoint) ?? [];
         var tenantId = _appState.CurrentTenantId ?? _authState.TenantId;
@@ -1220,7 +1244,7 @@ public sealed class HumanResourcesApiService
 
     private async Task<List<CatalogLookupItem>> GetPayrollRunLookupsAsync()
     {
-        var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
+        var client = CreateScopedClient();
         var rows = await client.GetFromJsonAsync<List<PayrollRunDto>>("/api/payroll/runs") ?? [];
         return rows.Where(x => x.IsActive).OrderByDescending(x => x.RunDate).Select(x => new CatalogLookupItem
         {
@@ -1231,7 +1255,7 @@ public sealed class HumanResourcesApiService
 
     private async Task<List<CatalogLookupItem>> GetPayrollConceptLookupsAsync()
     {
-        var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
+        var client = CreateScopedClient();
         var rows = await client.GetFromJsonAsync<List<PayrollConceptDto>>("/api/payroll/concepts") ?? [];
         return rows.Where(x => x.IsActive).OrderBy(x => x.Code).Select(x => new CatalogLookupItem
         {
@@ -1242,7 +1266,7 @@ public sealed class HumanResourcesApiService
 
     private async Task<List<CatalogLookupItem>> GetPayrollIncidentTypeLookupsAsync()
     {
-        var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
+        var client = CreateScopedClient();
         var rows = await client.GetFromJsonAsync<List<NomPayrollIncidentTypeDto>>("/api/payroll/incident-types") ?? [];
         var tenantId = _appState.CurrentTenantId ?? _authState.TenantId;
         var companyId = _appState.CurrentCompanyId ?? _authState.CompanyId;
@@ -1286,7 +1310,7 @@ public sealed class HumanResourcesApiService
 
     private async Task<List<CatalogLookupItem>> GetPayrollRunLineLookupsAsync()
     {
-        var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
+        var client = CreateScopedClient();
         var rows = await client.GetFromJsonAsync<List<PayrollRunLineDto>>("/api/payroll/run-lines") ?? [];
         return rows.Where(x => x.IsActive).OrderBy(x => x.PayrollRunFolio).ThenBy(x => x.EmployeeName).Select(x => new CatalogLookupItem
         {

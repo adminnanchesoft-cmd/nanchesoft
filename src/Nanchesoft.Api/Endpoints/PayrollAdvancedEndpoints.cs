@@ -133,9 +133,14 @@ public static class PayrollAdvancedEndpoints
         };
     }
 
-    private static async Task<IResult> GetAttendancePunchesAsync(NanchesoftDbContext db)
+    private static async Task<IResult> GetAttendancePunchesAsync(HttpContext httpContext, NanchesoftDbContext db)
     {
+        var scope = ApiTenantScope.RequireScope(httpContext);
+        if (!scope.IsValid) return scope.Error!;
+
         var rows = await db.AttendancePunches.AsNoTracking()
+            .Where(x => x.TenantId == scope.TenantId
+                     && (!scope.CompanyId.HasValue || x.CompanyId == scope.CompanyId.Value))
             .Include(x => x.Company)
             .Include(x => x.Branch)
             .Include(x => x.Employee)
@@ -233,9 +238,14 @@ public static class PayrollAdvancedEndpoints
         return Results.Ok(new { success = true });
     }
 
-    private static async Task<IResult> GetRecurringMovementsAsync(NanchesoftDbContext db)
+    private static async Task<IResult> GetRecurringMovementsAsync(HttpContext httpContext, NanchesoftDbContext db)
     {
+        var scope = ApiTenantScope.RequireScope(httpContext);
+        if (!scope.IsValid) return scope.Error!;
+
         var rows = await db.PayrollRecurringMovements.AsNoTracking()
+            .Where(x => x.TenantId == scope.TenantId
+                     && (!scope.CompanyId.HasValue || x.CompanyId == scope.CompanyId.Value))
             .Include(x => x.Company)
             .Include(x => x.Employee)
             .Include(x => x.PayrollConcept)
@@ -347,9 +357,14 @@ public static class PayrollAdvancedEndpoints
         return Results.Ok(new { success = true });
     }
 
-    private static async Task<IResult> GetLoansAsync(NanchesoftDbContext db)
+    private static async Task<IResult> GetLoansAsync(HttpContext httpContext, NanchesoftDbContext db)
     {
+        var scope = ApiTenantScope.RequireScope(httpContext);
+        if (!scope.IsValid) return scope.Error!;
+
         var rows = await db.EmployeeLoans.AsNoTracking()
+            .Where(x => x.TenantId == scope.TenantId
+                     && (!scope.CompanyId.HasValue || x.CompanyId == scope.CompanyId.Value))
             .Include(x => x.Company)
             .Include(x => x.Employee)
             .Include(x => x.PayrollConcept)
@@ -452,9 +467,14 @@ public static class PayrollAdvancedEndpoints
         return Results.Ok(new { success = true });
     }
 
-    private static async Task<IResult> GetLoanDeductionsAsync(NanchesoftDbContext db)
+    private static async Task<IResult> GetLoanDeductionsAsync(HttpContext httpContext, NanchesoftDbContext db)
     {
+        var scope = ApiTenantScope.RequireScope(httpContext);
+        if (!scope.IsValid) return scope.Error!;
+
         var rows = await db.EmployeeLoanDeductions.AsNoTracking()
+            .Where(x => x.TenantId == scope.TenantId
+                     && (!scope.CompanyId.HasValue || x.CompanyId == scope.CompanyId.Value))
             .Include(x => x.Company)
             .Include(x => x.Employee)
             .Include(x => x.EmployeeLoan)

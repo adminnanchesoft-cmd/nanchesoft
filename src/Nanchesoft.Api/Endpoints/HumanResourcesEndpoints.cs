@@ -198,9 +198,8 @@ var branchId = ApiTenantScope.ResolveBranchId(httpContext);
         var companyId = ApiTenantScope.ResolveCompanyId(httpContext);
 
         var rows = await db.Departments.AsNoTracking()
-            .Where(x => (!tenantId.HasValue && !companyId.HasValue)
-                     || (x.TenantId == tenantId)
-                     || (!tenantId.HasValue && x.CompanyId == companyId))
+            .Where(x => tenantId.HasValue && x.TenantId == tenantId.Value
+                     && (!companyId.HasValue || x.CompanyId == companyId.Value))
             .Include(x => x.Company)
             .OrderBy(x => x.Code)
             .Select(x => new DepartmentDto
@@ -294,9 +293,8 @@ var branchId = ApiTenantScope.ResolveBranchId(httpContext);
         var companyId = ApiTenantScope.ResolveCompanyId(httpContext);
 
         var rows = await db.Positions.AsNoTracking()
-            .Where(x => (!tenantId.HasValue && !companyId.HasValue)
-                     || (x.TenantId == tenantId)
-                     || (!tenantId.HasValue && x.CompanyId == companyId))
+            .Where(x => tenantId.HasValue && x.TenantId == tenantId.Value
+                     && (!companyId.HasValue || x.CompanyId == companyId.Value))
             .Include(x => x.Company)
             .Include(x => x.Department)
             .OrderBy(x => x.Code)
@@ -405,12 +403,10 @@ var branchId = ApiTenantScope.ResolveBranchId(httpContext);
     {
         var tenantId = ApiTenantScope.ResolveTenantId(httpContext);
         var companyId = ApiTenantScope.ResolveCompanyId(httpContext);
-        var branchId = ApiTenantScope.ResolveBranchId(httpContext);
 
         var rows = await db.Employees.AsNoTracking()
             .Where(x => (!tenantId.HasValue || x.TenantId == tenantId.Value)
                      && (!companyId.HasValue || x.CompanyId == companyId.Value))
-            .Where(x => !branchId.HasValue || !x.BranchId.HasValue || x.BranchId == branchId.Value)
             .Include(x => x.Company)
             .Include(x => x.Branch)
             .Include(x => x.Department)
@@ -814,9 +810,8 @@ var branchId = ApiTenantScope.ResolveBranchId(httpContext);
         var companyId = ApiTenantScope.ResolveCompanyId(httpContext);
 
         var rows = await db.EmployeeContracts.AsNoTracking()
-            .Where(x => (!tenantId.HasValue && !companyId.HasValue)
-                     || (x.TenantId == tenantId)
-                     || (!tenantId.HasValue && x.CompanyId == companyId))
+            .Where(x => tenantId.HasValue && x.TenantId == tenantId.Value
+                     && (!companyId.HasValue || x.CompanyId == companyId.Value))
             .Include(x => x.Company)
             .Include(x => x.Branch)
             .Include(x => x.Employee)
@@ -1195,9 +1190,8 @@ var branchId = ApiTenantScope.ResolveBranchId(httpContext);
         var companyId = ApiTenantScope.ResolveCompanyId(httpContext);
 
         var rows = await db.HrRecurringIncidentRules.AsNoTracking()
-            .Where(x => (!tenantId.HasValue && !companyId.HasValue)
-                     || (x.TenantId == tenantId)
-                     || (!tenantId.HasValue && x.CompanyId == companyId))
+            .Where(x => tenantId.HasValue && x.TenantId == tenantId.Value
+                     && (!companyId.HasValue || x.CompanyId == companyId.Value))
             .Where(x => !x.IsDeleted)
             .Include(x => x.Company)
             .Include(x => x.Branch)
@@ -1577,9 +1571,8 @@ var branchId = ApiTenantScope.ResolveBranchId(httpContext);
         var companyId = ApiTenantScope.ResolveCompanyId(httpContext);
 
         var rows = await db.PayrollPeriodTypes.AsNoTracking()
-            .Where(x => (!tenantId.HasValue && !companyId.HasValue)
-                     || (x.TenantId == tenantId)
-                     || (!tenantId.HasValue && x.CompanyId == companyId))
+            .Where(x => tenantId.HasValue && x.TenantId == tenantId.Value
+                     && (!companyId.HasValue || x.CompanyId == companyId.Value))
             .Include(x => x.Company)
             .OrderBy(x => x.Code)
             .Select(x => new PayrollPeriodTypeDto
@@ -1672,13 +1665,12 @@ var branchId = ApiTenantScope.ResolveBranchId(httpContext);
 
     private static async Task<IResult> GetPayrollConceptsAsync(HttpContext httpContext, NanchesoftDbContext db)
     {
-        var tenantId = ApiTenantScope.ResolveTenantId(httpContext);
-        var companyId = ApiTenantScope.ResolveCompanyId(httpContext);
+        var scope = ApiTenantScope.RequireScope(httpContext);
+        if (!scope.IsValid) return scope.Error!;
 
         var rows = await db.PayrollConcepts.AsNoTracking()
-            .Where(x => (!tenantId.HasValue && !companyId.HasValue)
-                     || (x.TenantId == tenantId)
-                     || (!tenantId.HasValue && x.CompanyId == companyId))
+            .Where(x => x.TenantId == scope.TenantId
+                     && (!scope.CompanyId.HasValue || x.CompanyId == scope.CompanyId.Value))
             .Include(x => x.Company)
             .OrderBy(x => x.Code)
             .Select(x => new PayrollConceptDto
@@ -1727,12 +1719,20 @@ var branchId = ApiTenantScope.ResolveBranchId(httpContext);
 
     private static async Task<IResult> CreatePayrollConceptAsync(HttpContext httpContext, PayrollConceptRequest request, NanchesoftDbContext db)
     {
-        var context = await ResolveDefaultContextAsync(httpContext, db);
-        var tenantId = request.TenantId ?? context.TenantId;
-        var companyId = request.CompanyId ?? context.CompanyId;
+        var scope = ApiTenantScope.RequireScope(httpContext);
+        if (!scope.IsValid) return scope.Error!;
 
-        if (!tenantId.HasValue || !companyId.HasValue)
-            return Results.BadRequest(new { message = "No existe contexto de tenant/empresa para el concepto." });
+        var context = await ResolveDefaultContextAsync(httpContext, db);
+        var tenantId = scope.TenantId;
+        var companyId = scope.CompanyId ?? request.CompanyId ?? context.CompanyId;
+
+        if (!companyId.HasValue)
+            return Results.BadRequest(new { message = "Selecciona empresa activa para crear el concepto." });
+
+        // Forzar que la compañía pertenezca al tenant del usuario.
+        var owns = await db.Companies.AnyAsync(x => x.Id == companyId.Value && x.TenantId == tenantId);
+        if (!owns)
+            return Results.BadRequest(new { message = "La empresa no pertenece a tu tenant." });
 
         var code = NormalizeUpper(request.Code);
         var name = NormalizeText(request.Name);
@@ -1740,12 +1740,12 @@ var branchId = ApiTenantScope.ResolveBranchId(httpContext);
         if (string.IsNullOrWhiteSpace(code) || string.IsNullOrWhiteSpace(name))
             return Results.BadRequest(new { message = "Código y nombre son obligatorios." });
 
-        if (await db.PayrollConcepts.AnyAsync(x => x.CompanyId == companyId && x.Code == code))
+        if (await db.PayrollConcepts.AnyAsync(x => x.CompanyId == companyId.Value && x.Code == code))
             return Results.BadRequest(new { message = "Ya existe un concepto con ese código." });
 
         var entity = new PayrollConcept
         {
-            TenantId = tenantId.Value,
+            TenantId = tenantId,
             CompanyId = companyId.Value,
             Code = code,
             Name = name,
@@ -1787,11 +1787,14 @@ var branchId = ApiTenantScope.ResolveBranchId(httpContext);
         return Results.Ok(new { success = true, id = entity.Id });
     }
 
-    private static async Task<IResult> UpdatePayrollConceptAsync(Guid id, PayrollConceptRequest request, NanchesoftDbContext db)
+    private static async Task<IResult> UpdatePayrollConceptAsync(HttpContext httpContext, Guid id, PayrollConceptRequest request, NanchesoftDbContext db)
     {
-        var entity = await db.PayrollConcepts.FirstOrDefaultAsync(x => x.Id == id);
+        var scope = ApiTenantScope.RequireScope(httpContext);
+        if (!scope.IsValid) return scope.Error!;
+
+        var entity = await db.PayrollConcepts.FirstOrDefaultAsync(x => x.Id == id && x.TenantId == scope.TenantId);
         if (entity is null)
-            return Results.NotFound(new { message = "No se encontró el concepto." });
+            return Results.NotFound(new { message = "No se encontró el concepto en tu tenant." });
 
         var code = NormalizeUpper(request.Code, entity.Code);
         if (await db.PayrollConcepts.AnyAsync(x => x.Id != id && x.CompanyId == entity.CompanyId && x.Code == code))
@@ -1836,11 +1839,14 @@ var branchId = ApiTenantScope.ResolveBranchId(httpContext);
         return Results.Ok(new { success = true });
     }
 
-    private static async Task<IResult> DeletePayrollConceptAsync(Guid id, NanchesoftDbContext db)
+    private static async Task<IResult> DeletePayrollConceptAsync(HttpContext httpContext, Guid id, NanchesoftDbContext db)
     {
-        var entity = await db.PayrollConcepts.FirstOrDefaultAsync(x => x.Id == id);
+        var scope = ApiTenantScope.RequireScope(httpContext);
+        if (!scope.IsValid) return scope.Error!;
+
+        var entity = await db.PayrollConcepts.FirstOrDefaultAsync(x => x.Id == id && x.TenantId == scope.TenantId);
         if (entity is null)
-            return Results.NotFound(new { message = "No se encontró el concepto." });
+            return Results.NotFound(new { message = "No se encontró el concepto en tu tenant." });
 
         db.PayrollConcepts.Remove(entity);
         await db.SaveChangesAsync();
@@ -1853,9 +1859,8 @@ var branchId = ApiTenantScope.ResolveBranchId(httpContext);
         var companyId = ApiTenantScope.ResolveCompanyId(httpContext);
 
         var rows = await db.PayrollRuns.AsNoTracking()
-            .Where(x => (!tenantId.HasValue && !companyId.HasValue)
-                     || (x.TenantId == tenantId)
-                     || (!tenantId.HasValue && x.CompanyId == companyId))
+            .Where(x => tenantId.HasValue && x.TenantId == tenantId.Value
+                     && (!companyId.HasValue || x.CompanyId == companyId.Value))
             .Include(x => x.Company)
             .Include(x => x.Branch)
             .Include(x => x.PayrollPeriod)
@@ -1999,9 +2004,8 @@ var branchId = ApiTenantScope.ResolveBranchId(httpContext);
         var companyId = ApiTenantScope.ResolveCompanyId(httpContext);
 
         var rows = await db.PayrollRunLines.AsNoTracking()
-            .Where(x => (!tenantId.HasValue && !companyId.HasValue)
-                     || (x.TenantId == tenantId)
-                     || (!tenantId.HasValue && x.CompanyId == companyId))
+            .Where(x => tenantId.HasValue && x.TenantId == tenantId.Value
+                     && (!companyId.HasValue || x.CompanyId == companyId.Value))
             .Include(x => x.Company)
             .Include(x => x.PayrollRun)
             .Include(x => x.Employee)

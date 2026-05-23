@@ -10,26 +10,31 @@ public static class NomPayrollIncidentTypeEndpoints
 
         group.MapGet("/", async (HttpContext httpContext, INomPayrollIncidentTypeService service, bool includeInactive = false) =>
         {
-            var tenantId = ApiTenantScope.ResolveTenantId(httpContext);
-            var companyId = ApiTenantScope.ResolveCompanyId(httpContext);
-            return Results.Ok(await service.ListAsync(tenantId, companyId, includeInactive));
+            var scope = ApiTenantScope.RequireScope(httpContext);
+            if (!scope.IsValid) return scope.Error!;
+            return Results.Ok(await service.ListAsync(scope.TenantId, scope.CompanyId, includeInactive));
         });
 
-        group.MapGet("/{id:guid}", async (Guid id, INomPayrollIncidentTypeService service) =>
+        group.MapGet("/{id:guid}", async (HttpContext httpContext, Guid id, INomPayrollIncidentTypeService service) =>
         {
+            var scope = ApiTenantScope.RequireScope(httpContext);
+            if (!scope.IsValid) return scope.Error!;
             var row = await service.GetAsync(id);
-            return row is null
-                ? Results.NotFound(new { message = "No se encontro el tipo de incidencia." })
-                : Results.Ok(row);
+            if (row is null || row.TenantId != scope.TenantId)
+                return Results.NotFound(new { message = "No se encontro el tipo de incidencia en tu tenant." });
+            return Results.Ok(row);
         });
 
         group.MapPost("/", async (HttpContext httpContext, NomPayrollIncidentTypeRequest request, INomPayrollIncidentTypeService service) =>
         {
+            var scope = ApiTenantScope.RequireScope(httpContext);
+            if (!scope.IsValid) return scope.Error!;
+
             var result = await service.CreateAsync(
                 request,
-                ApiTenantScope.ResolveTenantId(httpContext),
-                ApiTenantScope.ResolveCompanyId(httpContext),
-                ApiTenantScope.ResolveBranchId(httpContext));
+                scope.TenantId,
+                scope.CompanyId,
+                scope.BranchId);
 
             return result.Success
                 ? Results.Ok(new { success = true, id = result.Id })

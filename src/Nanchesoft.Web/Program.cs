@@ -36,6 +36,7 @@ builder.Services
 
 builder.Services.AddHttpContextAccessor();
 
+builder.Services.AddSingleton<Nanchesoft.Web.State.TenantContextAccessor>();
 builder.Services.AddScoped<ApiTenantScopeHandler>();
 
 builder.Services.AddHttpClient("Nanchesoft.Api", client =>

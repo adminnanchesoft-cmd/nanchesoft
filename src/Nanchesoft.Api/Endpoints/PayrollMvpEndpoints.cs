@@ -7,6 +7,8 @@ namespace Nanchesoft.Api.Endpoints;
 
 public static class PayrollMvpEndpoints
 {
+    private const string UnidentifiedCatalogCode = "POR IDENTIFICAR";
+
     public static IEndpointRouteBuilder MapPayrollMvpEndpoints(this IEndpointRouteBuilder app)
     {
         var employees = app.MapGroup("/api/hr/employees").WithTags("HrEmployees");
@@ -35,17 +37,178 @@ public static class PayrollMvpEndpoints
 
     // ──────────────────────────────────────────────────────────────
     // 1. IMPORTAR EMPLEADOS DESDE EXCEL
-    // Columnas esperadas: NoEmpleado, Nombre, ApellidoPaterno, ApellidoMaterno,
-    //   RFC, CURP, Email, Telefono, FechaIngreso, SueldoPeriodo, SalarioDiario, SalarioDiarioIntegrado,
-    //   DepartamentoCodigo, PuestoCodigo
+    //
+    // Pipeline: ParseFile → DetectDuplicates → ValidateAgainstDb →
+    //           ApplyConflictMode → SaveTransactionally → PersistLog.
+    //
+    // Modos de conflicto (query string ?conflict_mode=update|skip|error):
+    //   * update  (default) — si el empleado existe se actualiza.
+    //   * skip               — si existe se omite (no se modifica nada).
+    //   * error              — si existe se rechaza la fila.
+    //
+    // Validaciones obligatorias:
+    //   * Duplicados intra-archivo por NoEmpleado, RFC, CURP, NSS.
+    //   * Conflictos cruzados contra BD: RFC/CURP/NSS pertenecientes a otro empleado.
+    //   * Catálogos requeridos (Departamento/Puesto) si vienen códigos.
+    //
+    // Si CUALQUIER fila tiene status=error y conflict_mode!=skip, se aborta
+    // la importación completa (todo o nada). La bitácora se guarda siempre.
     // ──────────────────────────────────────────────────────────────
     private static async Task<IResult> ImportEmployeesFromExcelAsync(HttpContext httpContext, IFormFile file, NanchesoftDbContext db)
     {
         if (file is null || file.Length == 0)
             return Results.BadRequest(new { message = "El archivo está vacío." });
 
-        // Resolver empresa/tenant del contexto del usuario (headers X-Tenant-Id / X-Company-Id),
-        // no agarrar la primera por fecha — eso ponía todos los empleados en la empresa semilla.
+        var conflictMode = ResolveConflictMode(httpContext);
+
+        var (companyOrError, branchId) = await ResolveImportScopeAsync(httpContext, db);
+        if (companyOrError is not Company company)
+            return Results.BadRequest(new { message = companyOrError as string ?? "No se pudo determinar la empresa." });
+
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        EmployeeImportBundle? bundle;
+        try
+        {
+            bundle = await BuildEmployeeImportBundleAsync(file, db, company, branchId, conflictMode);
+        }
+        catch (Exception ex)
+        {
+            return Results.Problem($"No se pudo leer el archivo: {ex.Message}", statusCode: 400);
+        }
+
+        var rows = bundle.Rows;
+        var summary = SummarizeRows(rows);
+        var executedBy = ResolveUserName(httpContext);
+
+        var fatalError = summary.ErrorCount > 0 && conflictMode != "skip";
+        var log = new HrEmployeeImportLog
+        {
+            TenantId = company.TenantId,
+            CompanyId = company.Id,
+            BranchId = branchId,
+            FileName = file.FileName ?? string.Empty,
+            FileSizeBytes = file.Length,
+            ConflictMode = conflictMode,
+            TotalRows = summary.Total,
+            CreatedCount = summary.NewCount,
+            UpdatedCount = summary.UpdateCount,
+            SkippedCount = summary.SkipCount,
+            DuplicateCount = summary.DuplicateCount,
+            ErrorCount = summary.ErrorCount,
+            ExecutedBy = executedBy,
+            ExecutedAt = DateTime.UtcNow
+        };
+
+        // Errores fatales: no se aplica nada, sólo se persiste bitácora.
+        if (fatalError)
+        {
+            log.Success = false;
+            log.RolledBack = true;
+            log.Errors = System.Text.Json.JsonSerializer.Serialize(rows.Where(r => r.Status == "error").Take(200));
+            log.Duplicates = System.Text.Json.JsonSerializer.Serialize(rows.Where(r => r.Status == "duplicate").Take(200));
+            log.DurationMs = (int)sw.ElapsedMilliseconds;
+            db.HrEmployeeImportLogs.Add(log);
+            await db.SaveChangesAsync();
+
+            return Results.BadRequest(new
+            {
+                success = false,
+                message = "La importación se canceló porque hay filas con error. Corrige el archivo o usa conflict_mode=skip.",
+                rolledBack = true,
+                summary = new
+                {
+                    total = summary.Total,
+                    created = 0,
+                    updated = 0,
+                    skipped = summary.SkipCount,
+                    duplicates = summary.DuplicateCount,
+                    errors = summary.ErrorCount,
+                },
+                errorRows = rows.Where(r => r.Status == "error").Take(50).Select(r => new { r.RowNumber, r.EmployeeNumber, r.Message }),
+                logId = log.Id
+            });
+        }
+
+        // Aplicar las filas válidas en una sola transacción.
+        await using var tx = await db.Database.BeginTransactionAsync();
+        try
+        {
+            await EnsureImportCatalogsAsync(db, company, rows);
+
+            foreach (var row in rows)
+            {
+                if (row.Status == "new")
+                {
+                    db.Employees.Add(BuildNewEmployee(row, company, branchId));
+                }
+                else if (row.Status == "update")
+                {
+                    ApplyUpdate(row, bundle.ExistingByEmployeeNumber[row.EmployeeNumber]);
+                }
+            }
+
+            await db.SaveChangesAsync();
+
+            log.Success = true;
+            log.RolledBack = false;
+            log.Errors = System.Text.Json.JsonSerializer.Serialize(rows.Where(r => r.Status == "error").Take(200));
+            log.Duplicates = System.Text.Json.JsonSerializer.Serialize(rows.Where(r => r.Status == "duplicate").Take(200));
+            log.DurationMs = (int)sw.ElapsedMilliseconds;
+            db.HrEmployeeImportLogs.Add(log);
+            await db.SaveChangesAsync();
+
+            await tx.CommitAsync();
+        }
+        catch (Exception ex)
+        {
+            await tx.RollbackAsync();
+
+            // Persistir log fuera de la transacción para que quede registro del fallo.
+            log.Success = false;
+            log.RolledBack = true;
+            log.ErrorCount = Math.Max(log.ErrorCount, 1);
+            log.Errors = System.Text.Json.JsonSerializer.Serialize(new[] { new { row = 0, message = $"Excepción al guardar: {ex.Message}" } });
+            log.DurationMs = (int)sw.ElapsedMilliseconds;
+            db.ChangeTracker.Clear();
+            db.HrEmployeeImportLogs.Add(log);
+            await db.SaveChangesAsync();
+
+            return Results.Problem($"Importación abortada y revertida. {ex.Message}", statusCode: 500);
+        }
+
+        return Results.Ok(new
+        {
+            success = true,
+            created = summary.NewCount,
+            updated = summary.UpdateCount,
+            skipped = summary.SkipCount,
+            duplicates = summary.DuplicateCount,
+            errors = summary.ErrorCount,
+            logId = log.Id,
+            durationMs = log.DurationMs
+        });
+    }
+
+    // ──────────────────────────────────────────────────────────────
+    // Helpers compartidos entre Preview e Import
+    // ──────────────────────────────────────────────────────────────
+    private static string ResolveConflictMode(HttpContext httpContext)
+    {
+        var mode = httpContext.Request.Query["conflict_mode"].ToString().Trim().ToLowerInvariant();
+        return mode is "update" or "skip" or "error" ? mode : "update";
+    }
+
+    private static string ResolveUserName(HttpContext httpContext)
+    {
+        var headerUser = httpContext.Request.Headers["X-User-Email"].ToString();
+        if (!string.IsNullOrWhiteSpace(headerUser)) return headerUser.Trim();
+        var headerName = httpContext.Request.Headers["X-User-Name"].ToString();
+        if (!string.IsNullOrWhiteSpace(headerName)) return headerName.Trim();
+        return httpContext.User?.Identity?.Name ?? "excel-import";
+    }
+
+    private static async Task<(object companyOrError, Guid? branchId)> ResolveImportScopeAsync(HttpContext httpContext, NanchesoftDbContext db)
+    {
         var ctxTenantId = ApiTenantScope.ResolveTenantId(httpContext);
         var ctxCompanyId = ApiTenantScope.ResolveCompanyId(httpContext);
         var ctxBranchId = ApiTenantScope.ResolveBranchId(httpContext);
@@ -57,129 +220,323 @@ public static class PayrollMvpEndpoints
             company = await db.Companies.Where(x => x.TenantId == ctxTenantId.Value && x.IsActive).OrderBy(x => x.CreatedAt).FirstOrDefaultAsync();
 
         if (company is null)
-            return Results.BadRequest(new { message = "No se pudo determinar la empresa para importar. Selecciona empresa activa en el contexto del usuario." });
+            return ("No se pudo determinar la empresa para importar. Selecciona empresa activa en el contexto del usuario.", null);
 
         var branchId = ctxBranchId
             ?? await db.Branches.Where(x => x.CompanyId == company.Id).OrderBy(x => x.CreatedAt).Select(x => (Guid?)x.Id).FirstOrDefaultAsync();
+
+        return (company, branchId);
+    }
+
+    private sealed class EmployeeImportBundle
+    {
+        public List<EmployeeImportPreviewRow> Rows { get; set; } = [];
+        public Dictionary<string, Employee> ExistingByEmployeeNumber { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+        public List<EmployeeImportFieldMapping> Mappings { get; set; } = [];
+    }
+
+    private sealed class ImportSummary
+    {
+        public int Total { get; set; }
+        public int NewCount { get; set; }
+        public int UpdateCount { get; set; }
+        public int SkipCount { get; set; }
+        public int DuplicateCount { get; set; }
+        public int ErrorCount { get; set; }
+    }
+
+    private static ImportSummary SummarizeRows(List<EmployeeImportPreviewRow> rows) => new()
+    {
+        Total = rows.Count,
+        NewCount = rows.Count(r => r.Status == "new"),
+        UpdateCount = rows.Count(r => r.Status == "update"),
+        SkipCount = rows.Count(r => r.Status == "skip"),
+        DuplicateCount = rows.Count(r => r.Status == "duplicate"),
+        ErrorCount = rows.Count(r => r.Status == "error")
+    };
+
+    private static async Task<EmployeeImportBundle> BuildEmployeeImportBundleAsync(
+        IFormFile file, NanchesoftDbContext db, Company company, Guid? branchIdHint, string conflictMode)
+    {
+        var bundle = new EmployeeImportBundle();
 
         using var stream = file.OpenReadStream();
         using var workbook = new XLWorkbook(stream);
         var ws = workbook.Worksheet(1);
 
         var headers = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
-        var headerRow = ws.Row(1);
-        foreach (var cell in headerRow.CellsUsed())
+        foreach (var cell in ws.Row(1).CellsUsed())
             headers[cell.GetString().Trim()] = cell.Address.ColumnNumber;
+        bundle.Mappings = BuildEmployeeImportMappings(headers);
 
-        int created = 0, updated = 0, skipped = 0;
-        var errors = new List<string>();
+        var branches = await db.Branches.Where(x => x.CompanyId == company.Id)
+            .ToDictionaryAsync(x => x.Code.ToUpperInvariant(), x => new { x.Id, x.Name });
+        var departments = await db.Departments.Where(x => x.CompanyId == company.Id)
+            .ToDictionaryAsync(x => x.Code.ToUpperInvariant(), x => new { x.Id, x.Name });
+        var positions = await db.Positions.Where(x => x.CompanyId == company.Id)
+            .ToDictionaryAsync(x => x.Code.ToUpperInvariant(), x => new { x.Id, x.Name });
+
+        var existing = await db.Employees.Where(x => x.CompanyId == company.Id).ToListAsync();
+        bundle.ExistingByEmployeeNumber = existing.ToDictionary(x => x.EmployeeNumber.Trim().ToUpperInvariant(), StringComparer.OrdinalIgnoreCase);
+        var existingByTaxId = existing.Where(x => !string.IsNullOrWhiteSpace(x.TaxId))
+            .GroupBy(x => x.TaxId.Trim().ToUpperInvariant())
+            .ToDictionary(g => g.Key, g => g.First());
+        var existingByCurp = existing.Where(x => !string.IsNullOrWhiteSpace(x.Curp))
+            .GroupBy(x => x.Curp.Trim().ToUpperInvariant())
+            .ToDictionary(g => g.Key, g => g.First());
+        var existingByNss = existing.Where(x => !string.IsNullOrWhiteSpace(x.Nss))
+            .GroupBy(x => x.Nss.Trim())
+            .ToDictionary(g => g.Key, g => g.First());
+
         var lastRow = ws.LastRowUsed()?.RowNumber() ?? 1;
 
-        var departments = await db.Departments.Where(x => x.CompanyId == company.Id).ToDictionaryAsync(x => x.Code.ToUpperInvariant(), x => x.Id);
-        var positions = await db.Positions.Where(x => x.CompanyId == company.Id).ToDictionaryAsync(x => x.Code.ToUpperInvariant(), x => x.Id);
-        var existingEmployees = await db.Employees.Where(x => x.CompanyId == company.Id).ToDictionaryAsync(x => x.EmployeeNumber.ToUpperInvariant());
-
-        for (int row = 2; row <= lastRow; row++)
+        // 1) Lectura inicial — todas las filas a estructura uniforme.
+        var rawRows = new List<EmployeeImportPreviewRow>();
+        for (int r = 2; r <= lastRow; r++)
         {
-            try
+            var empNum = GetCell(ws, r, headers, "NoEmpleado").Trim().ToUpperInvariant();
+            if (string.IsNullOrWhiteSpace(empNum))
             {
-                var empNum = GetCell(ws, row, headers, "NoEmpleado").Trim().ToUpperInvariant();
-                if (string.IsNullOrWhiteSpace(empNum))
+                rawRows.Add(new EmployeeImportPreviewRow { RowNumber = r, Status = "skip", Message = "Sin número de empleado." });
+                continue;
+            }
+
+            var firstName = GetCell(ws, r, headers, "Nombre").Trim();
+            var lastName = GetCell(ws, r, headers, "ApellidoPaterno").Trim();
+            var secondLastName = GetCell(ws, r, headers, "ApellidoMaterno").Trim();
+            var taxId = GetCell(ws, r, headers, "RFC").Trim().ToUpperInvariant();
+            var curp = GetCell(ws, r, headers, "CURP").Trim().ToUpperInvariant();
+            var nss = GetCell(ws, r, headers, "NSS").Trim();
+            var email = GetCell(ws, r, headers, "Email").Trim();
+            var phone = GetCell(ws, r, headers, "Telefono").Trim();
+            var hireDateStr = GetCell(ws, r, headers, "FechaIngreso").Trim();
+            var periodSalaryStr = GetCellAny(ws, r, headers, "SueldoPeriodo", "SueldoDelPeriodo", "Sueldo del periodo", "Sueldo periodo", "Sueldo semanal").Trim();
+            var salaryStr = GetCell(ws, r, headers, "SalarioDiario").Trim();
+            var intSalaryStr = GetCell(ws, r, headers, "SalarioDiarioIntegrado").Trim();
+            var branchCode = NormalizeCatalogCode(GetCell(ws, r, headers, "SucursalCodigo"));
+            var deptCode = NormalizeCatalogCode(GetCell(ws, r, headers, "DepartamentoCodigo"));
+            var posCode = NormalizeCatalogCode(GetCell(ws, r, headers, "PuestoCodigo"));
+
+            _ = DateTime.TryParse(hireDateStr, out var hireDate);
+            TryParseDecimalValue(periodSalaryStr, out var periodSalary);
+            TryParseDecimalValue(salaryStr, out var dailySalary);
+            TryParseDecimalValue(intSalaryStr, out var intDailySalary);
+            if (intDailySalary == 0m && dailySalary != 0m) intDailySalary = dailySalary;
+
+            string branchName = "", deptName = "", posName = "";
+            Guid? branchId = null, deptId = null, posId = null;
+            if (branches.TryGetValue(branchCode, out var b)) branchName = b.Name;
+            if (branches.TryGetValue(branchCode, out b)) branchId = b.Id;
+            if (departments.TryGetValue(deptCode, out var d)) deptName = d.Name;
+            if (departments.TryGetValue(deptCode, out d)) deptId = d.Id;
+            if (positions.TryGetValue(posCode, out var p)) posName = p.Name;
+            if (positions.TryGetValue(posCode, out p)) posId = p.Id;
+
+            rawRows.Add(new EmployeeImportPreviewRow
+            {
+                RowNumber = r,
+                EmployeeNumber = empNum,
+                FirstName = firstName,
+                LastName = lastName,
+                SecondLastName = secondLastName,
+                FullName = string.Join(" ", new[] { firstName, lastName, secondLastName }.Where(s => !string.IsNullOrWhiteSpace(s))),
+                TaxId = taxId,
+                Curp = curp,
+                Nss = nss,
+                Email = email,
+                Phone = phone,
+                HireDate = hireDate == default ? null : hireDate.Date,
+                PeriodSalary = periodSalary,
+                DailySalary = dailySalary,
+                IntegratedDailySalary = intDailySalary,
+                BranchCode = branchCode,
+                BranchName = branchName,
+                BranchId = branchId,
+                CreateBranch = branchId is null,
+                DepartmentCode = deptCode,
+                DepartmentName = deptName,
+                DepartmentId = deptId,
+                CreateDepartment = deptId is null,
+                PositionCode = posCode,
+                PositionName = posName,
+                PositionId = posId,
+                CreatePosition = posId is null,
+                HireDateRaw = hireDateStr,
+                PeriodSalaryRaw = periodSalaryStr,
+                SalaryRaw = salaryStr
+            });
+        }
+
+        // 2) Duplicados dentro del propio archivo.
+        var dupEmpNum = rawRows.Where(r => !string.IsNullOrWhiteSpace(r.EmployeeNumber))
+                               .GroupBy(r => r.EmployeeNumber).Where(g => g.Count() > 1)
+                               .SelectMany(g => g.Skip(1)).Select(r => r.RowNumber).ToHashSet();
+        var dupTaxId = rawRows.Where(r => !string.IsNullOrWhiteSpace(r.TaxId))
+                              .GroupBy(r => r.TaxId).Where(g => g.Count() > 1)
+                              .SelectMany(g => g.Skip(1)).Select(r => r.RowNumber).ToHashSet();
+        var dupCurp = rawRows.Where(r => !string.IsNullOrWhiteSpace(r.Curp))
+                             .GroupBy(r => r.Curp).Where(g => g.Count() > 1)
+                             .SelectMany(g => g.Skip(1)).Select(r => r.RowNumber).ToHashSet();
+        var dupNss = rawRows.Where(r => !string.IsNullOrWhiteSpace(r.Nss))
+                            .GroupBy(r => r.Nss).Where(g => g.Count() > 1)
+                            .SelectMany(g => g.Skip(1)).Select(r => r.RowNumber).ToHashSet();
+
+        // 3) Asignar status final.
+        foreach (var row in rawRows)
+        {
+            if (row.Status == "skip") continue; // ya skip por falta de NoEmpleado
+
+            var rowErrors = new List<string>();
+
+            if (dupEmpNum.Contains(row.RowNumber)) rowErrors.Add($"Número de empleado '{row.EmployeeNumber}' repetido en el archivo.");
+            if (dupTaxId.Contains(row.RowNumber)) rowErrors.Add($"RFC '{row.TaxId}' repetido en el archivo.");
+            if (dupCurp.Contains(row.RowNumber)) rowErrors.Add($"CURP '{row.Curp}' repetida en el archivo.");
+            if (dupNss.Contains(row.RowNumber)) rowErrors.Add($"NSS '{row.Nss}' repetido en el archivo.");
+
+            var isExisting = bundle.ExistingByEmployeeNumber.ContainsKey(row.EmployeeNumber);
+
+            // Choque cruzado contra BD: el RFC/CURP/NSS pertenece a OTRO empleado distinto del que se está procesando.
+            if (!string.IsNullOrWhiteSpace(row.TaxId) && existingByTaxId.TryGetValue(row.TaxId, out var owner1)
+                && (!isExisting || !string.Equals(owner1.EmployeeNumber, row.EmployeeNumber, StringComparison.OrdinalIgnoreCase)))
+                rowErrors.Add($"RFC '{row.TaxId}' ya pertenece al empleado {owner1.EmployeeNumber}.");
+            if (!string.IsNullOrWhiteSpace(row.Curp) && existingByCurp.TryGetValue(row.Curp, out var owner2)
+                && (!isExisting || !string.Equals(owner2.EmployeeNumber, row.EmployeeNumber, StringComparison.OrdinalIgnoreCase)))
+                rowErrors.Add($"CURP '{row.Curp}' ya pertenece al empleado {owner2.EmployeeNumber}.");
+            if (!string.IsNullOrWhiteSpace(row.Nss) && existingByNss.TryGetValue(row.Nss, out var owner3)
+                && (!isExisting || !string.Equals(owner3.EmployeeNumber, row.EmployeeNumber, StringComparison.OrdinalIgnoreCase)))
+                rowErrors.Add($"NSS '{row.Nss}' ya pertenece al empleado {owner3.EmployeeNumber}.");
+
+            // Validaciones de campos básicos.
+            if (!isExisting)
+            {
+                if (string.IsNullOrWhiteSpace(row.FirstName)) rowErrors.Add("Nombre vacío.");
+                if (string.IsNullOrWhiteSpace(row.LastName)) rowErrors.Add("Apellido paterno vacío.");
+            }
+            if (!string.IsNullOrWhiteSpace(row.HireDateRaw) && !DateTime.TryParse(row.HireDateRaw, out _))
+                rowErrors.Add($"Fecha ingreso inválida: '{row.HireDateRaw}'.");
+            if (!string.IsNullOrWhiteSpace(row.SalaryRaw) && !TryParseDecimalValue(row.SalaryRaw, out _))
+                rowErrors.Add($"Salario diario inválido: '{row.SalaryRaw}'.");
+            if (!string.IsNullOrWhiteSpace(row.PeriodSalaryRaw) && !TryParseDecimalValue(row.PeriodSalaryRaw, out _))
+                rowErrors.Add($"Sueldo del periodo inválido: '{row.PeriodSalaryRaw}'.");
+            if (rowErrors.Count > 0)
+            {
+                row.Status = "error";
+                row.Message = string.Join(" ", rowErrors);
+                continue;
+            }
+
+            if (isExisting)
+            {
+                switch (conflictMode)
                 {
-                    skipped++;
-                    continue;
-                }
-
-                var firstName = GetCell(ws, row, headers, "Nombre").Trim();
-                var lastName = GetCell(ws, row, headers, "ApellidoPaterno").Trim();
-                var middleName = GetCell(ws, row, headers, "ApellidoMaterno").Trim();
-                var taxId = GetCell(ws, row, headers, "RFC").Trim().ToUpperInvariant();
-                var nationalId = GetCell(ws, row, headers, "CURP").Trim().ToUpperInvariant();
-                var email = GetCell(ws, row, headers, "Email").Trim();
-                var phone = GetCell(ws, row, headers, "Telefono").Trim();
-                var hireDateStr = GetCell(ws, row, headers, "FechaIngreso").Trim();
-                var periodSalaryStr = GetCellAny(ws, row, headers, "SueldoPeriodo", "SueldoDelPeriodo", "Sueldo del periodo", "Sueldo periodo", "Sueldo semanal").Trim();
-                var salaryStr = GetCell(ws, row, headers, "SalarioDiario").Trim();
-                var intSalaryStr = GetCell(ws, row, headers, "SalarioDiarioIntegrado").Trim();
-                var deptCode = GetCell(ws, row, headers, "DepartamentoCodigo").Trim().ToUpperInvariant();
-                var posCode = GetCell(ws, row, headers, "PuestoCodigo").Trim().ToUpperInvariant();
-                var isExisting = existingEmployees.TryGetValue(empNum, out var existing);
-
-                if (!isExisting && (string.IsNullOrWhiteSpace(firstName) || string.IsNullOrWhiteSpace(lastName)))
-                {
-                    errors.Add($"Fila {row}: Nombre o apellido vacíos para No.{empNum}.");
-                    continue;
-                }
-
-                _ = DateTime.TryParse(hireDateStr, out var hireDate);
-                TryParseDecimalValue(periodSalaryStr, out var periodSalary);
-                TryParseDecimalValue(salaryStr, out var dailySalary);
-                TryParseDecimalValue(intSalaryStr, out var intDailySalary);
-                if (intDailySalary == 0m && dailySalary != 0m) intDailySalary = dailySalary;
-
-                Guid? deptId = !string.IsNullOrWhiteSpace(deptCode) && departments.TryGetValue(deptCode, out var did) ? did : null;
-                Guid? posId = !string.IsNullOrWhiteSpace(posCode) && positions.TryGetValue(posCode, out var pid) ? pid : null;
-
-                if (isExisting && existing is not null)
-                {
-                    if (!string.IsNullOrWhiteSpace(firstName)) existing.FirstName = firstName;
-                    if (!string.IsNullOrWhiteSpace(lastName)) existing.LastName = lastName;
-                    if (!string.IsNullOrWhiteSpace(middleName)) existing.MiddleName = middleName;
-                    if (!string.IsNullOrWhiteSpace(taxId)) existing.TaxId = taxId;
-                    if (!string.IsNullOrWhiteSpace(nationalId)) existing.NationalId = nationalId;
-                    if (!string.IsNullOrWhiteSpace(email)) existing.Email = email;
-                    if (!string.IsNullOrWhiteSpace(phone)) existing.Phone = phone;
-                    if (hireDate != default) existing.HireDate = hireDate;
-                    if (!string.IsNullOrWhiteSpace(periodSalaryStr)) existing.PeriodSalary = periodSalary;
-                    if (!string.IsNullOrWhiteSpace(salaryStr)) existing.DailySalary = dailySalary;
-                    if (!string.IsNullOrWhiteSpace(intSalaryStr)) existing.IntegratedDailySalary = intDailySalary;
-                    if (deptId.HasValue) existing.DepartmentId = deptId;
-                    if (posId.HasValue) existing.PositionId = posId;
-                    existing.UpdatedAt = DateTime.UtcNow;
-                    existing.UpdatedBy = "excel-import";
-                    updated++;
-                }
-                else
-                {
-                    var code = empNum;
-                    if (await db.Employees.AnyAsync(x => x.CompanyId == company.Id && x.Code == code))
-                        code = $"{code}-{Guid.NewGuid().ToString("N")[..4].ToUpper()}";
-
-                    db.Employees.Add(new Employee
-                    {
-                        TenantId = company.TenantId,
-                        CompanyId = company.Id,
-                        BranchId = branchId,
-                        DepartmentId = deptId,
-                        PositionId = posId,
-                        Code = code,
-                        EmployeeNumber = empNum,
-                        FirstName = firstName,
-                        LastName = lastName,
-                        MiddleName = middleName,
-                        TaxId = taxId,
-                        NationalId = nationalId,
-                        Email = email,
-                        Phone = phone,
-                        HireDate = hireDate == default ? DateTime.UtcNow.Date : hireDate,
-                        PeriodSalary = periodSalary,
-                        DailySalary = dailySalary,
-                        IntegratedDailySalary = intDailySalary,
-                        Status = "active",
-                        IsActive = true,
-                        CreatedBy = "excel-import"
-                    });
-                    created++;
+                    case "skip":
+                        row.Status = "skip";
+                        row.Message = "Existe — omitido (modo skip).";
+                        break;
+                    case "error":
+                        row.Status = "duplicate";
+                        row.Message = "Ya existe en la base de datos (modo error).";
+                        break;
+                    default:
+                        row.Status = "update";
+                        row.Message = "Actualización.";
+                        break;
                 }
             }
-            catch (Exception ex)
+            else
             {
-                errors.Add($"Fila {row}: {ex.Message}");
+                row.Status = "new";
+                row.Message = "Nuevo.";
+            }
+
+            if (row.Status is "new" or "update")
+            {
+                if (row.CreateBranch)
+                    row.Message = AppendMessage(row.Message, $"Se creará la sucursal '{row.BranchCode}'.");
+                else if (string.Equals(row.BranchCode, UnidentifiedCatalogCode, StringComparison.OrdinalIgnoreCase))
+                    row.Message = AppendMessage(row.Message, $"Se asignará la sucursal '{UnidentifiedCatalogCode}'.");
+                if (row.CreateDepartment)
+                    row.Message = AppendMessage(row.Message, $"Se creará el departamento '{row.DepartmentCode}'.");
+                else if (string.Equals(row.DepartmentCode, UnidentifiedCatalogCode, StringComparison.OrdinalIgnoreCase))
+                    row.Message = AppendMessage(row.Message, $"Se asignará el departamento '{UnidentifiedCatalogCode}'.");
+
+                if (row.CreatePosition)
+                    row.Message = AppendMessage(row.Message, $"Se creará el puesto '{row.PositionCode}'.");
+                else if (string.Equals(row.PositionCode, UnidentifiedCatalogCode, StringComparison.OrdinalIgnoreCase))
+                    row.Message = AppendMessage(row.Message, $"Se asignará el puesto '{UnidentifiedCatalogCode}'.");
             }
         }
 
-        await db.SaveChangesAsync();
-        return Results.Ok(new { success = true, created, updated, skipped, errors });
+        var nextEmployeeCodeNumber = GetNextEmployeeCodeNumber(existing);
+        foreach (var row in rawRows.Where(x => x.Status == "new"))
+        {
+            row.Code = FormatEmployeeCode(nextEmployeeCodeNumber++);
+            row.Message = AppendMessage($"Nuevo. Código asignado: {row.Code}.", row.Message.Replace("Nuevo.", string.Empty).Trim());
+        }
+
+        foreach (var row in rawRows.Where(x => x.Status == "update"))
+        {
+            if (bundle.ExistingByEmployeeNumber.TryGetValue(row.EmployeeNumber, out var existingEmployee))
+                row.Code = existingEmployee.Code;
+        }
+
+        bundle.Rows = rawRows;
+        return bundle;
+    }
+
+    private static Employee BuildNewEmployee(EmployeeImportPreviewRow row, Company company, Guid? branchId)
+    {
+        return new Employee
+        {
+            TenantId = company.TenantId,
+            CompanyId = company.Id,
+            BranchId = row.BranchId ?? branchId,
+            DepartmentId = row.DepartmentId,
+            PositionId = row.PositionId,
+            Code = row.Code,
+            EmployeeNumber = row.EmployeeNumber,
+            FirstName = row.FirstName,
+            LastName = row.LastName,
+            SecondLastName = string.IsNullOrWhiteSpace(row.SecondLastName) ? null : row.SecondLastName,
+            MiddleName = string.Empty,
+            Email = row.Email,
+            Phone = row.Phone,
+            TaxId = row.TaxId,
+            NationalId = row.Curp,
+            Curp = row.Curp,
+            Nss = row.Nss,
+            HireDate = row.HireDate ?? DateTime.UtcNow.Date,
+            PeriodSalary = row.PeriodSalary,
+            DailySalary = row.DailySalary,
+            IntegratedDailySalary = row.IntegratedDailySalary,
+            Status = "active",
+            IsActive = true,
+            CreatedBy = "excel-import"
+        };
+    }
+
+    private static void ApplyUpdate(EmployeeImportPreviewRow row, Employee existing)
+    {
+        if (!string.IsNullOrWhiteSpace(row.FirstName)) existing.FirstName = row.FirstName;
+        if (!string.IsNullOrWhiteSpace(row.LastName)) existing.LastName = row.LastName;
+        if (!string.IsNullOrWhiteSpace(row.SecondLastName)) existing.SecondLastName = row.SecondLastName;
+        if (!string.IsNullOrWhiteSpace(row.TaxId)) existing.TaxId = row.TaxId;
+        if (!string.IsNullOrWhiteSpace(row.Curp)) { existing.Curp = row.Curp; existing.NationalId = row.Curp; }
+        if (!string.IsNullOrWhiteSpace(row.Nss)) existing.Nss = row.Nss;
+        if (!string.IsNullOrWhiteSpace(row.Email)) existing.Email = row.Email;
+        if (!string.IsNullOrWhiteSpace(row.Phone)) existing.Phone = row.Phone;
+        if (row.HireDate.HasValue) existing.HireDate = row.HireDate.Value;
+        if (row.BranchId.HasValue) existing.BranchId = row.BranchId;
+        if (row.DepartmentId.HasValue) existing.DepartmentId = row.DepartmentId;
+        if (row.PositionId.HasValue) existing.PositionId = row.PositionId;
+        if (!string.IsNullOrWhiteSpace(row.PeriodSalaryRaw)) existing.PeriodSalary = row.PeriodSalary;
+        if (!string.IsNullOrWhiteSpace(row.SalaryRaw))
+        {
+            existing.DailySalary = row.DailySalary;
+            existing.IntegratedDailySalary = row.IntegratedDailySalary;
+        }
+        existing.UpdatedAt = DateTime.UtcNow;
+        existing.UpdatedBy = "excel-import";
     }
 
     // ──────────────────────────────────────────────────────────────
@@ -2029,7 +2386,7 @@ public static class PayrollMvpEndpoints
             "FechaIngreso", "FechaNacimiento",
             "Sexo", "EstadoCivil", "TipoSangre",
             "SueldoPeriodo", "SalarioDiario", "SalarioDiarioIntegrado",
-            "DepartamentoCodigo", "PuestoCodigo",
+            "SucursalCodigo", "DepartamentoCodigo", "PuestoCodigo",
             "TipoContrato", "PeriodoNomina",
             "ClaveReloj", "ClaveNOI",
             "Curp_Domicilio_Calle", "Colonia", "Ciudad", "Estado", "CodigoPostal",
@@ -2065,22 +2422,23 @@ public static class PayrollMvpEndpoints
         ws.Cell(2, 16).Value = 2100.00;
         ws.Cell(2, 17).Value = 300.00;
         ws.Cell(2, 18).Value = 320.00;
-        ws.Cell(2, 19).Value = "PROD";
-        ws.Cell(2, 20).Value = "OPER";
-        ws.Cell(2, 21).Value = "indefinite";
-        ws.Cell(2, 22).Value = "semanal";
-        ws.Cell(2, 23).Value = "001";
-        ws.Cell(2, 24).Value = "";
-        ws.Cell(2, 25).Value = "Av. Principal 123";
-        ws.Cell(2, 26).Value = "Centro";
-        ws.Cell(2, 27).Value = "Monterrey";
-        ws.Cell(2, 28).Value = "NL";
-        ws.Cell(2, 29).Value = "64000";
-        ws.Cell(2, 30).Value = "BBVA";
-        ws.Cell(2, 31).Value = "";
+        ws.Cell(2, 19).Value = "MATRIZ";
+        ws.Cell(2, 20).Value = "PROD";
+        ws.Cell(2, 21).Value = "OPER";
+        ws.Cell(2, 22).Value = "indefinite";
+        ws.Cell(2, 23).Value = "semanal";
+        ws.Cell(2, 24).Value = "001";
+        ws.Cell(2, 25).Value = "";
+        ws.Cell(2, 26).Value = "Av. Principal 123";
+        ws.Cell(2, 27).Value = "Centro";
+        ws.Cell(2, 28).Value = "Monterrey";
+        ws.Cell(2, 29).Value = "NL";
+        ws.Cell(2, 30).Value = "64000";
+        ws.Cell(2, 31).Value = "BBVA";
         ws.Cell(2, 32).Value = "";
-        ws.Cell(2, 33).Value = "Y1234567890";
-        ws.Cell(2, 34).Value = "A";
+        ws.Cell(2, 33).Value = "";
+        ws.Cell(2, 34).Value = "Y1234567890";
+        ws.Cell(2, 35).Value = "A";
 
         ws.Columns().AdjustToContents();
 
@@ -2101,126 +2459,54 @@ public static class PayrollMvpEndpoints
         if (file is null || file.Length == 0)
             return Results.BadRequest(new { message = "El archivo está vacío." });
 
-        var ctxTenantId = ApiTenantScope.ResolveTenantId(httpContext);
-        var ctxCompanyId = ApiTenantScope.ResolveCompanyId(httpContext);
+        var conflictMode = ResolveConflictMode(httpContext);
+        var (companyOrError, branchId) = await ResolveImportScopeAsync(httpContext, db);
+        if (companyOrError is not Company company)
+            return Results.BadRequest(new { message = companyOrError as string ?? "No se pudo determinar la empresa." });
 
-        Company? company = null;
-        if (ctxCompanyId.HasValue)
-            company = await db.Companies.FirstOrDefaultAsync(x => x.Id == ctxCompanyId.Value);
-        else if (ctxTenantId.HasValue)
-            company = await db.Companies.Where(x => x.TenantId == ctxTenantId.Value && x.IsActive).OrderBy(x => x.CreatedAt).FirstOrDefaultAsync();
-        else
-            company = await db.Companies.OrderBy(x => x.CreatedAt).FirstOrDefaultAsync();
-
-        if (company is null)
-            return Results.BadRequest(new { message = "No existe empresa configurada." });
-
-        var departments = await db.Departments.Where(x => x.CompanyId == company.Id)
-            .ToDictionaryAsync(x => x.Code.ToUpperInvariant(), x => x.Name);
-        var positions = await db.Positions.Where(x => x.CompanyId == company.Id)
-            .ToDictionaryAsync(x => x.Code.ToUpperInvariant(), x => x.Name);
-        var existingNumbers = await db.Employees.Where(x => x.CompanyId == company.Id)
-            .Select(x => x.EmployeeNumber.ToUpperInvariant())
-            .ToHashSetAsync();
-
-        using var stream = file.OpenReadStream();
-        using var workbook = new XLWorkbook(stream);
-        var ws = workbook.Worksheet(1);
-
-        var headers = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
-        foreach (var cell in ws.Row(1).CellsUsed())
-            headers[cell.GetString().Trim()] = cell.Address.ColumnNumber;
-
-        var lastRow = ws.LastRowUsed()?.RowNumber() ?? 1;
-        var rows = new List<EmployeeImportPreviewRow>();
-
-        for (int r = 2; r <= lastRow; r++)
+        EmployeeImportBundle bundle;
+        try
         {
-            var empNum = GetCell(ws, r, headers, "NoEmpleado").Trim().ToUpperInvariant();
-            if (string.IsNullOrWhiteSpace(empNum))
-            {
-                rows.Add(new EmployeeImportPreviewRow { RowNumber = r, Status = "skip", Message = "Sin número de empleado" });
-                continue;
-            }
-
-            var firstName = GetCell(ws, r, headers, "Nombre").Trim();
-            var lastName = GetCell(ws, r, headers, "ApellidoPaterno").Trim();
-            var secondLastName = GetCell(ws, r, headers, "ApellidoMaterno").Trim();
-            var taxId = GetCell(ws, r, headers, "RFC").Trim().ToUpperInvariant();
-            var curp = GetCell(ws, r, headers, "CURP").Trim().ToUpperInvariant();
-            var nss = GetCell(ws, r, headers, "NSS").Trim();
-            var email = GetCell(ws, r, headers, "Email").Trim();
-            var phone = GetCell(ws, r, headers, "Telefono").Trim();
-            var hireDateStr = GetCell(ws, r, headers, "FechaIngreso").Trim();
-            var periodSalaryStr = GetCellAny(ws, r, headers, "SueldoPeriodo", "SueldoDelPeriodo", "Sueldo del periodo", "Sueldo periodo", "Sueldo semanal").Trim();
-            var salaryStr = GetCell(ws, r, headers, "SalarioDiario").Trim();
-            var deptCode = GetCell(ws, r, headers, "DepartamentoCodigo").Trim().ToUpperInvariant();
-            var posCode = GetCell(ws, r, headers, "PuestoCodigo").Trim().ToUpperInvariant();
-
-            var rowErrors = new List<string>();
-            var isUpdate = existingNumbers.Contains(empNum);
-
-            if (!isUpdate && string.IsNullOrWhiteSpace(firstName)) rowErrors.Add("Nombre vacío");
-            if (!isUpdate && string.IsNullOrWhiteSpace(lastName)) rowErrors.Add("Apellido paterno vacío");
-
-            _ = DateTime.TryParse(hireDateStr, out var hireDate);
-            if (hireDate == default && !string.IsNullOrWhiteSpace(hireDateStr))
-                rowErrors.Add($"Fecha ingreso inválida: '{hireDateStr}'");
-
-            if (!TryParseDecimalValue(salaryStr, out var salary) && !string.IsNullOrWhiteSpace(salaryStr))
-                rowErrors.Add($"Salario diario inválido: '{salaryStr}'");
-            if (!TryParseDecimalValue(periodSalaryStr, out var periodSalary) && !string.IsNullOrWhiteSpace(periodSalaryStr))
-                rowErrors.Add($"Sueldo del periodo inválido: '{periodSalaryStr}'");
-
-            var deptName = !string.IsNullOrWhiteSpace(deptCode) && departments.TryGetValue(deptCode, out var dn) ? dn : "";
-            if (!string.IsNullOrWhiteSpace(deptCode) && string.IsNullOrWhiteSpace(deptName))
-                rowErrors.Add($"Departamento '{deptCode}' no encontrado");
-
-            var posName = !string.IsNullOrWhiteSpace(posCode) && positions.TryGetValue(posCode, out var pn) ? pn : "";
-            if (!string.IsNullOrWhiteSpace(posCode) && string.IsNullOrWhiteSpace(posName))
-                rowErrors.Add($"Puesto '{posCode}' no encontrado");
-
-            var status = rowErrors.Count > 0 ? "error" : isUpdate ? "update" : "new";
-
-            rows.Add(new EmployeeImportPreviewRow
-            {
-                RowNumber = r,
-                EmployeeNumber = empNum,
-                FullName = $"{firstName} {lastName} {secondLastName}".Trim(),
-                TaxId = taxId,
-                Curp = curp,
-                Nss = nss,
-                Email = email,
-                Phone = phone,
-                HireDate = hireDate == default ? null : hireDate.Date,
-                PeriodSalary = periodSalary,
-                DailySalary = salary,
-                DepartmentCode = deptCode,
-                DepartmentName = deptName,
-                PositionCode = posCode,
-                PositionName = posName,
-                Status = status,
-                Message = rowErrors.Count > 0 ? string.Join("; ", rowErrors) : isUpdate ? "Actualización" : "Nuevo"
-            });
+            bundle = await BuildEmployeeImportBundleAsync(file, db, company, branchId, conflictMode);
+        }
+        catch (Exception ex)
+        {
+            return Results.Problem($"No se pudo leer el archivo: {ex.Message}", statusCode: 400);
         }
 
-        var summary = new
-        {
-            total = rows.Count,
-            newCount = rows.Count(x => x.Status == "new"),
-            updateCount = rows.Count(x => x.Status == "update"),
-            errorCount = rows.Count(x => x.Status == "error"),
-            skipCount = rows.Count(x => x.Status == "skip"),
-            rows
-        };
+        var summary = SummarizeRows(bundle.Rows);
 
-        return Results.Ok(summary);
+        return Results.Ok(new
+        {
+            total = summary.Total,
+            newCount = summary.NewCount,
+            updateCount = summary.UpdateCount,
+            errorCount = summary.ErrorCount,
+            skipCount = summary.SkipCount,
+            duplicateCount = summary.DuplicateCount,
+            conflictMode = conflictMode,
+            mappings = bundle.Mappings,
+            rows = bundle.Rows
+        });
+    }
+
+    public sealed class EmployeeImportFieldMapping
+    {
+        public string TargetField { get; set; } = string.Empty;
+        public string Label { get; set; } = string.Empty;
+        public string SourceColumn { get; set; } = string.Empty;
+        public bool Required { get; set; }
+        public bool Found { get; set; }
     }
 
     public sealed class EmployeeImportPreviewRow
     {
         public int RowNumber { get; set; }
+        public string Code { get; set; } = string.Empty;
         public string EmployeeNumber { get; set; } = string.Empty;
+        public string FirstName { get; set; } = string.Empty;
+        public string LastName { get; set; } = string.Empty;
+        public string SecondLastName { get; set; } = string.Empty;
         public string FullName { get; set; } = string.Empty;
         public string TaxId { get; set; } = string.Empty;
         public string Curp { get; set; } = string.Empty;
@@ -2230,11 +2516,306 @@ public static class PayrollMvpEndpoints
         public DateTime? HireDate { get; set; }
         public decimal PeriodSalary { get; set; }
         public decimal DailySalary { get; set; }
+        public decimal IntegratedDailySalary { get; set; }
+        public Guid? BranchId { get; set; }
+        public bool CreateBranch { get; set; }
+        public string BranchCode { get; set; } = string.Empty;
+        public string BranchName { get; set; } = string.Empty;
+        public Guid? DepartmentId { get; set; }
+        public bool CreateDepartment { get; set; }
         public string DepartmentCode { get; set; } = string.Empty;
         public string DepartmentName { get; set; } = string.Empty;
+        public Guid? PositionId { get; set; }
+        public bool CreatePosition { get; set; }
         public string PositionCode { get; set; } = string.Empty;
         public string PositionName { get; set; } = string.Empty;
-        public string Status { get; set; } = string.Empty;
+        public string Status { get; set; } = string.Empty;     // new | update | skip | duplicate | error
         public string Message { get; set; } = string.Empty;
+
+        // Internos: se usan para revalidar formatos en el momento de aplicar.
+        public string HireDateRaw { get; set; } = string.Empty;
+        public string PeriodSalaryRaw { get; set; } = string.Empty;
+        public string SalaryRaw { get; set; } = string.Empty;
+    }
+
+    private static List<EmployeeImportFieldMapping> BuildEmployeeImportMappings(Dictionary<string, int> headers)
+    {
+        var specs = new (string TargetField, string Label, bool Required, string[] Aliases)[]
+        {
+            ("EmployeeNumber", "Número de empleado", true, ["NoEmpleado"]),
+            ("FirstName", "Nombre", true, ["Nombre"]),
+            ("LastName", "Apellido paterno", true, ["ApellidoPaterno"]),
+            ("SecondLastName", "Apellido materno", false, ["ApellidoMaterno"]),
+            ("TaxId", "RFC", false, ["RFC"]),
+            ("Curp", "CURP", false, ["CURP"]),
+            ("Nss", "NSS", false, ["NSS"]),
+            ("Email", "Email", false, ["Email"]),
+            ("Phone", "Teléfono", false, ["Telefono"]),
+            ("HireDate", "Fecha ingreso", true, ["FechaIngreso"]),
+            ("PeriodSalary", "Sueldo del periodo", false, ["SueldoPeriodo", "SueldoDelPeriodo", "Sueldo del periodo", "Sueldo periodo", "Sueldo semanal"]),
+            ("DailySalary", "Salario diario", false, ["SalarioDiario"]),
+            ("IntegratedDailySalary", "Salario diario integrado", false, ["SalarioDiarioIntegrado"]),
+            ("BranchId", "Sucursal", false, ["SucursalCodigo"]),
+            ("DepartmentId", "Departamento", false, ["DepartamentoCodigo"]),
+            ("PositionId", "Puesto", false, ["PuestoCodigo"]),
+            ("Code", "Código empleado", false, [])
+        };
+
+        var mappings = new List<EmployeeImportFieldMapping>();
+        foreach (var spec in specs)
+        {
+            var source = spec.Aliases.FirstOrDefault(alias => headers.ContainsKey(alias)) ?? string.Empty;
+            mappings.Add(new EmployeeImportFieldMapping
+            {
+                TargetField = spec.TargetField,
+                Label = spec.Label,
+                SourceColumn = string.IsNullOrWhiteSpace(source) && spec.TargetField == "Code" ? "Generado automáticamente" : source,
+                Required = spec.Required,
+                Found = spec.TargetField == "Code" || !string.IsNullOrWhiteSpace(source)
+            });
+        }
+        return mappings;
+    }
+
+    private static int GetNextEmployeeCodeNumber(List<Employee> existing)
+    {
+        var max = 0;
+        foreach (var employee in existing)
+        {
+            max = Math.Max(max, ExtractEmployeeCodeNumber(employee.Code));
+            max = Math.Max(max, ExtractEmployeeCodeNumber(employee.EmployeeNumber));
+        }
+        return max + 1;
+    }
+
+    private static int ExtractEmployeeCodeNumber(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return 0;
+
+        var digits = new string(value.Where(char.IsDigit).ToArray());
+        return int.TryParse(digits, out var parsed) ? parsed : 0;
+    }
+
+    private static string FormatEmployeeCode(int number) => $"EMP{number:000}";
+
+    private static string NormalizeCatalogCode(string? value)
+    {
+        var normalized = value?.Trim().ToUpperInvariant();
+        return string.IsNullOrWhiteSpace(normalized) ? UnidentifiedCatalogCode : normalized;
+    }
+
+    private static string AppendMessage(string current, string extra)
+        => string.IsNullOrWhiteSpace(current) ? extra : $"{current} {extra}";
+
+    private static async Task EnsureImportCatalogsAsync(NanchesoftDbContext db, Company company, List<EmployeeImportPreviewRow> rows)
+    {
+        var placeholderBranch = await db.Branches
+            .FirstOrDefaultAsync(x => x.CompanyId == company.Id && x.Code == UnidentifiedCatalogCode);
+        if (placeholderBranch is null)
+        {
+            placeholderBranch = new Branch
+            {
+                TenantId = company.TenantId,
+                CompanyId = company.Id,
+                Code = UnidentifiedCatalogCode,
+                Name = UnidentifiedCatalogCode,
+                IsActive = true,
+                CreatedBy = "excel-import"
+            };
+            db.Branches.Add(placeholderBranch);
+            await db.SaveChangesAsync();
+        }
+
+        var branchCodes = rows
+            .Where(x => x.Status is "new" or "update")
+            .Where(x => x.CreateBranch && !string.IsNullOrWhiteSpace(x.BranchCode))
+            .Select(x => x.BranchCode.Trim().ToUpperInvariant())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        if (branchCodes.Count > 0)
+        {
+            var existingBranches = await db.Branches
+                .Where(x => x.CompanyId == company.Id && branchCodes.Contains(x.Code))
+                .ToDictionaryAsync(x => x.Code.ToUpperInvariant(), StringComparer.OrdinalIgnoreCase);
+
+            foreach (var code in branchCodes.Where(code => !existingBranches.ContainsKey(code)))
+            {
+                var branch = new Branch
+                {
+                    TenantId = company.TenantId,
+                    CompanyId = company.Id,
+                    Code = code,
+                    Name = code,
+                    IsActive = true,
+                    CreatedBy = "excel-import"
+                };
+                db.Branches.Add(branch);
+                existingBranches[code] = branch;
+            }
+
+            await db.SaveChangesAsync();
+
+            foreach (var row in rows.Where(x => x.CreateBranch && !string.IsNullOrWhiteSpace(x.BranchCode)))
+            {
+                if (existingBranches.TryGetValue(row.BranchCode.Trim().ToUpperInvariant(), out var branch))
+                {
+                    row.BranchId = branch.Id;
+                    row.BranchName = branch.Name;
+                    row.CreateBranch = false;
+                }
+            }
+        }
+
+        foreach (var row in rows.Where(x => x.Status is "new" or "update").Where(x => !x.BranchId.HasValue))
+        {
+            row.BranchCode = UnidentifiedCatalogCode;
+            row.BranchName = placeholderBranch.Name;
+            row.BranchId = placeholderBranch.Id;
+            row.CreateBranch = false;
+        }
+
+        var placeholderDepartment = await db.Departments
+            .FirstOrDefaultAsync(x => x.CompanyId == company.Id && x.Code == UnidentifiedCatalogCode);
+        if (placeholderDepartment is null)
+        {
+            placeholderDepartment = new Department
+            {
+                TenantId = company.TenantId,
+                CompanyId = company.Id,
+                Code = UnidentifiedCatalogCode,
+                Name = UnidentifiedCatalogCode,
+                Description = "Registro comodín para importación de empleados.",
+                IsActive = true,
+                CreatedBy = "excel-import"
+            };
+            db.Departments.Add(placeholderDepartment);
+            await db.SaveChangesAsync();
+        }
+
+        var departmentCodes = rows
+            .Where(x => x.Status is "new" or "update")
+            .Where(x => x.CreateDepartment && !string.IsNullOrWhiteSpace(x.DepartmentCode))
+            .Select(x => x.DepartmentCode.Trim().ToUpperInvariant())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        if (departmentCodes.Count > 0)
+        {
+            var existingDepartments = await db.Departments
+                .Where(x => x.CompanyId == company.Id && departmentCodes.Contains(x.Code))
+                .ToDictionaryAsync(x => x.Code.ToUpperInvariant(), StringComparer.OrdinalIgnoreCase);
+
+            foreach (var code in departmentCodes.Where(code => !existingDepartments.ContainsKey(code)))
+            {
+                var department = new Department
+                {
+                    TenantId = company.TenantId,
+                    CompanyId = company.Id,
+                    Code = code,
+                    Name = code,
+                    Description = "Creado automáticamente por importación de empleados.",
+                    IsActive = true,
+                    CreatedBy = "excel-import"
+                };
+                db.Departments.Add(department);
+                existingDepartments[code] = department;
+            }
+
+            await db.SaveChangesAsync();
+
+            foreach (var row in rows.Where(x => x.CreateDepartment && !string.IsNullOrWhiteSpace(x.DepartmentCode)))
+            {
+                if (existingDepartments.TryGetValue(row.DepartmentCode.Trim().ToUpperInvariant(), out var department))
+                {
+                    row.DepartmentId = department.Id;
+                    row.DepartmentName = department.Name;
+                    row.CreateDepartment = false;
+                }
+            }
+        }
+
+        foreach (var row in rows.Where(x => x.Status is "new" or "update").Where(x => !x.DepartmentId.HasValue))
+        {
+            row.DepartmentCode = UnidentifiedCatalogCode;
+            row.DepartmentName = placeholderDepartment.Name;
+            row.DepartmentId = placeholderDepartment.Id;
+            row.CreateDepartment = false;
+        }
+
+        var placeholderPosition = await db.Positions
+            .FirstOrDefaultAsync(x => x.CompanyId == company.Id && x.Code == UnidentifiedCatalogCode);
+        if (placeholderPosition is null)
+        {
+            placeholderPosition = new Position
+            {
+                TenantId = company.TenantId,
+                CompanyId = company.Id,
+                DepartmentId = placeholderDepartment.Id,
+                Code = UnidentifiedCatalogCode,
+                Name = UnidentifiedCatalogCode,
+                Description = "Registro comodín para importación de empleados.",
+                PayrollGroup = string.Empty,
+                BaseSalary = 0m,
+                IsActive = true,
+                CreatedBy = "excel-import"
+            };
+            db.Positions.Add(placeholderPosition);
+            await db.SaveChangesAsync();
+        }
+
+        var positionCodes = rows
+            .Where(x => x.Status is "new" or "update")
+            .Where(x => x.CreatePosition && !string.IsNullOrWhiteSpace(x.PositionCode))
+            .Select(x => x.PositionCode.Trim().ToUpperInvariant())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        if (positionCodes.Count > 0)
+        {
+            var existingPositions = await db.Positions
+                .Where(x => x.CompanyId == company.Id && positionCodes.Contains(x.Code))
+                .ToDictionaryAsync(x => x.Code.ToUpperInvariant(), StringComparer.OrdinalIgnoreCase);
+
+            foreach (var code in positionCodes.Where(code => !existingPositions.ContainsKey(code)))
+            {
+                var position = new Position
+                {
+                    TenantId = company.TenantId,
+                    CompanyId = company.Id,
+                    DepartmentId = null,
+                    Code = code,
+                    Name = code,
+                    Description = "Creado automáticamente por importación de empleados.",
+                    PayrollGroup = string.Empty,
+                    BaseSalary = 0m,
+                    IsActive = true,
+                    CreatedBy = "excel-import"
+                };
+                db.Positions.Add(position);
+                existingPositions[code] = position;
+            }
+
+            await db.SaveChangesAsync();
+
+            foreach (var row in rows.Where(x => x.CreatePosition && !string.IsNullOrWhiteSpace(x.PositionCode)))
+            {
+                if (existingPositions.TryGetValue(row.PositionCode.Trim().ToUpperInvariant(), out var position))
+                {
+                    row.PositionId = position.Id;
+                    row.PositionName = position.Name;
+                    row.CreatePosition = false;
+                }
+            }
+        }
+
+        foreach (var row in rows.Where(x => x.Status is "new" or "update").Where(x => !x.PositionId.HasValue))
+        {
+            row.PositionCode = UnidentifiedCatalogCode;
+            row.PositionName = placeholderPosition.Name;
+            row.PositionId = placeholderPosition.Id;
+            row.CreatePosition = false;
+        }
     }
 }

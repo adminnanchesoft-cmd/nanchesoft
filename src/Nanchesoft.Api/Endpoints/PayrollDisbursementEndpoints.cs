@@ -62,9 +62,14 @@ public static class PayrollDisbursementEndpoints
     private static string NormalizeLower(string? value, string fallback = "")
         => string.IsNullOrWhiteSpace(value) ? fallback : value.Trim().ToLowerInvariant();
 
-    private static async Task<IResult> GetPayrollDispersionBatchesAsync(NanchesoftDbContext db)
+    private static async Task<IResult> GetPayrollDispersionBatchesAsync(HttpContext httpContext, NanchesoftDbContext db)
     {
+        var scope = ApiTenantScope.RequireScope(httpContext);
+        if (!scope.IsValid) return scope.Error!;
+
         var rows = await db.PayrollDispersionBatches.AsNoTracking()
+            .Where(x => x.TenantId == scope.TenantId
+                     && (!scope.CompanyId.HasValue || x.CompanyId == scope.CompanyId.Value))
             .Include(x => x.Company)
             .Include(x => x.PayrollRun)
             .OrderByDescending(x => x.DispersionDate)
@@ -207,9 +212,14 @@ public static class PayrollDisbursementEndpoints
         return Results.Ok(new { success = true, id = entity.Id });
     }
 
-    private static async Task<IResult> GetPayrollDispersionLinesAsync(NanchesoftDbContext db)
+    private static async Task<IResult> GetPayrollDispersionLinesAsync(HttpContext httpContext, NanchesoftDbContext db)
     {
+        var scope = ApiTenantScope.RequireScope(httpContext);
+        if (!scope.IsValid) return scope.Error!;
+
         var rows = await db.PayrollDispersionLines.AsNoTracking()
+            .Where(x => x.TenantId == scope.TenantId
+                     && (!scope.CompanyId.HasValue || x.CompanyId == scope.CompanyId.Value))
             .Include(x => x.Company)
             .Include(x => x.PayrollDispersionBatch)
             .Include(x => x.PayrollRun)
@@ -381,9 +391,14 @@ public static class PayrollDisbursementEndpoints
         return Results.Ok(new { success = true, created });
     }
 
-    private static async Task<IResult> GetPayrollAccountingPostingsAsync(NanchesoftDbContext db)
+    private static async Task<IResult> GetPayrollAccountingPostingsAsync(HttpContext httpContext, NanchesoftDbContext db)
     {
+        var scope = ApiTenantScope.RequireScope(httpContext);
+        if (!scope.IsValid) return scope.Error!;
+
         var rows = await db.PayrollAccountingPostings.AsNoTracking()
+            .Where(x => x.TenantId == scope.TenantId
+                     && (!scope.CompanyId.HasValue || x.CompanyId == scope.CompanyId.Value))
             .Include(x => x.Company)
             .Include(x => x.PayrollRun)
             .OrderByDescending(x => x.PostingDate)

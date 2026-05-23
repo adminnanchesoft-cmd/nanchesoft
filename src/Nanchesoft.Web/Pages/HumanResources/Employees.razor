@@ -2,6 +2,9 @@
 @using System.Net.Http.Json
 @inject NavigationManager Nav
 @inject IHttpClientFactory HttpClientFactory
+@inject Nanchesoft.Web.Services.AuthService AuthService
+@inject Nanchesoft.Web.State.AppState AppState
+@inject Nanchesoft.Web.State.AuthState AuthState
 
 <PageTitle>Colaboradores | Nanchesoft</PageTitle>
 
@@ -74,9 +77,6 @@
     <button class="btn btn-outline-success btn-sm px-3" @onclick="ExportarExcel">
         <span class="bi bi-file-earmark-excel me-1"></span> Exportar Excel
     </button>
-    <a href="/administration/universal-import" class="btn btn-outline-secondary btn-sm px-3">
-        <span class="bi bi-upload me-1"></span> Importar CSV
-    </a>
 </div>
 
 <CatalogCrudPage CatalogKey="hr-employees" />
@@ -93,7 +93,14 @@
     {
         try
         {
+            await AuthService.RestoreSessionAsync();
             var client = HttpClientFactory.CreateClient("Nanchesoft.Api");
+            Set("X-Tenant-Id", AppState.CurrentTenantId ?? AuthState.TenantId, client);
+            Set("X-Company-Id", AppState.CurrentCompanyId ?? AuthState.CompanyId, client);
+            Set("X-Branch-Id", AppState.CurrentBranchId ?? AuthState.BranchId, client);
+            Set("X-User-Id", AuthState.UserId, client);
+            client.DefaultRequestHeaders.Remove("X-Is-Platform-Owner");
+            client.DefaultRequestHeaders.Add("X-Is-Platform-Owner", AuthState.IsPlatformOwner ? "true" : "false");
             var employees = await client.GetFromJsonAsync<List<EmployeeStat>>("/api/hr/employees");
             if (employees is not null)
             {
@@ -107,6 +114,15 @@
         {
             // Stats are decorative — ignore errors silently
         }
+    }
+
+    private static void Set(string header, Guid? value, HttpClient? client = null)
+    {
+        if (client is null)
+            return;
+        client.DefaultRequestHeaders.Remove(header);
+        if (value.HasValue && value.Value != Guid.Empty)
+            client.DefaultRequestHeaders.Add(header, value.Value.ToString("D"));
     }
 
     private void ExportarExcel()

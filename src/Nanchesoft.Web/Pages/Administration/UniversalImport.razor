@@ -4,15 +4,18 @@
 @inject IHttpClientFactory HttpClientFactory
 @inject NavigationManager NavManager
 @inject IJSRuntime JS
+@inject Nanchesoft.Web.Services.AuthService AuthService
+@inject Nanchesoft.Web.State.AppState AppState
+@inject Nanchesoft.Web.State.AuthState AuthState
 @implements IAsyncDisposable
 
-<PageTitle>Importación universal | Nanchesoft</PageTitle>
+<PageTitle>@PageTitleText</PageTitle>
 
 <div class="ns-page-header">
     <div class="ns-page-header__left">
-        <div class="ns-page-header__breadcrumb">Administración / Importación universal</div>
-        <h1 class="ns-page-header__title">Importación universal</h1>
-        <p class="ns-page-header__subtitle">Sube cualquier CSV del ERP — el sistema detecta la entidad y mapea las columnas automáticamente.</p>
+        <div class="ns-page-header__breadcrumb">@BreadcrumbText</div>
+        <h1 class="ns-page-header__title">@HeaderTitle</h1>
+        <p class="ns-page-header__subtitle">@HeaderSubtitle</p>
     </div>
 </div>
 
@@ -164,8 +167,12 @@
     {
         <div class="ns-import-result-summary">
             <div class="ns-import-result-card ns-import-result-card--ok">
-                <div class="ns-import-result-card__num">@_importResult.Imported</div>
-                <div class="ns-import-result-card__label">Importados</div>
+                <div class="ns-import-result-card__num">@_importResult.Created</div>
+                <div class="ns-import-result-card__label">Creados</div>
+            </div>
+            <div class="ns-import-result-card ns-import-result-card--ok">
+                <div class="ns-import-result-card__num">@_importResult.Updated</div>
+                <div class="ns-import-result-card__label">Actualizados</div>
             </div>
             <div class="ns-import-result-card ns-import-result-card--dup">
                 <div class="ns-import-result-card__num">@_importResult.Duplicates</div>
@@ -181,26 +188,23 @@
             </div>
         </div>
 
-        @if (_importResult.Rows.Any(r => r.Status != "ok"))
-        {
-            <div class="table-responsive mt-4">
-                <table class="table table-sm table-bordered">
-                    <thead class="table-light">
-                        <tr><th>Fila</th><th>Estado</th><th>Mensaje</th></tr>
-                    </thead>
-                    <tbody>
-                        @foreach (var r in _importResult.Rows.Where(x => x.Status != "ok"))
-                        {
-                            <tr class="@(r.Status == "error" ? "table-danger" : "table-warning")">
-                                <td>@r.Row</td>
-                                <td>@r.Status</td>
-                                <td>@r.Message</td>
-                            </tr>
-                        }
-                    </tbody>
-                </table>
-            </div>
-        }
+        <div class="table-responsive mt-4">
+            <table class="table table-sm table-bordered">
+                <thead class="table-light">
+                    <tr><th>Fila</th><th>Estado</th><th>Mensaje</th></tr>
+                </thead>
+                <tbody>
+                    @foreach (var r in _importResult.Rows)
+                    {
+                        <tr class="@ResultRowClass(r.Status)">
+                            <td>@r.Row</td>
+                            <td>@ResultStatusText(r.Status)</td>
+                            <td>@r.Message</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
 
         <div class="d-flex gap-2 mt-4">
             <button class="btn btn-primary" @onclick="ResetWizard">Nueva importación</button>
@@ -227,11 +231,22 @@
     private AnalysisResult? _analysis;
     private List<FieldInfo> _currentEntityFields = [];
     private ImportResult? _importResult;
+    [Parameter, SupplyParameterFromQuery(Name = "entity")] public string? Entity { get; set; }
+    [Parameter, SupplyParameterFromQuery(Name = "returnUrl")] public string? ReturnUrl { get; set; }
+
+    private bool IsEmployeesImport => string.Equals(Entity, "hr-employees", StringComparison.OrdinalIgnoreCase);
+    private string PageTitleText => IsEmployeesImport ? "Importar colaboradores | Nanchesoft" : "Importación universal | Nanchesoft";
+    private string BreadcrumbText => IsEmployeesImport ? "Recursos Humanos / Colaboradores / Importar CSV" : "Administración / Importación universal";
+    private string HeaderTitle => IsEmployeesImport ? "Importar colaboradores" : "Importación universal";
+    private string HeaderSubtitle => IsEmployeesImport
+        ? "Carga el CSV de colaboradores, revisa el mapeo y confirma la importación."
+        : "Sube cualquier CSV del ERP — el sistema detecta la entidad y mapea las columnas automáticamente.";
 
     // ── Lifecycle ─────────────────────────────────────────────────
     protected override async Task OnInitializedAsync()
     {
-        var client = HttpClientFactory.CreateClient("Nanchesoft.Api");
+        try { await AuthService.RestoreSessionAsync(); } catch { }
+        var client = CreateScopedClient();
         _entities = await client.GetFromJsonAsync<List<EntityInfo>>("/api/import/entities") ?? [];
     }
 
@@ -336,11 +351,7 @@
             return;
         }
 
-        // Detect separator (comma, semicolon o tab) usando la línea con más delimitadores en las primeras 5
-        var sampleLine = lines.Take(5).OrderByDescending(l => l.Count(c => c == ',' || c == ';' || c == '\t')).First();
-        var sep = sampleLine.Count(c => c == '\t') > sampleLine.Count(c => c == ';') && sampleLine.Count(c => c == '\t') > sampleLine.Count(c => c == ',')
-            ? '\t'
-            : sampleLine.Count(c => c == ';') > sampleLine.Count(c => c == ',') ? ';' : ',';
+        var sep = DetectSeparator(lines);
 
         // Saltar filas de preámbulo: el verdadero header es la primera fila con ≥3 celdas no vacías
         int headerIdx = 0;
@@ -388,17 +399,66 @@
         return fields;
     }
 
+    private static char DetectSeparator(List<string> lines)
+    {
+        var sample = lines.Take(10).ToList();
+        var candidates = new[] { '\t', ';', ',' };
+        char bestSep = ',';
+        int bestScore = int.MinValue;
+
+        foreach (var candidate in candidates)
+        {
+            var counts = sample
+                .Select(line => ParseCsvLine(line, candidate).Count)
+                .ToList();
+
+            var nonTrivial = counts.Where(x => x >= 3).ToList();
+            if (nonTrivial.Count == 0)
+                continue;
+
+            var mode = nonTrivial
+                .GroupBy(x => x)
+                .OrderByDescending(g => g.Count())
+                .ThenByDescending(g => g.Key)
+                .First();
+
+            var score = (mode.Count() * 100) + mode.Key;
+
+            if (candidate == '\t' && sample.Any(x => x.Contains('\t')))
+                score += 50;
+
+            if (score > bestScore)
+            {
+                bestScore = score;
+                bestSep = candidate;
+            }
+        }
+
+        return bestSep;
+    }
+
     // ── Analysis ──────────────────────────────────────────────────
     private async Task AnalyzeAsync()
     {
-        var client = HttpClientFactory.CreateClient("Nanchesoft.Api");
+        var client = CreateScopedClient();
         var req = new { Headers = _csvHeaders, FirstRows = _previewRows };
         var resp = await client.PostAsJsonAsync("/api/import/analyze", req);
         if (!resp.IsSuccessStatusCode) { _uploadError = "Error al analizar el archivo."; return; }
 
         _analysis = await resp.Content.ReadFromJsonAsync<AnalysisResult>();
         if (_analysis is not null)
+        {
+            if (!string.IsNullOrWhiteSpace(Entity))
+            {
+                var entity = _entities.FirstOrDefault(x => string.Equals(x.Key, Entity, StringComparison.OrdinalIgnoreCase));
+                if (entity is not null)
+                {
+                    _analysis.EntityKey = entity.Key;
+                    _analysis.EntityName = entity.Name;
+                }
+            }
             UpdateFieldList(_analysis.EntityKey);
+        }
 
         _step = 2;
     }
@@ -409,7 +469,7 @@
         if (string.IsNullOrEmpty(key) || _analysis is null) return;
 
         // Re-analyze with forced entity key by sending only matching headers
-        var client = HttpClientFactory.CreateClient("Nanchesoft.Api");
+        var client = CreateScopedClient();
         var req = new { Headers = _csvHeaders, FirstRows = _previewRows };
         var resp = await client.PostAsJsonAsync("/api/import/analyze", req);
         _analysis = await resp.Content.ReadFromJsonAsync<AnalysisResult>();
@@ -462,10 +522,10 @@
 
         try
         {
-            var client = HttpClientFactory.CreateClient("Nanchesoft.Api");
+            var client = CreateScopedClient();
             var mappings = _analysis.Mappings
                 .Where(m => m.FieldKey is not null)
-                .Select(m => new { CsvColumn = m.CsvColumn, FieldKey = m.FieldKey! })
+                .Select(m => new { ColumnIndex = m.ColumnIndex, CsvColumn = m.CsvColumn, FieldKey = m.FieldKey! })
                 .ToList();
 
             var req = new
@@ -517,6 +577,43 @@
         _step == n ? "ns-import-step--active" :
         _step > n  ? "ns-import-step--done" : "";
 
+    private static string ResultRowClass(string status) => status switch
+    {
+        "error" => "table-danger",
+        "duplicado" => "table-warning",
+        "updated" => "table-info",
+        "created" => "table-success",
+        _ => ""
+    };
+
+    private static string ResultStatusText(string status) => status switch
+    {
+        "created" => "Creado",
+        "updated" => "Actualizado",
+        "duplicado" => "Duplicado",
+        "error" => "Error",
+        _ => status
+    };
+
+    private HttpClient CreateScopedClient()
+    {
+        var client = HttpClientFactory.CreateClient("Nanchesoft.Api");
+        Set("X-Tenant-Id", AppState.CurrentTenantId ?? AuthState.TenantId, client);
+        Set("X-Company-Id", AppState.CurrentCompanyId ?? AuthState.CompanyId, client);
+        Set("X-Branch-Id", AppState.CurrentBranchId ?? AuthState.BranchId, client);
+        Set("X-User-Id", AuthState.UserId, client);
+        client.DefaultRequestHeaders.Remove("X-Is-Platform-Owner");
+        client.DefaultRequestHeaders.Add("X-Is-Platform-Owner", AuthState.IsPlatformOwner ? "true" : "false");
+        return client;
+    }
+
+    private static void Set(string header, Guid? value, HttpClient client)
+    {
+        client.DefaultRequestHeaders.Remove(header);
+        if (value.HasValue && value.Value != Guid.Empty)
+            client.DefaultRequestHeaders.Add(header, value.Value.ToString("D"));
+    }
+
     // ── DTOs ──────────────────────────────────────────────────────
     private sealed record EntityInfo(string Key, string Name, string Group);
     private sealed record FieldInfo(string Key, string Name, string DataType, bool IsRequired);
@@ -531,6 +628,7 @@
 
     private sealed class ColumnMapping
     {
+        public int ColumnIndex  { get; set; }
         public string CsvColumn  { get; set; } = "";
         public string? FieldKey  { get; set; }
         public string? FieldName { get; set; }
@@ -544,6 +642,8 @@
     {
         public int Total     { get; set; }
         public int Imported  { get; set; }
+        public int Created   { get; set; }
+        public int Updated   { get; set; }
         public int Duplicates{ get; set; }
         public int Failed    { get; set; }
         public List<RowResult> Rows { get; set; } = [];

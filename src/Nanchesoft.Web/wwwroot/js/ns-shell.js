@@ -445,46 +445,60 @@ window.nsImport = {
         const zone = document.getElementById(elementId);
         if (!zone || zone._nsBinaryImportInit) return;
         zone._nsBinaryImportInit = true;
+        const fileInput = zone.querySelector('input[type="file"]');
 
         const readFile = async file => {
             if (!file) return;
-            const buffer = await file.arrayBuffer();
-            const bytes = new Uint8Array(buffer);
-            let binary = "";
-            const chunkSize = 0x8000;
-            for (let i = 0; i < bytes.length; i += chunkSize) {
-                binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunkSize));
-            }
+            const base64 = await new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => {
+                    const result = typeof reader.result === "string" ? reader.result : "";
+                    const commaIndex = result.indexOf(",");
+                    resolve(commaIndex >= 0 ? result.substring(commaIndex + 1) : result);
+                };
+                reader.onerror = () => reject(reader.error || new Error("No se pudo leer el archivo."));
+                reader.readAsDataURL(file);
+            });
             await dotNetRef.invokeMethodAsync(
                 "HandleDroppedFile",
                 file.name || "",
                 file.type || "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                btoa(binary));
+                base64);
         };
 
-        zone.addEventListener("dragenter", e => { e.preventDefault(); }, true);
-        zone.addEventListener("dragover", e => {
+        const findFile = event => {
+            if (event.dataTransfer && event.dataTransfer.files && event.dataTransfer.files.length > 0) {
+                return event.dataTransfer.files[0];
+            }
+            if (event.clipboardData && event.clipboardData.files && event.clipboardData.files.length > 0) {
+                return event.clipboardData.files[0];
+            }
+            return null;
+        };
+
+        const dragEnter = e => { e.preventDefault(); };
+        const dragOver = e => {
             e.preventDefault();
             zone.classList.add("ns-import-dz-over");
-        }, true);
-        zone.addEventListener("dragleave", e => {
+        };
+        const dragLeave = e => {
             if (!zone.contains(e.relatedTarget)) {
                 zone.classList.remove("ns-import-dz-over");
             }
-        }, true);
-        zone.addEventListener("drop", async e => {
+        };
+        const drop = async e => {
             e.preventDefault();
             e.stopPropagation();
             zone.classList.remove("ns-import-dz-over");
-            const file = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+            const file = findFile(e);
             try {
                 await readFile(file);
             } catch (err) {
                 console.error("nsImport binary drop error:", err);
             }
-        }, true);
-        zone.addEventListener("paste", async e => {
-            const file = e.clipboardData && e.clipboardData.files && e.clipboardData.files[0];
+        };
+        const paste = async e => {
+            const file = findFile(e);
             if (!file) return;
             e.preventDefault();
             try {
@@ -492,6 +506,20 @@ window.nsImport = {
             } catch (err) {
                 console.error("nsImport binary paste error:", err);
             }
-        }, true);
+        };
+
+        zone.addEventListener("dragenter", dragEnter, true);
+        zone.addEventListener("dragover", dragOver, true);
+        zone.addEventListener("dragleave", dragLeave, true);
+        zone.addEventListener("drop", drop, true);
+        zone.addEventListener("paste", paste, true);
+
+        if (fileInput) {
+            fileInput.addEventListener("dragenter", dragEnter, true);
+            fileInput.addEventListener("dragover", dragOver, true);
+            fileInput.addEventListener("dragleave", dragLeave, true);
+            fileInput.addEventListener("drop", drop, true);
+            fileInput.addEventListener("paste", paste, true);
+        }
     }
 };

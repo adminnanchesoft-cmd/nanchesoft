@@ -1,0 +1,233 @@
+@page "/payroll"
+
+<PageTitle>Nómina | Nanchesoft</PageTitle>
+
+<div class="payroll-index">
+    <div class="payroll-hero">
+        <div class="payroll-hero__text">
+            <div class="payroll-hero__eyebrow">Módulo</div>
+            <h1 class="payroll-hero__title">Nómina</h1>
+            <p class="payroll-hero__sub">Selecciona el proceso o catálogo que deseas operar</p>
+        </div>
+    </div>
+
+    <div class="payroll-section-label">Procesos principales</div>
+    <div class="payroll-grid payroll-grid--4">
+        <a href="/payroll/procesar" class="payroll-card payroll-card--teal">
+            <div class="payroll-card__title">Procesar nómina</div>
+            <div class="payroll-card__sub">Cálculo principal, neto y validación</div>
+        </a>
+        <a href="/payroll/prenomina" class="payroll-card payroll-card--blue">
+            <div class="payroll-card__title">Prenómina</div>
+            <div class="payroll-card__sub">Captura previa y revisión operativa</div>
+        </a>
+        <a href="/payroll/runs" class="payroll-card payroll-card--green">
+            <div class="payroll-card__title">Procesamientos</div>
+            <div class="payroll-card__sub">Corridas generadas y seguimiento</div>
+        </a>
+        <a href="/payroll/receipt-control" class="payroll-card payroll-card--slate">
+            <div class="payroll-card__title">Control de recibos</div>
+            <div class="payroll-card__sub">Estado de recibos, entrega y control</div>
+        </a>
+    </div>
+
+    <div class="payroll-section-label">Catálogos</div>
+    <div class="payroll-grid payroll-grid--3">
+        <a href="/payroll/period-types" class="payroll-card payroll-card--teal">
+            <div class="payroll-card__title">Tipos de nómina</div>
+            <div class="payroll-card__sub">Semanal, quincenal, mensual y variantes</div>
+        </a>
+        <a href="/payroll/periods" class="payroll-card payroll-card--teal">
+            <div class="payroll-card__title">Períodos</div>
+            <div class="payroll-card__sub">Fechas operativas y ventanas de pago</div>
+        </a>
+        <a href="/payroll/concepts" class="payroll-card payroll-card--teal">
+            <div class="payroll-card__title">Conceptos</div>
+            <div class="payroll-card__sub">Percepciones, deducciones y fórmulas</div>
+        </a>
+    </div>
+
+    <div class="payroll-section-label">Operación y control</div>
+    <div class="payroll-grid payroll-grid--4">
+        <a href="/payroll/run-lines" class="payroll-card payroll-card--orange">
+            <div class="payroll-card__title">Detalle nómina</div>
+            <div class="payroll-card__sub">Líneas por colaborador</div>
+        </a>
+        <a href="/payroll/run-line-details" class="payroll-card payroll-card--orange">
+            <div class="payroll-card__title">Percepciones y deducciones</div>
+            <div class="payroll-card__sub">Detalle de conceptos aplicados</div>
+        </a>
+        <a href="/payroll/loans" class="payroll-card payroll-card--purple">
+            <div class="payroll-card__title">Préstamos</div>
+            <div class="payroll-card__sub">Control de saldos y descuentos</div>
+        </a>
+        <a href="/payroll/loan-deductions" class="payroll-card payroll-card--purple">
+            <div class="payroll-card__title">Descuentos préstamos</div>
+            <div class="payroll-card__sub">Aplicaciones por período</div>
+        </a>
+        <a href="/payroll/captura-matricial" class="payroll-card payroll-card--blue">
+            <div class="payroll-card__title">Captura matricial</div>
+            <div class="payroll-card__sub">Edición masiva por empleado y concepto</div>
+        </a>
+        <a href="/payroll/reporte" class="payroll-card payroll-card--green">
+            <div class="payroll-card__title">Reporte de nómina</div>
+            <div class="payroll-card__sub">Consulta ejecutiva de importes</div>
+        </a>
+        <a href="/payroll/dispersion-batches" class="payroll-card payroll-card--slate">
+            <div class="payroll-card__title">Dispersiones bancarias</div>
+            <div class="payroll-card__sub">Lotes y seguimiento bancario</div>
+        </a>
+        <a href="/payroll/print-center" class="payroll-card payroll-card--slate">
+            <div class="payroll-card__title">Impresión nómina</div>
+            <div class="payroll-card__sub">Recibos, formatos y salida impresa</div>
+        </a>
+    </div>
+</div>
+
+<style>
+    .payroll-index {
+        padding: 0 0 40px;
+        max-width: 1200px;
+    }
+
+    .payroll-hero {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        background: linear-gradient(135deg, #ecfeff 0%, #ccfbf1 100%);
+        border: 1px solid #99f6e4;
+        border-radius: 16px;
+        padding: 24px 28px;
+        margin-bottom: 22px;
+    }
+
+    .payroll-hero__eyebrow {
+        font-size: 12px;
+        letter-spacing: .14em;
+        text-transform: uppercase;
+        color: #0f766e;
+        font-weight: 800;
+        margin-bottom: 8px;
+    }
+
+    .payroll-hero__title {
+        margin: 0 0 8px;
+        font-size: 34px;
+        line-height: 1.05;
+        color: #134e4a;
+        font-weight: 900;
+    }
+
+    .payroll-hero__sub {
+        margin: 0;
+        color: #115e59;
+        font-size: 15px;
+    }
+
+    .payroll-section-label {
+        margin: 24px 0 12px;
+        font-size: 13px;
+        font-weight: 900;
+        letter-spacing: .08em;
+        text-transform: uppercase;
+        color: #0f766e;
+    }
+
+    .payroll-grid {
+        display: grid;
+        gap: 16px;
+    }
+
+    .payroll-grid--3 {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .payroll-grid--4 {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+
+    .payroll-card {
+        display: block;
+        border-radius: 16px;
+        padding: 18px;
+        text-decoration: none;
+        border: 1px solid transparent;
+        box-shadow: 0 10px 24px rgba(15, 23, 42, .06);
+        transition: transform .16s ease, box-shadow .16s ease, border-color .16s ease;
+    }
+
+    .payroll-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 14px 28px rgba(15, 23, 42, .1);
+    }
+
+    .payroll-card__title {
+        font-size: 18px;
+        font-weight: 800;
+        margin-bottom: 6px;
+    }
+
+    .payroll-card__sub {
+        font-size: 14px;
+        line-height: 1.45;
+        opacity: .88;
+    }
+
+    .payroll-card--teal {
+        background: linear-gradient(180deg, #f0fdfa 0%, #ccfbf1 100%);
+        border-color: #99f6e4;
+        color: #134e4a;
+    }
+
+    .payroll-card--blue {
+        background: linear-gradient(180deg, #eff6ff 0%, #dbeafe 100%);
+        border-color: #bfdbfe;
+        color: #1e3a8a;
+    }
+
+    .payroll-card--green {
+        background: linear-gradient(180deg, #f0fdf4 0%, #dcfce7 100%);
+        border-color: #bbf7d0;
+        color: #166534;
+    }
+
+    .payroll-card--orange {
+        background: linear-gradient(180deg, #fff7ed 0%, #ffedd5 100%);
+        border-color: #fed7aa;
+        color: #9a3412;
+    }
+
+    .payroll-card--purple {
+        background: linear-gradient(180deg, #faf5ff 0%, #f3e8ff 100%);
+        border-color: #e9d5ff;
+        color: #6b21a8;
+    }
+
+    .payroll-card--slate {
+        background: linear-gradient(180deg, #f8fafc 0%, #e2e8f0 100%);
+        border-color: #cbd5e1;
+        color: #334155;
+    }
+
+    @@media (max-width: 1024px) {
+        .payroll-grid--3,
+        .payroll-grid--4 {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+    }
+
+    @@media (max-width: 640px) {
+        .payroll-hero {
+            padding: 20px;
+        }
+
+        .payroll-hero__title {
+            font-size: 28px;
+        }
+
+        .payroll-grid--3,
+        .payroll-grid--4 {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>

@@ -62,9 +62,14 @@ public static class PayrollFiscalEndpoints
     private static string NormalizeLower(string? value, string fallback = "")
         => string.IsNullOrWhiteSpace(value) ? fallback : value.Trim().ToLowerInvariant();
 
-    private static async Task<IResult> GetPayrollTaxAccumulatorsAsync(NanchesoftDbContext db)
+    private static async Task<IResult> GetPayrollTaxAccumulatorsAsync(HttpContext httpContext, NanchesoftDbContext db)
     {
+        var scope = ApiTenantScope.RequireScope(httpContext);
+        if (!scope.IsValid) return scope.Error!;
+
         var rows = await db.PayrollTaxAccumulators.AsNoTracking()
+            .Where(x => x.TenantId == scope.TenantId
+                     && (!scope.CompanyId.HasValue || x.CompanyId == scope.CompanyId.Value))
             .Include(x => x.Company)
             .Include(x => x.PayrollRun)
             .Include(x => x.PayrollPeriod)
@@ -241,9 +246,14 @@ public static class PayrollFiscalEndpoints
         return Results.Ok(new { success = true, inserted });
     }
 
-    private static async Task<IResult> GetPayrollEmployerObligationsAsync(NanchesoftDbContext db)
+    private static async Task<IResult> GetPayrollEmployerObligationsAsync(HttpContext httpContext, NanchesoftDbContext db)
     {
+        var scope = ApiTenantScope.RequireScope(httpContext);
+        if (!scope.IsValid) return scope.Error!;
+
         var rows = await db.PayrollEmployerObligations.AsNoTracking()
+            .Where(x => x.TenantId == scope.TenantId
+                     && (!scope.CompanyId.HasValue || x.CompanyId == scope.CompanyId.Value))
             .Include(x => x.Company)
             .Include(x => x.PayrollRun)
             .Include(x => x.PayrollPeriod)
@@ -406,9 +416,14 @@ public static class PayrollFiscalEndpoints
         return Results.Ok(new { success = true, inserted });
     }
 
-    private static async Task<IResult> GetPayrollFiscalReconciliationsAsync(NanchesoftDbContext db)
+    private static async Task<IResult> GetPayrollFiscalReconciliationsAsync(HttpContext httpContext, NanchesoftDbContext db)
     {
+        var scope = ApiTenantScope.RequireScope(httpContext);
+        if (!scope.IsValid) return scope.Error!;
+
         var rows = await db.PayrollFiscalReconciliations.AsNoTracking()
+            .Where(x => x.TenantId == scope.TenantId
+                     && (!scope.CompanyId.HasValue || x.CompanyId == scope.CompanyId.Value))
             .Include(x => x.Company)
             .Include(x => x.PayrollRun)
             .Include(x => x.PayrollPeriod)

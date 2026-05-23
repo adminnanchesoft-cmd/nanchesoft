@@ -6,11 +6,13 @@ public sealed class ContextService
 {
     private readonly AppState _appState;
     private readonly AuthState _authState;
+    private readonly TenantContextAccessor _tenantAccessor;
 
-    public ContextService(AppState appState, AuthState authState)
+    public ContextService(AppState appState, AuthState authState, TenantContextAccessor tenantAccessor)
     {
         _appState = appState;
         _authState = authState;
+        _tenantAccessor = tenantAccessor;
     }
 
     public Task<List<TenantOption>> GetAvailableTenantsAsync()
@@ -66,6 +68,12 @@ public sealed class ContextService
         _authState.TenantId = tenantId;
         _appState.CurrentTenantId = tenantId;
         _appState.CurrentTenantName = ResolveTenantName(tenantId);
+        _tenantAccessor.Set(
+            tenantId,
+            _appState.CurrentCompanyId,
+            _appState.CurrentBranchId,
+            _authState.UserId,
+            _authState.IsPlatformOwner);
 
         if (_authState.AccessibleTenantIds.Count == 1)
         {

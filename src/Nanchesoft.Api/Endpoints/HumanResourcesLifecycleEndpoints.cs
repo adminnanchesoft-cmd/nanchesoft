@@ -76,9 +76,14 @@ public static class HumanResourcesLifecycleEndpoints
         return source.Kind == DateTimeKind.Utc ? source : DateTime.SpecifyKind(source, DateTimeKind.Utc);
     }
 
-    private static async Task<IResult> GetEmployeeDocumentsAsync(NanchesoftDbContext db)
+    private static async Task<IResult> GetEmployeeDocumentsAsync(HttpContext httpContext, NanchesoftDbContext db)
     {
+        var scope = ApiTenantScope.RequireScope(httpContext);
+        if (!scope.IsValid) return scope.Error!;
+
         var rows = await db.EmployeeDocumentRecords.AsNoTracking()
+            .Where(x => x.TenantId == scope.TenantId
+                     && (!scope.CompanyId.HasValue || x.CompanyId == scope.CompanyId.Value))
             .Include(x => x.Company)
             .Include(x => x.Branch)
             .Include(x => x.Employee)
@@ -208,9 +213,14 @@ public static class HumanResourcesLifecycleEndpoints
         return Results.Ok(new { success = true });
     }
 
-    private static async Task<IResult> GetEmployeeMovementsAsync(NanchesoftDbContext db)
+    private static async Task<IResult> GetEmployeeMovementsAsync(HttpContext httpContext, NanchesoftDbContext db)
     {
+        var scope = ApiTenantScope.RequireScope(httpContext);
+        if (!scope.IsValid) return scope.Error!;
+
         var rows = await db.EmployeeLaborMovements.AsNoTracking()
+            .Where(x => x.TenantId == scope.TenantId
+                     && (!scope.CompanyId.HasValue || x.CompanyId == scope.CompanyId.Value))
             .Include(x => x.Company)
             .Include(x => x.Branch)
             .Include(x => x.Employee)
@@ -341,9 +351,14 @@ public static class HumanResourcesLifecycleEndpoints
         return Results.Ok(new { success = true });
     }
 
-    private static async Task<IResult> GetEmployeeCertificationsAsync(NanchesoftDbContext db)
+    private static async Task<IResult> GetEmployeeCertificationsAsync(HttpContext httpContext, NanchesoftDbContext db)
     {
+        var scope = ApiTenantScope.RequireScope(httpContext);
+        if (!scope.IsValid) return scope.Error!;
+
         var rows = await db.EmployeeCertificationRecords.AsNoTracking()
+            .Where(x => x.TenantId == scope.TenantId
+                     && (!scope.CompanyId.HasValue || x.CompanyId == scope.CompanyId.Value))
             .Include(x => x.Company)
             .Include(x => x.Branch)
             .Include(x => x.Employee)

@@ -61,9 +61,14 @@ public static class PayrollCalculatedEndpoints
     private static string NormalizeLower(string? value, string fallback = "")
         => string.IsNullOrWhiteSpace(value) ? fallback : value.Trim().ToLowerInvariant();
 
-    private static async Task<IResult> GetPayrollSourceApplicationsAsync(NanchesoftDbContext db)
+    private static async Task<IResult> GetPayrollSourceApplicationsAsync(HttpContext httpContext, NanchesoftDbContext db)
     {
+        var scope = ApiTenantScope.RequireScope(httpContext);
+        if (!scope.IsValid) return scope.Error!;
+
         var rows = await db.PayrollSourceApplications.AsNoTracking()
+            .Where(x => x.TenantId == scope.TenantId
+                     && (!scope.CompanyId.HasValue || x.CompanyId == scope.CompanyId.Value))
             .Include(x => x.Company)
             .Include(x => x.PayrollRun)
             .Include(x => x.PayrollRunLine)
@@ -184,9 +189,14 @@ public static class PayrollCalculatedEndpoints
         return Results.Ok(new { success = true });
     }
 
-    private static async Task<IResult> GetPayrollReceiptControlsAsync(NanchesoftDbContext db)
+    private static async Task<IResult> GetPayrollReceiptControlsAsync(HttpContext httpContext, NanchesoftDbContext db)
     {
+        var scope = ApiTenantScope.RequireScope(httpContext);
+        if (!scope.IsValid) return scope.Error!;
+
         var rows = await db.PayrollReceiptControls.AsNoTracking()
+            .Where(x => x.TenantId == scope.TenantId
+                     && (!scope.CompanyId.HasValue || x.CompanyId == scope.CompanyId.Value))
             .Include(x => x.Company)
             .Include(x => x.PayrollRun)
             .Include(x => x.Employee)
@@ -333,9 +343,14 @@ public static class PayrollCalculatedEndpoints
         return Results.Ok(new { success = true, created });
     }
 
-    private static async Task<IResult> GetPayrollRunClosingsAsync(NanchesoftDbContext db)
+    private static async Task<IResult> GetPayrollRunClosingsAsync(HttpContext httpContext, NanchesoftDbContext db)
     {
+        var scope = ApiTenantScope.RequireScope(httpContext);
+        if (!scope.IsValid) return scope.Error!;
+
         var rows = await db.PayrollRunClosings.AsNoTracking()
+            .Where(x => x.TenantId == scope.TenantId
+                     && (!scope.CompanyId.HasValue || x.CompanyId == scope.CompanyId.Value))
             .Include(x => x.Company)
             .Include(x => x.PayrollRun)
             .OrderByDescending(x => x.ClosingDate)

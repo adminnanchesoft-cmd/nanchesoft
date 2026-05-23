@@ -17,7 +17,7 @@
         if (normalized.StartsWith("inventory/")) return "Inventario";
         if (normalized.StartsWith("sales/")) return "Ventas";
         if (normalized.StartsWith("services/")) return "Servicios";
-        if (normalized.StartsWith("payroll/")) return "Nómina";
+        if (normalized == "payroll" || normalized.StartsWith("payroll/")) return "Nómina";
         if (normalized.StartsWith("hr/") || normalized.StartsWith("human-resources/")) return "Recursos Humanos";
         if (normalized.StartsWith("finance/")) return "Finanzas";
         if (normalized.StartsWith("products/")) return "Productos";
@@ -34,7 +34,7 @@
         if (normalized.StartsWith("inventory/")) return "Existencias, kardex, movimientos y trazabilidad operativa.";
         if (normalized.StartsWith("sales/")) return "Cotizaciones, pedidos, facturación y seguimiento comercial.";
         if (normalized.StartsWith("services/")) return "Notas por horas, clientes y cobranza para servicios profesionales.";
-        if (normalized.StartsWith("payroll/")) return "Períodos, incidencias, prenómina, recibos y dispersión.";
+        if (normalized == "payroll" || normalized.StartsWith("payroll/")) return "Períodos, incidencias, prenómina, recibos y dispersión.";
         if (normalized.StartsWith("hr/") || normalized.StartsWith("human-resources/")) return "Empleados, estructura organizacional y procesos de talento.";
         if (normalized.StartsWith("finance/")) return "Tesorería, bancos, ingresos, egresos y conciliación.";
         if (normalized.StartsWith("products/")) return "Ingeniería, estilos, productos terminados y control técnico.";
@@ -51,7 +51,7 @@
         if (normalized.StartsWith("inventory/")) return "STOCK";
         if (normalized.StartsWith("sales/")) return "COM";
         if (normalized.StartsWith("services/")) return "HRS";
-        if (normalized.StartsWith("payroll/")) return "PAY";
+        if (normalized == "payroll" || normalized.StartsWith("payroll/")) return "PAY";
         if (normalized.StartsWith("hr/") || normalized.StartsWith("human-resources/")) return "HR";
         if (normalized.StartsWith("finance/")) return "FIN";
         if (normalized.StartsWith("products/") || normalized.StartsWith("materials/")) return "CAT";

@@ -13,17 +13,20 @@ public sealed class AuthService
     private readonly AuthState _authState;
     private readonly AppState _appState;
     private readonly IJSRuntime _jsRuntime;
+    private readonly TenantContextAccessor _tenantAccessor;
 
     public AuthService(
         IHttpClientFactory httpClientFactory,
         AuthState authState,
         AppState appState,
-        IJSRuntime jsRuntime)
+        IJSRuntime jsRuntime,
+        TenantContextAccessor tenantAccessor)
     {
         _httpClientFactory = httpClientFactory;
         _authState = authState;
         _appState = appState;
         _jsRuntime = jsRuntime;
+        _tenantAccessor = tenantAccessor;
     }
 
     public async Task<LoginResult> LoginAsync(string usernameOrEmail, string password)
@@ -121,6 +124,31 @@ public sealed class AuthService
         }
     }
 
+    public async Task SetTenantContextAsync(Nanchesoft.Web.State.TenantOption option)
+    {
+        if (option is null)
+            return;
+
+        _authState.SetTenantContext(option);
+        _appState.CurrentTenantId = option.TenantId == Guid.Empty ? null : option.TenantId;
+        _appState.CurrentTenantName = string.IsNullOrWhiteSpace(option.Name)
+            ? (_authState.IsPlatformOwner ? "Plataforma" : "Sin tenant")
+            : option.Name;
+        _appState.CurrentCompanyId = option.CompanyId == Guid.Empty ? null : option.CompanyId;
+        _appState.CurrentCompanyName = string.IsNullOrWhiteSpace(option.CompanyName) ? "Sin empresa" : option.CompanyName;
+        _appState.CurrentBranchId = option.BranchId == Guid.Empty ? null : option.BranchId;
+        _appState.CurrentBranchName = string.IsNullOrWhiteSpace(option.BranchName) ? "Sin sucursal" : option.BranchName;
+
+        _tenantAccessor.Set(
+            _appState.CurrentTenantId,
+            _appState.CurrentCompanyId,
+            _appState.CurrentBranchId,
+            _authState.UserId,
+            _authState.IsPlatformOwner);
+
+        await PersistSessionAsync();
+    }
+
     public async Task LogoutAsync()
     {
         _authState.Clear();
@@ -130,6 +158,7 @@ public sealed class AuthService
         _appState.CurrentTenantName = "Sin tenant";
         _appState.CurrentCompanyName = "Sin empresa";
         _appState.CurrentBranchName = "Sin sucursal";
+        _tenantAccessor.Clear();
 
         try
         {
@@ -170,6 +199,13 @@ public sealed class AuthService
             : payload.TenantName;
         _appState.CurrentCompanyName = string.IsNullOrWhiteSpace(payload.CompanyName) ? "Sin empresa" : payload.CompanyName;
         _appState.CurrentBranchName = string.IsNullOrWhiteSpace(payload.BranchName) ? "Sin sucursal" : payload.BranchName;
+
+        _tenantAccessor.Set(
+            payload.TenantId,
+            payload.CompanyId,
+            payload.BranchId,
+            payload.UserId,
+            payload.IsPlatformOwner);
 
         _authState.NotifyStateChanged();
     }
