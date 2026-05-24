@@ -1,0 +1,101 @@
+@implements IDisposable
+@inject Nanchesoft.Web.State.ThemeState ThemeState
+@inject Nanchesoft.Web.Services.ThemeService ThemeService
+
+<HeadContent>
+    <style id="ns-theme-vars">
+        :root {
+            --ns-accent:        @_accent;
+            --ns-accent-end:    @ShiftHex(_accent, 0.14);
+            --ns-accent-soft:   @ShiftHex(_accent, -0.88);
+            --ns-accent-rgb:    @HexToRgb(_accent);
+            @if (!string.IsNullOrWhiteSpace(_secondary))
+            {
+                @:--ns-secondary:     @_secondary;
+                @:--ns-secondary-end: @ShiftHex(_secondary, 0.14);
+                @:--ns-secondary-rgb: @HexToRgb(_secondary);
+            }
+            @if (!string.IsNullOrWhiteSpace(_background))
+            {
+                @:--ns-background: @_background;
+            }
+        }
+    </style>
+</HeadContent>
+
+@code {
+    private string _accent    = "#3557ff";
+    private string _secondary = string.Empty;
+    private string _background = string.Empty;
+
+    protected override void OnInitialized()
+    {
+        ThemeState.OnChange += OnThemeChanged;
+        SyncFromState();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        if (!ThemeState.IsLoaded)
+            await ThemeService.LoadAsync();
+        SyncFromState();
+        StateHasChanged();
+    }
+
+    private void SyncFromState()
+    {
+        var (accent, secondary) = ThemeState.AutoModeEnabled
+            ? ThemeService.GetCurrentColors()
+            : (ThemeState.AccentColor, ThemeState.SecondaryColor);
+
+        _accent    = string.IsNullOrWhiteSpace(accent)    ? "#3557ff" : accent;
+        _secondary = secondary ?? string.Empty;
+        _background = ThemeState.BackgroundColor ?? string.Empty;
+    }
+
+    private void OnThemeChanged()
+    {
+        SyncFromState();
+        InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose() => ThemeState.OnChange -= OnThemeChanged;
+
+    // ── Utilidades de color ──────────────────────────────────────────────────
+
+    private static string HexToRgb(string hex)
+    {
+        var c = hex.TrimStart('#');
+        if (c.Length == 3) c = $"{c[0]}{c[0]}{c[1]}{c[1]}{c[2]}{c[2]}";
+        if (c.Length != 6) return "53,87,255";
+        int r = Convert.ToInt32(c[..2], 16);
+        int g = Convert.ToInt32(c[2..4], 16);
+        int b = Convert.ToInt32(c[4..6], 16);
+        return $"{r},{g},{b}";
+    }
+
+    private static string ShiftHex(string hex, double factor)
+    {
+        var c = hex.TrimStart('#');
+        if (c.Length == 3) c = $"{c[0]}{c[0]}{c[1]}{c[1]}{c[2]}{c[2]}";
+        if (c.Length != 6) return hex;
+        int r = Convert.ToInt32(c[..2], 16);
+        int g = Convert.ToInt32(c[2..4], 16);
+        int b = Convert.ToInt32(c[4..6], 16);
+        if (factor > 0)
+        {
+            r = Math.Max(0, (int)(r * (1 - factor)));
+            g = Math.Max(0, (int)(g * (1 - factor)));
+            b = Math.Max(0, (int)(b * (1 - factor)));
+        }
+        else
+        {
+            double f = -factor;
+            r = Math.Min(255, (int)(r + (255 - r) * f));
+            g = Math.Min(255, (int)(g + (255 - g) * f));
+            b = Math.Min(255, (int)(b + (255 - b) * f));
+        }
+        return $"#{r:x2}{g:x2}{b:x2}";
+    }
+}

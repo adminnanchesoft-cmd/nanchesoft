@@ -1,6 +1,7 @@
 @inherits LayoutComponentBase
 @inject Nanchesoft.Web.State.AuthState AuthState
 @inject Nanchesoft.Web.Services.AuthService AuthService
+@inject Nanchesoft.Web.Services.ThemeService ThemeService
 @inject NavigationManager NavigationManager
 
 @if (!_sessionReady)
@@ -11,6 +12,8 @@
 }
 else if (AuthState.IsAuthenticated)
 {
+    <ThemeVarsInjector />
+
     <div class="ns-shell2 ns-shell2--azure-topbar ns-shell-v3 ns-shell-enterprise">
         <TopBar />
 
@@ -41,15 +44,24 @@ else if (AuthState.IsAuthenticated)
         if (!firstRender)
             return;
 
-        var restored = await AuthService.RestoreSessionAsync();
+        await AuthService.RestoreSessionAsync();
         _sessionReady = true;
 
-        if (!restored && !AuthState.IsAuthenticated)
+        if (!AuthState.IsAuthenticated)
         {
             NavigationManager.NavigateTo("/login", forceLoad: true);
             return;
         }
 
+        // Context is incomplete (lost tenant/company) — redirect to login to re-establish it
+        if (!AuthState.IsPlatformOwner && (!AuthState.TenantId.HasValue || !AuthState.CompanyId.HasValue))
+        {
+            await AuthService.LogoutAsync();
+            NavigationManager.NavigateTo("/login", forceLoad: true);
+            return;
+        }
+
+        await ThemeService.LoadAsync();
         await InvokeAsync(StateHasChanged);
     }
 }

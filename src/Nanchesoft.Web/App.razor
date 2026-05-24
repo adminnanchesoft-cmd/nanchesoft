@@ -16,8 +16,22 @@
     <link rel="icon" type="image/png" href="favicon.png" />
 
     <link rel="stylesheet" href="@Assets["lib/bootstrap/dist/css/bootstrap.min.css"]" />
-    <link rel="stylesheet" href="https://cdn3.devexpress.com/jslib/25.1.6/css/dx.light.css" />
-    <link rel="stylesheet" href="app.css?v=20260518c" />
+
+    @* DevExtreme: tema activo como stylesheet (antiFlash + fallback) *@
+    <link id="dx-active-theme" rel="stylesheet" href="https://cdn3.devexpress.com/jslib/25.1.6/css/dx.light.css" />
+
+    @* DevExtreme: catálogo de temas disponibles para themes.current() *@
+    <link rel="dx-theme" data-theme="generic.light"               href="https://cdn3.devexpress.com/jslib/25.1.6/css/dx.light.css" />
+    <link rel="dx-theme" data-theme="generic.dark"                href="https://cdn3.devexpress.com/jslib/25.1.6/css/dx.dark.css" />
+    <link rel="dx-theme" data-theme="fluent.saas.light"           href="https://cdn3.devexpress.com/jslib/25.1.6/css/dx.fluent.saas.light.css" />
+    <link rel="dx-theme" data-theme="fluent.saas.dark"            href="https://cdn3.devexpress.com/jslib/25.1.6/css/dx.fluent.saas.dark.css" />
+    <link rel="dx-theme" data-theme="material.blue.light.compact" href="https://cdn3.devexpress.com/jslib/25.1.6/css/dx.material.blue.light.compact.css" />
+    <link rel="dx-theme" data-theme="material.blue.dark.compact"  href="https://cdn3.devexpress.com/jslib/25.1.6/css/dx.material.blue.dark.compact.css" />
+
+    @* AntiFlash: aplica tema guardado ANTES de renderizar *@
+    <script src="/js/theme.js"></script>
+
+    <link rel="stylesheet" href="app.css?v=20260524e" />
     <link rel="stylesheet" href="@Assets["Nanchesoft.Web.styles.css"]" />
 
     <ImportMap />
