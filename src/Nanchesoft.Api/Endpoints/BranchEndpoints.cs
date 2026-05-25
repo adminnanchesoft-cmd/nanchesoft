@@ -19,10 +19,10 @@ public static class BranchEndpoints
         return app;
     }
 
-    private static async Task<IResult> GetBranchesAsync(HttpContext httpContext, NanchesoftDbContext db)
+    private static async Task<IResult> GetBranchesAsync(HttpContext httpContext, Guid? companyId, NanchesoftDbContext db)
     {
         var tenantId = ApiTenantScope.ResolveTenantId(httpContext);
-        var companyId = ApiTenantScope.ResolveCompanyId(httpContext);
+        var scopeCompanyId = companyId ?? ApiTenantScope.ResolveCompanyId(httpContext);
         var isPlatformOwner = ApiTenantScope.IsPlatformOwner(httpContext);
 
         var query = db.Branches
@@ -31,10 +31,11 @@ public static class BranchEndpoints
             .Include(x => x.Company)
             .AsQueryable();
 
-        if (!isPlatformOwner && tenantId.HasValue)
+        // Explicit companyId param always applied (even for platform owners)
+        if (scopeCompanyId.HasValue && scopeCompanyId.Value != Guid.Empty)
+            query = query.Where(x => x.CompanyId == scopeCompanyId.Value);
+        else if (!isPlatformOwner && tenantId.HasValue)
             query = query.Where(x => x.TenantId == tenantId.Value);
-        if (!isPlatformOwner && companyId.HasValue)
-            query = query.Where(x => x.CompanyId == companyId.Value);
 
         var branches = await query.OrderBy(x => x.Name).Select(x => new BranchListItemDto
         {

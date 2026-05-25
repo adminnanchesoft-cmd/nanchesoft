@@ -37,10 +37,10 @@
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (!firstRender) return;
-        if (!ThemeState.IsLoaded)
-            await ThemeService.LoadAsync();
+        if (ThemeState.IsLoaded) return;
+        await ThemeService.LoadAsync();
         SyncFromState();
-        StateHasChanged();
+        await InvokeAsync(StateHasChanged);
     }
 
     private void SyncFromState()

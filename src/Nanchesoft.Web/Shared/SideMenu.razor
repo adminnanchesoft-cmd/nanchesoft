@@ -111,6 +111,7 @@
     private readonly string _treeId = $"ns-nav-tree-{Guid.NewGuid():N}";
     private DotNetObjectReference<SideMenu>? _objectReference;
     private bool _initialized;
+    private bool _needsReinit;
 
     private string CurrentGroupTitle { get; set; } = "Inicio";
     private string CurrentGroupCode { get; set; } = "IN";
@@ -129,9 +130,15 @@
         {
             _objectReference = DotNetObjectReference.Create(this);
             _initialized = true;
+            await InitializeTreeAsync();
+            return;
         }
 
-        await InitializeTreeAsync();
+        if (_needsReinit)
+        {
+            _needsReinit = false;
+            await InitializeTreeAsync();
+        }
     }
 
     public void Dispose()
@@ -153,14 +160,11 @@
         return Task.CompletedTask;
     }
 
-    private async void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
+    private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
     {
         RefreshContext();
-        await InvokeAsync(async () =>
-        {
-            StateHasChanged();
-            await InitializeTreeAsync();
-        });
+        _needsReinit = true;
+        InvokeAsync(StateHasChanged);
     }
 
     private void RefreshContext()

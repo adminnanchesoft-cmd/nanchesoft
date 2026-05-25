@@ -166,6 +166,10 @@ public static class ProductionOrderEndpoints
                 return Results.BadRequest(new { message = "BranchId es obligatorio." });
             if (request.Lines == null || request.Lines.Count == 0)
                 return Results.BadRequest(new { message = "Debe agregar al menos una línea." });
+            if (string.IsNullOrWhiteSpace(request.CustomerReference))
+                return Results.BadRequest(new { message = "La referencia del cliente es obligatoria." });
+            if (request.Lines.Any(l => string.IsNullOrWhiteSpace(l.CustomerPoReference)))
+                return Results.BadRequest(new { message = "Todas las líneas deben tener el campo P.O. (pedido del cliente)." });
 
             var company = await db.Companies.AsNoTracking().FirstOrDefaultAsync(x => x.Id == request.CompanyId);
             if (company is null) return Results.BadRequest(new { message = "Empresa no encontrada." });
@@ -182,8 +186,15 @@ public static class ProductionOrderEndpoints
                 StartDate = request.StartDate,
                 EndDate = request.EndDate,
                 DeliveryDate = request.DeliveryDate,
+                CancellationDate = request.CancellationDate,
                 Priority = request.Priority < 1 ? 1 : request.Priority,
                 Notes = request.Notes,
+                CustomerId = request.CustomerId == Guid.Empty ? null : request.CustomerId,
+                CustomerReference = request.CustomerReference.Trim(),
+                WarehouseId = request.WarehouseId == Guid.Empty ? null : request.WarehouseId,
+                ShipToAddressId = request.ShipToAddressId == Guid.Empty ? null : request.ShipToAddressId,
+                ShipToAddressText = request.ShipToAddressText?.Trim() ?? string.Empty,
+                LegalName = request.LegalName?.Trim() ?? string.Empty,
                 Status = "draft",
                 ExplosionStatus = "pending",
                 CreatedBy = request.UserId ?? "api"
@@ -192,10 +203,20 @@ public static class ProductionOrderEndpoints
             var lineNumber = 1;
             foreach (var lineReq in request.Lines)
             {
-                var totalPlanned = lineReq.QuantitiesPerSize.Values.Sum();
+                // Sanitize quantities — skip entries with invalid (empty) size run size IDs
+                var validQty = lineReq.QuantitiesPerSize
+                    .Where(kv => Guid.TryParse(kv.Key, out var g) && g != Guid.Empty && kv.Value > 0)
+                    .ToDictionary(kv => kv.Key, kv => kv.Value);
+
+                var totalPlanned = validQty.Values.Sum();
+                var lineTotal = Math.Round(totalPlanned * lineReq.UnitPrice * (1 - lineReq.DiscountPercent / 100m), 2);
+
+                var ncFolio = await GenerateNcFolioAsync(db, request.CompanyId);
+
                 order.Lines.Add(new ProductionOrderLine
                 {
                     LineNumber = lineNumber++,
+                    NcFolio = ncFolio,
                     FinishedProductId = lineReq.FinishedProductId,
                     ProductStyleId = lineReq.ProductStyleId,
                     ProductSizeRunId = lineReq.ProductSizeRunId,
@@ -203,24 +224,57 @@ public static class ProductionOrderEndpoints
                     ProductColorId = lineReq.ProductColorId,
                     ProductSoleId = lineReq.ProductSoleId,
                     ProductManufacturingTypeId = lineReq.ProductManufacturingTypeId,
-                    CustomerId = lineReq.CustomerId,
+                    CustomerId = lineReq.CustomerId == Guid.Empty ? null : lineReq.CustomerId,
                     SalesOrderId = lineReq.SalesOrderId,
                     SalesOrderLineId = lineReq.SalesOrderLineId,
-                    QuantitiesPerSize = lineReq.QuantitiesPerSize,
+                    QuantitiesPerSize = validQty,
                     TotalUnitsPlanned = totalPlanned,
                     TotalUnitsPending = totalPlanned,
+                    CustomerPoReference = (lineReq.CustomerPoReference ?? string.Empty).Trim(),
+                    UnitPrice = lineReq.UnitPrice,
+                    DiscountPercent = lineReq.DiscountPercent,
+                    LineTotal = lineTotal,
                     DeliveryDate = lineReq.DeliveryDate,
                     Priority = lineReq.Priority < 1 ? 1 : lineReq.Priority,
                     Status = "pending",
+                    Notes = lineReq.Notes ?? string.Empty,
+                    WarehouseId = lineReq.WarehouseId == Guid.Empty ? null : lineReq.WarehouseId,
+                    ShipToAddressId = lineReq.ShipToAddressId == Guid.Empty ? null : lineReq.ShipToAddressId,
+                    ShipToAddressText = lineReq.ShipToAddressText?.Trim() ?? string.Empty,
+                    LegalName = lineReq.LegalName?.Trim() ?? string.Empty,
                     CreatedBy = request.UserId ?? "api"
                 });
                 order.TotalUnitsPlanned += totalPlanned;
+                order.Subtotal += lineTotal;
             }
+
+            order.Total = order.Subtotal - order.DiscountAmount;
 
             db.ProductionOrders.Add(order);
             await db.SaveChangesAsync();
 
-            return Results.Created($"/api/production/orders/{order.Id}", new { productionOrderId = order.Id, folio = order.Folio });
+            // Return created lines with their NC folios for the print view
+            var linesResult = order.Lines.OrderBy(l => l.LineNumber).Select(l => new
+            {
+                l.Id,
+                l.LineNumber,
+                l.NcFolio,
+                l.FinishedProductId,
+                l.CustomerPoReference,
+                l.UnitPrice,
+                l.DiscountPercent,
+                l.TotalUnitsPlanned,
+                l.LineTotal
+            }).ToList();
+
+            return Results.Created($"/api/production/orders/{order.Id}", new
+            {
+                productionOrderId = order.Id,
+                folio = order.Folio,
+                subtotal = order.Subtotal,
+                total = order.Total,
+                lines = linesResult
+            });
         });
 
         // ─── Update header ───────────────────────────────────────────────────
@@ -724,6 +778,97 @@ public static class ProductionOrderEndpoints
             return Results.Ok(list);
         }).WithTags("ProductionOrders");
 
+        // ─── Price lookup: customer price list → finished product (by code match) ─
+        app.MapGet("/api/production/product-price", async (Guid finishedProductId, Guid customerId, NanchesoftDbContext db) =>
+        {
+            var customer = await db.Customers.AsNoTracking()
+                .Where(x => x.Id == customerId)
+                .Select(x => new { x.PriceListId })
+                .FirstOrDefaultAsync();
+
+            if (customer?.PriceListId == null)
+                return Results.Ok(new { price = 0m, found = false });
+
+            var product = await db.FinishedProducts.AsNoTracking()
+                .Where(x => x.Id == finishedProductId)
+                .Select(x => new { x.Code, x.Name })
+                .FirstOrDefaultAsync();
+
+            if (product is null)
+                return Results.Ok(new { price = 0m, found = false });
+
+            // Try to find by matching item code to product code
+            var priceDetail = await db.ItemPriceListDetails.AsNoTracking()
+                .Include(x => x.Item)
+                .Where(x => x.PriceListId == customer.PriceListId.Value
+                    && x.Item != null
+                    && (x.Item.Code == product.Code || x.Item.Name == product.Name))
+                .Select(x => new { x.Price })
+                .FirstOrDefaultAsync();
+
+            if (priceDetail is not null)
+                return Results.Ok(new { price = priceDetail.Price, found = true });
+
+            return Results.Ok(new { price = 0m, found = false });
+        }).WithTags("ProductionOrders");
+
+        // ─── Size run sizes for a finished product ───────────────────────────
+        app.MapGet("/api/production/product-sizes/{finishedProductId:guid}", async (Guid finishedProductId, NanchesoftDbContext db) =>
+        {
+            var product = await db.FinishedProducts.AsNoTracking()
+                .Where(x => x.Id == finishedProductId)
+                .Select(x => new { x.ProductSizeRunId, x.ProductStyleId })
+                .FirstOrDefaultAsync();
+
+            if (product?.ProductSizeRunId == null)
+                return Results.Ok(new List<object>());
+
+            var sizes = await db.ProductSizeRunSizes.AsNoTracking()
+                .Where(x => x.ProductSizeRunId == product.ProductSizeRunId.Value && x.IsActive)
+                .OrderBy(x => x.Sequence)
+                .Select(x => new { sizeRunSizeId = x.Id, sizeCode = x.SizeCode, sequence = x.Sequence })
+                .ToListAsync();
+
+            return Results.Ok(new
+            {
+                productSizeRunId = product.ProductSizeRunId,
+                productStyleId = product.ProductStyleId,
+                sizes
+            });
+        }).WithTags("ProductionOrders");
+
+        // ─── Customer shipping addresses / locations ──────────────────────────
+        app.MapGet("/api/production/customer-addresses/{customerId:guid}", async (Guid customerId, NanchesoftDbContext db) =>
+        {
+            var rows = await db.ThirdPartyAddresses.AsNoTracking()
+                .Where(x => x.ThirdPartyType == "customer" && x.ThirdPartyId == customerId && x.IsActive)
+                .OrderByDescending(x => x.IsPrimary)
+                .ThenBy(x => x.LocationName).ThenBy(x => x.Street)
+                .Select(x => new
+                {
+                    AddressId = x.Id,
+                    LocationName = x.LocationName,
+                    AddressType = x.AddressType,
+                    Street = x.Street,
+                    ExteriorNumber = x.ExteriorNumber,
+                    Neighborhood = x.Neighborhood,
+                    ZipCode = x.ZipCode,
+                    IsPrimary = x.IsPrimary
+                })
+                .ToListAsync();
+
+            var result = rows.Select(x => new
+            {
+                x.AddressId,
+                x.IsPrimary,
+                FullAddress = (!string.IsNullOrWhiteSpace(x.LocationName) ? x.LocationName + " — " : "") +
+                              string.Join(", ", new[] { (x.Street + " " + x.ExteriorNumber).Trim(), x.Neighborhood, x.ZipCode }
+                                  .Where(s => !string.IsNullOrWhiteSpace(s)))
+            }).ToList();
+
+            return Results.Ok(result);
+        }).WithTags("ProductionOrders");
+
         // ─── Material requirement for an order ───────────────────────────────
         app.MapGet("/api/production/orders/{id:guid}/material-requirement", async (Guid id, NanchesoftDbContext db) =>
         {
@@ -792,6 +937,46 @@ public static class ProductionOrderEndpoints
 
         return formatted;
     }
+
+    // NC = Número de Control — sequential, unique per company across all order lines
+    private static async Task<string> GenerateNcFolioAsync(NanchesoftDbContext db, Guid companyId)
+    {
+        var series = await db.DocumentSeries
+            .FirstOrDefaultAsync(x => x.CompanyId == companyId && x.DocumentType == "PRODUCTION_ORDER_LINE_NC" && x.IsDefault && x.IsActive);
+
+        if (series is null)
+        {
+            // Auto-create a default NC series for this company
+            var maxNc = await db.ProductionOrderLines
+                .Where(l => l.ProductionOrder != null && l.ProductionOrder.CompanyId == companyId && l.NcFolio.StartsWith("NC-"))
+                .Select(l => l.NcFolio)
+                .ToListAsync();
+
+            var nextNum = maxNc.Count == 0 ? 1
+                : maxNc.Select(nc => int.TryParse(nc.Replace("NC-", ""), out var n) ? n : 0).Max() + 1;
+
+            return $"NC-{nextNum:D6}";
+        }
+
+        var folio = await db.DocumentFolios
+            .FirstOrDefaultAsync(x => x.CompanyId == companyId && x.DocumentType == "PRODUCTION_ORDER_LINE_NC" && x.SeriesId == series.Id);
+
+        var number = folio?.CurrentNumber ?? series.CurrentNumber;
+        var formatted = $"{series.Prefix}{number.ToString().PadLeft(series.NumberLength, '0')}";
+
+        if (folio is not null)
+        {
+            folio.CurrentNumber = number + 1;
+            folio.UpdatedAt = DateTime.UtcNow;
+        }
+        else
+        {
+            series.CurrentNumber = number + 1;
+            series.UpdatedAt = DateTime.UtcNow;
+        }
+
+        return formatted;
+    }
 }
 
 // ─── DTOs ────────────────────────────────────────────────────────────────────
@@ -800,13 +985,22 @@ public sealed class ProductionOrderRequest
 {
     public Guid CompanyId { get; set; }
     public Guid BranchId { get; set; }
+    public Guid? WarehouseId { get; set; }
+    public Guid? CustomerId { get; set; }
+    public string CustomerReference { get; set; } = string.Empty;
     public string WeekCode { get; set; } = string.Empty;
+    public string Season { get; set; } = string.Empty;
     public DateOnly StartDate { get; set; }
     public DateOnly EndDate { get; set; }
     public DateOnly DeliveryDate { get; set; }
+    public DateOnly? CancellationDate { get; set; }
     public int Priority { get; set; } = 1;
     public string? Notes { get; set; }
     public string? UserId { get; set; }
+    // Shipping & identity
+    public Guid? ShipToAddressId { get; set; }
+    public string ShipToAddressText { get; set; } = string.Empty;
+    public string LegalName { get; set; } = string.Empty;
     public List<ProductionOrderLineRequest> Lines { get; set; } = new();
 }
 
@@ -837,6 +1031,15 @@ public sealed class ProductionOrderLineRequest
     public DateOnly? DeliveryDate { get; set; }
     public int Priority { get; set; } = 1;
     public string? UserId { get; set; }
+    public string? CustomerPoReference { get; set; }
+    public decimal UnitPrice { get; set; }
+    public decimal DiscountPercent { get; set; }
+    public string? Notes { get; set; }
+    // Per-line shipping & identity overrides
+    public Guid? WarehouseId { get; set; }
+    public Guid? ShipToAddressId { get; set; }
+    public string ShipToAddressText { get; set; } = string.Empty;
+    public string LegalName { get; set; } = string.Empty;
 }
 
 public sealed class ProductionOrderActionRequest

@@ -1,0 +1,230 @@
+@page "/purchases/material-orders"
+@using Nanchesoft.Web.Services.Purchases
+@inject MaterialPurchaseApiService Api
+@inject NavigationManager Nav
+
+<PageTitle>Órdenes de Compra · Materiales | Nanchesoft</PageTitle>
+
+<div class="ns-module-page">
+    <div class="ns-module-header">
+        <div class="ns-module-header__info">
+            <div class="ns-module-header__breadcrumb">Compras · Materiales</div>
+            <h1 class="ns-module-header__title">Órdenes de Compra M</h1>
+            <p class="ns-module-header__subtitle">Gestión de órdenes de compra de materiales con proveedor, fechas de entrega y seguimiento de recepciones.</p>
+        </div>
+        <div class="ns-module-header__actions">
+            <button class="ns-btn ns-btn--secondary" @onclick="LoadAsync">
+                <i class="bi bi-arrow-clockwise"></i> Actualizar
+            </button>
+            <button class="ns-btn ns-btn--primary" @onclick="New">
+                <i class="bi bi-plus-lg"></i> Nueva OC
+            </button>
+        </div>
+    </div>
+
+    @* Filtros *@
+    <div class="ns-filter-bar">
+        <div class="ns-filter-bar__search">
+            <input class="ns-input ns-input--search" placeholder="Buscar..." @bind="_search" @bind:event="oninput" @onkeyup="OnSearch" />
+        </div>
+        <div class="ns-filter-bar__chips">
+            @foreach (var s in _statuses)
+            {
+                <button class="ns-chip @(_statusFilter == s.Key ? "ns-chip--active" : "")"
+                        @onclick="() => SetStatus(s.Key)">@s.Value</button>
+            }
+        </div>
+    </div>
+
+    @* KPI Cards *@
+    <div class="ns-kpi-row">
+        <div class="ns-kpi ns-kpi--gray">
+            <div class="ns-kpi__label">Borrador</div>
+            <div class="ns-kpi__value">@_items.Count(x => x.Status == "draft")</div>
+        </div>
+        <div class="ns-kpi ns-kpi--blue">
+            <div class="ns-kpi__label">Autorizadas</div>
+            <div class="ns-kpi__value">@_items.Count(x => x.Status == "authorized")</div>
+        </div>
+        <div class="ns-kpi ns-kpi--yellow">
+            <div class="ns-kpi__label">Parcial</div>
+            <div class="ns-kpi__value">@_items.Count(x => x.Status == "partially_received")</div>
+        </div>
+        <div class="ns-kpi ns-kpi--green">
+            <div class="ns-kpi__label">Recibidas</div>
+            <div class="ns-kpi__value">@_items.Count(x => x.Status == "received")</div>
+        </div>
+    </div>
+
+    @* Table *@
+    @if (_loading)
+    {
+        <div class="ns-loader-center"><div class="ns-spinner"></div><span>Cargando órdenes...</span></div>
+    }
+    else if (_filtered.Any())
+    {
+        <div class="ns-table-container">
+            <table class="ns-table">
+                <thead>
+                    <tr>
+                        <th>Folio</th>
+                        <th>Fecha OC</th>
+                        <th>Entrega prom.</th>
+                        <th>Proveedor</th>
+                        <th class="text-right">Total</th>
+                        <th class="text-right">Recibido</th>
+                        <th class="text-right">Pendiente</th>
+                        <th>Comprador</th>
+                        <th>Estatus</th>
+                        <th class="text-center">Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var item in _filtered)
+                    {
+                        <tr class="ns-table__row ns-table__row--@StatusClass(item.Status)" @ondblclick="() => Edit(item.Id)">
+                            <td><span class="ns-folio">@item.Folio</span></td>
+                            <td>@item.OrderDate.ToString("dd/MM/yyyy")</td>
+                            <td class="@(IsLate(item) ? "text-danger fw-semibold" : "")">
+                                @(item.SupplierDeliveryDate.HasValue ? item.SupplierDeliveryDate.Value.ToString("dd/MM/yyyy") : "—")
+                                @if (IsLate(item))
+                                { <span class="ns-badge ns-badge--danger ms-1">RETRASO</span> }
+                            </td>
+                            <td>@item.SupplierName</td>
+                            <td class="text-right">@item.Total.ToString("C")</td>
+                            <td class="text-right text-success">@item.ReceivedTotal.ToString("C")</td>
+                            <td class="text-right @(item.Total - item.ReceivedTotal > 0 ? "text-warning" : "")">
+                                @((item.Total - item.ReceivedTotal).ToString("C"))
+                            </td>
+                            <td>@item.BuyerName</td>
+                            <td><span class="ns-status ns-status--@StatusClass(item.Status)">@StatusLabel(item.Status)</span></td>
+                            <td class="text-center">
+                                <button class="ns-icon-btn" title="Ver/Editar" @onclick="() => Edit(item.Id)">
+                                    <i class="bi bi-pencil"></i>
+                                </button>
+                                @if (item.Status == "draft")
+                                {
+                                    <button class="ns-icon-btn ns-icon-btn--success" title="Autorizar" @onclick="() => AuthorizeAsync(item.Id)">
+                                        <i class="bi bi-check-circle"></i>
+                                    </button>
+                                }
+                                @if (item.Status == "authorized" || item.Status == "partially_received")
+                                {
+                                    <button class="ns-icon-btn ns-icon-btn--primary" title="Recibir mercancía" @onclick="() => Receive(item.Id)">
+                                        <i class="bi bi-box-arrow-in-down"></i>
+                                    </button>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+    else
+    {
+        <div class="ns-empty-state">
+            <i class="bi bi-cart-x ns-empty-state__icon"></i>
+            <p>No hay órdenes de compra con los filtros seleccionados.</p>
+            <button class="ns-btn ns-btn--primary" @onclick="New">Crear primera OC</button>
+        </div>
+    }
+
+    @* Toast *@
+    @if (!string.IsNullOrWhiteSpace(_toast))
+    {
+        <div class="ns-toast ns-toast--@_toastType">@_toast</div>
+    }
+</div>
+
+@code {
+    private List<MatOrderListItem> _items = new();
+    private List<MatOrderListItem> _filtered = new();
+    private bool _loading = true;
+    private string _search = string.Empty;
+    private string _statusFilter = string.Empty;
+    private string _toast = string.Empty;
+    private string _toastType = "success";
+
+    private readonly Dictionary<string, string> _statuses = new()
+    {
+        [""] = "Todos",
+        ["draft"] = "Borrador",
+        ["authorized"] = "Autorizadas",
+        ["partially_received"] = "Parcial",
+        ["received"] = "Recibidas",
+        ["closed"] = "Cerradas",
+        ["cancelled"] = "Canceladas"
+    };
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        try
+        {
+            var result = await Api.GetOrdersAsync(status: string.IsNullOrEmpty(_statusFilter) ? null : _statusFilter, pageSize: 200);
+            _items = result.Items;
+            ApplyFilter();
+        }
+        finally { _loading = false; }
+    }
+
+    private void ApplyFilter()
+    {
+        _filtered = _items.Where(x =>
+            string.IsNullOrWhiteSpace(_search) ||
+            x.Folio.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
+            x.SupplierName.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
+            x.BuyerName.Contains(_search, StringComparison.OrdinalIgnoreCase)
+        ).ToList();
+    }
+
+    private Task OnSearch(KeyboardEventArgs _) { ApplyFilter(); return Task.CompletedTask; }
+    private async Task SetStatus(string s) { _statusFilter = s; await LoadAsync(); }
+
+    private void New() => Nav.NavigateTo("/purchases/material-orders/new");
+    private void Edit(Guid id) => Nav.NavigateTo($"/purchases/material-orders/{id}");
+    private void Receive(Guid id) => Nav.NavigateTo($"/purchases/material-receipts/new?orderId={id}");
+
+    private async Task AuthorizeAsync(Guid id)
+    {
+        var ok = await Api.AuthorizeOrderAsync(id, "usuario");
+        if (ok) { ShowToast("OC autorizada correctamente.", "success"); await LoadAsync(); }
+        else ShowToast("No se pudo autorizar la OC.", "danger");
+    }
+
+    private void ShowToast(string msg, string type)
+    {
+        _toast = msg; _toastType = type;
+        _ = Task.Delay(3500).ContinueWith(_ => { _toast = string.Empty; InvokeAsync(StateHasChanged); });
+    }
+
+    private static bool IsLate(MatOrderListItem item)
+        => item.SupplierDeliveryDate.HasValue
+           && item.SupplierDeliveryDate.Value.Date < DateTime.Today
+           && item.Status is "authorized" or "partially_received";
+
+    private static string StatusClass(string s) => s switch
+    {
+        "draft" => "gray",
+        "authorized" => "blue",
+        "partially_received" => "yellow",
+        "received" => "green",
+        "closed" => "green-dark",
+        "cancelled" => "red",
+        _ => "gray"
+    };
+
+    private static string StatusLabel(string s) => s switch
+    {
+        "draft" => "Borrador",
+        "authorized" => "Autorizada",
+        "partially_received" => "Parcialmente recibida",
+        "received" => "Recibida",
+        "closed" => "Cerrada",
+        "cancelled" => "Cancelada",
+        _ => s
+    };
+}

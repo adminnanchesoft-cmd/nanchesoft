@@ -40,6 +40,14 @@ window.nsCrudGrid = (() => {
         return pick(definition, "allowDelete", "AllowDelete", true);
     }
 
+    function getNewUrl(definition) {
+        return pick(definition, "newUrl", "NewUrl", null);
+    }
+
+    function getEditUrl(definition) {
+        return pick(definition, "editUrl", "EditUrl", null);
+    }
+
     function getMetadata(definition) {
         return pick(definition, "metadata", "Metadata", {});
     }
@@ -101,12 +109,10 @@ window.nsCrudGrid = (() => {
             .ns-crud-popup-wrapper .dx-overlay-content {
                 max-height: 92vh !important;
             }
-
             .ns-crud-popup-wrapper .dx-popup-content {
                 overflow-y: auto !important;
                 padding-bottom: 12px;
             }
-
             .ns-crud-popup-wrapper .dx-popup-bottom {
                 position: sticky;
                 bottom: 0;
@@ -114,9 +120,110 @@ window.nsCrudGrid = (() => {
                 border-top: 1px solid #e5e7eb;
                 z-index: 5;
             }
+            .ns-qc-plus-btn {
+                flex-shrink: 0;
+                width: 36px;
+                height: 36px;
+                border: 1px solid #cbd5e1;
+                background: #f8fafc;
+                border-radius: 8px;
+                cursor: pointer;
+                font-size: 20px;
+                font-weight: 700;
+                color: #1d4ed8;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                transition: background .15s, border-color .15s;
+                padding: 0;
+                line-height: 1;
+            }
+            .ns-qc-plus-btn:hover {
+                background: #eff6ff;
+                border-color: #93c5fd;
+            }
+            .ns-qc-wrapper {
+                display: flex;
+                gap: 6px;
+                align-items: center;
+            }
+            .ns-qc-wrapper > div:first-child {
+                flex: 1;
+                min-width: 0;
+            }
         `;
 
         document.head.appendChild(style);
+    }
+
+    function showQuickCreateDialog(title, onSave) {
+        const overlay = document.createElement("div");
+        overlay.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:10000;display:flex;align-items:center;justify-content:center;padding:16px;";
+
+        const dialog = document.createElement("div");
+        dialog.style.cssText = "background:#fff;border-radius:14px;padding:24px 28px;max-width:380px;width:100%;box-shadow:0 16px 48px rgba(0,0,0,.22);font-family:'Segoe UI',sans-serif;";
+
+        dialog.innerHTML = [
+            `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">`,
+            `  <h3 style="margin:0;font-size:16px;font-weight:700;color:#0f172a;">${title}</h3>`,
+            `  <button class="qc-x" style="background:none;border:none;font-size:22px;cursor:pointer;color:#94a3b8;line-height:1;">×</button>`,
+            `</div>`,
+            `<div class="qc-error" style="display:none;margin-bottom:12px;padding:8px 12px;border-radius:8px;background:#fff1f2;color:#991b1b;font-size:13px;border:1px solid #fecdd3;"></div>`,
+            `<div style="margin-bottom:12px;">`,
+            `  <label style="display:block;font-size:11px;font-weight:700;color:#475569;margin-bottom:4px;letter-spacing:.4px;text-transform:uppercase;">Código *</label>`,
+            `  <input class="qc-code" type="text" style="width:100%;box-sizing:border-box;padding:8px 12px;border-radius:8px;border:1px solid #cbd5e1;font-size:14px;" autocomplete="off"/>`,
+            `</div>`,
+            `<div style="margin-bottom:20px;">`,
+            `  <label style="display:block;font-size:11px;font-weight:700;color:#475569;margin-bottom:4px;letter-spacing:.4px;text-transform:uppercase;">Nombre *</label>`,
+            `  <input class="qc-name" type="text" style="width:100%;box-sizing:border-box;padding:8px 12px;border-radius:8px;border:1px solid #cbd5e1;font-size:14px;" autocomplete="off"/>`,
+            `</div>`,
+            `<div style="display:flex;gap:10px;justify-content:flex-end;">`,
+            `  <button class="qc-cancel" style="padding:8px 18px;border-radius:8px;border:1px solid #cbd5e1;background:#fff;color:#475569;cursor:pointer;font-size:14px;">Cancelar</button>`,
+            `  <button class="qc-save" style="padding:8px 18px;border-radius:8px;border:none;background:#1d4ed8;color:#fff;cursor:pointer;font-size:14px;font-weight:600;">Crear</button>`,
+            `</div>`
+        ].join("");
+
+        overlay.appendChild(dialog);
+        document.body.appendChild(overlay);
+
+        const codeInput = dialog.querySelector(".qc-code");
+        const nameInput = dialog.querySelector(".qc-name");
+        const errorDiv  = dialog.querySelector(".qc-error");
+        const saveBtn   = dialog.querySelector(".qc-save");
+        const cancelBtn = dialog.querySelector(".qc-cancel");
+        const xBtn      = dialog.querySelector(".qc-x");
+
+        setTimeout(() => codeInput.focus(), 60);
+
+        const close = () => { if (overlay.parentNode) document.body.removeChild(overlay); };
+        cancelBtn.addEventListener("click", close);
+        xBtn.addEventListener("click", close);
+        overlay.addEventListener("click", e => { if (e.target === overlay) close(); });
+
+        const doSave = async () => {
+            const code = codeInput.value.trim();
+            const name = nameInput.value.trim();
+            if (!code || !name) {
+                errorDiv.textContent = "Código y nombre son obligatorios.";
+                errorDiv.style.display = "block";
+                return;
+            }
+            saveBtn.disabled = true;
+            saveBtn.textContent = "Guardando…";
+            errorDiv.style.display = "none";
+            try {
+                await onSave(code, name);
+                close();
+            } catch (err) {
+                errorDiv.textContent = err.message || "Error al crear el registro.";
+                errorDiv.style.display = "block";
+                saveBtn.disabled = false;
+                saveBtn.textContent = "Crear";
+            }
+        };
+
+        saveBtn.addEventListener("click", doSave);
+        nameInput.addEventListener("keydown", e => { if (e.key === "Enter") doSave(); });
     }
 
     function disposeCrudGrid(containerId) {
@@ -172,10 +279,13 @@ window.nsCrudGrid = (() => {
         const allowCreate = getAllowCreate(definition);
         const allowUpdate = getAllowUpdate(definition);
         const allowDelete = getAllowDelete(definition);
+        const newUrl = getNewUrl(definition);
+        const editUrl = getEditUrl(definition);
 
         const editableColumns = columns.filter(x =>
             getColumnValue(x, "visible", "Visible", true) !== false &&
-            getColumnValue(x, "allowEditing", "AllowEditing", true)
+            getColumnValue(x, "allowEditing", "AllowEditing", true) &&
+            getColumnValue(x, "dataField", "DataField", "") !== keyExpr
         );
 
         return {
@@ -194,12 +304,14 @@ window.nsCrudGrid = (() => {
             sorting: { mode: "multiple" },
             filterRow: { visible: true, applyFilter: "auto" },
             headerFilter: { visible: true },
+            filterPanel: { visible: true },
             searchPanel: {
                 visible: true,
-                width: 300,
-                placeholder: "Buscar..."
+                width: 280,
+                placeholder: "Buscar en todos los campos..."
             },
-            groupPanel: { visible: false },
+            groupPanel: { visible: true, emptyPanelText: "Arrastra una columna aquí para agrupar" },
+            grouping: { autoExpandAll: true },
             selection: { mode: "single" },
 
             paging: { pageSize: 12 },
@@ -217,12 +329,12 @@ window.nsCrudGrid = (() => {
                 storageKey: `nanchesoft:${catalogKey}:grid-state:v6`
             },
 
-            columns: buildColumns(columns, definition),
+            columns: buildColumns(columns, definition, dotNetRef),
 
             editing: {
                 mode: "popup",
-                allowAdding: allowCreate,
-                allowUpdating: allowUpdate,
+                allowAdding: allowCreate && !newUrl,
+                allowUpdating: allowUpdate && !editUrl,
                 allowDeleting: allowDelete,
                 useIcons: true,
                 popup: {
@@ -247,7 +359,7 @@ window.nsCrudGrid = (() => {
                 form: {
                     colCount: 2,
                     labelLocation: "top",
-                    items: editableColumns.map(buildFormItem),
+                    items: editableColumns.map(col => buildFormItem(col, definition, dotNetRef)),
                     onFieldDataChanged(e) {
                         refreshDependentLookups(e.component, definition);
                         applyServiceNoteDefaults(e.component, definition, false, e.dataField);
@@ -266,7 +378,17 @@ window.nsCrudGrid = (() => {
                             return el;
                         }
                     },
-                    ...(allowCreate ? [{
+                    ...(allowCreate && newUrl ? [{
+                        location: "after",
+                        widget: "dxButton",
+                        options: {
+                            text: "Nuevo",
+                            icon: "add",
+                            type: "success",
+                            stylingMode: "contained",
+                            onClick: () => dotNetRef.invokeMethodAsync("HandleNavigateTo", newUrl)
+                        }
+                    }] : allowCreate ? [{
                         name: "addRowButton",
                         location: "after",
                         showText: "always",
@@ -313,6 +435,13 @@ window.nsCrudGrid = (() => {
                         e.data.NoteDate = new Date();
                     }
                 }
+                if (catalogKey === "hr-work-schedules") {
+                    e.data.Monday = true;
+                    e.data.Tuesday = true;
+                    e.data.Wednesday = true;
+                    e.data.Thursday = true;
+                    e.data.Friday = true;
+                }
             },
 
             onEditingStart(e) {
@@ -335,17 +464,19 @@ window.nsCrudGrid = (() => {
         };
     }
 
-    function buildColumns(columns, definition) {
+    function buildColumns(columns, definition, dotNetRef) {
         const allowUpdate = getAllowUpdate(definition);
         const allowDelete = getAllowDelete(definition);
+        const editUrl = getEditUrl(definition);
         const keyExpr = getKeyExpr(definition);
         const mapped = columns
-            .filter(x => getColumnValue(x, "visible", "Visible", true) !== false && getColumnValue(x, "dataField", "DataField", "") !== keyExpr)
+            .filter(x => getColumnValue(x, "dataField", "DataField", "") !== keyExpr)
             .map(col => {
                 const dataType = getColumnValue(col, "dataType", "DataType", "string");
                 const useLookup = getColumnValue(col, "useLookup", "UseLookup", false);
                 const lookupItems = getLookupItems(col);
                 const dataField = getColumnValue(col, "dataField", "DataField", "");
+                const showInGrid = getColumnValue(col, "showInGrid", "ShowInGrid", true) !== false;
 
                 const dxColumn = {
                     dataField: dataField,
@@ -354,7 +485,9 @@ window.nsCrudGrid = (() => {
                     width: getColumnValue(col, "width", "Width", 160),
                     allowEditing: getColumnValue(col, "allowEditing", "AllowEditing", true),
                     allowFiltering: getColumnValue(col, "allowFiltering", "AllowFiltering", true),
-                    allowSorting: getColumnValue(col, "allowSorting", "AllowSorting", true)
+                    allowSorting: getColumnValue(col, "allowSorting", "AllowSorting", true),
+                    visible: showInGrid,
+                    showInColumnChooser: showInGrid
                 };
 
                 if (String(dataType).toLowerCase() === "boolean") {
@@ -363,6 +496,10 @@ window.nsCrudGrid = (() => {
 
                 if (String(dataType).toLowerCase() === "number") {
                     dxColumn.format = { type: "fixedPoint", precision: 2 };
+                }
+
+                if (String(dataType).toLowerCase() === "date") {
+                    dxColumn.format = "dd/MM/yyyy";
                 }
 
                 if (useLookup && Array.isArray(lookupItems) && lookupItems.length > 0) {
@@ -380,7 +517,18 @@ window.nsCrudGrid = (() => {
             });
 
         const commandButtons = [];
-        if (allowUpdate) commandButtons.push("edit");
+        if (allowUpdate && editUrl) {
+            commandButtons.push({
+                hint: "Editar",
+                icon: "edit",
+                onClick(e) {
+                    const key = e.row?.data?.[keyExpr];
+                    if (key) dotNetRef.invokeMethodAsync("HandleNavigateTo", `${editUrl}/${key}`);
+                }
+            });
+        } else if (allowUpdate) {
+            commandButtons.push("edit");
+        }
         if (allowDelete) commandButtons.push("delete");
 
         if (commandButtons.length > 0) {
@@ -400,13 +548,14 @@ window.nsCrudGrid = (() => {
         return mapped;
     }
 
-    function buildFormItem(col) {
+    function buildFormItem(col, definition, dotNetRef) {
         const caption = getColumnValue(col, "caption", "Caption", "");
         const dataField = getColumnValue(col, "dataField", "DataField", "");
         const dataType = getColumnValue(col, "dataType", "DataType", "string");
         const useLookup = getColumnValue(col, "useLookup", "UseLookup", false);
         const lookupItems = getLookupItems(col);
         const required = getColumnValue(col, "required", "Required", false);
+        const quickCreateKey = getColumnValue(col, "quickCreateKey", "QuickCreateKey", null);
 
         const item = {
             dataField: dataField,
@@ -414,19 +563,83 @@ window.nsCrudGrid = (() => {
             colSpan: 1
         };
 
-        if (useLookup && Array.isArray(lookupItems) && lookupItems.length > 0) {
-            item.editorType = "dxSelectBox";
-            item.editorOptions = {
-                dataSource: lookupItems.map(x => ({
-                    id: getLookupItemValue(x, "id", "Id", ""),
-                    name: getLookupItemValue(x, "name", "Name", "")
-                })),
-                valueExpr: "id",
-                displayExpr: "name",
-                searchEnabled: true,
-                showClearButton: false,
-                deferRendering: false
-            };
+        if (useLookup && Array.isArray(lookupItems)) {
+            const normalizedItems = lookupItems.map(x => ({
+                id: getLookupItemValue(x, "id", "Id", ""),
+                name: getLookupItemValue(x, "name", "Name", "")
+            }));
+
+            if (quickCreateKey && dotNetRef) {
+                // Custom template: dxSelectBox + "+" button
+                item.template = function(data, itemElement) {
+                    const wrapper = document.createElement("div");
+                    wrapper.className = "ns-qc-wrapper";
+
+                    const selectDiv = document.createElement("div");
+
+                    const itemsRef = [...normalizedItems];
+
+                    const currentVal = (data.component?.option?.("formData") ?? {})[dataField] ?? null;
+
+                    const sb = new DevExpress.ui.dxSelectBox(selectDiv, {
+                        dataSource: itemsRef,
+                        valueExpr: "id",
+                        displayExpr: "name",
+                        searchEnabled: true,
+                        showClearButton: !required,
+                        deferRendering: false,
+                        value: currentVal,
+                        onValueChanged(e) {
+                            data.component?.updateData?.(dataField, e.value ?? null);
+                        }
+                    });
+
+                    const btn = document.createElement("button");
+                    btn.type = "button";
+                    btn.className = "ns-qc-plus-btn";
+                    btn.title = `Crear ${caption}`;
+                    btn.textContent = "+";
+
+                    btn.addEventListener("click", function(e) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        showQuickCreateDialog(`Nuevo: ${caption}`, async function(code, name) {
+                            const result = await dotNetRef.invokeMethodAsync("HandleQuickCreate", quickCreateKey, code, name);
+                            if (!result.success) throw new Error(result.error || "Error al crear.");
+                            const newItems = (result.allItems || []).map(x => ({
+                                id: x.id || x.Id || "",
+                                name: x.name || x.Name || ""
+                            }));
+                            // Update column definition so refreshes also see new items
+                            if (col.LookupItems) col.LookupItems = result.allItems;
+                            if (col.lookupItems) col.lookupItems = result.allItems;
+                            itemsRef.length = 0;
+                            newItems.forEach(x => itemsRef.push(x));
+                            sb.option("dataSource", [...newItems]);
+                            if (result.newId) {
+                                sb.option("value", result.newId);
+                                data.component?.updateData?.(dataField, result.newId);
+                            }
+                        });
+                    });
+
+                    wrapper.appendChild(selectDiv);
+                    wrapper.appendChild(btn);
+
+                    const el = itemElement instanceof HTMLElement ? itemElement : itemElement?.[0];
+                    if (el) el.appendChild(wrapper);
+                };
+            } else {
+                item.editorType = "dxSelectBox";
+                item.editorOptions = {
+                    dataSource: normalizedItems,
+                    valueExpr: "id",
+                    displayExpr: "name",
+                    searchEnabled: true,
+                    showClearButton: false,
+                    deferRendering: false
+                };
+            }
         } else if (String(dataType).toLowerCase() === "boolean") {
             item.editorType = "dxSwitch";
         } else if (String(dataType).toLowerCase() === "number") {
@@ -434,6 +647,14 @@ window.nsCrudGrid = (() => {
             item.editorOptions = {
                 showSpinButtons: true,
                 format: "#,##0.00"
+            };
+        } else if (String(dataType).toLowerCase() === "time") {
+            item.editorType = "dxTextBox";
+            item.editorOptions = {
+                mask: "00:00",
+                showMaskMode: "always",
+                useMaskedValue: true,
+                placeholder: "HH:mm"
             };
         }
 

@@ -4458,3 +4458,247 @@ body {
 
 /* ── Popup title strip ── */
 .dx-popup-title { border-bottom: 2px solid var(--ns-accent, #0078d4) !important; }
+
+/* ============================================================
+   MODO OSCURO — data-ns-dark="1" en <html>
+   Corrige textos invisibles en navegación, búsqueda y topbar
+   ============================================================ */
+
+[data-ns-dark="1"] {
+    /* Fondo general */
+    background-color: #0f172a;
+    color: #e2e8f0;
+}
+
+/* Buscador lateral (dx-texteditor dentro de nav) */
+[data-ns-dark="1"] .ns-azure-nav__search .dx-texteditor,
+[data-ns-dark="1"] .ns-azure-nav--blazor .ns-azure-nav__searchbox {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+}
+[data-ns-dark="1"] .ns-azure-nav__search .dx-texteditor-input,
+[data-ns-dark="1"] .ns-azure-nav--blazor .ns-azure-nav__searchinput {
+    color: #e2e8f0 !important;
+    background: transparent !important;
+}
+[data-ns-dark="1"] .ns-azure-nav__search .dx-placeholder,
+[data-ns-dark="1"] .ns-azure-nav--blazor .ns-azure-nav__searchinput::placeholder {
+    color: #94a3b8 !important;
+}
+[data-ns-dark="1"] .ns-azure-nav--blazor .ns-azure-nav__searchicon,
+[data-ns-dark="1"] .ns-azure-nav--blazor .ns-azure-nav__clearsearch {
+    color: #94a3b8 !important;
+}
+
+/* Buscador de la topbar */
+[data-ns-dark="1"] .ns-azure-topbar__search,
+[data-ns-dark="1"] .ns-topbar2__search {
+    color: #e2e8f0 !important;
+    background: rgba(255,255,255,.06) !important;
+}
+[data-ns-dark="1"] .ns-azure-topbar__search::placeholder,
+[data-ns-dark="1"] .ns-topbar2__search::placeholder {
+    color: #94a3b8 !important;
+}
+
+/* Textos de ítems de navegación */
+[data-ns-dark="1"] .ns-nav-tree-item {
+    color: #cbd5e1 !important;
+}
+[data-ns-dark="1"] .ns-nav-tree-item__label {
+    color: #cbd5e1 !important;
+}
+[data-ns-dark="1"] .ns-nav-tree-item--group .ns-nav-tree-item__label {
+    color: #94a3b8 !important;
+}
+
+/* DevExtreme inputs en modo oscuro */
+[data-ns-dark="1"] .dx-texteditor-input,
+[data-ns-dark="1"] .dx-texteditor {
+    color: #e2e8f0 !important;
+    background-color: #1e293b !important;
+    border-color: #334155 !important;
+}
+[data-ns-dark="1"] .dx-placeholder {
+    color: #94a3b8 !important;
+}
+
+/* Grid en modo oscuro */
+[data-ns-dark="1"] .dx-datagrid,
+[data-ns-dark="1"] .dx-datagrid-headers,
+[data-ns-dark="1"] .dx-datagrid-rowsview {
+    background-color: #1e293b !important;
+    color: #e2e8f0 !important;
+}
+[data-ns-dark="1"] .dx-datagrid .dx-row > td {
+    color: #e2e8f0 !important;
+    border-color: #334155 !important;
+}
+[data-ns-dark="1"] .dx-datagrid-headers .dx-row > td {
+    background-color: #162032 !important;
+    color: #94a3b8 !important;
+    border-color: #334155 !important;
+}
+
+/* Popup / modal en modo oscuro */
+[data-ns-dark="1"] .dx-popup-content,
+[data-ns-dark="1"] .dx-overlay-content {
+    background-color: #1e293b !important;
+    color: #e2e8f0 !important;
+}
+
+/* SelectBox / DropDown abierto */
+[data-ns-dark="1"] .dx-dropdowneditor-overlay .dx-list-item {
+    color: #e2e8f0 !important;
+}
+[data-ns-dark="1"] .dx-list {
+    background-color: #1e293b !important;
+    color: #e2e8f0 !important;
+}
+
+/* Checkbox label */
+[data-ns-dark="1"] .dx-checkbox-text {
+    color: #e2e8f0 !important;
+}
+
+/* ============================================================
+   LOGIN — MODO CLARO  (data-ns-dark="0")
+   Aplica cuando el usuario tiene seleccionado un tema light
+   ============================================================ */
+
+/* Fondo principal */
+[data-ns-dark="0"] .ns-auth3 {
+    background:
+        radial-gradient(circle at 14% 18%, rgba(var(--ns-accent-rgb, 0,120,212), .10), transparent 34%),
+        radial-gradient(circle at 78% 10%, rgba(var(--ns-accent-rgb, 0,120,212), .06), transparent 28%),
+        linear-gradient(135deg, #f8faff 0%, #eef3ff 42%, #e4edff 100%) !important;
+    color: #1e293b !important;
+}
+[data-ns-dark="0"] .ns-auth3::after {
+    background: radial-gradient(ellipse at center, rgba(var(--ns-accent-rgb, 0,120,212), .10), transparent 70%) !important;
+}
+[data-ns-dark="0"] .ns-auth3__ambient--one {
+    background: radial-gradient(circle, rgba(var(--ns-accent-rgb, 0,120,212), .18), transparent 67%) !important;
+}
+[data-ns-dark="0"] .ns-auth3__ambient--two {
+    background: radial-gradient(circle, rgba(var(--ns-accent-rgb, 0,120,212), .14), transparent 68%) !important;
+}
+
+/* Topbar */
+[data-ns-dark="0"] .ns-auth3__topbar {
+    background: rgba(255,255,255,.88) !important;
+    border-bottom-color: rgba(var(--ns-accent-rgb, 0,120,212), .12) !important;
+    backdrop-filter: blur(22px);
+}
+[data-ns-dark="0"] .ns-auth3__top-logo-link { color: #1e293b !important; }
+[data-ns-dark="0"] .ns-auth3__top-logo-text strong { color: #0f172a !important; text-shadow: none !important; }
+[data-ns-dark="0"] .ns-auth3__top-logo-text small { color: #64748b !important; }
+[data-ns-dark="0"] .ns-auth3__top-logo-img {
+    border-color: rgba(var(--ns-accent-rgb, 0,120,212), .30) !important;
+    box-shadow: 0 0 0 4px rgba(var(--ns-accent-rgb, 0,120,212), .08), 0 8px 24px rgba(var(--ns-accent-rgb, 0,120,212), .14) !important;
+}
+[data-ns-dark="0"] .ns-auth3__top-pill {
+    background: rgba(var(--ns-accent-rgb, 0,120,212), .08) !important;
+    border-color: rgba(var(--ns-accent-rgb, 0,120,212), .18) !important;
+    color: #1e293b !important;
+}
+
+/* Hero — texto del lado izquierdo */
+[data-ns-dark="0"] .ns-auth3__eyebrow {
+    background: rgba(var(--ns-accent-rgb, 0,120,212), .08) !important;
+    border-color: rgba(var(--ns-accent-rgb, 0,120,212), .16) !important;
+    color: var(--ns-accent, #0078d4) !important;
+}
+[data-ns-dark="0"] .ns-auth3__title { color: #0f172a !important; text-shadow: none !important; }
+[data-ns-dark="0"] .ns-auth3__lead  { color: #334155 !important; }
+
+/* Tarjetas de beneficios */
+[data-ns-dark="0"] .ns-auth3__promise {
+    background: rgba(255,255,255,.80) !important;
+    border-color: rgba(var(--ns-accent-rgb, 0,120,212), .12) !important;
+    box-shadow: 0 8px 24px rgba(0,0,0,.06) !important;
+}
+[data-ns-dark="0"] .ns-auth3__promise strong { color: #0f172a !important; }
+[data-ns-dark="0"] .ns-auth3__promise span   { color: #475569 !important; }
+[data-ns-dark="0"] .ns-auth3__promise-icon {
+    background: rgba(var(--ns-accent-rgb, 0,120,212), .10) !important;
+    border-color: rgba(var(--ns-accent-rgb, 0,120,212), .18) !important;
+    color: var(--ns-accent, #0078d4) !important;
+}
+
+/* Métricas inferiores */
+[data-ns-dark="0"] .ns-auth3__metrics {
+    background: rgba(255,255,255,.70) !important;
+    border-color: rgba(var(--ns-accent-rgb, 0,120,212), .12) !important;
+}
+[data-ns-dark="0"] .ns-auth3__metrics div { background: rgba(255,255,255,.50) !important; }
+[data-ns-dark="0"] .ns-auth3__metrics strong { color: #0f172a !important; }
+[data-ns-dark="0"] .ns-auth3__metrics span   { color: #475569 !important; }
+
+/* Panel derecho (form side) */
+[data-ns-dark="0"] .ns-auth3__form-side {
+    background: rgba(255,255,255,.70) !important;
+    border-left-color: rgba(var(--ns-accent-rgb, 0,120,212), .10) !important;
+}
+
+/* Tarjeta de login */
+[data-ns-dark="0"] .ns-login3-card {
+    background: rgba(255,255,255,.95) !important;
+    border-color: rgba(var(--ns-accent-rgb, 0,120,212), .16) !important;
+    box-shadow: 0 12px 40px rgba(0,0,0,.10), inset 0 1px 0 rgba(255,255,255,.9) !important;
+    color: #1e293b !important;
+}
+[data-ns-dark="0"] .ns-login3-card::before {
+    background: linear-gradient(90deg, transparent, var(--ns-accent, #0078d4), transparent) !important;
+    opacity: .5 !important;
+}
+[data-ns-dark="0"] .ns-login3-card__badge {
+    background: rgba(var(--ns-accent-rgb, 0,120,212), .08) !important;
+    border-color: rgba(var(--ns-accent-rgb, 0,120,212), .18) !important;
+    color: var(--ns-accent, #0078d4) !important;
+}
+[data-ns-dark="0"] .ns-login3-card__title { color: #0f172a !important; }
+[data-ns-dark="0"] .ns-login3-card__sub   { color: #475569 !important; }
+
+/* Logo dentro de la tarjeta */
+[data-ns-dark="0"] .ns-login3-brand__text strong { color: #0f172a !important; text-shadow: none !important; }
+[data-ns-dark="0"] .ns-login3-brand__text small  { color: #64748b !important; }
+
+/* Campos de texto */
+[data-ns-dark="0"] .ns-login3-field__label { color: #1e293b !important; }
+[data-ns-dark="0"] .ns-login3-field__wrap  { background: #f8fafc !important; border-color: #e2e8f0 !important; }
+[data-ns-dark="0"] .ns-login3-field__input { color: #0f172a !important; }
+[data-ns-dark="0"] .ns-login3-field__icon  { color: var(--ns-accent, #0078d4) !important; }
+
+/* Checkbox recordar */
+[data-ns-dark="0"] .ns-login3-card__remember      { color: #475569 !important; }
+[data-ns-dark="0"] .ns-login3-card__remember-box  {
+    background: #f1f5f9 !important;
+    border-color: #cbd5e1 !important;
+}
+
+/* Bloque de beneficios dentro de la tarjeta */
+[data-ns-dark="0"] .ns-login3-growth {
+    background: rgba(var(--ns-accent-rgb, 0,120,212), .04) !important;
+    border-color: rgba(var(--ns-accent-rgb, 0,120,212), .10) !important;
+}
+[data-ns-dark="0"] .ns-login3-growth__item strong { color: #0f172a !important; }
+[data-ns-dark="0"] .ns-login3-growth__item span   { color: #475569 !important; }
+
+/* Pie de la tarjeta */
+[data-ns-dark="0"] .ns-login3-card__foot { border-top-color: #e2e8f0 !important; }
+[data-ns-dark="0"] .ns-login3-card__foot strong { color: #0f172a !important; }
+[data-ns-dark="0"] .ns-login3-card__foot span   { color: #475569 !important; }
+[data-ns-dark="0"] .ns-login3-card__foot a {
+    color: var(--ns-accent, #0078d4) !important;
+    border-color: rgba(var(--ns-accent-rgb, 0,120,212), .25) !important;
+    background: rgba(var(--ns-accent-rgb, 0,120,212), .06) !important;
+}
+
+/* Footer */
+[data-ns-dark="0"] .ns-auth3__footer {
+    background: rgba(255,255,255,.80) !important;
+    border-top-color: rgba(var(--ns-accent-rgb, 0,120,212), .10) !important;
+    color: #64748b !important;
+}
+[data-ns-dark="0"] .ns-auth3__footer a { color: var(--ns-accent, #0078d4) !important; }

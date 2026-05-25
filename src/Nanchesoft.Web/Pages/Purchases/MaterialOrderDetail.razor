@@ -1,0 +1,395 @@
+@page "/purchases/material-orders/new"
+@page "/purchases/material-orders/{Id:guid}"
+@using Nanchesoft.Web.Services.Purchases
+@inject MaterialPurchaseApiService Api
+@inject NavigationManager Nav
+
+<PageTitle>@(_isNew ? "Nueva OC · Materiales" : $"OC {_model.Folio}") | Nanchesoft</PageTitle>
+
+<div class="ns-module-page">
+    <div class="ns-module-header">
+        <div class="ns-module-header__info">
+            <div class="ns-module-header__breadcrumb">
+                <a href="/purchases/material-orders">Órdenes M</a> · @(_isNew ? "Nueva" : _model.Folio)
+            </div>
+            <h1 class="ns-module-header__title">
+                @if (_isNew) { <span>Nueva Orden de Compra</span> }
+                else { <span>@_model.Folio <span class="ns-status ns-status--@StatusClass(_model.Status) ms-2">@StatusLabel(_model.Status)</span></span> }
+            </h1>
+        </div>
+        <div class="ns-module-header__actions">
+            <button class="ns-btn ns-btn--ghost" @onclick="Back"><i class="bi bi-arrow-left"></i> Volver</button>
+            @if (_model.Status == "draft")
+            {
+                <button class="ns-btn ns-btn--secondary" @onclick="SaveAsync" disabled="@_saving">
+                    @if (_saving) { <span class="ns-spinner ns-spinner--sm"></span> } else { <i class="bi bi-floppy"></i> }
+                    Guardar
+                </button>
+                <button class="ns-btn ns-btn--success" @onclick="AuthorizeAsync" disabled="@_saving">
+                    <i class="bi bi-check-circle"></i> Guardar y Autorizar
+                </button>
+            }
+            else
+            {
+                <button class="ns-btn ns-btn--secondary" disabled title="Solo se puede editar en borrador">
+                    <i class="bi bi-lock"></i> OC @StatusLabel(_model.Status)
+                </button>
+                @if (_model.Status is "authorized" or "partially_received")
+                {
+                    <button class="ns-btn ns-btn--primary" @onclick="Receive">
+                        <i class="bi bi-box-arrow-in-down"></i> Recibir Mercancía
+                    </button>
+                }
+            }
+        </div>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(_error))
+    {
+        <div class="ns-alert ns-alert--danger">@_error</div>
+    }
+    @if (!string.IsNullOrWhiteSpace(_success))
+    {
+        <div class="ns-alert ns-alert--success">@_success</div>
+    }
+
+    @if (_loading)
+    {
+        <div class="ns-loader-center"><div class="ns-spinner"></div><span>Cargando...</span></div>
+    }
+    else
+    {
+        @* Datos generales *@
+        <div class="ns-card ns-card--form mb-3">
+            <div class="ns-card__header"><h3>Datos generales</h3></div>
+            <div class="ns-card__body">
+                <div class="ns-form-grid ns-form-grid--4">
+                    <div class="ns-form-field">
+                        <label>Folio</label>
+                        <input class="ns-input" value="@(_isNew ? "(automático)" : _model.Folio)" disabled />
+                    </div>
+                    <div class="ns-form-field">
+                        <label>Fecha OC <span class="req">*</span></label>
+                        <input class="ns-input" type="date" @bind="_model.OrderDate" disabled="@(_model.Status != "draft")" />
+                    </div>
+                    <div class="ns-form-field">
+                        <label>Fecha entrega proveedor</label>
+                        <input class="ns-input" type="date" @bind="_model.SupplierDeliveryDate" disabled="@(_model.Status != "draft")" />
+                    </div>
+                    <div class="ns-form-field">
+                        <label>Comprador</label>
+                        <input class="ns-input" @bind="_model.BuyerName" disabled="@(_model.Status != "draft")" />
+                    </div>
+                    <div class="ns-form-field ns-form-field--wide">
+                        <label>Proveedor <span class="req">*</span></label>
+                        <select class="ns-select" @bind="_supplierIdStr" disabled="@(_model.Status != "draft")">
+                            <option value="">Seleccione proveedor...</option>
+                            @foreach (var s in _lookups.Suppliers)
+                            {
+                                <option value="@s.Id">@s.Name</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="ns-form-field">
+                        <label>Almacén</label>
+                        <select class="ns-select" @bind="_warehouseIdStr" disabled="@(_model.Status != "draft")">
+                            <option value="">Seleccione...</option>
+                            @foreach (var w in _lookups.Warehouses)
+                            {
+                                <option value="@w.Id">@w.Name</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="ns-form-field">
+                        <label>Moneda</label>
+                        <select class="ns-select" @bind="_currencyIdStr" disabled="@(_model.Status != "draft")">
+                            <option value="">MXN</option>
+                            @foreach (var c in _lookups.Currencies)
+                            {
+                                <option value="@c.Id">@c.Code — @c.Name</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="ns-form-field">
+                        <label>Tipo de cambio</label>
+                        <input class="ns-input text-right" type="number" step="0.0001" @bind="_model.ExchangeRate" disabled="@(_model.Status != "draft")" />
+                    </div>
+                    <div class="ns-form-field">
+                        <label>Días crédito</label>
+                        <input class="ns-input text-right" type="number" @bind="_model.PaymentTermDays" disabled="@(_model.Status != "draft")" />
+                    </div>
+                    <div class="ns-form-field ns-form-field--full">
+                        <label>Observaciones</label>
+                        <textarea class="ns-textarea" rows="2" @bind="_model.Notes" disabled="@(_model.Status != "draft")"></textarea>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        @* Detalle de líneas *@
+        <div class="ns-card ns-card--form mb-3">
+            <div class="ns-card__header d-flex justify-content-between align-items-center">
+                <h3>Materiales</h3>
+                @if (_model.Status == "draft")
+                {
+                    <button class="ns-btn ns-btn--sm ns-btn--secondary" @onclick="AddLine">
+                        <i class="bi bi-plus"></i> Agregar material
+                    </button>
+                }
+            </div>
+            <div class="ns-card__body p-0">
+                <div class="ns-table-container">
+                    <table class="ns-table ns-table--lines">
+                        <thead>
+                            <tr>
+                                <th style="width:40px">#</th>
+                                <th>Material</th>
+                                <th style="width:100px">Unidad</th>
+                                <th style="width:100px" class="text-right">Cantidad</th>
+                                @if (_model.Status != "draft")
+                                {
+                                    <th style="width:100px" class="text-right">Recibido</th>
+                                    <th style="width:100px" class="text-right">Faltante</th>
+                                }
+                                <th style="width:110px" class="text-right">Precio</th>
+                                <th style="width:80px" class="text-right">Desc.</th>
+                                <th style="width:90px" class="text-right">IVA</th>
+                                <th style="width:110px" class="text-right">Total</th>
+                                @if (_model.Status == "draft")
+                                {
+                                    <th style="width:40px"></th>
+                                }
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @for (var i = 0; i < _model.Lines.Count; i++)
+                            {
+                                var line = _model.Lines[i];
+                                var idx = i;
+                                <tr class="@(line.PendingQuantity == 0 && line.ReceivedQuantity > 0 ? "ns-table__row--done" : "")">
+                                    <td class="text-center text-muted">@(idx + 1)</td>
+                                    <td>
+                                        @if (_model.Status == "draft")
+                                        {
+                                            <select class="ns-select ns-select--inline" @bind="line.MaterialItemId"
+                                                    @bind:after="() => OnMaterialSelected(line)">
+                                                <option value="">Seleccionar material...</option>
+                                                @foreach (var m in _lookups.Materials)
+                                                {
+                                                    <option value="@m.Id">[@m.Code] @m.Name</option>
+                                                }
+                                            </select>
+                                        }
+                                        else
+                                        {
+                                            <span>@line.MaterialName</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        @if (_model.Status == "draft")
+                                        {
+                                            <select class="ns-select ns-select--inline" @bind="line.UnitId">
+                                                <option value="">—</option>
+                                                @foreach (var u in _lookups.Units)
+                                                {
+                                                    <option value="@u.Id">@u.Name</option>
+                                                }
+                                            </select>
+                                        }
+                                        else { <span>@(_lookups.Units.FirstOrDefault(u => u.Id == line.UnitId)?.Name ?? "—")</span> }
+                                    </td>
+                                    <td>
+                                        @if (_model.Status == "draft")
+                                        {
+                                            <input class="ns-input ns-input--right" type="number" step="0.01" @bind="line.Quantity" @bind:after="RecalcTotals" />
+                                        }
+                                        else { <span class="text-right d-block">@line.Quantity.ToString("N2")</span> }
+                                    </td>
+                                    @if (_model.Status != "draft")
+                                    {
+                                        <td class="text-right text-success">@line.ReceivedQuantity.ToString("N2")</td>
+                                        <td class="text-right @(line.PendingQuantity > 0 ? "text-warning" : "text-muted")">@line.PendingQuantity.ToString("N2")</td>
+                                    }
+                                    <td>
+                                        @if (_model.Status == "draft")
+                                        {
+                                            <input class="ns-input ns-input--right" type="number" step="0.0001" @bind="line.UnitPrice" @bind:after="RecalcTotals" />
+                                        }
+                                        else { <span class="text-right d-block">@line.UnitPrice.ToString("N4")</span> }
+                                    </td>
+                                    <td>
+                                        @if (_model.Status == "draft")
+                                        {
+                                            <input class="ns-input ns-input--right" type="number" step="0.01" @bind="line.DiscountAmount" @bind:after="RecalcTotals" />
+                                        }
+                                        else { <span class="text-right d-block">@line.DiscountAmount.ToString("N2")</span> }
+                                    </td>
+                                    <td>
+                                        @if (_model.Status == "draft")
+                                        {
+                                            <input class="ns-input ns-input--right" type="number" step="0.01" @bind="line.TaxAmount" @bind:after="RecalcTotals" />
+                                        }
+                                        else { <span class="text-right d-block">@line.TaxAmount.ToString("N2")</span> }
+                                    </td>
+                                    <td class="text-right fw-semibold">@line.LineTotal.ToString("N2")</td>
+                                    @if (_model.Status == "draft")
+                                    {
+                                        <td class="text-center">
+                                            <button class="ns-icon-btn ns-icon-btn--danger" @onclick="() => RemoveLine(idx)">
+                                                <i class="bi bi-trash"></i>
+                                            </button>
+                                        </td>
+                                    }
+                                </tr>
+                            }
+                            @if (!_model.Lines.Any())
+                            {
+                                <tr><td colspan="10" class="text-center text-muted py-3">Sin materiales. Agregue al menos uno.</td></tr>
+                            }
+                        </tbody>
+                        <tfoot>
+                            <tr class="ns-table__totals">
+                                <td colspan="@(_model.Status == "draft" ? 8 : 8)" class="text-right fw-semibold">Subtotal:</td>
+                                <td class="text-right fw-semibold">@_model.Subtotal.ToString("N2")</td>
+                                @if (_model.Status == "draft") { <td></td> }
+                            </tr>
+                            <tr class="ns-table__totals">
+                                <td colspan="@(_model.Status == "draft" ? 8 : 8)" class="text-right">IVA:</td>
+                                <td class="text-right">@_model.TaxAmount.ToString("N2")</td>
+                                @if (_model.Status == "draft") { <td></td> }
+                            </tr>
+                            <tr class="ns-table__totals ns-table__totals--grand">
+                                <td colspan="@(_model.Status == "draft" ? 8 : 8)" class="text-right fw-bold">TOTAL:</td>
+                                <td class="text-right fw-bold">@_model.Total.ToString("C")</td>
+                                @if (_model.Status == "draft") { <td></td> }
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        @* Info autorización *@
+        @if (!string.IsNullOrWhiteSpace(_model.ApprovedBy))
+        {
+            <div class="ns-info-bar">
+                <i class="bi bi-check-circle-fill text-success"></i>
+                Autorizada por <strong>@_model.ApprovedBy</strong> el @_model.ApprovedAt?.ToString("dd/MM/yyyy HH:mm")
+            </div>
+        }
+    }
+</div>
+
+@code {
+    [Parameter] public Guid? Id { get; set; }
+
+    private MatOrderDetail _model = new() { OrderDate = DateTime.Today, ExchangeRate = 1 };
+    private MatLookups _lookups = new();
+    private bool _isNew => Id is null || Id == Guid.Empty;
+    private bool _loading = true;
+    private bool _saving;
+    private string _error = string.Empty;
+    private string _success = string.Empty;
+
+    private string _supplierIdStr
+    {
+        get => _model.SupplierId?.ToString() ?? string.Empty;
+        set => _model.SupplierId = Guid.TryParse(value, out var g) ? g : null;
+    }
+    private string _warehouseIdStr
+    {
+        get => _model.WarehouseId?.ToString() ?? string.Empty;
+        set => _model.WarehouseId = Guid.TryParse(value, out var g) ? g : null;
+    }
+    private string _currencyIdStr
+    {
+        get => _model.CurrencyId?.ToString() ?? string.Empty;
+        set => _model.CurrencyId = Guid.TryParse(value, out var g) ? g : null;
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _lookups = await Api.GetLookupsAsync();
+        if (!_isNew)
+        {
+            var order = await Api.GetOrderAsync(Id!.Value);
+            if (order is not null) _model = order;
+        }
+        _loading = false;
+    }
+
+    private void AddLine() => _model.Lines.Add(new MatOrderLineDetail());
+
+    private void RemoveLine(int idx)
+    {
+        _model.Lines.RemoveAt(idx);
+        RecalcTotals();
+    }
+
+    private void OnMaterialSelected(MatOrderLineDetail line)
+    {
+        if (line.MaterialItemId is null) return;
+        var mat = _lookups.Materials.FirstOrDefault(m => m.Id == line.MaterialItemId);
+        if (mat is null) return;
+        line.Description = mat.Name;
+        line.MaterialName = mat.Name;
+        line.MaterialCode = mat.Code;
+        if (line.UnitPrice == 0) line.UnitPrice = mat.AuthorizedCost;
+        if (line.UnitId is null) line.UnitId = mat.PurchaseUnitId;
+        RecalcTotals();
+    }
+
+    private void RecalcTotals()
+    {
+        foreach (var l in _model.Lines)
+        {
+            l.LineTotal = l.Quantity * l.UnitPrice - l.DiscountAmount + l.TaxAmount;
+            if (l.LineTotal < 0) l.LineTotal = 0;
+        }
+        _model.Subtotal = _model.Lines.Sum(l => l.Quantity * l.UnitPrice - l.DiscountAmount);
+        _model.TaxAmount = _model.Lines.Sum(l => l.TaxAmount);
+        _model.Total = _model.Subtotal + _model.TaxAmount;
+    }
+
+    private async Task SaveAsync()
+    {
+        _error = string.Empty; _success = string.Empty; _saving = true;
+        try
+        {
+            var result = await Api.SaveOrderAsync(_model);
+            if (result.Success || result.Id != Guid.Empty)
+            {
+                _success = "OC guardada correctamente.";
+                if (_isNew) Nav.NavigateTo($"/purchases/material-orders/{result.Id}");
+                else { var refreshed = await Api.GetOrderAsync(_model.Id); if (refreshed != null) _model = refreshed; }
+            }
+        }
+        catch (Exception ex) { _error = $"Error al guardar: {ex.Message}"; }
+        finally { _saving = false; }
+    }
+
+    private async Task AuthorizeAsync()
+    {
+        await SaveAsync();
+        if (!string.IsNullOrWhiteSpace(_error)) return;
+        var ok = await Api.AuthorizeOrderAsync(_model.Id, "usuario");
+        if (ok) { var refreshed = await Api.GetOrderAsync(_model.Id); if (refreshed != null) _model = refreshed; _success = "OC autorizada."; }
+        else _error = "No se pudo autorizar la OC.";
+    }
+
+    private void Back() => Nav.NavigateTo("/purchases/material-orders");
+    private void Receive() => Nav.NavigateTo($"/purchases/material-receipts/new?orderId={_model.Id}");
+
+    private static string StatusClass(string s) => s switch
+    {
+        "draft" => "gray", "authorized" => "blue", "partially_received" => "yellow",
+        "received" => "green", "closed" => "green-dark", "cancelled" => "red", _ => "gray"
+    };
+
+    private static string StatusLabel(string s) => s switch
+    {
+        "draft" => "Borrador", "authorized" => "Autorizada",
+        "partially_received" => "Parcialmente recibida", "received" => "Recibida",
+        "closed" => "Cerrada", "cancelled" => "Cancelada", _ => s
+    };
+}

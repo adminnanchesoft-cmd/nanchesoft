@@ -141,14 +141,15 @@
        ======================================================== */
 
     .ns-auth3 {
-        --ns-bg-950: #030816;
-        --ns-bg-900: #071225;
-        --ns-bg-850: #0a1830;
-        --ns-bg-800: #10233f;
-        --ns-blue-700: #0b4ea2;
-        --ns-blue-500: #0078d4;
-        --ns-cyan-400: #14c8ff;
-        --ns-cyan-300: #64e7ff;
+        /* Conecta con el sistema de temas global */
+        --ns-bg-950: color-mix(in srgb, var(--ns-accent, #0078d4) 8%, #030816);
+        --ns-bg-900: color-mix(in srgb, var(--ns-accent, #0078d4) 10%, #071225);
+        --ns-bg-850: color-mix(in srgb, var(--ns-accent, #0078d4) 12%, #0a1830);
+        --ns-bg-800: color-mix(in srgb, var(--ns-accent, #0078d4) 14%, #10233f);
+        --ns-blue-700: color-mix(in srgb, var(--ns-accent, #0078d4) 60%, #000);
+        --ns-blue-500: var(--ns-accent, #0078d4);
+        --ns-cyan-400: color-mix(in srgb, var(--ns-accent, #0078d4) 60%, #fff);
+        --ns-cyan-300: color-mix(in srgb, var(--ns-accent, #0078d4) 40%, #fff);
         --ns-ink-50: #f8fafc;
         --ns-ink-100: #eef6ff;
         --ns-ink-200: #dbeafe;
@@ -164,11 +165,25 @@
         overflow: hidden;
         color: var(--ns-ink-50);
         background:
-            radial-gradient(circle at 14% 18%, rgba(0, 120, 212, .34), transparent 34%),
-            radial-gradient(circle at 78% 10%, rgba(20, 200, 255, .22), transparent 28%),
+            radial-gradient(circle at 14% 18%, rgba(var(--ns-accent-rgb, 0,120,212), .34), transparent 34%),
+            radial-gradient(circle at 78% 10%, rgba(var(--ns-accent-rgb, 0,120,212), .22), transparent 28%),
             linear-gradient(135deg, #030816 0%, #071225 42%, #0c2445 100%);
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Inter", system-ui, sans-serif;
         -webkit-font-smoothing: antialiased;
+    }
+
+    /* Modo claro — cuando el usuario elige un tema light */
+    [data-ns-dark="0"] .ns-auth3,
+    :root:not([data-ns-dark="1"]) .ns-auth3[data-light] {
+        --ns-ink-50: #1e293b;
+        --ns-ink-100: #334155;
+        --ns-ink-300: #475569;
+        --ns-ink-400: #64748b;
+        background:
+            radial-gradient(circle at 14% 18%, rgba(var(--ns-accent-rgb, 0,120,212), .12), transparent 34%),
+            radial-gradient(circle at 78% 10%, rgba(var(--ns-accent-rgb, 0,120,212), .08), transparent 28%),
+            linear-gradient(135deg, #f0f4f9 0%, #e8f0fa 42%, #dbeafe 100%);
+        color: #1e293b;
     }
 
     .ns-auth3::before {
@@ -189,7 +204,7 @@
         position: absolute;
         inset: auto -14% -28% -14%;
         height: 42vh;
-        background: radial-gradient(ellipse at center, rgba(20, 200, 255, .24), transparent 70%);
+        background: radial-gradient(ellipse at center, rgba(var(--ns-accent-rgb, 20,200,255), .24), transparent 70%);
         pointer-events: none;
     }
 

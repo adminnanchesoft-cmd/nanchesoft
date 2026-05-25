@@ -34,18 +34,12 @@ window.nsNavigation = (() => {
                 renderItem(itemData, itemElement);
             },
             onItemClick(e) {
-                if (!e.itemData) {
+                if (!e.itemData || !e.itemData.route) {
+                    // Group node: DX toggles expansion automatically — no manual call needed
                     return;
                 }
 
-                if (e.itemData.route) {
-                    dotNetRef.invokeMethodAsync("NavigateTo", e.itemData.route);
-                    return;
-                }
-
-                if (e.itemData.id) {
-                    e.component.toggleItemExpansion(e.itemData.id);
-                }
+                dotNetRef.invokeMethodAsync("NavigateTo", e.itemData.route).catch(function () {});
             },
             onContentReady(e) {
                 syncSelection(e.component, items, currentRoute);

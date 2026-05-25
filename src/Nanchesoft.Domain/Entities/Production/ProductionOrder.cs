@@ -38,6 +38,21 @@ public sealed class ProductionOrder : BaseEntity
     public string? ApprovedBy { get; set; }
     public DateTime? ClosedAt { get; set; }
     public string? ClosedBy { get; set; }
+    public DateOnly? CancellationDate { get; set; }
+
+    // Commercial fields stored at order level
+    public Guid? CustomerId { get; set; }
+    public Customer? Customer { get; set; }
+    public string CustomerReference { get; set; } = string.Empty;
+    public decimal Subtotal { get; set; }
+    public decimal DiscountAmount { get; set; }
+    public decimal Total { get; set; }
+
+    // Shipping & commercial identity fields
+    public Guid? WarehouseId { get; set; }
+    public Guid? ShipToAddressId { get; set; }
+    public string ShipToAddressText { get; set; } = string.Empty;
+    public string LegalName { get; set; } = string.Empty;
 
     public ICollection<ProductionOrderLine> Lines { get; set; } = new List<ProductionOrderLine>();
     public ICollection<MaterialRequirement> MaterialRequirements { get; set; } = new List<MaterialRequirement>();

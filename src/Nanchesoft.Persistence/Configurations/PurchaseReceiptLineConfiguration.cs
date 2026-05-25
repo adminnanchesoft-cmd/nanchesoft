@@ -13,8 +13,17 @@ public sealed class PurchaseReceiptLineConfiguration : IEntityTypeConfiguration<
 
         builder.Property(x => x.Description).HasMaxLength(240).IsRequired();
         builder.Property(x => x.Quantity).HasPrecision(18, 4);
+        builder.Property(x => x.UnitPrice).HasPrecision(18, 4);
+        builder.Property(x => x.DiscountAmount).HasPrecision(18, 2);
+        builder.Property(x => x.TaxAmount).HasPrecision(18, 2);
+        builder.Property(x => x.LineTotal).HasPrecision(18, 2);
+        builder.Property(x => x.OrderedQuantity).HasPrecision(18, 4);
+        builder.Property(x => x.OrderedUnitPrice).HasPrecision(18, 4);
+
         builder.HasOne(x => x.PurchaseOrderLine).WithMany().HasForeignKey(x => x.PurchaseOrderLineId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne(x => x.Item).WithMany().HasForeignKey(x => x.ItemId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne(x => x.Unit).WithMany().HasForeignKey(x => x.UnitId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne(x => x.MaterialItem).WithMany().HasForeignKey(x => x.MaterialItemId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne(x => x.Tax).WithMany().HasForeignKey(x => x.TaxId).OnDelete(DeleteBehavior.Restrict);
     }
 }

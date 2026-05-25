@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.AspNetCore.SignalR;
 using Nanchesoft.Web;
 using Nanchesoft.Web.Services;
 using Nanchesoft.Web.Services.Accounting;
@@ -30,9 +31,34 @@ using Nanchesoft.Web.State;
 
 var builder = WebApplication.CreateBuilder(args);
 
+builder.WebHost.ConfigureKestrel(kestrel =>
+{
+    kestrel.Limits.MaxConcurrentConnections = 1000;
+    kestrel.Limits.MaxConcurrentUpgradedConnections = 1000;
+    kestrel.Limits.KeepAliveTimeout = TimeSpan.FromMinutes(2);
+    kestrel.Limits.RequestHeadersTimeout = TimeSpan.FromSeconds(30);
+});
+
 builder.Services
     .AddRazorComponents()
-    .AddInteractiveServerComponents();
+    .AddInteractiveServerComponents(options =>
+    {
+        options.DisconnectedCircuitRetentionPeriod = TimeSpan.FromMinutes(10);
+        options.DisconnectedCircuitMaxRetained = 300;
+        options.JSInteropDefaultCallTimeout = TimeSpan.FromMinutes(1);
+        options.MaxBufferedUnacknowledgedRenderBatches = 20;
+    });
+
+builder.Services.Configure<HubOptions>(options =>
+{
+    // KeepAlive pings every 30s; server times out client after 90s of silence.
+    // ClientTimeoutInterval must be > 2× KeepAliveInterval.
+    options.KeepAliveInterval = TimeSpan.FromSeconds(30);
+    options.ClientTimeoutInterval = TimeSpan.FromSeconds(90);
+    options.HandshakeTimeout = TimeSpan.FromSeconds(30);
+    options.MaximumReceiveMessageSize = 1024 * 1024;
+    options.StreamBufferCapacity = 20;
+});
 
 builder.Services.AddHttpContextAccessor();
 
@@ -49,8 +75,10 @@ builder.Services.AddHttpClient("Nanchesoft.Api", client =>
 builder.Services.AddScoped<AppState>();
 builder.Services.AddScoped<AuthState>();
 builder.Services.AddScoped<ShellState>();
+builder.Services.AddScoped<ThemeState>();
 
 builder.Services.AddScoped<AuthService>();
+builder.Services.AddScoped<ThemeService>();
 builder.Services.AddScoped<NavigationService>();
 builder.Services.AddScoped<ContextService>();
 builder.Services.AddScoped<DashboardService>();
@@ -70,6 +98,7 @@ builder.Services.AddScoped<MasterCatalogApiService>();
 builder.Services.AddScoped<ThirdPartiesProductsApiService>();
 builder.Services.AddScoped<ProductEngineeringApiService>();
 builder.Services.AddScoped<PurchaseApiService>();
+builder.Services.AddScoped<MaterialPurchaseApiService>();
 builder.Services.AddScoped<InventoryApiService>();
 builder.Services.AddScoped<SalesApiService>();
 builder.Services.AddScoped<TreasuryApiService>();

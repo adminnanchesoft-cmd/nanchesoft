@@ -9,6 +9,7 @@
 <div class="page-header">
     <h1 class="page-title">Insumos por producto</h1>
     <p class="page-subtitle">Asignación de materiales por componente y talla para cada producto terminado.</p>
+    <small class="text-muted">Build insumos: 2026-05-23 21:30 UTC ⚡ guardado optimizado</small>
 </div>
 
 @if (!string.IsNullOrEmpty(_errorMessage))
@@ -25,10 +26,12 @@
         <option value="">— Selecciona un producto —</option>
         @foreach (var p in _products)
         {
-            <option value="@p.FinishedProductId">@p.Code — @p.Name</option>
+            <option @key="p.FinishedProductId" value="@p.FinishedProductId">@p.Code — @p.Name</option>
         }
     </select>
-    <button class="btn btn-primary" @onclick="LoadSuppliesAsync">Ver insumos</button>
+    <button class="btn btn-primary" @onclick="LoadSuppliesAsync" disabled="@(_loading || string.IsNullOrEmpty(_selectedProductId))">
+        @(_loading ? "Cargando..." : "Ver insumos")
+    </button>
     @if (!string.IsNullOrEmpty(_selectedProductId))
     {
         <button class="btn btn-outline-secondary" @onclick="InitializeSuppliesAsync" disabled="@_initializing">
@@ -53,6 +56,25 @@
     }
 </div>
 
+@if (_supplies.Count > 0)
+{
+    <div class="d-flex gap-2 align-items-center mb-2 text-muted small">
+        <span>Mostrando @_visibleSupplies.Count de @_supplies.Count componentes</span>
+        @if (_visibleSupplies.Count < _supplies.Count)
+        {
+            <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="ShowMoreRows">
+                Mostrar más
+            </button>
+        }
+        @if (_visibleSupplies.Count > _initialVisibleRows)
+        {
+            <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="ShowInitialRows">
+                Reducir
+            </button>
+        }
+    </div>
+}
+
 @if (_loading)
 {
     <p>Cargando...</p>
@@ -65,27 +87,31 @@ else if (_supplies.Count == 0 && !string.IsNullOrEmpty(_selectedProductId))
 }
 else if (_supplies.Count > 0)
 {
-    <div style="overflow-x:auto;">
+    <div class="supply-matrix-wrap">
         <table class="table table-sm table-bordered supply-matrix">
             <thead class="table-dark sticky-top">
                 <tr>
                     <th class="sticky-col" style="min-width:180px">Componente</th>
                     <th style="min-width:60px">Fase</th>
                     <th style="min-width:60px">Auth.</th>
-                    @foreach (var sz in SizeHeaders)
+                    @foreach (var sz in _sizeHeaders)
                     {
-                        <th style="min-width:120px">@sz</th>
+                        <th @key="sz" style="min-width:120px">@sz</th>
                     }
                 </tr>
             </thead>
             <tbody>
-                @foreach (var row in _supplies)
+                @foreach (var row in _visibleSupplies)
                 {
                     bool authorized = row.IsAuthorized;
-                    <tr class="@(authorized ? "table-success" : "")">
+                    <tr @key="row.FinishedProductSupplyId" class="@(authorized ? "table-success" : "")">
                         <td class="sticky-col">
-                            <strong>@row.ProductComponentCode</strong><br />
-                            <small class="text-muted">@row.ProductComponentName</small>
+                            <strong>@row.ProductComponentCode</strong>
+                            @if (HasDistinctComponentName(row))
+                            {
+                                <br />
+                                <small class="text-muted">@row.ProductComponentName</small>
+                            }
                         </td>
                         <td class="text-center align-middle">
                             <small>@(_componentPhase.GetValueOrDefault(row.ProductComponentId, string.Empty))</small>
@@ -102,18 +128,34 @@ else if (_supplies.Count > 0)
                         </td>
                         @foreach (var sz in row.Sizes)
                         {
-                            <td class="align-middle p-1">
+                            var cellKey = CellKey(row, sz);
+                            <td @key="cellKey" class="align-middle p-1 supply-cell">
                                 @if (!authorized)
                                 {
-                                    <select class="form-select form-select-sm"
-                                            value="@sz.MaterialItemId?.ToString()"
-                                            @onchange="e => OnMaterialChanged(row, sz, e.Value?.ToString())">
-                                        <option value="">— ninguno —</option>
-                                        @foreach (var m in FilteredMaterials(row.ProductComponentId))
-                                        {
-                                            <option value="@m.MaterialItemId">@m.Name</option>
-                                        }
-                                    </select>
+                                    @if (_activeCellKey == cellKey)
+                                    {
+                                        <input class="form-control form-control-sm mb-1"
+                                               placeholder="Buscar material"
+                                               value="@_materialSearch"
+                                               @oninput="OnMaterialSearchInput" />
+                                        <select class="form-select form-select-sm"
+                                                value="@sz.MaterialItemId?.ToString()"
+                                                @onchange="e => OnMaterialChanged(row, sz, e.Value?.ToString())">
+                                            <option value="">— ninguno —</option>
+                                            @foreach (var m in FilteredMaterials(row.ProductComponentId, sz.MaterialItemId))
+                                            {
+                                                <option @key="m.MaterialItemId" value="@m.MaterialItemId">@m.Name</option>
+                                            }
+                                        </select>
+                                    }
+                                    else
+                                    {
+                                        <button type="button"
+                                                class="btn btn-sm btn-light supply-cell-button"
+                                                @onclick="() => BeginEditAsync(row, sz)">
+                                            @(sz.MaterialItemName ?? "—")
+                                        </button>
+                                    }
                                 }
                                 else
                                 {
@@ -129,6 +171,11 @@ else if (_supplies.Count > 0)
 }
 
 <style>
+    .supply-matrix-wrap {
+        max-height: calc(100vh - 260px);
+        overflow: auto;
+    }
+
     .supply-matrix .sticky-col {
         position: sticky;
         left: 0;
@@ -142,16 +189,41 @@ else if (_supplies.Count > 0)
     .supply-matrix tr.table-success .sticky-col {
         background: #d1e7dd;
     }
+
+    .supply-matrix tbody tr {
+        height: 68px;
+    }
+
+    .supply-cell {
+        min-width: 160px;
+        max-width: 220px;
+    }
+
+    .supply-cell-button {
+        width: 100%;
+        min-height: 31px;
+        overflow: hidden;
+        text-align: left;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
 </style>
 
 @code {
     private List<ProductOptionDto> _products = [];
     private List<MaterialOptionDto> _materials = [];
+    private Dictionary<Guid, MaterialOptionDto> _materialById = [];
     private List<ComponentOptionDto> _components = [];
 
     private string _selectedProductId = string.Empty;
     private List<SupplyRowDto> _supplies = [];
+    private List<string> _sizeHeaders = [];
     private Dictionary<Guid, string> _componentPhase = new();
+    private string _activeCellKey = string.Empty;
+    private string _materialSearch = string.Empty;
+    private CancellationTokenSource? _materialSearchDebounce;
+    private bool _materialsLoaded;
+    private bool _materialsLoading;
 
     private bool _loading;
     private bool _saving;
@@ -159,11 +231,11 @@ else if (_supplies.Count > 0)
     private bool _authorizing;
     private string _errorMessage = string.Empty;
     private string _successMessage = string.Empty;
+    private readonly int _initialVisibleRows = 24;
+    private int _visibleRowCount = 24;
 
     private bool _allAuthorized => _supplies.Count > 0 && _supplies.All(s => s.IsAuthorized);
-
-    private IEnumerable<string> SizeHeaders
-        => _supplies.FirstOrDefault()?.Sizes.Select(s => s.SizeLabel) ?? [];
+    private List<SupplyRowDto> _visibleSupplies => _supplies.Take(_visibleRowCount).ToList();
 
     protected override async Task OnInitializedAsync()
     {
@@ -175,21 +247,34 @@ else if (_supplies.Count > 0)
     private async Task LoadLookupsAsync()
     {
         _products = await Client.GetFromJsonAsync<List<ProductOptionDto>>("/api/products/finished-products/options") ?? [];
-        _materials = await Client.GetFromJsonAsync<List<MaterialOptionDto>>("/api/products/material-items/options") ?? [];
         _components = await Client.GetFromJsonAsync<List<ComponentOptionDto>>("/api/products/product-components/options") ?? [];
         _componentPhase = _components.ToDictionary(c => c.ProductComponentId, c => c.ProductionPhaseName);
     }
 
     private async Task LoadSuppliesAsync()
     {
-        if (string.IsNullOrEmpty(_selectedProductId)) return;
+        if (_loading || string.IsNullOrEmpty(_selectedProductId)) return;
         _loading = true; _errorMessage = string.Empty; _successMessage = string.Empty;
+        _supplies = [];
+        _sizeHeaders = [];
+        _activeCellKey = string.Empty;
+        _visibleRowCount = _initialVisibleRows;
+        await InvokeAsync(StateHasChanged);
         try
         {
-            _supplies = await Client.GetFromJsonAsync<List<SupplyRowDto>>(
+            var supplies = await Client.GetFromJsonAsync<List<SupplyRowDto>>(
                 $"/api/products/finished-product-supplies/{_selectedProductId}") ?? [];
+            var normalized = NormalizeSupplies(supplies);
+            _sizeHeaders = normalized.FirstOrDefault()?.Sizes.Select(s => s.SizeLabel).ToList() ?? [];
+            // Render primeras 8 filas para no sobrecargar SignalR de golpe
+            _visibleRowCount = Math.Min(8, normalized.Count);
+            _supplies = normalized;
+            _loading = false;
+            await InvokeAsync(StateHasChanged);
+            await Task.Delay(80);
+            _visibleRowCount = _initialVisibleRows;
         }
-        catch (Exception ex) { _errorMessage = ex.Message; }
+        catch (Exception ex) { _errorMessage = ex.Message; _loading = false; }
         finally { _loading = false; }
     }
 
@@ -219,7 +304,7 @@ else if (_supplies.Count > 0)
     private void OnMaterialChanged(SupplyRowDto row, SupplySizeDto sz, string? rawId)
     {
         sz.MaterialItemId = string.IsNullOrEmpty(rawId) ? null : Guid.Parse(rawId);
-        var item = _materials.FirstOrDefault(m => m.MaterialItemId == sz.MaterialItemId);
+        _materialById.TryGetValue(sz.MaterialItemId ?? Guid.Empty, out var item);
         sz.MaterialItemName = item?.Name ?? string.Empty;
 
         // Copy to all sizes in the row when first size is set
@@ -232,6 +317,8 @@ else if (_supplies.Count > 0)
                 other.MaterialItemName = sz.MaterialItemName;
             }
         }
+
+        _activeCellKey = string.Empty;
     }
 
     private async Task SaveAllAsync()
@@ -239,23 +326,24 @@ else if (_supplies.Count > 0)
         _saving = true; _errorMessage = string.Empty; _successMessage = string.Empty;
         try
         {
-            foreach (var row in _supplies.Where(s => !s.IsAuthorized))
+            var unsaved = _supplies.Where(s => !s.IsAuthorized).ToList();
+            if (unsaved.Count == 0) { _successMessage = "Sin cambios pendientes."; return; }
+            var payload = unsaved.Select(row => new
             {
-                var payload = row.Sizes.Select(s => new
+                supplyId = row.FinishedProductSupplyId,
+                sizes = row.Sizes.Select(s => new
                 {
                     productSizeRunSizeId = s.ProductSizeRunSizeId,
                     materialItemId = s.MaterialItemId,
                     notes = string.Empty
-                }).ToList();
-                var resp = await Client.PutAsJsonAsync(
-                    $"/api/products/finished-product-supplies/{row.FinishedProductSupplyId}/sizes", payload);
-                if (!resp.IsSuccessStatusCode)
-                {
-                    _errorMessage = $"Error guardando fila {row.ProductComponentCode}.";
-                    return;
-                }
-            }
-            _successMessage = "Cambios guardados.";
+                }).ToList()
+            }).ToList();
+            var resp = await Client.PutAsJsonAsync(
+                $"/api/products/finished-product-supplies/{_selectedProductId}/sizes/batch", payload);
+            if (resp.IsSuccessStatusCode)
+                _successMessage = "Cambios guardados.";
+            else
+                _errorMessage = "Error al guardar los cambios.";
         }
         catch (Exception ex) { _errorMessage = ex.Message; }
         finally { _saving = false; }
@@ -284,7 +372,122 @@ else if (_supplies.Count > 0)
         finally { _authorizing = false; }
     }
 
-    private IEnumerable<MaterialOptionDto> FilteredMaterials(Guid componentId) => _materials;
+    private void ShowMoreRows()
+    {
+        _visibleRowCount = Math.Min(_visibleRowCount + _initialVisibleRows, _supplies.Count);
+    }
+
+    private void ShowInitialRows()
+    {
+        _visibleRowCount = _initialVisibleRows;
+        _activeCellKey = string.Empty;
+    }
+
+    private static List<SupplyRowDto> NormalizeSupplies(IEnumerable<SupplyRowDto> supplies)
+    {
+        return supplies
+            .GroupBy(s => s.ProductComponentId)
+            .Select(group =>
+            {
+                var row = group.First();
+                row.Sizes = group
+                    .SelectMany(s => s.Sizes)
+                    .GroupBy(s => s.ProductSizeRunSizeId)
+                    .Select(sizeGroup => sizeGroup.FirstOrDefault(s => s.MaterialItemId.HasValue) ?? sizeGroup.First())
+                    .OrderBy(s => s.SizeLabel)
+                    .ToList();
+
+                row.IsAuthorized = group.All(s => s.IsAuthorized);
+                return row;
+            })
+            .OrderBy(s => s.ProductComponentCode)
+            .ToList();
+    }
+
+    private static bool HasDistinctComponentName(SupplyRowDto row)
+    {
+        return !string.IsNullOrWhiteSpace(row.ProductComponentName) &&
+            !string.Equals(row.ProductComponentCode.Trim(), row.ProductComponentName.Trim(), StringComparison.OrdinalIgnoreCase);
+    }
+
+    private async Task BeginEditAsync(SupplyRowDto row, SupplySizeDto sz)
+    {
+        _activeCellKey = CellKey(row, sz);
+        _materialSearch = sz.MaterialItemName ?? string.Empty;
+        await EnsureMaterialsLoadedAsync();
+    }
+
+    private async Task EnsureMaterialsLoadedAsync()
+    {
+        if (_materialsLoaded || _materialsLoading)
+        {
+            return;
+        }
+
+        _materialsLoading = true;
+        try
+        {
+            _materials = await Client.GetFromJsonAsync<List<MaterialOptionDto>>("/api/products/material-items/options") ?? [];
+            _materialById = _materials.ToDictionary(m => m.MaterialItemId);
+            _materialsLoaded = true;
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = ex.Message;
+        }
+        finally
+        {
+            _materialsLoading = false;
+        }
+    }
+
+    private async Task OnMaterialSearchInput(ChangeEventArgs e)
+    {
+        _materialSearch = e.Value?.ToString() ?? string.Empty;
+        _materialSearchDebounce?.Cancel();
+        _materialSearchDebounce?.Dispose();
+
+        var debounce = new CancellationTokenSource();
+        _materialSearchDebounce = debounce;
+
+        try
+        {
+            await Task.Delay(250, debounce.Token);
+            await InvokeAsync(StateHasChanged);
+        }
+        catch (TaskCanceledException)
+        {
+        }
+    }
+
+    private IEnumerable<MaterialOptionDto> FilteredMaterials(Guid componentId, Guid? selectedMaterialId)
+    {
+        if (!_materialsLoaded)
+        {
+            return [];
+        }
+
+        var query = _materials.AsEnumerable();
+        if (!string.IsNullOrWhiteSpace(_materialSearch))
+        {
+            query = query.Where(m =>
+                m.Name.Contains(_materialSearch, StringComparison.OrdinalIgnoreCase) ||
+                m.Code.Contains(_materialSearch, StringComparison.OrdinalIgnoreCase));
+        }
+
+        var options = query.Take(80).ToList();
+        if (selectedMaterialId.HasValue &&
+            _materialById.TryGetValue(selectedMaterialId.Value, out var selected) &&
+            options.All(m => m.MaterialItemId != selectedMaterialId.Value))
+        {
+            options.Insert(0, selected);
+        }
+
+        return options;
+    }
+
+    private static string CellKey(SupplyRowDto row, SupplySizeDto sz)
+        => $"{row.FinishedProductSupplyId:N}:{sz.ProductSizeRunSizeId:N}";
 
     // DTOs
     private sealed record ProductOptionDto(Guid FinishedProductId, string Code, string Name);

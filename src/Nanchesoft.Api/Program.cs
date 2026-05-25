@@ -67,6 +67,7 @@ using (var scope = app.Services.CreateScope())
 
     dbContext.Database.EnsureCreated();
     await SubscriptionControlSeeder.EnsureAsync(dbContext);
+    await MaterialPurchaseSeeder.EnsureAsync(dbContext);
     await InitialDataSeeder.SeedAsync(dbContext);
     await CommercialTenantsSeeder.SeedAsync(dbContext);
     await ThirdPartiesProductsSeeder.SeedAsync(dbContext);
@@ -189,7 +190,80 @@ app.MapPost("/api/auth/login", async (AuthLoginRequest request, NanchesoftDbCont
     });
 });
 
+app.MapGet("/api/auth/context/{userId:guid}", async (Guid userId, NanchesoftDbContext db) =>
+{
+    var user = await db.Users.AsNoTracking()
+        .FirstOrDefaultAsync(x => x.Id == userId && x.IsActive && !x.IsLocked);
+
+    if (user is null) return Results.Unauthorized();
+
+    var tenant = await db.Tenants.AsNoTracking()
+        .FirstOrDefaultAsync(x => x.Id == user.TenantId && x.IsActive);
+
+    if (tenant is null)
+    {
+        tenant = await (
+            from ur in db.UserRoles.AsNoTracking()
+            join r in db.Roles.AsNoTracking() on ur.RoleId equals r.Id
+            join t in db.Tenants.AsNoTracking() on r.TenantId equals t.Id
+            where ur.UserId == user.Id && ur.IsActive && t.IsActive
+            orderby t.Name
+            select t)
+            .FirstOrDefaultAsync();
+    }
+
+    var effectiveTenantId = tenant?.Id ?? user.TenantId;
+
+    var company = await db.Companies.AsNoTracking()
+        .Where(x => x.TenantId == effectiveTenantId && x.IsActive)
+        .OrderBy(x => x.Name)
+        .FirstOrDefaultAsync();
+
+    var branch = company is null ? null
+        : await db.Branches.AsNoTracking()
+            .Where(x => x.TenantId == effectiveTenantId && x.CompanyId == company.Id && x.IsActive)
+            .OrderBy(x => x.Name)
+            .FirstOrDefaultAsync();
+
+    var roleInfos = await (
+        from ur in db.UserRoles.AsNoTracking()
+        join r in db.Roles.AsNoTracking() on ur.RoleId equals r.Id
+        where ur.UserId == user.Id && ur.IsActive
+        orderby r.IsSystemRole descending, r.Name
+        select new { r.Code, r.Name })
+        .ToListAsync();
+
+    var roleInfo = roleInfos.FirstOrDefault();
+    var isPlatformOwner = roleInfos.Any(x =>
+        string.Equals(x.Code, "PLATFORM_OWNER", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(x.Code, "SYSTEM_ADMIN", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(x.Code, "OWNER", StringComparison.OrdinalIgnoreCase));
+
+    return Results.Ok(new
+    {
+        token = "demo-token",
+        refreshToken = "demo-refresh-token",
+        userId = user.Id,
+        username = user.Username,
+        email = user.Email,
+        displayName = string.IsNullOrWhiteSpace(user.GetDisplayName()) ? user.Username : user.GetDisplayName(),
+        firstName = user.FirstName,
+        lastName = user.LastName,
+        roleName = roleInfo?.Name ?? "Tenant admin",
+        isPlatformOwner,
+        tenantId = effectiveTenantId,
+        tenantCode = tenant?.Code ?? string.Empty,
+        tenantName = tenant?.Name ?? string.Empty,
+        companyId = company?.Id,
+        companyName = company?.Name ?? string.Empty,
+        branchId = branch?.Id,
+        branchName = branch?.Name ?? string.Empty,
+        requiresTenantSelection = false
+    });
+});
+
 app.MapPostalCodeEndpoints();
+app.MapThemeEndpoints();
 app.MapCompanyEndpoints();
 app.MapBranchEndpoints();
 app.MapWarehouseEndpoints();
@@ -200,11 +274,13 @@ app.MapSessionEndpoints();
 app.MapAccessLogEndpoints();
 app.MapMasterCatalogEndpoints();
 app.MapThirdPartiesAndProductsEndpoints();
+app.MapCustomerProfileEndpoints();
 app.MapProductEngineeringEndpoints();
 app.MapProductOrangeCatalogEndpoints();
 app.MapProductSizeRunEnterpriseEndpoints();
 app.MapProductMaterialSupplierEndpoints();
 app.MapPurchaseEndpoints();
+app.MapMaterialPurchaseEndpoints();
 app.MapInventoryEndpoints();
 app.MapSalesEndpoints();
 app.MapTreasuryEndpoints();
@@ -247,6 +323,7 @@ app.MapTenantEndpoints();
 app.MapPlanEndpoints();
 app.MapSubscriptionControlEndpoints();
 app.MapUniversalImportEndpoints();
+app.MapConstanciaImportEndpoints();
 
 app.Run();
 

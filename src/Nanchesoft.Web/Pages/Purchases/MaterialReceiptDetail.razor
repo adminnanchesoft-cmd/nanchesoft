@@ -1,0 +1,468 @@
+@page "/purchases/material-receipts/new"
+@page "/purchases/material-receipts/{Id:guid}"
+@using Nanchesoft.Web.Services.Purchases
+@inject MaterialPurchaseApiService Api
+@inject NavigationManager Nav
+
+<PageTitle>@(_isNew ? "Nueva Recepción" : $"Recepción {_model.Folio}") | Nanchesoft</PageTitle>
+
+<div class="ns-module-page">
+    <div class="ns-module-header">
+        <div class="ns-module-header__info">
+            <div class="ns-module-header__breadcrumb">
+                <a href="/purchases/material-receipts">Recepciones M</a> · @(_isNew ? "Nueva" : _model.Folio)
+            </div>
+            <h1 class="ns-module-header__title">
+                @if (_isNew)
+                {
+                    <span>@(_receiptType == "invoice" ? "Compra con Factura" : "Entrada por Revisión")</span>
+                }
+                else
+                {
+                    <span>@_model.Folio
+                        <span class="ns-badge @(_model.ReceiptType == "invoice" ? "ns-badge--blue" : "ns-badge--gray") ms-2">
+                            @(_model.ReceiptType == "invoice" ? "Factura" : "Revisión")
+                        </span>
+                        <span class="ns-status ns-status--@StatusClass(_model.Status) ms-2">@StatusLabel(_model.Status)</span>
+                    </span>
+                }
+            </h1>
+        </div>
+        <div class="ns-module-header__actions">
+            <button class="ns-btn ns-btn--ghost" @onclick="Back"><i class="bi bi-arrow-left"></i> Volver</button>
+            @if (_model.Status == "draft")
+            {
+                <button class="ns-btn ns-btn--secondary" @onclick="SaveAsync" disabled="@_saving">
+                    @if (_saving) { <span class="ns-spinner ns-spinner--sm"></span> } else { <i class="bi bi-floppy"></i> }
+                    Guardar y afectar inventario
+                </button>
+            }
+        </div>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(_error))
+    { <div class="ns-alert ns-alert--danger">@_error</div> }
+    @if (!string.IsNullOrWhiteSpace(_success))
+    { <div class="ns-alert ns-alert--success">@_success</div> }
+
+    @if (_loading)
+    {
+        <div class="ns-loader-center"><div class="ns-spinner"></div></div>
+    }
+    else
+    {
+        @* Datos generales *@
+        <div class="ns-card ns-card--form mb-3">
+            <div class="ns-card__header"><h3>Datos del documento</h3></div>
+            <div class="ns-card__body">
+                <div class="ns-form-grid ns-form-grid--4">
+                    <div class="ns-form-field">
+                        <label>Folio</label>
+                        <input class="ns-input" value="@(_isNew ? "(automático)" : _model.Folio)" disabled />
+                    </div>
+                    <div class="ns-form-field">
+                        <label>Fecha recepción <span class="req">*</span></label>
+                        <input class="ns-input" type="date" @bind="_model.ReceiptDate" disabled="@(_model.Status != "draft")" />
+                    </div>
+                    <div class="ns-form-field">
+                        <label>Tipo de documento</label>
+                        <select class="ns-select" @bind="_model.ReceiptType" disabled="@(!_isNew || _model.Status != "draft")">
+                            <option value="review">Entrada por Revisión</option>
+                            <option value="invoice">Compra con Factura</option>
+                        </select>
+                    </div>
+                    @if (_model.ReceiptType == "invoice")
+                    {
+                        <div class="ns-form-field">
+                            <label>No. Factura proveedor</label>
+                            <input class="ns-input" @bind="_model.SupplierDocumentNumber" disabled="@(_model.Status != "draft")" />
+                        </div>
+                        <div class="ns-form-field">
+                            <label>Fecha factura</label>
+                            <input class="ns-input" type="date" @bind="_model.SupplierDocumentDate" disabled="@(_model.Status != "draft")" />
+                        </div>
+                    }
+                    <div class="ns-form-field ns-form-field--wide">
+                        <label>Proveedor <span class="req">*</span></label>
+                        <select class="ns-select" @bind="_supplierIdStr" disabled="@(_model.Status != "draft")">
+                            <option value="">Seleccionar...</option>
+                            @foreach (var s in _lookups.Suppliers)
+                            { <option value="@s.Id">@s.Name</option> }
+                        </select>
+                    </div>
+                    <div class="ns-form-field">
+                        <label>Almacén <span class="req">*</span></label>
+                        <select class="ns-select" @bind="_warehouseIdStr" disabled="@(_model.Status != "draft")">
+                            <option value="">Seleccionar...</option>
+                            @foreach (var w in _lookups.Warehouses)
+                            { <option value="@w.Id">@w.Name</option> }
+                        </select>
+                    </div>
+                    <div class="ns-form-field ns-form-field--full">
+                        <label>OC de origen (opcional)</label>
+                        @if (_isNew)
+                        {
+                            <select class="ns-select" @bind="_orderIdStr" @bind:after="LoadFromOrderAsync"
+                                    disabled="@(_model.Status != "draft")">
+                                <option value="">Sin OC (entrada libre)</option>
+                                @foreach (var o in _authorizedOrders)
+                                { <option value="@o.Id">@o.Folio — @o.SupplierName (@o.Status)</option> }
+                            </select>
+                        }
+                        else
+                        {
+                            <input class="ns-input" value="@(_model.PurchaseOrderId?.ToString() ?? "—")" disabled />
+                        }
+                    </div>
+                    <div class="ns-form-field ns-form-field--full">
+                        <label>Observaciones</label>
+                        <textarea class="ns-textarea" rows="2" @bind="_model.Notes" disabled="@(_model.Status != "draft")"></textarea>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        @* Líneas de materiales *@
+        <div class="ns-card ns-card--form mb-3">
+            <div class="ns-card__header d-flex justify-content-between align-items-center">
+                <h3>Materiales recibidos</h3>
+                @if (_model.Status == "draft")
+                {
+                    <button class="ns-btn ns-btn--sm ns-btn--secondary" @onclick="AddLine">
+                        <i class="bi bi-plus"></i> Agregar línea
+                    </button>
+                }
+            </div>
+            <div class="ns-card__body p-0">
+                <div class="ns-table-container">
+                    <table class="ns-table ns-table--lines">
+                        <thead>
+                            <tr>
+                                <th style="width:40px">#</th>
+                                <th>Material</th>
+                                <th style="width:100px">Unidad</th>
+                                <th style="width:100px" class="text-right">Pedido</th>
+                                <th style="width:100px" class="text-right">Cantidad rec.</th>
+                                <th style="width:110px" class="text-right">Costo</th>
+                                <th style="width:80px" class="text-right">Desc.</th>
+                                <th style="width:90px" class="text-right">IVA</th>
+                                <th style="width:110px" class="text-right">Total</th>
+                                @if (_model.Status == "draft")
+                                { <th style="width:40px"></th> }
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @for (var i = 0; i < _model.Lines.Count; i++)
+                            {
+                                var line = _model.Lines[i];
+                                var idx = i;
+                                <tr>
+                                    <td class="text-center text-muted">@(idx + 1)</td>
+                                    <td>
+                                        @if (_model.Status == "draft")
+                                        {
+                                            <select class="ns-select ns-select--inline" @bind="line.MaterialItemId"
+                                                    @bind:after="() => OnMaterialSelected(line)">
+                                                <option value="">Seleccionar...</option>
+                                                @foreach (var m in _lookups.Materials)
+                                                { <option value="@m.Id">[@m.Code] @m.Name</option> }
+                                            </select>
+                                        }
+                                        else
+                                        {
+                                            <span>@line.MaterialName</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        @if (_model.Status == "draft")
+                                        {
+                                            <select class="ns-select ns-select--inline" @bind="line.UnitId">
+                                                <option value="">—</option>
+                                                @foreach (var u in _lookups.Units)
+                                                { <option value="@u.Id">@u.Name</option> }
+                                            </select>
+                                        }
+                                        else { <span>@(_lookups.Units.FirstOrDefault(u => u.Id == line.UnitId)?.Name ?? "—")</span> }
+                                    </td>
+                                    <td class="text-right text-muted">@(line.OrderedQuantity > 0 ? line.OrderedQuantity.ToString("N2") : "—")</td>
+                                    <td>
+                                        @if (_model.Status == "draft")
+                                        {
+                                            <input class="ns-input ns-input--right" type="number" step="0.001"
+                                                   @bind="line.Quantity" @bind:after="RecalcTotals" />
+                                        }
+                                        else { <span class="text-right d-block">@line.Quantity.ToString("N2")</span> }
+                                    </td>
+                                    <td>
+                                        @if (_model.Status == "draft")
+                                        {
+                                            <input class="ns-input ns-input--right" type="number" step="0.0001"
+                                                   @bind="line.UnitPrice" @bind:after="RecalcTotals" />
+                                        }
+                                        else { <span class="text-right d-block">@line.UnitPrice.ToString("N4")</span> }
+                                    </td>
+                                    <td>
+                                        @if (_model.Status == "draft")
+                                        {
+                                            <input class="ns-input ns-input--right" type="number" step="0.01"
+                                                   @bind="line.DiscountAmount" @bind:after="RecalcTotals" />
+                                        }
+                                        else { <span class="text-right d-block">@line.DiscountAmount.ToString("N2")</span> }
+                                    </td>
+                                    <td>
+                                        @if (_model.Status == "draft")
+                                        {
+                                            <input class="ns-input ns-input--right" type="number" step="0.01"
+                                                   @bind="line.TaxAmount" @bind:after="RecalcTotals" />
+                                        }
+                                        else { <span class="text-right d-block">@line.TaxAmount.ToString("N2")</span> }
+                                    </td>
+                                    <td class="text-right fw-semibold">@line.LineTotal.ToString("N2")</td>
+                                    @if (_model.Status == "draft")
+                                    {
+                                        <td class="text-center">
+                                            <button class="ns-icon-btn ns-icon-btn--danger" @onclick="() => RemoveLine(idx)">
+                                                <i class="bi bi-trash"></i>
+                                            </button>
+                                        </td>
+                                    }
+                                </tr>
+                            }
+                        </tbody>
+                        <tfoot>
+                            <tr class="ns-table__totals">
+                                <td colspan="8" class="text-right fw-semibold">Subtotal:</td>
+                                <td class="text-right fw-semibold">@_model.Subtotal.ToString("N2")</td>
+                                @if (_model.Status == "draft") { <td></td> }
+                            </tr>
+                            <tr class="ns-table__totals">
+                                <td colspan="8" class="text-right">IVA:</td>
+                                <td class="text-right">@_model.TaxAmount.ToString("N2")</td>
+                                @if (_model.Status == "draft") { <td></td> }
+                            </tr>
+                            <tr class="ns-table__totals ns-table__totals--grand">
+                                <td colspan="8" class="text-right fw-bold">TOTAL:</td>
+                                <td class="text-right fw-bold text-primary">@_model.Total.ToString("C")</td>
+                                @if (_model.Status == "draft") { <td></td> }
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        @* Audit trail *@
+        @if (!string.IsNullOrWhiteSpace(_model.ReviewedBy))
+        {
+            <div class="ns-info-bar ns-info-bar--purple">
+                <i class="bi bi-clipboard-check-fill"></i>
+                Revisada por <strong>@_model.ReviewedBy</strong> el @_model.ReviewedAt?.ToString("dd/MM/yyyy HH:mm")
+            </div>
+        }
+        @if (!string.IsNullOrWhiteSpace(_model.AuthorizedBy))
+        {
+            <div class="ns-info-bar ns-info-bar--success">
+                <i class="bi bi-check-circle-fill"></i>
+                Autorizada por <strong>@_model.AuthorizedBy</strong> el @_model.AuthorizedAt?.ToString("dd/MM/yyyy HH:mm")
+                @if (_model.HasDifferences)
+                { <span class="ns-badge ns-badge--warning ms-2">Con diferencias autorizadas</span> }
+            </div>
+        }
+
+        @* Payments summary *@
+        @if (_model.Payments.Any())
+        {
+            <div class="ns-card ns-card--form mb-3">
+                <div class="ns-card__header"><h3>Pagos registrados</h3></div>
+                <div class="ns-card__body p-0">
+                    <table class="ns-table ns-table--compact">
+                        <thead>
+                            <tr><th>Folio</th><th>Fecha</th><th>Forma</th><th class="text-right">Monto</th><th>Referencia</th></tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var p in _model.Payments)
+                            {
+                                <tr>
+                                    <td>@p.Folio</td>
+                                    <td>@p.PaymentDate.ToString("dd/MM/yyyy")</td>
+                                    <td>@PayMethodLabel(p.PaymentMethod)</td>
+                                    <td class="text-right">@p.Amount.ToString("C")</td>
+                                    <td>@p.Reference</td>
+                                </tr>
+                            }
+                        </tbody>
+                        <tfoot>
+                            <tr><td colspan="3" class="text-right fw-bold">Total pagado:</td>
+                                <td class="text-right fw-bold text-success">@_model.PaidAmount.ToString("C")</td><td></td></tr>
+                            <tr><td colspan="3" class="text-right">Pendiente:</td>
+                                <td class="text-right text-danger">@((_model.Total - _model.PaidAmount).ToString("C"))</td><td></td></tr>
+                        </tfoot>
+                    </table>
+                </div>
+            </div>
+        }
+
+        @if (_model.Status == "draft")
+        {
+            <div class="ns-alert ns-alert--info">
+                <i class="bi bi-info-circle"></i>
+                Al guardar, el inventario de materiales se actualizará automáticamente con las cantidades recibidas.
+            </div>
+        }
+    }
+</div>
+
+@code {
+    [Parameter] public Guid? Id { get; set; }
+    [SupplyParameterFromQuery] public string? Type { get; set; }
+    [SupplyParameterFromQuery] public Guid? OrderId { get; set; }
+
+    private MatReceiptDetail _model = new() { ReceiptDate = DateTime.Today };
+    private MatLookups _lookups = new();
+    private List<MatOrderDetail> _authorizedOrders = new();
+    private bool _isNew => Id is null || Id == Guid.Empty;
+    private bool _loading = true;
+    private bool _saving;
+    private string _error = string.Empty;
+    private string _success = string.Empty;
+    private string _receiptType => Type ?? "review";
+
+    private string _supplierIdStr
+    {
+        get => _model.SupplierId?.ToString() ?? "";
+        set => _model.SupplierId = Guid.TryParse(value, out var g) ? g : null;
+    }
+    private string _warehouseIdStr
+    {
+        get => _model.WarehouseId?.ToString() ?? "";
+        set => _model.WarehouseId = Guid.TryParse(value, out var g) ? g : null;
+    }
+    private string _orderIdStr
+    {
+        get => _model.PurchaseOrderId?.ToString() ?? "";
+        set => _model.PurchaseOrderId = Guid.TryParse(value, out var g) ? g : null;
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _lookups = await Api.GetLookupsAsync();
+        _authorizedOrders = await Api.GetAuthorizedOrdersAsync();
+
+        if (_isNew)
+        {
+            _model.ReceiptType = _receiptType;
+            _model.ReceiptDate = DateTime.Today;
+            if (OrderId.HasValue)
+            {
+                _model.PurchaseOrderId = OrderId;
+                await LoadFromOrderAsync();
+            }
+        }
+        else
+        {
+            var receipt = await Api.GetReceiptAsync(Id!.Value);
+            if (receipt is not null) _model = receipt;
+        }
+        _loading = false;
+    }
+
+    private async Task LoadFromOrderAsync()
+    {
+        if (_model.PurchaseOrderId is null) return;
+        var order = _authorizedOrders.FirstOrDefault(o => o.Id == _model.PurchaseOrderId);
+        if (order is null) order = await Api.GetOrderAsync(_model.PurchaseOrderId.Value);
+        if (order is null) return;
+
+        _model.SupplierId = order.SupplierId;
+        _model.WarehouseId = order.WarehouseId;
+        _model.Lines.Clear();
+        foreach (var ol in order.Lines)
+        {
+            _model.Lines.Add(new MatReceiptLineDetail
+            {
+                PurchaseOrderLineId = ol.Id,
+                MaterialItemId = ol.MaterialItemId,
+                MaterialName = ol.MaterialName ?? ol.Description,
+                MaterialCode = ol.MaterialCode,
+                Description = ol.Description,
+                UnitId = ol.UnitId,
+                Quantity = ol.PendingQuantity,
+                OrderedQuantity = ol.Quantity,
+                UnitPrice = ol.UnitPrice,
+                OrderedUnitPrice = ol.UnitPrice,
+                TaxAmount = ol.TaxAmount
+            });
+        }
+        RecalcTotals();
+    }
+
+    private void AddLine() => _model.Lines.Add(new MatReceiptLineDetail());
+
+    private void RemoveLine(int idx)
+    {
+        _model.Lines.RemoveAt(idx);
+        RecalcTotals();
+    }
+
+    private void OnMaterialSelected(MatReceiptLineDetail line)
+    {
+        if (line.MaterialItemId is null) return;
+        var mat = _lookups.Materials.FirstOrDefault(m => m.Id == line.MaterialItemId);
+        if (mat is null) return;
+        line.Description = mat.Name;
+        line.MaterialName = mat.Name;
+        line.MaterialCode = mat.Code;
+        if (line.UnitPrice == 0) line.UnitPrice = mat.AuthorizedCost;
+        if (line.UnitId is null) line.UnitId = mat.PurchaseUnitId;
+        RecalcTotals();
+    }
+
+    private void RecalcTotals()
+    {
+        foreach (var l in _model.Lines)
+        {
+            l.LineTotal = l.Quantity * l.UnitPrice - l.DiscountAmount + l.TaxAmount;
+            if (l.LineTotal < 0) l.LineTotal = 0;
+        }
+        _model.Subtotal = _model.Lines.Sum(l => l.Quantity * l.UnitPrice - l.DiscountAmount);
+        _model.TaxAmount = _model.Lines.Sum(l => l.TaxAmount);
+        _model.Total = _model.Subtotal + _model.TaxAmount;
+    }
+
+    private async Task SaveAsync()
+    {
+        _error = ""; _success = ""; _saving = true;
+        try
+        {
+            var result = await Api.SaveReceiptAsync(_model);
+            if (result.Success || result.Id != Guid.Empty)
+            {
+                _success = "Recepción guardada. Inventario actualizado.";
+                if (_isNew) Nav.NavigateTo($"/purchases/material-receipts/{result.Id}");
+                else { var r = await Api.GetReceiptAsync(_model.Id); if (r is not null) _model = r; }
+            }
+        }
+        catch (Exception ex) { _error = $"Error: {ex.Message}"; }
+        finally { _saving = false; }
+    }
+
+    private void Back() => Nav.NavigateTo("/purchases/material-receipts");
+
+    private static string StatusClass(string s) => s switch
+    {
+        "draft" => "gray", "reviewed" => "purple", "authorized" => "blue",
+        "rejected" => "red", "cancelled" => "red", _ => "gray"
+    };
+
+    private static string StatusLabel(string s) => s switch
+    {
+        "draft" => "Borrador", "reviewed" => "Revisada", "authorized" => "Autorizada",
+        "rejected" => "Rechazada", "cancelled" => "Cancelada", _ => s
+    };
+
+    private static string PayMethodLabel(string m) => m switch
+    {
+        "transfer" => "Transferencia", "cash" => "Efectivo", "check" => "Cheque",
+        "card" => "Tarjeta", _ => m
+    };
+}

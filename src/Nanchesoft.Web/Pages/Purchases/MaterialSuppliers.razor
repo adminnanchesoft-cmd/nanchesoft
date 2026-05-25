@@ -1,0 +1,178 @@
+@page "/purchases/suppliers"
+@using Nanchesoft.Web.Services.Purchases
+@inject MaterialPurchaseApiService Api
+@inject NavigationManager Nav
+
+<PageTitle>Catálogo de Proveedores | Nanchesoft</PageTitle>
+
+<div class="ns-module-page">
+    <div class="ns-module-header">
+        <div class="ns-module-header__info">
+            <div class="ns-module-header__breadcrumb">Compras · Materiales</div>
+            <h1 class="ns-module-header__title">Catálogo de Proveedores</h1>
+            <p class="ns-module-header__subtitle">Alta, edición y control de proveedores de materiales.</p>
+        </div>
+        <div class="ns-module-header__actions">
+            <button class="ns-btn ns-btn--secondary" @onclick="LoadAsync"><i class="bi bi-arrow-clockwise"></i></button>
+            <button class="ns-btn ns-btn--primary" @onclick="NewSupplier">
+                <i class="bi bi-plus-circle"></i> Nuevo proveedor
+            </button>
+        </div>
+    </div>
+
+    <div class="ns-filter-bar mb-3">
+        <div class="ns-filter-bar__search">
+            <input class="ns-input ns-input--search" placeholder="Buscar por nombre, código o RFC..." @bind="_search"
+                   @bind:event="oninput" @onkeyup="OnSearchKey" />
+        </div>
+        <div class="ns-filter-bar__right">
+            <select class="ns-select" @bind="_activeFilter" @bind:after="LoadAsync">
+                <option value="">Todos</option>
+                <option value="true">Activos</option>
+                <option value="false">Inactivos</option>
+            </select>
+        </div>
+    </div>
+
+    @* KPI summary *@
+    <div class="ns-kpi-row mb-3">
+        <div class="ns-kpi ns-kpi--blue">
+            <div class="ns-kpi__label">Total</div>
+            <div class="ns-kpi__value">@_result.Total</div>
+        </div>
+        <div class="ns-kpi ns-kpi--green">
+            <div class="ns-kpi__label">Activos</div>
+            <div class="ns-kpi__value">@_result.Items.Count(x => x.IsActive)</div>
+        </div>
+        <div class="ns-kpi ns-kpi--yellow">
+            <div class="ns-kpi__label">Saldo total</div>
+            <div class="ns-kpi__value">@_result.Items.Sum(x => x.CurrentBalance).ToString("C0")</div>
+        </div>
+        <div class="ns-kpi ns-kpi--red">
+            <div class="ns-kpi__label">Límite crédito total</div>
+            <div class="ns-kpi__value">@_result.Items.Sum(x => x.CreditLimit).ToString("C0")</div>
+        </div>
+    </div>
+
+    @if (_loading)
+    {
+        <div class="ns-loader-center"><div class="ns-spinner"></div></div>
+    }
+    else
+    {
+        <div class="ns-table-container">
+            <table class="ns-table">
+                <thead>
+                    <tr>
+                        <th>Código</th>
+                        <th>Nombre</th>
+                        <th>RFC</th>
+                        <th>Clasificación</th>
+                        <th>Ciudad</th>
+                        <th>Teléfono</th>
+                        <th class="text-right">Crédito (días)</th>
+                        <th class="text-right">Límite</th>
+                        <th class="text-right">Saldo</th>
+                        <th>Pago pref.</th>
+                        <th class="text-center">Estatus</th>
+                        <th class="text-center">Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var s in _result.Items)
+                    {
+                        <tr class="@(s.IsActive ? "" : "ns-table__row--muted")">
+                            <td><code>@s.Code</code></td>
+                            <td class="fw-semibold">
+                                <button class="ns-link-btn" @onclick="() => Edit(s.Id)">@s.Name</button>
+                                @if (!string.IsNullOrWhiteSpace(s.ShortName) && s.ShortName != s.Name)
+                                { <div class="text-muted small">@s.ShortName</div> }
+                            </td>
+                            <td class="text-muted">@(string.IsNullOrWhiteSpace(s.TaxId) ? "—" : s.TaxId)</td>
+                            <td>
+                                @if (!string.IsNullOrWhiteSpace(s.Classification))
+                                { <span class="ns-badge ns-badge--gray">@ClassificationLabel(s.Classification)</span> }
+                            </td>
+                            <td class="text-muted">@(string.IsNullOrWhiteSpace(s.City) ? "—" : $"{s.City}, {s.State}")</td>
+                            <td class="text-muted">@(string.IsNullOrWhiteSpace(s.Phone) ? "—" : s.Phone)</td>
+                            <td class="text-right">@s.PaymentTermDays días</td>
+                            <td class="text-right">@(s.CreditLimit > 0 ? s.CreditLimit.ToString("C0") : "—")</td>
+                            <td class="text-right @(s.CurrentBalance > s.CreditLimit && s.CreditLimit > 0 ? "text-danger fw-semibold" : "")">
+                                @(s.CurrentBalance > 0 ? s.CurrentBalance.ToString("C0") : "—")
+                            </td>
+                            <td><span class="ns-badge ns-badge--blue">@PaymentMethodLabel(s.PreferredPaymentMethod)</span></td>
+                            <td class="text-center">
+                                <span class="ns-status ns-status--@(s.IsActive ? "green" : "gray")">
+                                    @(s.IsActive ? "Activo" : "Inactivo")
+                                </span>
+                            </td>
+                            <td class="text-center">
+                                <button class="ns-icon-btn" title="Editar" @onclick="() => Edit(s.Id)">
+                                    <i class="bi bi-pencil"></i>
+                                </button>
+                            </td>
+                        </tr>
+                    }
+                    @if (!_result.Items.Any())
+                    {
+                        <tr><td colspan="12" class="text-center text-muted py-3">Sin proveedores registrados.</td></tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        @* Paginación *@
+        @if (_result.TotalPages > 1)
+        {
+            <div class="ns-pagination">
+                <button class="ns-btn ns-btn--ghost ns-btn--sm" @onclick="PrevPage" disabled="@(_page == 1)">
+                    <i class="bi bi-chevron-left"></i>
+                </button>
+                <span class="ns-pagination__info">Página @_page de @_result.TotalPages (@_result.Total registros)</span>
+                <button class="ns-btn ns-btn--ghost ns-btn--sm" @onclick="NextPage" disabled="@(_page >= _result.TotalPages)">
+                    <i class="bi bi-chevron-right"></i>
+                </button>
+            </div>
+        }
+    }
+</div>
+
+@code {
+    private PagedResult<MatSupplierListItem> _result = new();
+    private bool _loading = true;
+    private string _search = string.Empty;
+    private string _activeFilter = "true";
+    private int _page = 1;
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        try { _result = await Api.GetSuppliersAsync(q: _search, page: _page); }
+        finally { _loading = false; }
+    }
+
+    private async Task OnSearchKey(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter") { _page = 1; await LoadAsync(); }
+    }
+
+    private void NewSupplier() => Nav.NavigateTo("/purchases/suppliers/new");
+    private void Edit(Guid id) => Nav.NavigateTo($"/purchases/suppliers/{id}");
+
+    private async Task PrevPage() { if (_page > 1) { _page--; await LoadAsync(); } }
+    private async Task NextPage() { if (_page < _result.TotalPages) { _page++; await LoadAsync(); } }
+
+    private static string ClassificationLabel(string c) => c switch
+    {
+        "national" => "Nacional", "international" => "Internacional",
+        "service" => "Servicio", "manufacturer" => "Fabricante", _ => c
+    };
+
+    private static string PaymentMethodLabel(string m) => m switch
+    {
+        "transfer" => "Transferencia", "cash" => "Efectivo", "check" => "Cheque",
+        "card" => "Tarjeta", _ => m
+    };
+}

@@ -1,0 +1,205 @@
+@page "/purchases/material-reports"
+@using Nanchesoft.Web.Services.Purchases
+@inject MaterialPurchaseApiService Api
+
+<PageTitle>Reportes Compras Materiales | Nanchesoft</PageTitle>
+
+<div class="ns-module-page">
+    <div class="ns-module-header">
+        <div class="ns-module-header__info">
+            <div class="ns-module-header__breadcrumb">Compras · Materiales</div>
+            <h1 class="ns-module-header__title">Reportes de Compras</h1>
+        </div>
+    </div>
+
+    @* Report selector *@
+    <div class="ns-tab-bar mb-3">
+        @foreach (var r in _reports)
+        {
+            <button class="ns-tab @(_activeReport == r.Key ? "ns-tab--active" : "")"
+                    @onclick="() => SetReport(r.Key)">@r.Value</button>
+        }
+    </div>
+
+    @* Filters *@
+    <div class="ns-filter-bar mb-3">
+        <div class="ns-filter-bar__group">
+            <label class="ns-label">Desde:</label>
+            <input class="ns-input" type="date" @bind="_from" />
+        </div>
+        <div class="ns-filter-bar__group">
+            <label class="ns-label">Hasta:</label>
+            <input class="ns-input" type="date" @bind="_to" />
+        </div>
+        <button class="ns-btn ns-btn--primary" @onclick="RunReport"><i class="bi bi-play-fill"></i> Ejecutar</button>
+    </div>
+
+    @if (_loading)
+    {
+        <div class="ns-loader-center"><div class="ns-spinner"></div></div>
+    }
+    else
+    {
+        @* Report: Órdenes por material *@
+        @if (_activeReport == "orders-by-material" && _ordersByMaterial.Any())
+        {
+            <div class="ns-table-container">
+                <table class="ns-table">
+                    <thead>
+                        <tr>
+                            <th>OC</th>
+                            <th>Fecha</th>
+                            <th>Entrega prom.</th>
+                            <th>Proveedor</th>
+                            <th>Material</th>
+                            <th class="text-right">Pedido</th>
+                            <th class="text-right">Recibido</th>
+                            <th class="text-right">Faltante</th>
+                            <th class="text-right">Costo unit.</th>
+                            <th class="text-right">Total</th>
+                            <th>Estatus</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var row in _ordersByMaterial)
+                        {
+                            <tr class="@(row.PendingQuantity > 0 ? "" : "ns-table__row--done")">
+                                <td><span class="ns-folio">@row.OrderFolio</span></td>
+                                <td>@row.OrderDate.ToString("dd/MM/yyyy")</td>
+                                <td class="@(IsRowLate(row) ? "text-danger" : "text-muted")">
+                                    @(row.SupplierDeliveryDate.HasValue ? row.SupplierDeliveryDate.Value.ToString("dd/MM/yyyy") : "—")
+                                </td>
+                                <td>@row.SupplierName</td>
+                                <td class="fw-semibold">[@row.MaterialCode] @row.MaterialName</td>
+                                <td class="text-right">@row.Quantity.ToString("N2")</td>
+                                <td class="text-right text-success">@row.ReceivedQuantity.ToString("N2")</td>
+                                <td class="text-right @(row.PendingQuantity > 0 ? "text-warning fw-semibold" : "text-muted")">@row.PendingQuantity.ToString("N2")</td>
+                                <td class="text-right">@row.UnitPrice.ToString("N4")</td>
+                                <td class="text-right fw-semibold">@row.LineTotal.ToString("C")</td>
+                                <td><span class="ns-status ns-status--@StatusClass(row.OrderStatus)">@StatusLabel(row.OrderStatus)</span></td>
+                            </tr>
+                        }
+                    </tbody>
+                    <tfoot>
+                        <tr class="ns-table__totals">
+                            <td colspan="5" class="text-right fw-semibold">Totales:</td>
+                            <td class="text-right fw-semibold">@_ordersByMaterial.Sum(r => r.Quantity).ToString("N2")</td>
+                            <td class="text-right text-success fw-semibold">@_ordersByMaterial.Sum(r => r.ReceivedQuantity).ToString("N2")</td>
+                            <td class="text-right text-warning fw-semibold">@_ordersByMaterial.Sum(r => r.PendingQuantity).ToString("N2")</td>
+                            <td></td>
+                            <td class="text-right fw-bold">@_ordersByMaterial.Sum(r => r.LineTotal).ToString("C")</td>
+                            <td></td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        }
+
+        @* Report: Pendientes por recibir *@
+        @if (_activeReport == "pending" && _pendingReceipts.Any())
+        {
+            <div class="ns-table-container">
+                <table class="ns-table">
+                    <thead>
+                        <tr>
+                            <th>OC</th>
+                            <th>Proveedor</th>
+                            <th>Material</th>
+                            <th class="text-right">Pedido</th>
+                            <th class="text-right">Recibido</th>
+                            <th class="text-right">Faltante</th>
+                            <th>Entrega prom.</th>
+                            <th>Retraso (días)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var row in _pendingReceipts)
+                        {
+                            <tr class="@(row.DaysLate > 0 ? "ns-table__row--warning" : "")">
+                                <td><span class="ns-folio">@row.OrderFolio</span></td>
+                                <td>@row.SupplierName</td>
+                                <td>[@row.MaterialCode] @row.MaterialName</td>
+                                <td class="text-right">@row.Quantity.ToString("N2")</td>
+                                <td class="text-right text-success">@row.ReceivedQuantity.ToString("N2")</td>
+                                <td class="text-right text-warning fw-semibold">@row.PendingQuantity.ToString("N2")</td>
+                                <td>@(row.DeliveryDate.HasValue ? row.DeliveryDate.Value.ToString("dd/MM/yyyy") : "—")</td>
+                                <td>
+                                    @if (row.DaysLate > 0)
+                                    { <span class="ns-badge ns-badge--danger">@row.DaysLate días</span> }
+                                    else if (row.DaysLate == 0)
+                                    { <span class="ns-badge ns-badge--warning">Hoy</span> }
+                                    else { <span class="text-muted">A tiempo</span> }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+
+        @if (!_loading && !_hasResults)
+        {
+            <div class="ns-empty-state">
+                <i class="bi bi-bar-chart ns-empty-state__icon"></i>
+                <p>Selecciona un reporte y haz clic en Ejecutar.</p>
+            </div>
+        }
+    }
+</div>
+
+@code {
+    private bool _loading;
+    private bool _hasResults;
+    private string _activeReport = "orders-by-material";
+    private DateTime? _from = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1);
+    private DateTime? _to = DateTime.Today;
+
+    private List<MatOrderByMaterialItem> _ordersByMaterial = new();
+    private List<MatPendingReceiptItem> _pendingReceipts = new();
+
+    private readonly Dictionary<string, string> _reports = new()
+    {
+        ["orders-by-material"] = "OC por material",
+        ["pending"] = "Pendientes por recibir"
+    };
+
+    protected override async Task OnInitializedAsync() => await RunReport();
+
+    private void SetReport(string r) { _activeReport = r; }
+
+    private async Task RunReport()
+    {
+        _loading = true; _hasResults = false;
+        try
+        {
+            if (_activeReport == "orders-by-material")
+            {
+                _ordersByMaterial = await Api.GetOrdersByMaterialAsync(from: _from, to: _to);
+                _hasResults = _ordersByMaterial.Any();
+            }
+            else if (_activeReport == "pending")
+            {
+                _pendingReceipts = await Api.GetPendingReceiptsAsync();
+                _hasResults = _pendingReceipts.Any();
+            }
+        }
+        finally { _loading = false; }
+    }
+
+    private static bool IsRowLate(MatOrderByMaterialItem row)
+        => row.SupplierDeliveryDate.HasValue && row.SupplierDeliveryDate.Value.Date < DateTime.Today
+           && row.PendingQuantity > 0;
+
+    private static string StatusClass(string s) => s switch
+    {
+        "draft" => "gray", "authorized" => "blue", "partially_received" => "yellow",
+        "received" => "green", "closed" => "green-dark", "cancelled" => "red", _ => "gray"
+    };
+
+    private static string StatusLabel(string s) => s switch
+    {
+        "draft" => "Borrador", "authorized" => "Autorizada",
+        "partially_received" => "Parcial", "received" => "Recibida",
+        "closed" => "Cerrada", "cancelled" => "Cancelada", _ => s
+    };
+}

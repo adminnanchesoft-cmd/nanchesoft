@@ -1,0 +1,174 @@
+@page "/purchases/material-kardex"
+@using Nanchesoft.Web.Services.Purchases
+@inject MaterialPurchaseApiService Api
+@inject NavigationManager Nav
+
+<PageTitle>Kardex de Materiales | Nanchesoft</PageTitle>
+
+<div class="ns-module-page">
+    <div class="ns-module-header">
+        <div class="ns-module-header__info">
+            <div class="ns-module-header__breadcrumb"><a href="/purchases/material-inventory">Inventario M</a> · Kardex</div>
+            <h1 class="ns-module-header__title">Kardex de Materiales</h1>
+        </div>
+        <div class="ns-module-header__actions">
+            <button class="ns-btn ns-btn--secondary" @onclick="LoadAsync"><i class="bi bi-arrow-clockwise"></i></button>
+        </div>
+    </div>
+
+    @* Filters *@
+    <div class="ns-filter-bar">
+        <div class="ns-filter-bar__group">
+            <select class="ns-select" @bind="_materialIdStr" @bind:after="LoadAsync">
+                <option value="">Seleccione material...</option>
+                @foreach (var m in _lookups.Materials)
+                { <option value="@m.Id">[@m.Code] @m.Name</option> }
+            </select>
+        </div>
+        <div class="ns-filter-bar__group">
+            <select class="ns-select" @bind="_warehouseIdStr" @bind:after="LoadAsync">
+                <option value="">Todos los almacenes</option>
+                @foreach (var w in _lookups.Warehouses)
+                { <option value="@w.Id">@w.Name</option> }
+            </select>
+        </div>
+        <div class="ns-filter-bar__group">
+            <input class="ns-input" type="date" @bind="_from" @bind:after="LoadAsync" title="Desde" />
+            <input class="ns-input" type="date" @bind="_to" @bind:after="LoadAsync" title="Hasta" />
+        </div>
+    </div>
+
+    @if (_loading)
+    {
+        <div class="ns-loader-center"><div class="ns-spinner"></div></div>
+    }
+    else if (_kardex is not null)
+    {
+        @* Summary card *@
+        <div class="ns-kpi-row">
+            <div class="ns-kpi ns-kpi--blue">
+                <div class="ns-kpi__label">Movimientos</div>
+                <div class="ns-kpi__value">@_kardex.Movements.Count</div>
+            </div>
+            <div class="ns-kpi ns-kpi--green">
+                <div class="ns-kpi__label">Total entradas</div>
+                <div class="ns-kpi__value">@_kardex.Movements.Sum(m => m.QuantityIn).ToString("N3")</div>
+            </div>
+            <div class="ns-kpi ns-kpi--red">
+                <div class="ns-kpi__label">Total salidas</div>
+                <div class="ns-kpi__value">@_kardex.Movements.Sum(m => m.QuantityOut).ToString("N3")</div>
+            </div>
+            <div class="ns-kpi ns-kpi--gray">
+                <div class="ns-kpi__label">Saldo actual</div>
+                <div class="ns-kpi__value">@(_kardex.Movements.LastOrDefault()?.BalanceAfter.ToString("N3") ?? "0")</div>
+            </div>
+        </div>
+
+        <div class="ns-table-container">
+            <table class="ns-table">
+                <thead>
+                    <tr>
+                        <th>Fecha</th>
+                        <th>Tipo</th>
+                        <th>Documento</th>
+                        <th>Folio</th>
+                        <th class="text-right">Entrada</th>
+                        <th class="text-right">Salida</th>
+                        <th class="text-right">Saldo</th>
+                        <th class="text-right">Costo unit.</th>
+                        <th class="text-right">Costo total</th>
+                        <th>Usuario</th>
+                        <th>Notas</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var m in _kardex.Movements)
+                    {
+                        <tr class="@(m.MovementType == "entry" ? "ns-table__row--entry" : "ns-table__row--exit")">
+                            <td>@m.MovementDate.ToString("dd/MM/yyyy")</td>
+                            <td>
+                                <span class="ns-badge @(m.MovementType == "entry" ? "ns-badge--green" : "ns-badge--red")">
+                                    @(m.MovementType == "entry" ? "Entrada" : "Salida")
+                                </span>
+                            </td>
+                            <td class="text-muted">@DocTypeLabel(m.DocumentType)</td>
+                            <td><span class="ns-folio">@m.DocumentFolio</span></td>
+                            <td class="text-right text-success fw-semibold">@(m.QuantityIn > 0 ? m.QuantityIn.ToString("N3") : "—")</td>
+                            <td class="text-right text-danger">@(m.QuantityOut > 0 ? m.QuantityOut.ToString("N3") : "—")</td>
+                            <td class="text-right fw-bold">@m.BalanceAfter.ToString("N3")</td>
+                            <td class="text-right">@m.UnitCost.ToString("N4")</td>
+                            <td class="text-right">@m.TotalCost.ToString("N2")</td>
+                            <td class="text-muted">@m.UserName</td>
+                            <td class="text-muted small">@m.Notes</td>
+                        </tr>
+                    }
+                    @if (!_kardex.Movements.Any())
+                    {
+                        <tr><td colspan="11" class="text-center text-muted py-3">Sin movimientos en el período.</td></tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+    else if (_materialIdStr != string.Empty)
+    {
+        <div class="ns-empty-state">
+            <i class="bi bi-list-ul ns-empty-state__icon"></i>
+            <p>Sin movimientos para el material y período seleccionados.</p>
+        </div>
+    }
+    else
+    {
+        <div class="ns-empty-state">
+            <i class="bi bi-search ns-empty-state__icon"></i>
+            <p>Seleccione un material para ver su kardex.</p>
+        </div>
+    }
+</div>
+
+@code {
+    [SupplyParameterFromQuery] public Guid? MaterialId { get; set; }
+
+    private MatKardex? _kardex;
+    private MatLookups _lookups = new();
+    private bool _loading;
+    private Guid? _materialId;
+    private Guid? _warehouseId;
+    private DateTime? _from;
+    private DateTime? _to = DateTime.Today;
+
+    private string _materialIdStr
+    {
+        get => _materialId?.ToString() ?? "";
+        set => _materialId = Guid.TryParse(value, out var g) ? g : null;
+    }
+    private string _warehouseIdStr
+    {
+        get => _warehouseId?.ToString() ?? "";
+        set => _warehouseId = Guid.TryParse(value, out var g) ? g : null;
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _lookups = await Api.GetLookupsAsync();
+        if (MaterialId.HasValue) { _materialId = MaterialId; }
+        if (_materialId.HasValue) await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        if (_materialId is null) return;
+        _loading = true;
+        try { _kardex = await Api.GetKardexAsync(_materialId.Value, _warehouseId, _from, _to); }
+        finally { _loading = false; }
+    }
+
+    private static string DocTypeLabel(string t) => t switch
+    {
+        "review_receipt" => "Entrada revisión",
+        "purchase_invoice" => "Compra factura",
+        "return" => "Devolución",
+        "adjustment" => "Ajuste",
+        _ => t
+    };
+}

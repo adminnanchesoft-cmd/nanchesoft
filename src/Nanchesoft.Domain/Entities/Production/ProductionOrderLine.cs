@@ -55,4 +55,19 @@ public sealed class ProductionOrderLine : BaseEntity
     public DateOnly? DeliveryDate { get; set; }
     public int Priority { get; set; } = 1;
     public string Notes { get; set; } = string.Empty;
+
+    // Número de control — unique per company, auto-generated
+    public string NcFolio { get; set; } = string.Empty;
+
+    // Commercial fields
+    public string CustomerPoReference { get; set; } = string.Empty;
+    public decimal UnitPrice { get; set; }
+    public decimal DiscountPercent { get; set; }
+    public decimal LineTotal { get; set; }
+
+    // Per-line shipping & identity overrides (defaults from order header)
+    public Guid? WarehouseId { get; set; }
+    public Guid? ShipToAddressId { get; set; }
+    public string ShipToAddressText { get; set; } = string.Empty;
+    public string LegalName { get; set; } = string.Empty;
 }

@@ -1,0 +1,202 @@
+@page "/purchases/material-dashboard"
+@using Nanchesoft.Web.Services.Purchases
+@inject MaterialPurchaseApiService Api
+@inject NavigationManager Nav
+
+<PageTitle>Dashboard Compras Materiales | Nanchesoft</PageTitle>
+
+<div class="ns-module-page">
+    <div class="ns-module-header">
+        <div class="ns-module-header__info">
+            <div class="ns-module-header__breadcrumb">Compras · Materiales</div>
+            <h1 class="ns-module-header__title">Dashboard Ejecutivo</h1>
+            <p class="ns-module-header__subtitle">Resumen de compras, recepciones, pagos y proveedores del mes en curso.</p>
+        </div>
+        <div class="ns-module-header__actions">
+            <button class="ns-btn ns-btn--secondary" @onclick="LoadAsync"><i class="bi bi-arrow-clockwise"></i> Actualizar</button>
+        </div>
+    </div>
+
+    @if (_loading)
+    {
+        <div class="ns-loader-center"><div class="ns-spinner"></div><span>Cargando dashboard...</span></div>
+    }
+    else if (_data is not null)
+    {
+        @* KPI Cards principales *@
+        <div class="ns-dashboard-kpis">
+            <div class="ns-kpi-card ns-kpi-card--blue" @onclick='() => Nav.NavigateTo("/purchases/material-orders?status=authorized")'>
+                <div class="ns-kpi-card__icon"><i class="bi bi-cart3"></i></div>
+                <div class="ns-kpi-card__info">
+                    <div class="ns-kpi-card__value">@_data.PendingOrders</div>
+                    <div class="ns-kpi-card__label">OC pendientes de recibir</div>
+                </div>
+            </div>
+            <div class="ns-kpi-card ns-kpi-card--gray" @onclick='() => Nav.NavigateTo("/purchases/material-orders?status=draft")'>
+                <div class="ns-kpi-card__icon"><i class="bi bi-file-earmark-text"></i></div>
+                <div class="ns-kpi-card__info">
+                    <div class="ns-kpi-card__value">@_data.DraftOrders</div>
+                    <div class="ns-kpi-card__label">OC en borrador</div>
+                </div>
+            </div>
+            <div class="ns-kpi-card ns-kpi-card--green">
+                <div class="ns-kpi-card__icon"><i class="bi bi-currency-dollar"></i></div>
+                <div class="ns-kpi-card__info">
+                    <div class="ns-kpi-card__value">@_data.MonthPurchased.ToString("C0")</div>
+                    <div class="ns-kpi-card__label">Comprado este mes</div>
+                </div>
+            </div>
+            <div class="ns-kpi-card ns-kpi-card--yellow" @onclick='() => Nav.NavigateTo("/purchases/material-receipts?paymentStatus=pending")'>
+                <div class="ns-kpi-card__icon"><i class="bi bi-hourglass-split"></i></div>
+                <div class="ns-kpi-card__info">
+                    <div class="ns-kpi-card__value">@_data.PendingPayment</div>
+                    <div class="ns-kpi-card__label">Pendientes de pago</div>
+                </div>
+            </div>
+            <div class="ns-kpi-card ns-kpi-card--orange" @onclick='() => Nav.NavigateTo("/purchases/material-receipts?paymentStatus=partial")'>
+                <div class="ns-kpi-card__icon"><i class="bi bi-cash-coin"></i></div>
+                <div class="ns-kpi-card__info">
+                    <div class="ns-kpi-card__value">@_data.PartialPayment</div>
+                    <div class="ns-kpi-card__label">Pagadas parcialmente</div>
+                </div>
+            </div>
+            <div class="ns-kpi-card ns-kpi-card--red">
+                <div class="ns-kpi-card__icon"><i class="bi bi-exclamation-triangle"></i></div>
+                <div class="ns-kpi-card__info">
+                    <div class="ns-kpi-card__value">@_data.WithDiffs</div>
+                    <div class="ns-kpi-card__label">Con diferencias pendientes</div>
+                </div>
+            </div>
+        </div>
+
+        @* Quick access *@
+        <div class="ns-card ns-card--form mb-3">
+            <div class="ns-card__header"><h3>Acceso rápido</h3></div>
+            <div class="ns-card__body">
+                <div class="ns-quick-links">
+                    <a class="ns-quick-link" href="/purchases/material-orders/new">
+                        <i class="bi bi-plus-circle"></i>
+                        <span>Nueva OC</span>
+                    </a>
+                    <a class="ns-quick-link" href="/purchases/material-receipts/new?type=review">
+                        <i class="bi bi-clipboard-check"></i>
+                        <span>Entrada Revisión</span>
+                    </a>
+                    <a class="ns-quick-link" href="/purchases/material-receipts/new?type=invoice">
+                        <i class="bi bi-receipt"></i>
+                        <span>Compra Factura</span>
+                    </a>
+                    <a class="ns-quick-link" href="/purchases/material-inventory">
+                        <i class="bi bi-boxes"></i>
+                        <span>Inventario</span>
+                    </a>
+                    <a class="ns-quick-link" href="/purchases/material-kardex">
+                        <i class="bi bi-list-ul"></i>
+                        <span>Kardex</span>
+                    </a>
+                    <a class="ns-quick-link" href="/purchases/material-reports">
+                        <i class="bi bi-bar-chart"></i>
+                        <span>Reportes</span>
+                    </a>
+                    <a class="ns-quick-link" href="/purchases/suppliers">
+                        <i class="bi bi-people"></i>
+                        <span>Proveedores</span>
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        @* Top Proveedores *@
+        @if (_data.TopSuppliers.Any())
+        {
+            <div class="ns-card ns-card--form mb-3">
+                <div class="ns-card__header"><h3>Top Proveedores del mes</h3></div>
+                <div class="ns-card__body">
+                    <div class="ns-bar-chart">
+                        @{
+                            var maxVal = _data.TopSuppliers.Max(x => x.Total);
+                        }
+                        @foreach (var s in _data.TopSuppliers)
+                        {
+                            var pct = maxVal > 0 ? (double)(s.Total / maxVal * 100) : 0;
+                            <div class="ns-bar-chart__row">
+                                <div class="ns-bar-chart__label">@s.Name</div>
+                                <div class="ns-bar-chart__bar-wrap">
+                                    <div class="ns-bar-chart__bar" style="width: @(pct.ToString("F0"))%"></div>
+                                </div>
+                                <div class="ns-bar-chart__value">@s.Total.ToString("C0")</div>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        }
+
+        @* Pendientes de recibir *@
+        @if (_pendingReceipts.Any())
+        {
+            <div class="ns-card ns-card--form mb-3">
+                <div class="ns-card__header d-flex justify-content-between align-items-center">
+                    <h3>Materiales pendientes de recibir</h3>
+                    <a class="ns-btn ns-btn--ghost ns-btn--sm" href="/purchases/material-reports">Ver reporte completo</a>
+                </div>
+                <div class="ns-card__body p-0">
+                    <table class="ns-table ns-table--compact">
+                        <thead>
+                            <tr>
+                                <th>OC</th>
+                                <th>Proveedor</th>
+                                <th>Material</th>
+                                <th class="text-right">Pendiente</th>
+                                <th>Entrega prom.</th>
+                                <th>Retraso</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var p in _pendingReceipts.Take(10))
+                            {
+                                <tr class="@(p.DaysLate > 0 ? "ns-table__row--warning" : "")">
+                                    <td><span class="ns-folio">@p.OrderFolio</span></td>
+                                    <td>@p.SupplierName</td>
+                                    <td>[@p.MaterialCode] @p.MaterialName</td>
+                                    <td class="text-right fw-semibold">@p.PendingQuantity.ToString("N2")</td>
+                                    <td>@(p.DeliveryDate.HasValue ? p.DeliveryDate.Value.ToString("dd/MM/yyyy") : "—")</td>
+                                    <td>
+                                        @if (p.DaysLate > 0)
+                                        { <span class="ns-badge ns-badge--danger">@p.DaysLate días</span> }
+                                        else if (p.DaysLate == 0)
+                                        { <span class="ns-badge ns-badge--warning">Hoy</span> }
+                                        else
+                                        { <span class="text-muted">A tiempo</span> }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        }
+    }
+</div>
+
+@code {
+    private MatDashboard? _data;
+    private List<MatPendingReceiptItem> _pendingReceipts = new();
+    private bool _loading = true;
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        try
+        {
+            var t1 = Api.GetDashboardAsync();
+            var t2 = Api.GetPendingReceiptsAsync();
+            await Task.WhenAll(t1, t2);
+            _data = t1.Result;
+            _pendingReceipts = t2.Result;
+        }
+        finally { _loading = false; }
+    }
+}

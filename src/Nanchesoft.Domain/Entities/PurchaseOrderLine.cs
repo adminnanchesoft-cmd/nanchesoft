@@ -18,6 +18,9 @@ public sealed class PurchaseOrderLine : BaseEntity
     public Guid? TaxId { get; set; }
     public Tax? Tax { get; set; }
 
+    public Guid? MaterialItemId { get; set; }
+    public MaterialItem? MaterialItem { get; set; }
+
     public string Description { get; set; } = string.Empty;
     public decimal Quantity { get; set; }
     public decimal ReceivedQuantity { get; set; }
@@ -26,4 +29,5 @@ public sealed class PurchaseOrderLine : BaseEntity
     public decimal DiscountAmount { get; set; }
     public decimal TaxAmount { get; set; }
     public decimal LineTotal { get; set; }
+    public string Notes { get; set; } = string.Empty;
 }

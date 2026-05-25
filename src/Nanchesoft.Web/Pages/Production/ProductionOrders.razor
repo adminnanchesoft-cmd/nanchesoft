@@ -1,0 +1,1603 @@
+@page "/produccion/pedidos"
+@using System.Net.Http.Json
+@using System.Text.Json
+@inject IHttpClientFactory HttpClientFactory
+@inject NavigationManager Navigation
+@inject Nanchesoft.Web.State.AuthState AuthState
+
+<PageTitle>Pedidos de producción | Nanchesoft</PageTitle>
+
+<style>
+    .po-hero {
+        background: linear-gradient(135deg, #0f172a 0%, #1e3a5f 45%, #2563eb 100%);
+        color: #fff;
+        padding: 1.4rem 1.75rem;
+        border-radius: 14px;
+        margin-bottom: 1.25rem;
+        box-shadow: 0 4px 20px rgba(37,99,235,0.25);
+    }
+    .po-hero h1 { font-size: 1.9rem; font-weight: 900; letter-spacing: -0.5px; margin: 0 0 0.1rem 0; }
+    .po-hero .subtitle { font-size: 0.82rem; opacity: 0.8; margin: 0; }
+    .po-kpi { background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.2); border-radius:10px; padding:0.5rem 0.9rem; text-align:center; min-width:82px; }
+    .po-kpi .kval { font-size:1.5rem; font-weight:800; line-height:1; }
+    .po-kpi .klbl { font-size:0.62rem; opacity:0.82; text-transform:uppercase; letter-spacing:0.5px; margin-top:2px; }
+
+    .section-lbl { font-size:0.68rem; font-weight:800; text-transform:uppercase; letter-spacing:0.9px; color:#6b7280; border-left:3px solid #2563eb; padding-left:0.5rem; margin-bottom:0.6rem; }
+    .form-card { background:#fff; border:1px solid #e5e7eb; border-radius:12px; padding:0.9rem 1.1rem; margin-bottom:0.85rem; box-shadow:0 1px 4px rgba(0,0,0,0.05); }
+
+    /* Product line card */
+    .line-card { background:#fff; border:1px solid #d1d5db; border-radius:10px; margin-bottom:0.75rem; overflow:hidden; }
+    .line-card-header { background:linear-gradient(90deg,#1e3a5f,#2563eb); color:#fff; padding:0.4rem 0.75rem; font-size:0.72rem; font-weight:700; display:flex; align-items:center; gap:0.5rem; }
+    .line-card-body { padding:0.6rem 0.75rem; }
+    .nc-badge { background:rgba(255,255,255,0.2); border:1px solid rgba(255,255,255,0.3); border-radius:20px; padding:0.1rem 0.55rem; font-size:0.68rem; font-family:monospace; letter-spacing:0.5px; }
+
+    /* Horizontal sizes */
+    .sizes-strip { display:flex; flex-wrap:nowrap; gap:0.3rem; overflow-x:auto; padding:0.4rem 0; align-items:center; }
+    .size-col { display:flex; flex-direction:column; align-items:center; gap:2px; flex-shrink:0; }
+    .size-lbl { font-size:0.65rem; font-weight:700; color:#2563eb; text-transform:uppercase; }
+    .size-inp { width:52px; text-align:center; border:1px solid #d1d5db; border-radius:5px; padding:0.2rem; font-size:0.82rem; font-weight:600; background:#f8fafc; }
+    .size-inp:focus { outline:none; border-color:#2563eb; box-shadow:0 0 0 2px rgba(37,99,235,0.2); background:#fff; }
+    .size-inp.has-value { background:#e0f2f1; border-color:#059669; color:#065f46; }
+    .size-total { background:#059669; color:#fff; font-weight:800; padding:0.18rem 0.65rem; border-radius:20px; font-size:0.82rem; min-width:44px; text-align:center; }
+    .loading-sizes { color:#6b7280; font-size:0.72rem; font-style:italic; animation:pulse 1s infinite; }
+    @@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+    /* Product search */
+    .prod-search-wrap { position:relative; }
+    .prod-search-input { width:100%; border:1px solid #d1d5db; border-radius:6px; padding:0.3rem 0.5rem; font-size:0.82rem; }
+    .prod-search-input:focus { outline:none; border-color:#2563eb; box-shadow:0 0 0 2px rgba(37,99,235,0.2); }
+    .prod-dropdown { position:absolute; top:100%; left:0; right:0; z-index:1000; background:#fff; border:1px solid #d1d5db; border-radius:6px; max-height:220px; overflow-y:auto; box-shadow:0 4px 12px rgba(0,0,0,0.12); }
+    .prod-option { padding:0.35rem 0.65rem; font-size:0.8rem; cursor:pointer; border-bottom:1px solid #f3f4f6; display:flex; flex-direction:column; gap:1px; }
+    .prod-option:hover, .prod-option.active { background:#eff6ff; }
+    .prod-option .pcode { font-family:monospace; color:#2563eb; font-weight:700; font-size:0.75rem; }
+    .prod-option .pname { color:#374151; }
+    .prod-selected { background:#eff6ff; border:1px solid #bfdbfe; border-radius:6px; padding:0.3rem 0.5rem; font-size:0.82rem; color:#1e40af; font-weight:600; display:flex; justify-content:space-between; align-items:center; }
+
+    /* Override section */
+    .line-override-toggle { font-size:0.68rem; color:#6b7280; cursor:pointer; background:none; border:none; padding:0; text-decoration:underline; }
+    .line-override-toggle:hover { color:#2563eb; }
+    .override-section { background:#f8fafc; border:1px dashed #d1d5db; border-radius:6px; padding:0.5rem 0.65rem; margin-top:0.5rem; }
+    .override-badge { background:#f59e0b; color:#fff; font-size:0.6rem; font-weight:700; border-radius:10px; padding:0.05rem 0.4rem; vertical-align:middle; }
+
+    /* Orders list table */
+    .orders-table th { background:#1e293b; color:#e2e8f0; font-size:0.71rem; font-weight:700; text-transform:uppercase; letter-spacing:0.5px; padding:0.5rem 0.65rem; white-space:nowrap; }
+    .orders-table td { font-size:0.82rem; padding:0.45rem 0.65rem; vertical-align:middle; }
+    .orders-table tr:hover td { background:#f0f7ff !important; }
+
+    .badge-status { font-size:0.7rem; padding:0.2rem 0.55rem; border-radius:20px; font-weight:700; display:inline-block; color:#fff; }
+    .priority-dot { width:8px; height:8px; border-radius:50%; display:inline-block; margin-right:4px; }
+
+    /* Totals bar */
+    .totals-bar { background:linear-gradient(135deg,#065f46,#059669); color:#fff; border-radius:10px; padding:0.75rem 1.2rem; }
+    .totals-bar .tval { font-size:1.3rem; font-weight:800; }
+    .totals-bar .tlbl { font-size:0.65rem; opacity:0.85; text-transform:uppercase; }
+
+    /* Print */
+    .print-area { font-family:'Segoe UI', sans-serif; }
+    @@media print {
+        .no-print { display:none !important; }
+        .print-area { display:block !important; }
+    }
+
+    /* Quick-add modals */
+    .qa-overlay { position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,.5); z-index:2000; display:flex; align-items:center; justify-content:center; }
+    .qa-box { background:#fff; border-radius:12px; padding:1.5rem; width:440px; max-width:92vw; box-shadow:0 8px 32px rgba(0,0,0,.22); }
+    .qa-box h6 { font-weight:800; margin-bottom:1rem; color:#1e3a5f; font-size:1rem; }
+</style>
+
+<div class="container-fluid py-3">
+
+    @* ── Hero ──────────────────────────────────────────────────────────────── *@
+    <div class="po-hero">
+        <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
+            <div>
+                <h1>Pedidos de producción</h1>
+                <p class="subtitle">Captura de pedidos con precios, tallas y control por número de control (NC)</p>
+            </div>
+            <div class="d-flex gap-2 flex-wrap align-items-center">
+                <div class="po-kpi"><div class="kval">@_orders.Count</div><div class="klbl">Total</div></div>
+                <div class="po-kpi"><div class="kval">@_orders.Count(o => o.Status is "draft" or "planned")</div><div class="klbl">Activos</div></div>
+                <div class="po-kpi"><div class="kval">@_orders.Count(o => o.Status == "in_progress")</div><div class="klbl">En proc.</div></div>
+                <div class="po-kpi"><div class="kval">@_orders.Sum(o => o.TotalUnitsPlanned).ToString("N0")</div><div class="klbl">Pares</div></div>
+                @if (!_showForm)
+                {
+                    <button class="btn btn-light fw-bold ms-2 px-3" style="border-radius:8px;" @onclick="OpenNewFormAsync">+ Nuevo pedido</button>
+                }
+                else
+                {
+                    <button class="btn btn-outline-light fw-semibold ms-2 px-3" style="border-radius:8px;" @onclick="CloseForm">✕ Cerrar</button>
+                }
+            </div>
+        </div>
+    </div>
+
+    @* ── Alerts ───────────────────────────────────────────────────────────── *@
+    @if (!string.IsNullOrWhiteSpace(_message))
+    {
+        <div class="alert alert-success alert-dismissible py-2 mb-3"><strong>✓</strong> @_message <button type="button" class="btn-close" @onclick='() => _message = string.Empty'></button></div>
+    }
+    @if (!string.IsNullOrWhiteSpace(_error))
+    {
+        <div class="alert alert-danger alert-dismissible py-2 mb-3"><strong>✗</strong> @_error <button type="button" class="btn-close" @onclick='() => _error = string.Empty'></button></div>
+    }
+
+    @* ════════════════════════════════════════════════════════════════════════
+       FORM
+    ════════════════════════════════════════════════════════════════════════ *@
+    @if (_showForm)
+    {
+        <div class="form-card" style="border-top:3px solid #2563eb;">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <div class="section-lbl" style="color:#1d4ed8; border-color:#1d4ed8; font-size:0.76rem; margin:0;">Nuevo pedido de producción</div>
+                <button class="btn btn-sm btn-outline-secondary" @onclick="CloseForm">✕ Cancelar</button>
+            </div>
+
+            @* ─── ENCABEZADO ─────────────────────────────────────────────────── *@
+            <div class="form-card" style="background:#f8fafc; border-color:#dbeafe;">
+                <div class="section-lbl">Encabezado del pedido</div>
+
+                @* Row 1: Empresa / Sucursal / Almacén / Prioridad / Semana *@
+                <div class="row g-2 mb-2">
+                    @if (_tenantCompanies.Count > 1)
+                    {
+                        <div class="col-md-3">
+                            <label class="form-label fw-semibold small mb-1">Empresa</label>
+                            <select class="form-select form-select-sm" @bind="_formCompanyId" @bind:after="OnFormCompanyChangedAsync">
+                                @foreach (var c in _tenantCompanies)
+                                {
+                                    <option value="@c.CompanyId">@c.Name</option>
+                                }
+                            </select>
+                        </div>
+                    }
+                    @if (_branches.Count > 1)
+                    {
+                        <div class="col-md-3">
+                            <label class="form-label fw-semibold small mb-1">Sucursal</label>
+                            <select class="form-select form-select-sm" @bind="_formBranchId">
+                                @foreach (var b in _branches)
+                                {
+                                    <option value="@b.BranchId">@b.Name</option>
+                                }
+                            </select>
+                        </div>
+                    }
+                    <div class="col-md-3">
+                        <label class="form-label fw-semibold small mb-1">Almacén general</label>
+                        <select class="form-select form-select-sm"
+                                value="@(_formWarehouseId?.ToString() ?? "")"
+                                @onchange='e => { _formWarehouseId = Guid.TryParse(e.Value?.ToString(), out var g) && g != Guid.Empty ? g : (Guid?)null; }'>
+                            <option value="">— Sin especificar —</option>
+                            @foreach (var w in _warehouses)
+                            {
+                                <option value="@w.WarehouseId">@w.Name</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label fw-semibold small mb-1">Prioridad</label>
+                        <select class="form-select form-select-sm" @bind="_formPriority">
+                            <option value="1">● Normal</option>
+                            <option value="2">●● Alta</option>
+                            <option value="3">●●● Urgente</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label fw-semibold small mb-1">Semana</label>
+                        <input class="form-control form-control-sm" @bind="_formWeekCode" placeholder="2026-W22" />
+                    </div>
+                </div>
+
+                @* Row 2: Cliente / Referencia / Temporada / F.Cancelación *@
+                <div class="row g-2 mb-2">
+                    <div class="col-md-4">
+                        <label class="form-label fw-semibold small mb-1">Cliente <span class="text-danger">*</span></label>
+                        <select class="form-select form-select-sm" @bind="_formCustomerId" @bind:after="OnFormCustomerChangedAsync">
+                            <option value="">— Selecciona cliente —</option>
+                            @foreach (var c in _tenantCustomers)
+                            {
+                                <option value="@c.CustomerId">@c.Code · @c.Name</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-semibold small mb-1">Referencia / Pedido cliente <span class="text-danger">*</span></label>
+                        <input class="form-control form-control-sm @(!string.IsNullOrWhiteSpace(_formReference) ? "" : "border-danger")"
+                               @bind="_formReference" @bind:after="PropagateReferenceToLines"
+                               placeholder="Ej. PO-2026-001 (requerido)" />
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label fw-semibold small mb-1">Temporada</label>
+                        <input class="form-control form-control-sm" @bind="_formSeason" placeholder="Primavera 2026" />
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label fw-semibold small mb-1">F. Cancelación</label>
+                        <input type="date" class="form-control form-control-sm" @bind="_formCancellationDate" />
+                    </div>
+                </div>
+
+                @* Row 3: Razón social / Dirección de envío *@
+                <div class="row g-2 mb-2">
+                    <div class="col-md-4">
+                        <label class="form-label fw-semibold small mb-1">Razón social</label>
+                        <div class="d-flex gap-1">
+                            @if (_customerLegalEntities.Count > 0)
+                            {
+                                <select class="form-select form-select-sm flex-fill"
+                                        value="@(_formLegalEntityId?.ToString() ?? "")"
+                                        @onchange="OnHeaderLegalEntityChangedAsync">
+                                    <option value="">— Sin especificar —</option>
+                                    @foreach (var le in _customerLegalEntities)
+                                    {
+                                        <option value="@le.LegalEntityId">@(le.IsPrimary ? "★ " : "")@le.LegalName@(string.IsNullOrWhiteSpace(le.TaxId) ? "" : $" ({le.TaxId})")</option>
+                                    }
+                                </select>
+                            }
+                            else
+                            {
+                                <input class="form-control form-control-sm flex-fill" @bind="_formLegalName"
+                                       placeholder="@(_formCustomerId != Guid.Empty ? "Sin razones sociales — agrega con +" : "Selecciona cliente primero")"
+                                       disabled="@(_formCustomerId == Guid.Empty)" />
+                            }
+                            <button type="button" class="btn btn-sm btn-outline-primary px-2" title="Nueva razón social"
+                                    disabled="@(_formCustomerId == Guid.Empty)" @onclick="OpenQuickAddLegalEntity">+</button>
+                        </div>
+                    </div>
+                    <div class="col-md-5">
+                        <label class="form-label fw-semibold small mb-1">¿A dónde se envía? (dirección)</label>
+                        <div class="d-flex gap-1">
+                            @if (_customerAddresses.Count > 0)
+                            {
+                                <select class="form-select form-select-sm flex-fill"
+                                        value="@(_formShipToAddressId?.ToString() ?? "")"
+                                        @onchange="OnHeaderAddressChangedAsync">
+                                    <option value="">— Sin dirección específica —</option>
+                                    @foreach (var a in _customerAddresses)
+                                    {
+                                        <option value="@a.AddressId">@(a.IsPrimary ? "★ " : "")@a.FullAddress</option>
+                                    }
+                                </select>
+                            }
+                            else
+                            {
+                                <input class="form-control form-control-sm flex-fill" @bind="_formShipToAddressText"
+                                       placeholder="@(_formCustomerId != Guid.Empty && _formCustomerId != default ? "Sin direcciones — agrega con +" : "Selecciona un cliente primero")"
+                                       disabled="@(_formCustomerId == Guid.Empty || _formCustomerId == default)" />
+                            }
+                            <button type="button" class="btn btn-sm btn-outline-primary px-2" title="Nueva dirección"
+                                    disabled="@(_formCustomerId == Guid.Empty)" @onclick="OpenQuickAddLocation">+</button>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label fw-semibold small mb-1">F. Entrega <span class="text-danger">*</span></label>
+                        <input type="date" class="form-control form-control-sm" @bind="_formDeliveryDate" />
+                    </div>
+                </div>
+
+                @* Row 4: Fechas / Observaciones *@
+                <div class="row g-2">
+                    <div class="col-md-3">
+                        <label class="form-label fw-semibold small mb-1">F. Inicio producción</label>
+                        <input type="date" class="form-control form-control-sm" @bind="_formStartDate" />
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label fw-semibold small mb-1">F. Fin producción</label>
+                        <input type="date" class="form-control form-control-sm" @bind="_formEndDate" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-semibold small mb-1">Observaciones generales</label>
+                        <input class="form-control form-control-sm" @bind="_formNotes" placeholder="Instrucciones especiales..." />
+                    </div>
+                </div>
+            </div>
+
+            @* ─── LÍNEAS ──────────────────────────────────────────────────────── *@
+            <div class="form-card" style="background:#f8fafc; border-color:#dbeafe;">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <div class="section-lbl mb-0">
+                        Líneas de producción ·
+                        <span class="text-success fw-bold">@_formLines.Sum(l => l.TotalQty) pares</span> ·
+                        <span class="text-primary fw-bold">$@_formLines.Sum(l => l.LineTotal).ToString("N2") total</span>
+                    </div>
+                    <button class="btn btn-sm btn-primary px-3" style="border-radius:20px; font-size:0.8rem;" @onclick="AddLine">
+                        + Agregar línea
+                    </button>
+                </div>
+
+                @if (_formLines.Count == 0)
+                {
+                    <div class="text-center text-secondary py-4 small" style="border:2px dashed #d1d5db; border-radius:8px;">
+                        Agrega al menos una línea con el producto a producir
+                    </div>
+                }
+                else
+                {
+                    @foreach (var (line, idx) in _formLines.Select((l, i) => (l, i)))
+                    {
+                        var hasOverride = (line.WarehouseId.HasValue && line.WarehouseId != _formWarehouseId)
+                                       || (line.ShipToAddressId.HasValue && line.ShipToAddressId != _formShipToAddressId)
+                                       || (!string.IsNullOrWhiteSpace(line.LegalName) && line.LegalName != _formLegalName);
+
+                        <div class="line-card">
+                            <div class="line-card-header">
+                                <span style="opacity:0.8;">#@(idx+1)</span>
+                                @if (!string.IsNullOrEmpty(line.NcPreview))
+                                {
+                                    <span class="nc-badge">NC: @line.NcPreview</span>
+                                }
+                                @if (hasOverride)
+                                {
+                                    <span class="override-badge">Envío personalizado</span>
+                                }
+                                <span class="ms-auto d-flex align-items-center gap-2">
+                                    <span class="size-total" style="background:rgba(255,255,255,0.25); color:#fff; font-size:0.72rem;">
+                                        @line.TotalQty pares
+                                    </span>
+                                    @if (line.LineTotal > 0)
+                                    {
+                                        <span style="font-size:0.75rem; opacity:0.9;">$@line.LineTotal.ToString("N2")</span>
+                                    }
+                                    <button class="btn btn-sm py-0 px-1" style="background:rgba(239,68,68,0.3); color:#fff; border:none; border-radius:4px; font-size:0.75rem;" @onclick="() => RemoveLine(line)">✕</button>
+                                </span>
+                            </div>
+                            <div class="line-card-body">
+                                <div class="row g-2 mb-2">
+                                    <div class="col-md-4">
+                                        <label class="form-label fw-semibold small mb-1">Producto terminado <span class="text-danger">*</span></label>
+                                        <div class="prod-search-wrap">
+                                            @if (line.FinishedProductId == Guid.Empty)
+                                            {
+                                                <input class="prod-search-input" placeholder="Buscar por clave o nombre..."
+                                                       @bind="line.ProductSearch" @bind:event="oninput"
+                                                       @onfocus="() => line.ShowDropdown = true"
+                                                       @onblur="async () => { await Task.Delay(200); line.ShowDropdown = false; StateHasChanged(); }" />
+                                                @if (line.ShowDropdown && !string.IsNullOrWhiteSpace(line.ProductSearch))
+                                                {
+                                                    var opts = FilteredProducts(line.ProductSearch);
+                                                    @if (opts.Count > 0)
+                                                    {
+                                                        <div class="prod-dropdown">
+                                                            @foreach (var p in opts)
+                                                            {
+                                                                var captured = p;
+                                                                <div class="prod-option" @onmousedown="() => SelectProductAsync(line, captured)">
+                                                                    <span class="pcode">@p.Code</span>
+                                                                    <span class="pname">@p.Name</span>
+                                                                </div>
+                                                            }
+                                                        </div>
+                                                    }
+                                                }
+                                            }
+                                            else
+                                            {
+                                                <div class="prod-selected">
+                                                    <span><span class="me-1" style="font-family:monospace; color:#1d4ed8;">@line.ProductCode</span> @line.ProductName</span>
+                                                    <button class="btn btn-sm py-0 px-1 btn-outline-secondary" style="font-size:0.72rem;" @onclick="() => ClearProduct(line)">✎</button>
+                                                </div>
+                                                @if (line.LoadingSizes)
+                                                {
+                                                    <div class="loading-sizes mt-1">cargando corrida de tallas...</div>
+                                                }
+                                            }
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label fw-semibold small mb-1">P.O. (Pedido del cliente) <span class="text-danger">*</span></label>
+                                        <input class="form-control form-control-sm @(string.IsNullOrWhiteSpace(line.CustomerPoReference) ? "border-warning" : "")"
+                                               @bind="line.CustomerPoReference"
+                                               placeholder="Referencia por línea (req.)" />
+                                    </div>
+                                    <div class="col-md-2">
+                                        <label class="form-label fw-semibold small mb-1">Precio unitario</label>
+                                        <div class="input-group input-group-sm">
+                                            <span class="input-group-text">$</span>
+                                            <input type="number" class="form-control" min="0" step="0.01"
+                                                   value="@line.UnitPrice"
+                                                   @onchange="e => { if (decimal.TryParse(e.Value?.ToString(), out var v)) { line.UnitPrice = v < 0 ? 0 : v; } }" />
+                                        </div>
+                                    </div>
+                                    <div class="col-md-1">
+                                        <label class="form-label fw-semibold small mb-1">Desc.%</label>
+                                        <input type="number" class="form-control form-control-sm" min="0" max="100" step="0.5"
+                                               value="@line.DiscountPercent"
+                                               @onchange="e => { if (decimal.TryParse(e.Value?.ToString(), out var v)) { line.DiscountPercent = v < 0 ? 0 : (v > 100 ? 100 : v); } }" />
+                                    </div>
+                                    <div class="col-md-2">
+                                        <label class="form-label fw-semibold small mb-1">Observaciones línea</label>
+                                        <input class="form-control form-control-sm" @bind="line.Notes" placeholder="..." />
+                                    </div>
+                                </div>
+
+                                @* Horizontal size strip *@
+                                @if (line.FinishedProductId != Guid.Empty && !line.LoadingSizes)
+                                {
+                                    @if (line.Sizes.Count > 0)
+                                    {
+                                        <div class="d-flex align-items-center gap-3 flex-wrap">
+                                            <div class="sizes-strip">
+                                                @foreach (var sz in line.Sizes)
+                                                {
+                                                    var captured = sz;
+                                                    <div class="size-col">
+                                                        <span class="size-lbl">@sz.SizeCode</span>
+                                                        <input type="number" class="size-inp @(sz.Qty > 0 ? "has-value" : "")"
+                                                               min="0" value="@sz.Qty"
+                                                               @onchange="e => { if (int.TryParse(e.Value?.ToString(), out var v)) captured.Qty = v < 0 ? 0 : v; }" />
+                                                    </div>
+                                                }
+                                            </div>
+                                            <div class="ms-2 flex-shrink-0">
+                                                <span class="size-total">@line.TotalQty</span>
+                                                @if (line.LineTotal > 0)
+                                                {
+                                                    <div class="text-success fw-bold small mt-1 text-center">$@line.LineTotal.ToString("N2")</div>
+                                                }
+                                            </div>
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <div class="text-secondary small" style="font-style:italic;">Este producto no tiene corrida de tallas configurada. Verifica el catálogo de productos.</div>
+                                    }
+                                }
+
+                                @* Per-line shipping overrides *@
+                                <div class="mt-2">
+                                    <button type="button" class="line-override-toggle"
+                                            @onclick="() => line.ShowShippingOverrides = !line.ShowShippingOverrides">
+                                        @(line.ShowShippingOverrides ? "▲ Ocultar opciones de envío por renglón" : "▼ Opciones de envío / almacén / razón social por renglón")
+                                    </button>
+                                    @if (line.ShowShippingOverrides)
+                                    {
+                                        <div class="override-section row g-2">
+                                            <div class="col-md-3">
+                                                <label class="form-label fw-semibold small mb-1">Almacén (este renglón)</label>
+                                                <select class="form-select form-select-sm"
+                                                        value="@(line.WarehouseId?.ToString() ?? "")"
+                                                        @onchange='e => { line.WarehouseId = Guid.TryParse(e.Value?.ToString(), out var g) && g != Guid.Empty ? g : (Guid?)null; }'>
+                                                    <option value="">— Del encabezado —</option>
+                                                    @foreach (var w in _warehouses)
+                                                    {
+                                                        <option value="@w.WarehouseId">@w.Name</option>
+                                                    }
+                                                </select>
+                                            </div>
+                                            <div class="col-md-5">
+                                                <label class="form-label fw-semibold small mb-1">Dirección de envío (este renglón)</label>
+                                                <div class="d-flex gap-1">
+                                                    @if (_customerAddresses.Count > 0)
+                                                    {
+                                                        <select class="form-select form-select-sm flex-fill"
+                                                                value="@(line.ShipToAddressId?.ToString() ?? "")"
+                                                                @onchange="e => UpdateLineAddress(line, e.Value?.ToString())">
+                                                            <option value="">— Del encabezado —</option>
+                                                            @foreach (var a in _customerAddresses)
+                                                            {
+                                                                <option value="@a.AddressId">@(a.IsPrimary ? "★ " : "")@a.FullAddress</option>
+                                                            }
+                                                        </select>
+                                                    }
+                                                    else
+                                                    {
+                                                        <input class="form-control form-control-sm flex-fill" @bind="line.ShipToAddressText"
+                                                               placeholder="Ingresa dirección de envío..." />
+                                                    }
+                                                    <button type="button" class="btn btn-sm btn-outline-primary px-2" title="Nueva dirección"
+                                                            disabled="@(_formCustomerId == Guid.Empty)" @onclick="OpenQuickAddLocation">+</button>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-4">
+                                                <label class="form-label fw-semibold small mb-1">Razón social (este renglón)</label>
+                                                <div class="d-flex gap-1">
+                                                    @if (_customerLegalEntities.Count > 0)
+                                                    {
+                                                        <select class="form-select form-select-sm flex-fill"
+                                                                value="@(line.LegalEntityId?.ToString() ?? "")"
+                                                                @onchange="e => UpdateLineLegalEntity(line, e.Value?.ToString())">
+                                                            <option value="">— Del encabezado —</option>
+                                                            @foreach (var le in _customerLegalEntities)
+                                                            {
+                                                                <option value="@le.LegalEntityId">@(le.IsPrimary ? "★ " : "")@le.LegalName</option>
+                                                            }
+                                                        </select>
+                                                    }
+                                                    else
+                                                    {
+                                                        <input class="form-control form-control-sm flex-fill" @bind="line.LegalName"
+                                                               placeholder="@(!string.IsNullOrWhiteSpace(_formLegalName) ? _formLegalName : "Razón social para este renglón")" />
+                                                    }
+                                                    <button type="button" class="btn btn-sm btn-outline-primary px-2" title="Nueva razón social"
+                                                            disabled="@(_formCustomerId == Guid.Empty)" @onclick="OpenQuickAddLegalEntity">+</button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+                    }
+                }
+            </div>
+
+            @* ─── TOTALES ─────────────────────────────────────────────────────── *@
+            @if (_formLines.Count > 0)
+            {
+                <div class="totals-bar d-flex justify-content-end gap-4 mb-3">
+                    <div class="text-end">
+                        <div class="tlbl">Total pares</div>
+                        <div class="tval">@_formLines.Sum(l => l.TotalQty).ToString("N0")</div>
+                    </div>
+                    <div class="text-end">
+                        <div class="tlbl">Subtotal</div>
+                        <div class="tval">$@_formLines.Sum(l => l.LineTotal).ToString("N2")</div>
+                    </div>
+                    <div class="text-end" style="border-left:1px solid rgba(255,255,255,0.3); padding-left:1rem;">
+                        <div class="tlbl">Total del pedido</div>
+                        <div class="tval" style="font-size:1.6rem;">$@_formLines.Sum(l => l.LineTotal).ToString("N2")</div>
+                    </div>
+                </div>
+            }
+
+            @if (!string.IsNullOrWhiteSpace(_formError))
+            {
+                <div class="alert alert-danger py-2 mb-2">@_formError</div>
+            }
+            <div class="d-flex gap-2 justify-content-end">
+                <button class="btn btn-outline-secondary" @onclick="CloseForm" disabled="@_busy">Cancelar</button>
+                <button class="btn btn-success px-4 fw-semibold" disabled="@_busy" @onclick="SubmitFormAsync">
+                    @(_busy ? "Guardando..." : "✓ Crear pedido de producción")
+                </button>
+            </div>
+        </div>
+    }
+
+    @* ════════════════════════════════════════════════════════════════════════
+       FILTER + LIST
+    ════════════════════════════════════════════════════════════════════════ *@
+    @if (!_showForm)
+    {
+        <div class="d-flex gap-2 flex-wrap align-items-center mb-3">
+            @if (_tenantCompanies.Count > 1)
+            {
+                <select class="form-select form-select-sm" style="width:200px;" @onchange="OnCompanyFilterChangedAsync">
+                    @foreach (var c in _tenantCompanies)
+                    {
+                        <option value="@c.CompanyId" selected="@(c.CompanyId == _selectedCompanyId)">@c.Name</option>
+                    }
+                </select>
+            }
+            <select class="form-select form-select-sm" style="width:160px;" @bind="_statusFilter" @bind:after="LoadOrdersAsync">
+                <option value="">Todos los estados</option>
+                <option value="draft">Borrador</option>
+                <option value="planned">Planeada</option>
+                <option value="in_progress">En proceso</option>
+                <option value="completed">Completada</option>
+                <option value="closed">Cerrada</option>
+                <option value="cancelled">Cancelada</option>
+            </select>
+            <input class="form-control form-control-sm" style="width:180px;" placeholder="🔍 Buscar folio..." @bind="_searchFolio" @bind:event="oninput" />
+            <button class="btn btn-sm btn-outline-secondary" @onclick="LoadOrdersAsync">↺</button>
+        </div>
+
+        @if (_loading)
+        {
+            <div class="d-flex align-items-center gap-2 text-secondary py-4"><div class="spinner-border spinner-border-sm"></div> Cargando...</div>
+        }
+        else
+        {
+            var filtered = FilteredOrders;
+            @if (filtered.Count == 0)
+            {
+                <div class="form-card text-center py-5 text-secondary">
+                    <div style="font-size:2.5rem; opacity:0.25;">📋</div>
+                    <div class="mt-2">Sin pedidos registrados.</div>
+                    <button class="btn btn-primary mt-3 px-4" @onclick="OpenNewFormAsync">+ Crear primer pedido</button>
+                </div>
+            }
+            else
+            {
+                <div class="card shadow-sm" style="border-radius:12px; overflow:hidden; border:none;">
+                    <div class="table-responsive">
+                        <table class="table align-middle mb-0 orders-table">
+                            <thead>
+                                <tr>
+                                    <th>Folio</th>
+                                    <th>Semana</th>
+                                    <th>Estado</th>
+                                    <th>Prioridad</th>
+                                    <th class="text-end">Pares</th>
+                                    <th>Entrega</th>
+                                    <th>Creado</th>
+                                    <th style="width:200px;">Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var o in filtered)
+                                {
+                                    <tr>
+                                        <td><span class="fw-bold" style="font-family:monospace; font-size:0.85rem;">@o.Folio</span></td>
+                                        <td><span class="badge bg-light text-dark border" style="font-size:0.7rem;">@o.WeekCode</span></td>
+                                        <td><span class="badge-status" style="background:@StatusColor(o.Status);">@StatusLabel(o.Status)</span></td>
+                                        <td>
+                                            <span class="priority-dot" style="background:@PriorityColor(o.Priority);"></span>
+                                            <span class="small">@PriorityLabel(o.Priority)</span>
+                                        </td>
+                                        <td class="text-end fw-bold" style="color:#059669;">@o.TotalUnitsPlanned.ToString("N0")</td>
+                                        <td class="small text-secondary">@o.DeliveryDate.ToString("dd/MM/yy")</td>
+                                        <td class="small text-secondary">@o.CreatedAt.ToString("dd/MM/yy")</td>
+                                        <td>
+                                            <div class="d-flex gap-1 flex-wrap">
+                                                @if (o.Status == "draft")
+                                                {
+                                                    <button class="btn btn-sm btn-outline-primary" style="font-size:0.72rem; padding:0.15rem 0.5rem;" disabled="@_busy" @onclick='() => DoActionAsync(o.ProductionOrderId, "confirm")'>Confirmar</button>
+                                                }
+                                                @if (o.Status == "planned")
+                                                {
+                                                    <button class="btn btn-sm btn-warning" style="font-size:0.72rem; padding:0.15rem 0.5rem;" disabled="@_busy" @onclick='() => DoActionAsync(o.ProductionOrderId, "explode")'>Explotar</button>
+                                                    <button class="btn btn-sm btn-success" style="font-size:0.72rem; padding:0.15rem 0.5rem;" disabled="@_busy" @onclick='() => DoActionAsync(o.ProductionOrderId, "start")'>Iniciar</button>
+                                                }
+                                                @if (o.Status == "in_progress")
+                                                {
+                                                    <button class="btn btn-sm btn-success" style="font-size:0.72rem; padding:0.15rem 0.5rem;" disabled="@_busy" @onclick='() => DoActionAsync(o.ProductionOrderId, "complete")'>Completar</button>
+                                                }
+                                                @if (o.Status is "draft" or "planned")
+                                                {
+                                                    <button class="btn btn-sm btn-outline-danger" style="font-size:0.72rem; padding:0.15rem 0.5rem;" disabled="@_busy" @onclick="() => StartCancel(o.ProductionOrderId, o.Folio)">Cancelar</button>
+                                                }
+                                            </div>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="px-3 py-2 text-secondary small border-top" style="background:#f8fafc;">
+                        @filtered.Count pedido(s) · @filtered.Sum(o => o.TotalUnitsPlanned).ToString("N0") pares totales
+                    </div>
+                </div>
+            }
+        }
+    }
+
+    @* ── Cancel confirm ───────────────────────────────────────────────────── *@
+    @if (_cancelId != Guid.Empty)
+    {
+        <div class="modal fade show d-block" tabindex="-1" style="background:rgba(0,0,0,.5);">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header"><h5 class="modal-title" style="font-size:1rem;">Cancelar @_cancelFolio</h5><button class="btn-close" @onclick="() => _cancelId = Guid.Empty"></button></div>
+                    <div class="modal-body">
+                        <label class="form-label small fw-semibold">Motivo</label>
+                        <input class="form-control" @bind="_cancelReason" placeholder="Motivo de cancelación..." />
+                    </div>
+                    <div class="modal-footer">
+                        <button class="btn btn-secondary" @onclick="() => _cancelId = Guid.Empty">No cancelar</button>
+                        <button class="btn btn-danger" disabled="@_busy" @onclick="ExecuteCancelAsync">Sí, cancelar</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+
+    @* ── Quick-add: razón social ─────────────────────────────────────────────── *@
+    @if (_showQaLegalEntity)
+    {
+        <div class="qa-overlay" @onclick="() => _showQaLegalEntity = false">
+            <div class="qa-box" @onclick:stopPropagation>
+                <h6>Nueva razón social</h6>
+                @if (!string.IsNullOrWhiteSpace(_qaLeError))
+                {
+                    <div class="alert alert-danger py-1 mb-2 small">@_qaLeError</div>
+                }
+                <div class="mb-2">
+                    <label class="form-label small fw-semibold mb-1">Razón social <span class="text-danger">*</span></label>
+                    <input class="form-control form-control-sm" @bind="_qaLeName" placeholder="Nombre completo de la empresa" />
+                </div>
+                <div class="mb-3">
+                    <label class="form-label small fw-semibold mb-1">RFC</label>
+                    <input class="form-control form-control-sm" @bind="_qaLeTaxId" placeholder="XAXX010101000" style="text-transform:uppercase;" />
+                </div>
+                <div class="d-flex gap-2 justify-content-end">
+                    <button class="btn btn-sm btn-outline-secondary" @onclick='() => _showQaLegalEntity = false'>Cancelar</button>
+                    <button class="btn btn-sm btn-primary" disabled="@_qaLeBusy" @onclick="SaveQuickLegalEntityAsync">
+                        @(_qaLeBusy ? "Guardando..." : "Guardar")
+                    </button>
+                </div>
+            </div>
+        </div>
+    }
+
+    @* ── Quick-add: dirección de envío ───────────────────────────────────────── *@
+    @if (_showQaLocation)
+    {
+        <div class="qa-overlay" @onclick="() => _showQaLocation = false">
+            <div class="qa-box" @onclick:stopPropagation>
+                <h6>Nueva dirección de envío</h6>
+                @if (!string.IsNullOrWhiteSpace(_qaLocError))
+                {
+                    <div class="alert alert-danger py-1 mb-2 small">@_qaLocError</div>
+                }
+                <div class="row g-2 mb-3">
+                    <div class="col-12">
+                        <label class="form-label small fw-semibold mb-1">Nombre de la ubicación</label>
+                        <input class="form-control form-control-sm" @bind="_qaLocName" placeholder="Ej. Sucursal Centro, Almacén Norte..." />
+                    </div>
+                    <div class="col-8">
+                        <label class="form-label small fw-semibold mb-1">Calle <span class="text-danger">*</span></label>
+                        <input class="form-control form-control-sm" @bind="_qaLocStreet" placeholder="Nombre de la calle" />
+                    </div>
+                    <div class="col-4">
+                        <label class="form-label small fw-semibold mb-1">Núm. exterior</label>
+                        <input class="form-control form-control-sm" @bind="_qaLocExtNum" placeholder="123" />
+                    </div>
+                    <div class="col-8">
+                        <label class="form-label small fw-semibold mb-1">Colonia</label>
+                        <input class="form-control form-control-sm" @bind="_qaLocNeighborhood" placeholder="Colonia / Fracc." />
+                    </div>
+                    <div class="col-4">
+                        <label class="form-label small fw-semibold mb-1">C.P.</label>
+                        <input class="form-control form-control-sm" @bind="_qaLocZip" placeholder="00000" />
+                    </div>
+                </div>
+                <div class="d-flex gap-2 justify-content-end">
+                    <button class="btn btn-sm btn-outline-secondary" @onclick='() => _showQaLocation = false'>Cancelar</button>
+                    <button class="btn btn-sm btn-primary" disabled="@_qaLocBusy" @onclick="SaveQuickLocationAsync">
+                        @(_qaLocBusy ? "Guardando..." : "Guardar")
+                    </button>
+                </div>
+            </div>
+        </div>
+    }
+
+    @* ── Print modal ──────────────────────────────────────────────────────── *@
+    @if (_showPrint && _lastCreatedOrder is not null)
+    {
+        <div class="modal fade show d-block" tabindex="-1" style="background:rgba(0,0,0,.6);">
+            <div class="modal-dialog modal-xl modal-dialog-scrollable">
+                <div class="modal-content">
+                    <div class="modal-header no-print" style="background:#1e3a5f; color:#fff;">
+                        <h5 class="modal-title">Pedido de producción — @_lastCreatedOrder.Folio</h5>
+                        <div class="d-flex gap-2 ms-auto">
+                            <button class="btn btn-sm btn-light" onclick="window.print()">🖨 Imprimir</button>
+                            <button class="btn-close btn-close-white" @onclick="ClosePrintAndContinue"></button>
+                        </div>
+                    </div>
+                    <div class="modal-body print-area" style="padding:1.5rem 2rem;">
+                        @* Print header *@
+                        <div class="d-flex justify-content-between align-items-start mb-3">
+                            <div>
+                                <div style="font-size:1.4rem; font-weight:900; color:#1e3a5f;">PEDIDO DE PRODUCCIÓN</div>
+                                <div style="font-size:0.85rem; color:#6b7280;">Nanchesoft ERP · Producción</div>
+                            </div>
+                            <div class="text-end">
+                                <div style="font-size:1.6rem; font-weight:900; font-family:monospace; color:#2563eb;">@_lastCreatedOrder.Folio</div>
+                                <div class="small text-secondary">Fecha: @DateTime.Now.ToString("dd/MM/yyyy HH:mm")</div>
+                                <span class="badge-status" style="background:#6b7280; font-size:0.8rem;">BORRADOR</span>
+                            </div>
+                        </div>
+                        <hr />
+                        <div class="row g-3 mb-3">
+                            <div class="col-md-4">
+                                <div class="small text-secondary text-uppercase fw-semibold" style="font-size:0.65rem;">Cliente</div>
+                                <div class="fw-semibold">@(_tenantCustomers.FirstOrDefault(c => c.CustomerId == _formCustomerId)?.Name ?? "—")</div>
+                                @if (!string.IsNullOrWhiteSpace(_formLegalName))
+                                {
+                                    <div class="small text-secondary">@_formLegalName</div>
+                                }
+                            </div>
+                            <div class="col-md-3">
+                                <div class="small text-secondary text-uppercase fw-semibold" style="font-size:0.65rem;">Referencia</div>
+                                <div class="fw-semibold">@_lastCreatedOrder.CustomerReference</div>
+                            </div>
+                            <div class="col-md-2">
+                                <div class="small text-secondary text-uppercase fw-semibold" style="font-size:0.65rem;">Semana</div>
+                                <div class="fw-semibold">@_formWeekCode</div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="small text-secondary text-uppercase fw-semibold" style="font-size:0.65rem;">Fecha entrega</div>
+                                <div class="fw-semibold">@_formDeliveryDate.ToString("dd/MM/yyyy")</div>
+                            </div>
+                            @if (!string.IsNullOrWhiteSpace(_formShipToAddressText))
+                            {
+                                <div class="col-12">
+                                    <div class="small text-secondary text-uppercase fw-semibold" style="font-size:0.65rem;">Dirección de envío</div>
+                                    <div class="fw-semibold small">@_formShipToAddressText</div>
+                                </div>
+                            }
+                        </div>
+
+                        @* Lines table *@
+                        <div class="table-responsive">
+                            <table class="table table-sm table-bordered align-middle" style="font-size:0.78rem;">
+                                <thead style="background:#1e293b; color:#fff;">
+                                    <tr>
+                                        <th style="width:40px;">#</th>
+                                        <th style="width:70px;">NC</th>
+                                        <th>Producto</th>
+                                        <th>P.O.</th>
+                                        @foreach (var s in AllPrintSizes)
+                                        {
+                                            <th class="text-center" style="min-width:36px;">@s</th>
+                                        }
+                                        <th class="text-center">Pares</th>
+                                        <th class="text-end">Precio</th>
+                                        <th class="text-end">Desc.</th>
+                                        <th class="text-end">Importe</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var (line, i) in _lastCreatedOrder.PrintLines.Select((l, i) => (l, i)))
+                                    {
+                                        <tr>
+                                            <td class="text-center fw-bold text-secondary">@(i+1)</td>
+                                            <td class="text-center" style="font-family:monospace; font-size:0.72rem; color:#2563eb;">@line.NcFolio</td>
+                                            <td><span style="font-family:monospace; color:#1e40af; font-size:0.75rem;">@line.ProductCode</span> @line.ProductName</td>
+                                            <td class="small">@line.CustomerPoReference</td>
+                                            @foreach (var s in AllPrintSizes)
+                                            {
+                                                var qty = line.SizeQtys.TryGetValue(s, out var q) ? q : 0;
+                                                <td class="text-center @(qty > 0 ? "fw-bold" : "text-secondary")" style="@(qty > 0 ? "background:#e0f2f1; color:#065f46;" : "")">
+                                                    @(qty > 0 ? qty.ToString() : "—")
+                                                </td>
+                                            }
+                                            <td class="text-center fw-bold" style="background:#059669; color:#fff;">@line.TotalQty</td>
+                                            <td class="text-end">$@line.UnitPrice.ToString("N2")</td>
+                                            <td class="text-end">@(line.DiscountPercent > 0 ? line.DiscountPercent.ToString("N1") + "%" : "—")</td>
+                                            <td class="text-end fw-bold">$@line.LineTotal.ToString("N2")</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                                <tfoot style="background:#f8fafc; font-weight:700;">
+                                    <tr>
+                                        <td colspan="@(4 + AllPrintSizes.Count)" class="text-end">TOTALES</td>
+                                        <td class="text-center" style="background:#059669; color:#fff;">@_lastCreatedOrder.PrintLines.Sum(l => l.TotalQty)</td>
+                                        <td colspan="2"></td>
+                                        <td class="text-end" style="font-size:0.9rem; color:#065f46;">$@_lastCreatedOrder.PrintLines.Sum(l => l.LineTotal).ToString("N2")</td>
+                                    </tr>
+                                </tfoot>
+                            </table>
+                        </div>
+
+                        @if (!string.IsNullOrWhiteSpace(_formNotes))
+                        {
+                            <div class="mt-2 p-2 bg-light border rounded small"><strong>Observaciones:</strong> @_formNotes</div>
+                        }
+                    </div>
+                    <div class="modal-footer no-print">
+                        <button class="btn btn-outline-secondary" @onclick="ClosePrintAndContinue">Cerrar e iniciar otro pedido</button>
+                        <button class="btn btn-primary" onclick="window.print()">🖨 Imprimir pedido</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+
+</div>
+
+@code {
+    // ─── State ────────────────────────────────────────────────────────────────
+    private bool _loading = true;
+    private bool _busy;
+    private string _message = string.Empty;
+    private string _error = string.Empty;
+
+    private List<CompanyOption> _allCompanies = [];
+    private List<CompanyOption> _tenantCompanies = [];
+    private Guid _selectedCompanyId;
+    private string _statusFilter = string.Empty;
+    private string _searchFolio = string.Empty;
+    private List<OrderSummary> _orders = [];
+
+    // Form
+    private bool _showForm;
+    private string _formError = string.Empty;
+    private Guid _formCompanyId;
+    private Guid _formBranchId;
+    private Guid? _formWarehouseId;
+    private Guid _formCustomerId;
+    private string _formReference = string.Empty;
+    private string _formSeason = string.Empty;
+    private string _formWeekCode = string.Empty;
+    private DateOnly _formStartDate;
+    private DateOnly _formEndDate;
+    private DateOnly _formDeliveryDate;
+    private DateOnly? _formCancellationDate;
+    private int _formPriority = 1;
+    private string _formNotes = string.Empty;
+    private string _formLegalName = string.Empty;
+    private Guid? _formShipToAddressId;
+    private string _formShipToAddressText = string.Empty;
+    private List<OrderLineForm> _formLines = [];
+
+    // Catalogs
+    private List<BranchOption> _branches = [];
+    private List<WarehouseOption> _warehouses = [];
+    private List<CustomerOption> _allCustomers = [];
+    private List<CustomerOption> _tenantCustomers = [];
+    private List<AddressOption> _customerAddresses = [];
+    private List<LegalEntityOption> _customerLegalEntities = [];
+    private Guid? _formLegalEntityId;
+    private List<FinishedProductOption> _products = [];
+
+    // Quick-add legal entity
+    private bool _showQaLegalEntity;
+    private string _qaLeName = string.Empty;
+    private string _qaLeTaxId = string.Empty;
+    private bool _qaLeBusy;
+    private string _qaLeError = string.Empty;
+
+    // Quick-add location
+    private bool _showQaLocation;
+    private string _qaLocName = string.Empty;
+    private string _qaLocStreet = string.Empty;
+    private string _qaLocExtNum = string.Empty;
+    private string _qaLocNeighborhood = string.Empty;
+    private string _qaLocZip = string.Empty;
+    private bool _qaLocBusy;
+    private string _qaLocError = string.Empty;
+
+    // Cancel
+    private Guid _cancelId;
+    private string _cancelFolio = string.Empty;
+    private string _cancelReason = string.Empty;
+
+    // Print
+    private bool _showPrint;
+    private PrintOrderData? _lastCreatedOrder;
+
+    // Computed
+    private List<OrderSummary> FilteredOrders
+    {
+        get
+        {
+            var r = _orders.AsEnumerable();
+            if (!string.IsNullOrWhiteSpace(_searchFolio))
+                r = r.Where(o => o.Folio.Contains(_searchFolio, StringComparison.OrdinalIgnoreCase));
+            return r.ToList();
+        }
+    }
+
+    private List<string> AllPrintSizes => _lastCreatedOrder?.PrintLines
+        .SelectMany(l => l.SizeQtys.Keys)
+        .Distinct()
+        .OrderBy(s => s.Length).ThenBy(s => s)
+        .ToList() ?? [];
+
+    // ─── Init ─────────────────────────────────────────────────────────────────
+    protected override async Task OnInitializedAsync()
+    {
+        var client = HttpClientFactory.CreateClient("Nanchesoft.Api");
+        var t1 = client.GetFromJsonAsync<List<CompanyOption>>("/api/organization/companies");
+        var t2 = client.GetFromJsonAsync<List<FinishedProductOption>>("/api/products/finished-products/options");
+        var t3 = client.GetFromJsonAsync<List<CustomerOption>>("/api/third-parties/customers");
+        await Task.WhenAll(t1, t2, t3);
+
+        _allCompanies = t1.Result ?? [];
+        _products = t2.Result ?? [];
+        _allCustomers = (t3.Result ?? []).Where(c => c.IsActive).ToList();
+
+        // Filter by current tenant
+        var tenantId = AuthState.TenantId;
+        _tenantCompanies = tenantId.HasValue
+            ? _allCompanies.Where(c => c.TenantId == tenantId.Value).ToList()
+            : _allCompanies;
+
+        _tenantCustomers = tenantId.HasValue
+            ? _allCustomers.Where(c => c.TenantId == tenantId.Value).ToList()
+            : _allCustomers;
+
+        if (_tenantCompanies.Count > 0) _selectedCompanyId = _tenantCompanies[0].CompanyId;
+        await LoadOrdersAsync();
+    }
+
+    private async Task LoadOrdersAsync()
+    {
+        _loading = true; _error = string.Empty;
+        try
+        {
+            var client = HttpClientFactory.CreateClient("Nanchesoft.Api");
+            var url = $"/api/production/orders?pageSize=200&companyId={_selectedCompanyId}";
+            if (!string.IsNullOrWhiteSpace(_statusFilter)) url += $"&status={_statusFilter}";
+            var resp = await client.GetFromJsonAsync<OrderListResult>(url);
+            _orders = resp?.Items ?? [];
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _loading = false; }
+    }
+
+    private async Task OnCompanyFilterChangedAsync(ChangeEventArgs e)
+    {
+        if (Guid.TryParse(e.Value?.ToString(), out var id))
+        {
+            _selectedCompanyId = id;
+            await LoadOrdersAsync();
+        }
+    }
+
+    // ─── Form open/close ──────────────────────────────────────────────────────
+    private async Task OpenNewFormAsync()
+    {
+        _formError = string.Empty;
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        var dow = (int)DateTime.Today.DayOfWeek;
+        var monday = today.AddDays(dow == 0 ? -6 : 1 - dow);
+        var weekNum = System.Globalization.ISOWeek.GetWeekOfYear(monday.ToDateTime(TimeOnly.MinValue));
+
+        _formCompanyId = _selectedCompanyId != Guid.Empty ? _selectedCompanyId : (_tenantCompanies.Count > 0 ? _tenantCompanies[0].CompanyId : Guid.Empty);
+        _formWeekCode = $"{today.Year}-W{weekNum:D2}";
+        _formSeason = today.Year.ToString();
+        _formStartDate = monday;
+        _formEndDate = monday.AddDays(4);
+        _formDeliveryDate = monday.AddDays(7);
+        _formCancellationDate = null;
+        _formPriority = 1;
+        _formNotes = string.Empty;
+        _formReference = string.Empty;
+        _formCustomerId = Guid.Empty;
+        _formWarehouseId = null;
+        _formLegalName = string.Empty;
+        _formLegalEntityId = null;
+        _formShipToAddressId = null;
+        _formShipToAddressText = string.Empty;
+        _customerAddresses = [];
+        _customerLegalEntities = [];
+        _formLines = [new OrderLineForm()];
+
+        var client = HttpClientFactory.CreateClient("Nanchesoft.Api");
+        var bt = client.GetFromJsonAsync<List<BranchOption>>($"/api/organization/branches?companyId={_formCompanyId}");
+        var wt = client.GetFromJsonAsync<List<WarehouseOption>>("/api/organization/warehouses");
+        await Task.WhenAll(bt, wt);
+        _branches = bt.Result ?? [];
+        _warehouses = wt.Result ?? [];
+        _formBranchId = _branches.Count > 0 ? _branches[0].BranchId : Guid.Empty;
+        _showForm = true;
+    }
+
+    private void CloseForm() { _showForm = false; _formLines = []; _customerAddresses = []; }
+
+    // ─── Form helpers ─────────────────────────────────────────────────────────
+    private async Task OnFormCompanyChangedAsync()
+    {
+        var client = HttpClientFactory.CreateClient("Nanchesoft.Api");
+        _branches = await client.GetFromJsonAsync<List<BranchOption>>($"/api/organization/branches?companyId={_formCompanyId}") ?? [];
+        _formBranchId = _branches.Count > 0 ? _branches[0].BranchId : Guid.Empty;
+    }
+
+    private async Task OnFormCustomerChangedAsync()
+    {
+        var cust = _tenantCustomers.FirstOrDefault(c => c.CustomerId == _formCustomerId);
+
+        _formLegalEntityId = null;
+        _formLegalName = string.Empty;
+        _formShipToAddressId = null;
+        _formShipToAddressText = string.Empty;
+        _customerAddresses = [];
+        _customerLegalEntities = [];
+
+        if (_formCustomerId != Guid.Empty && _formCustomerId != default)
+        {
+            try
+            {
+                var client = HttpClientFactory.CreateClient("Nanchesoft.Api");
+                var t1 = client.GetFromJsonAsync<List<AddressOption>>($"/api/production/customer-addresses/{_formCustomerId}");
+                var t2 = client.GetFromJsonAsync<List<LegalEntityOption>>($"/api/third-parties/customers/{_formCustomerId}/legal-entities");
+                await Task.WhenAll(t1, t2);
+
+                _customerAddresses = t1.Result ?? [];
+                _customerLegalEntities = t2.Result ?? [];
+
+                var primary = _customerAddresses.FirstOrDefault(a => a.IsPrimary) ?? _customerAddresses.FirstOrDefault();
+                if (primary is not null) { _formShipToAddressId = primary.AddressId; _formShipToAddressText = primary.FullAddress; }
+
+                var primaryLe = _customerLegalEntities.FirstOrDefault(x => x.IsPrimary) ?? _customerLegalEntities.FirstOrDefault();
+                if (primaryLe is not null) { _formLegalEntityId = primaryLe.LegalEntityId; _formLegalName = primaryLe.LegalName; }
+                else _formLegalName = cust?.LegalName ?? string.Empty;
+            }
+            catch { _formLegalName = cust?.LegalName ?? string.Empty; }
+
+            foreach (var line in _formLines.Where(l => l.FinishedProductId != Guid.Empty && l.UnitPrice == 0))
+                await TryLoadPriceAsync(line);
+        }
+    }
+
+    private async Task OnHeaderAddressChangedAsync(ChangeEventArgs e)
+    {
+        if (Guid.TryParse(e.Value?.ToString(), out var g) && g != Guid.Empty)
+        {
+            _formShipToAddressId = g;
+            var addr = _customerAddresses.FirstOrDefault(a => a.AddressId == g);
+            _formShipToAddressText = addr?.FullAddress ?? string.Empty;
+        }
+        else
+        {
+            _formShipToAddressId = null;
+            _formShipToAddressText = string.Empty;
+        }
+        await Task.CompletedTask;
+    }
+
+    private async Task OnHeaderLegalEntityChangedAsync(ChangeEventArgs e)
+    {
+        if (Guid.TryParse(e.Value?.ToString(), out var g) && g != Guid.Empty)
+        {
+            _formLegalEntityId = g;
+            var le = _customerLegalEntities.FirstOrDefault(x => x.LegalEntityId == g);
+            _formLegalName = le?.LegalName ?? string.Empty;
+        }
+        else { _formLegalEntityId = null; _formLegalName = string.Empty; }
+        await Task.CompletedTask;
+    }
+
+    private void UpdateLineLegalEntity(OrderLineForm line, string? value)
+    {
+        if (Guid.TryParse(value, out var g) && g != Guid.Empty)
+        {
+            line.LegalEntityId = g;
+            var le = _customerLegalEntities.FirstOrDefault(x => x.LegalEntityId == g);
+            line.LegalName = le?.LegalName ?? string.Empty;
+        }
+        else { line.LegalEntityId = null; line.LegalName = string.Empty; }
+    }
+
+    private void OpenQuickAddLegalEntity()
+    {
+        _qaLeName = string.Empty; _qaLeTaxId = string.Empty; _qaLeError = string.Empty;
+        _showQaLegalEntity = true;
+    }
+
+    private async Task SaveQuickLegalEntityAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_qaLeName)) { _qaLeError = "El nombre es obligatorio."; return; }
+        _qaLeBusy = true; _qaLeError = string.Empty;
+        try
+        {
+            var client = HttpClientFactory.CreateClient("Nanchesoft.Api");
+            var resp = await client.PostAsJsonAsync(
+                $"/api/third-parties/customers/{_formCustomerId}/quick-add-legal-entity",
+                new { legalName = _qaLeName, taxId = _qaLeTaxId, isPrimary = false, userId = "web" });
+            if (resp.IsSuccessStatusCode)
+            {
+                var dto = await resp.Content.ReadFromJsonAsync<LegalEntityOption>();
+                if (dto is not null)
+                {
+                    _customerLegalEntities.Add(dto);
+                    _formLegalEntityId = dto.LegalEntityId;
+                    _formLegalName = dto.LegalName;
+                }
+                _showQaLegalEntity = false;
+            }
+            else
+            {
+                var body = await resp.Content.ReadFromJsonAsync<JsonElement>();
+                _qaLeError = body.TryGetProperty("message", out var m) ? m.GetString() ?? "Error" : "Error al guardar.";
+            }
+        }
+        catch (Exception ex) { _qaLeError = ex.Message; }
+        finally { _qaLeBusy = false; }
+    }
+
+    private void OpenQuickAddLocation()
+    {
+        _qaLocName = _qaLocStreet = _qaLocExtNum = _qaLocNeighborhood = _qaLocZip = _qaLocError = string.Empty;
+        _showQaLocation = true;
+    }
+
+    private async Task SaveQuickLocationAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_qaLocStreet) && string.IsNullOrWhiteSpace(_qaLocName))
+        { _qaLocError = "Ingresa al menos el nombre de la ubicación o la calle."; return; }
+        _qaLocBusy = true; _qaLocError = string.Empty;
+        try
+        {
+            var client = HttpClientFactory.CreateClient("Nanchesoft.Api");
+            var resp = await client.PostAsJsonAsync(
+                $"/api/third-parties/customers/{_formCustomerId}/quick-add-location",
+                new { locationName = _qaLocName, street = _qaLocStreet, exteriorNumber = _qaLocExtNum, neighborhood = _qaLocNeighborhood, zipCode = _qaLocZip, isPrimary = false, userId = "web" });
+            if (resp.IsSuccessStatusCode)
+            {
+                var dto = await resp.Content.ReadFromJsonAsync<QuickLocationResult>();
+                if (dto is not null)
+                {
+                    var opt = new AddressOption(dto.LocationId, "shipping", dto.IsPrimary, dto.FullAddress);
+                    _customerAddresses.Add(opt);
+                    _formShipToAddressId = opt.AddressId;
+                    _formShipToAddressText = opt.FullAddress;
+                }
+                _showQaLocation = false;
+            }
+            else
+            {
+                var body = await resp.Content.ReadFromJsonAsync<JsonElement>();
+                _qaLocError = body.TryGetProperty("message", out var m) ? m.GetString() ?? "Error" : "Error al guardar.";
+            }
+        }
+        catch (Exception ex) { _qaLocError = ex.Message; }
+        finally { _qaLocBusy = false; }
+    }
+
+    private void UpdateLineAddress(OrderLineForm line, string? value)
+    {
+        if (Guid.TryParse(value, out var g) && g != Guid.Empty)
+        {
+            line.ShipToAddressId = g;
+            var addr = _customerAddresses.FirstOrDefault(a => a.AddressId == g);
+            line.ShipToAddressText = addr?.FullAddress ?? string.Empty;
+        }
+        else
+        {
+            line.ShipToAddressId = null;
+            line.ShipToAddressText = string.Empty;
+        }
+    }
+
+    private void PropagateReferenceToLines()
+    {
+        foreach (var line in _formLines.Where(l => string.IsNullOrWhiteSpace(l.CustomerPoReference)))
+            line.CustomerPoReference = _formReference;
+    }
+
+    private void AddLine()
+    {
+        var line = new OrderLineForm
+        {
+            CustomerPoReference = _formReference,
+            WarehouseId = _formWarehouseId,
+            ShipToAddressId = _formShipToAddressId,
+            ShipToAddressText = _formShipToAddressText,
+            LegalEntityId = _formLegalEntityId,
+            LegalName = _formLegalName
+        };
+        _formLines.Add(line);
+    }
+
+    private void RemoveLine(OrderLineForm line) => _formLines.Remove(line);
+
+    private List<FinishedProductOption> FilteredProducts(string search)
+    {
+        if (string.IsNullOrWhiteSpace(search)) return [];
+        var q = search.Trim().ToLowerInvariant();
+        return _products
+            .Where(p => p.Code.ToLowerInvariant().Contains(q) || p.Name.ToLowerInvariant().Contains(q))
+            .Take(12)
+            .ToList();
+    }
+
+    private async Task SelectProductAsync(OrderLineForm line, FinishedProductOption product)
+    {
+        line.FinishedProductId = product.FinishedProductId;
+        line.ProductCode = product.Code;
+        line.ProductName = product.Name;
+        line.ProductSearch = string.Empty;
+        line.ShowDropdown = false;
+        line.Sizes = [];
+        line.LoadingSizes = true;
+        StateHasChanged();
+
+        try
+        {
+            var client = HttpClientFactory.CreateClient("Nanchesoft.Api");
+            var result = await client.GetFromJsonAsync<ProductSizesResult>($"/api/production/product-sizes/{product.FinishedProductId}");
+            if (result?.Sizes is { Count: > 0 })
+            {
+                line.ProductSizeRunId = result.ProductSizeRunId;
+                line.ProductStyleId = result.ProductStyleId;
+                line.Sizes = result.Sizes.Select(s => new SizeQty
+                {
+                    SizeRunSizeId = s.SizeRunSizeId,
+                    SizeCode = s.SizeCode,
+                    Qty = 0
+                }).ToList();
+            }
+
+            if (_formCustomerId != Guid.Empty && line.UnitPrice == 0)
+                await TryLoadPriceAsync(line);
+        }
+        catch { }
+        finally
+        {
+            line.LoadingSizes = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task TryLoadPriceAsync(OrderLineForm line)
+    {
+        try
+        {
+            var client = HttpClientFactory.CreateClient("Nanchesoft.Api");
+            var priceResp = await client.GetFromJsonAsync<PriceLookupResult>(
+                $"/api/production/product-price?finishedProductId={line.FinishedProductId}&customerId={_formCustomerId}");
+            if (priceResp?.Found == true && priceResp.Price > 0)
+                line.UnitPrice = priceResp.Price;
+        }
+        catch { }
+    }
+
+    private void ClearProduct(OrderLineForm line)
+    {
+        line.FinishedProductId = Guid.Empty;
+        line.ProductCode = string.Empty;
+        line.ProductName = string.Empty;
+        line.ProductSearch = string.Empty;
+        line.Sizes = [];
+        line.ProductSizeRunId = null;
+        line.UnitPrice = 0;
+    }
+
+    // ─── Submit ───────────────────────────────────────────────────────────────
+    private async Task SubmitFormAsync()
+    {
+        _formError = string.Empty;
+
+        if (_formCompanyId == Guid.Empty) { _formError = "Selecciona una empresa."; return; }
+        if (_formBranchId == Guid.Empty) { _formError = "Selecciona una sucursal."; return; }
+        if (_formCustomerId == Guid.Empty) { _formError = "El cliente es obligatorio."; return; }
+        if (string.IsNullOrWhiteSpace(_formReference)) { _formError = "La referencia del cliente es obligatoria."; return; }
+        if (_formDeliveryDate == default) { _formError = "La fecha de entrega es obligatoria."; return; }
+        if (_formLines.Count == 0) { _formError = "Agrega al menos una línea."; return; }
+        if (_formLines.Any(l => l.FinishedProductId == Guid.Empty)) { _formError = "Todas las líneas deben tener un producto seleccionado."; return; }
+        if (_formLines.Any(l => string.IsNullOrWhiteSpace(l.CustomerPoReference))) { _formError = "Todas las líneas requieren el campo P.O. (pedido del cliente)."; return; }
+        if (_formLines.All(l => l.TotalQty == 0)) { _formError = "Captura al menos una cantidad en las líneas."; return; }
+
+        _busy = true;
+        try
+        {
+            var client = HttpClientFactory.CreateClient("Nanchesoft.Api");
+            var notesText = string.IsNullOrWhiteSpace(_formSeason) ? _formNotes : $"[Temporada: {_formSeason}] {_formNotes}".Trim();
+
+            var payload = new
+            {
+                companyId = _formCompanyId,
+                branchId = _formBranchId,
+                warehouseId = _formWarehouseId,
+                customerId = _formCustomerId == Guid.Empty ? (Guid?)null : _formCustomerId,
+                customerReference = _formReference,
+                weekCode = _formWeekCode,
+                season = _formSeason,
+                startDate = _formStartDate,
+                endDate = _formEndDate,
+                deliveryDate = _formDeliveryDate,
+                cancellationDate = _formCancellationDate,
+                priority = _formPriority,
+                notes = notesText,
+                legalName = _formLegalName,
+                shipToAddressId = _formShipToAddressId,
+                shipToAddressText = _formShipToAddressText,
+                userId = "web",
+                lines = _formLines.Select(l => new
+                {
+                    finishedProductId = l.FinishedProductId,
+                    productStyleId = l.ProductStyleId,
+                    productSizeRunId = l.ProductSizeRunId,
+                    customerId = _formCustomerId == Guid.Empty ? (Guid?)null : _formCustomerId,
+                    customerPoReference = l.CustomerPoReference,
+                    unitPrice = l.UnitPrice,
+                    discountPercent = l.DiscountPercent,
+                    notes = l.Notes,
+                    deliveryDate = _formDeliveryDate,
+                    priority = _formPriority,
+                    warehouseId = l.WarehouseId ?? _formWarehouseId,
+                    shipToAddressId = l.ShipToAddressId ?? _formShipToAddressId,
+                    shipToAddressText = !string.IsNullOrWhiteSpace(l.ShipToAddressText) ? l.ShipToAddressText : _formShipToAddressText,
+                    legalName = !string.IsNullOrWhiteSpace(l.LegalName) ? l.LegalName : _formLegalName,
+                    quantitiesPerSize = l.Sizes
+                        .Where(s => s.SizeRunSizeId != Guid.Empty && s.Qty > 0)
+                        .ToDictionary(s => s.SizeRunSizeId.ToString(), s => s.Qty),
+                    userId = "web"
+                }).ToList()
+            };
+
+            var resp = await client.PostAsJsonAsync("/api/production/orders", payload);
+            if (resp.IsSuccessStatusCode)
+            {
+                var body = await resp.Content.ReadFromJsonAsync<CreateOrderResult>();
+                if (body is not null)
+                {
+                    _lastCreatedOrder = new PrintOrderData
+                    {
+                        Folio = body.Folio,
+                        CustomerReference = _formReference,
+                        PrintLines = _formLines.Select((l, i) =>
+                        {
+                            var apiLine = body.Lines?.ElementAtOrDefault(i);
+                            return new PrintLineData
+                            {
+                                NcFolio = apiLine?.NcFolio ?? $"NC-{i + 1:D6}",
+                                ProductCode = l.ProductCode,
+                                ProductName = l.ProductName,
+                                CustomerPoReference = l.CustomerPoReference,
+                                UnitPrice = l.UnitPrice,
+                                DiscountPercent = l.DiscountPercent,
+                                TotalQty = l.TotalQty,
+                                LineTotal = l.LineTotal,
+                                SizeQtys = l.Sizes.Where(s => s.Qty > 0).ToDictionary(s => s.SizeCode, s => s.Qty)
+                            };
+                        }).ToList()
+                    };
+                    _showPrint = true;
+                    CloseForm();
+                    await LoadOrdersAsync();
+                }
+            }
+            else
+            {
+                var body = await resp.Content.ReadFromJsonAsync<JsonElement>();
+                _formError = body.TryGetProperty("message", out var m) ? m.GetString() ?? "Error." : "Error al guardar.";
+            }
+        }
+        catch (Exception ex) { _formError = ex.Message; }
+        finally { _busy = false; }
+    }
+
+    private void ClosePrintAndContinue()
+    {
+        _showPrint = false;
+        _lastCreatedOrder = null;
+        _message = "Pedido creado. Puedes capturar otro.";
+    }
+
+    // ─── Actions ──────────────────────────────────────────────────────────────
+    private async Task DoActionAsync(Guid orderId, string action)
+    {
+        _busy = true; _message = _error = string.Empty;
+        try
+        {
+            var client = HttpClientFactory.CreateClient("Nanchesoft.Api");
+            var resp = await client.PostAsJsonAsync($"/api/production/orders/{orderId}/{action}", new { userId = "web" });
+            if (resp.IsSuccessStatusCode)
+            {
+                var body = await resp.Content.ReadFromJsonAsync<JsonElement>();
+                _message = body.TryGetProperty("message", out var m) ? m.GetString() ?? "OK" : "Acción ejecutada.";
+                await LoadOrdersAsync();
+            }
+            else
+            {
+                var body = await resp.Content.ReadFromJsonAsync<JsonElement>();
+                _error = body.TryGetProperty("message", out var m) ? m.GetString() ?? "Error" : "Error";
+            }
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _busy = false; }
+    }
+
+    private void StartCancel(Guid id, string folio) { _cancelId = id; _cancelFolio = folio; _cancelReason = string.Empty; }
+
+    private async Task ExecuteCancelAsync()
+    {
+        _busy = true;
+        try
+        {
+            var client = HttpClientFactory.CreateClient("Nanchesoft.Api");
+            var resp = await client.PostAsJsonAsync($"/api/production/orders/{_cancelId}/cancel", new { userId = "web", reason = _cancelReason });
+            if (resp.IsSuccessStatusCode) { _message = "Orden cancelada."; _cancelId = Guid.Empty; await LoadOrdersAsync(); }
+            else { var b = await resp.Content.ReadFromJsonAsync<JsonElement>(); _error = b.TryGetProperty("message", out var m) ? m.GetString() ?? "Error" : "Error"; }
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _busy = false; }
+    }
+
+    // ─── Display ──────────────────────────────────────────────────────────────
+    private static string StatusColor(string s) => s switch { "draft" => "#6b7280", "planned" => "#3b82f6", "exploded" => "#8b5cf6", "reserved" => "#f59e0b", "in_progress" => "#f97316", "completed" => "#10b981", "closed" => "#059669", "cancelled" => "#ef4444", _ => "#6b7280" };
+    private static string StatusLabel(string s) => s switch { "draft" => "Borrador", "planned" => "Planeada", "exploded" => "Explosionada", "reserved" => "Reservada", "in_progress" => "En proceso", "completed" => "Completada", "closed" => "Cerrada", "cancelled" => "Cancelada", _ => s };
+    private static string PriorityColor(int p) => p switch { 2 => "#f59e0b", 3 => "#ef4444", _ => "#10b981" };
+    private static string PriorityLabel(int p) => p switch { 2 => "Alta", 3 => "Urgente", _ => "Normal" };
+
+    // ─── Models ───────────────────────────────────────────────────────────────
+    private sealed record CompanyOption(Guid CompanyId, string Name, Guid TenantId);
+    private sealed record BranchOption(Guid BranchId, string Name);
+    private sealed record WarehouseOption(Guid WarehouseId, string Name);
+    private sealed record FinishedProductOption(Guid FinishedProductId, string Code, string Name);
+    private sealed record CustomerOption(Guid CustomerId, string Code, string Name, string LegalName, bool IsActive, Guid TenantId);
+    private sealed record AddressOption(Guid AddressId, string AddressType, bool IsPrimary, string FullAddress);
+
+    private sealed class LegalEntityOption
+    {
+        public Guid LegalEntityId { get; set; }
+        public string LegalName { get; set; } = string.Empty;
+        public string TaxId { get; set; } = string.Empty;
+        public bool IsPrimary { get; set; }
+    }
+
+    private sealed class QuickLocationResult
+    {
+        public Guid LocationId { get; set; }
+        public string FullAddress { get; set; } = string.Empty;
+        public bool IsPrimary { get; set; }
+    }
+
+    private sealed class SizeQty
+    {
+        public Guid SizeRunSizeId { get; set; }
+        public string SizeCode { get; set; } = string.Empty;
+        public int Qty { get; set; }
+    }
+
+    private sealed class OrderLineForm
+    {
+        public Guid FinishedProductId { get; set; }
+        public string ProductCode { get; set; } = string.Empty;
+        public string ProductName { get; set; } = string.Empty;
+        public string ProductSearch { get; set; } = string.Empty;
+        public bool ShowDropdown { get; set; }
+        public Guid? ProductStyleId { get; set; }
+        public Guid? ProductSizeRunId { get; set; }
+        public string CustomerPoReference { get; set; } = string.Empty;
+        public decimal UnitPrice { get; set; }
+        public decimal DiscountPercent { get; set; }
+        public string Notes { get; set; } = string.Empty;
+        public List<SizeQty> Sizes { get; set; } = [];
+        public bool LoadingSizes { get; set; }
+        public string NcPreview { get; set; } = string.Empty;
+        // Per-line overrides
+        public Guid? WarehouseId { get; set; }
+        public Guid? ShipToAddressId { get; set; }
+        public string ShipToAddressText { get; set; } = string.Empty;
+        public Guid? LegalEntityId { get; set; }
+        public string LegalName { get; set; } = string.Empty;
+        public bool ShowShippingOverrides { get; set; }
+
+        public int TotalQty => Sizes.Sum(s => s.Qty);
+        public decimal LineTotal => Math.Round(TotalQty * UnitPrice * (1 - DiscountPercent / 100m), 2);
+    }
+
+    private sealed class ProductSizesResult
+    {
+        public Guid? ProductSizeRunId { get; set; }
+        public Guid? ProductStyleId { get; set; }
+        public List<SizeEntry> Sizes { get; set; } = [];
+        public sealed class SizeEntry { public Guid SizeRunSizeId { get; set; } public string SizeCode { get; set; } = string.Empty; public int Sequence { get; set; } }
+    }
+
+    private sealed class PriceLookupResult
+    {
+        public decimal Price { get; set; }
+        public bool Found { get; set; }
+    }
+
+    private sealed record OrderListResult(int Total, int Page, int PageSize, List<OrderSummary> Items);
+
+    private sealed record OrderSummary(
+        Guid ProductionOrderId, Guid CompanyId, Guid BranchId,
+        string Folio, string WeekCode, string Status, string ExplosionStatus,
+        int Priority, DateOnly StartDate, DateOnly EndDate, DateOnly DeliveryDate,
+        int TotalUnitsPlanned, int TotalUnitsProduced, int TotalUnitsShipped,
+        int LineCount, string? Notes, DateTime CreatedAt);
+
+    private sealed class CreateOrderResult
+    {
+        public Guid ProductionOrderId { get; set; }
+        public string Folio { get; set; } = string.Empty;
+        public string CustomerReference { get; set; } = string.Empty;
+        public decimal Subtotal { get; set; }
+        public decimal Total { get; set; }
+        public List<CreateOrderLine>? Lines { get; set; }
+    }
+
+    private sealed class CreateOrderLine
+    {
+        public Guid Id { get; set; }
+        public int LineNumber { get; set; }
+        public string NcFolio { get; set; } = string.Empty;
+    }
+
+    private sealed class PrintOrderData
+    {
+        public string Folio { get; set; } = string.Empty;
+        public string CustomerReference { get; set; } = string.Empty;
+        public List<PrintLineData> PrintLines { get; set; } = [];
+    }
+
+    private sealed class PrintLineData
+    {
+        public string NcFolio { get; set; } = string.Empty;
+        public string ProductCode { get; set; } = string.Empty;
+        public string ProductName { get; set; } = string.Empty;
+        public string CustomerPoReference { get; set; } = string.Empty;
+        public decimal UnitPrice { get; set; }
+        public decimal DiscountPercent { get; set; }
+        public int TotalQty { get; set; }
+        public decimal LineTotal { get; set; }
+        public Dictionary<string, int> SizeQtys { get; set; } = [];
+    }
+}

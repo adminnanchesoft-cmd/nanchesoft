@@ -1,0 +1,142 @@
+@page "/purchases/material-inventory"
+@using Nanchesoft.Web.Services.Purchases
+@inject MaterialPurchaseApiService Api
+@inject NavigationManager Nav
+
+<PageTitle>Inventario de Materiales | Nanchesoft</PageTitle>
+
+<div class="ns-module-page">
+    <div class="ns-module-header">
+        <div class="ns-module-header__info">
+            <div class="ns-module-header__breadcrumb">Compras · Materiales</div>
+            <h1 class="ns-module-header__title">Inventario de Materiales</h1>
+            <p class="ns-module-header__subtitle">Existencias actuales por material y almacén. Se actualiza automáticamente al guardar recepciones.</p>
+        </div>
+        <div class="ns-module-header__actions">
+            <button class="ns-btn ns-btn--secondary" @onclick="LoadAsync"><i class="bi bi-arrow-clockwise"></i></button>
+        </div>
+    </div>
+
+    <div class="ns-filter-bar">
+        <div class="ns-filter-bar__search">
+            <input class="ns-input ns-input--search" placeholder="Buscar material..." @bind="_search" @bind:event="oninput" @onkeyup="Filter" />
+        </div>
+        <div class="ns-filter-bar__right">
+            <select class="ns-select" @bind="_warehouseFilter" @bind:after="LoadAsync">
+                <option value="">Todos los almacenes</option>
+                @foreach (var w in _lookups.Warehouses)
+                { <option value="@w.Id">@w.Name</option> }
+            </select>
+        </div>
+    </div>
+
+    @* KPI summary *@
+    <div class="ns-kpi-row">
+        <div class="ns-kpi ns-kpi--blue">
+            <div class="ns-kpi__label">Materiales</div>
+            <div class="ns-kpi__value">@_items.Count</div>
+        </div>
+        <div class="ns-kpi ns-kpi--green">
+            <div class="ns-kpi__label">Valor inventario</div>
+            <div class="ns-kpi__value">@_items.Sum(x => x.QuantityOnHand * x.AverageCost).ToString("C")</div>
+        </div>
+        <div class="ns-kpi ns-kpi--yellow">
+            <div class="ns-kpi__label">Sin existencias</div>
+            <div class="ns-kpi__value">@_items.Count(x => x.QuantityOnHand <= 0)</div>
+        </div>
+    </div>
+
+    @if (_loading)
+    {
+        <div class="ns-loader-center"><div class="ns-spinner"></div></div>
+    }
+    else
+    {
+        <div class="ns-table-container">
+            <table class="ns-table">
+                <thead>
+                    <tr>
+                        <th>Código</th>
+                        <th>Material</th>
+                        <th>Familia</th>
+                        <th>Subfamilia</th>
+                        <th>Almacén</th>
+                        <th class="text-right">Existencia</th>
+                        <th class="text-right">Reservado</th>
+                        <th class="text-right">Disponible</th>
+                        <th class="text-right">Costo prom.</th>
+                        <th class="text-right">Último costo</th>
+                        <th class="text-right">Valor</th>
+                        <th class="text-center">Kardex</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var item in _filtered)
+                    {
+                        <tr class="@(item.QuantityOnHand <= 0 ? "ns-table__row--muted" : "")">
+                            <td><code>@item.MaterialCode</code></td>
+                            <td class="fw-semibold">@item.MaterialName</td>
+                            <td class="text-muted">@item.FamilyName</td>
+                            <td class="text-muted">@item.SubfamilyName</td>
+                            <td>@item.WarehouseName</td>
+                            <td class="text-right @(item.QuantityOnHand <= 0 ? "text-danger" : "")">@item.QuantityOnHand.ToString("N3")</td>
+                            <td class="text-right text-warning">@item.QuantityReserved.ToString("N3")</td>
+                            <td class="text-right text-success fw-semibold">@item.QuantityAvailable.ToString("N3")</td>
+                            <td class="text-right">@item.AverageCost.ToString("N4")</td>
+                            <td class="text-right text-muted">@item.LastCost.ToString("N4")</td>
+                            <td class="text-right fw-semibold">@((item.QuantityOnHand * item.AverageCost).ToString("N2"))</td>
+                            <td class="text-center">
+                                <button class="ns-icon-btn" title="Ver kardex" @onclick="() => ViewKardex(item.MaterialItemId)">
+                                    <i class="bi bi-list-ul"></i>
+                                </button>
+                            </td>
+                        </tr>
+                    }
+                    @if (!_filtered.Any())
+                    {
+                        <tr><td colspan="12" class="text-center text-muted py-3">Sin inventario registrado.</td></tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
+
+@code {
+    private List<MatStockBalance> _items = new();
+    private List<MatStockBalance> _filtered = new();
+    private MatLookups _lookups = new();
+    private bool _loading = true;
+    private string _search = string.Empty;
+    private Guid? _warehouseFilter;
+    private string _warehouseStr { get => _warehouseFilter?.ToString() ?? ""; set => _warehouseFilter = Guid.TryParse(value, out var g) ? g : null; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _lookups = await Api.GetLookupsAsync();
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        try
+        {
+            _items = await Api.GetStockBalancesAsync(warehouseId: _warehouseFilter, q: _search);
+            Filter();
+        }
+        finally { _loading = false; }
+    }
+
+    private void Filter(KeyboardEventArgs? _ = null)
+    {
+        _filtered = string.IsNullOrWhiteSpace(_search) ? _items :
+            _items.Where(x =>
+                x.MaterialName.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
+                x.MaterialCode.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
+                x.FamilyName.Contains(_search, StringComparison.OrdinalIgnoreCase)
+            ).ToList();
+    }
+
+    private void ViewKardex(Guid materialId) => Nav.NavigateTo($"/purchases/material-kardex?materialId={materialId}");
+}

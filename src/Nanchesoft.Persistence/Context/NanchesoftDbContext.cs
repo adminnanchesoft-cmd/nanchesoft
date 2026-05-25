@@ -40,6 +40,7 @@ public sealed class NanchesoftDbContext : DbContext
     public DbSet<CompanySetting> CompanySettings => Set<CompanySetting>();
 
     public DbSet<Customer> Customers => Set<Customer>();
+    public DbSet<CustomerLegalEntity> CustomerLegalEntities => Set<CustomerLegalEntity>();
     public DbSet<Supplier> Suppliers => Set<Supplier>();
     public DbSet<ThirdPartyContact> ThirdPartyContacts => Set<ThirdPartyContact>();
     public DbSet<ThirdPartyAddress> ThirdPartyAddresses => Set<ThirdPartyAddress>();
@@ -182,6 +183,11 @@ public sealed class NanchesoftDbContext : DbContext
     public DbSet<PurchaseInvoiceLine> PurchaseInvoiceLines => Set<PurchaseInvoiceLine>();
     public DbSet<PurchaseReturn> PurchaseReturns => Set<PurchaseReturn>();
     public DbSet<PurchaseReturnLine> PurchaseReturnLines => Set<PurchaseReturnLine>();
+    public DbSet<PurchasePayment> PurchasePayments => Set<PurchasePayment>();
+    public DbSet<PurchaseReceiptDiff> PurchaseReceiptDiffs => Set<PurchaseReceiptDiff>();
+    public DbSet<PurchaseReceiptDiffLine> PurchaseReceiptDiffLines => Set<PurchaseReceiptDiffLine>();
+    public DbSet<MaterialStockBalance> MaterialStockBalances => Set<MaterialStockBalance>();
+    public DbSet<MaterialInventoryMovement> MaterialInventoryMovements => Set<MaterialInventoryMovement>();
 
     public DbSet<StockBalance> StockBalances => Set<StockBalance>();
     public DbSet<InventoryMovement> InventoryMovements => Set<InventoryMovement>();
@@ -242,6 +248,9 @@ public sealed class NanchesoftDbContext : DbContext
     public DbSet<AccountsReceivableAccount> AccountsReceivableAccounts => Set<AccountsReceivableAccount>();
     public DbSet<AccountsReceivableMovement> AccountsReceivableMovements => Set<AccountsReceivableMovement>();
     public DbSet<ReceiptApplication> ReceiptApplications => Set<ReceiptApplication>();
+
+    // User preferences
+    public DbSet<UserThemePreference> UserThemePreferences => Set<UserThemePreference>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

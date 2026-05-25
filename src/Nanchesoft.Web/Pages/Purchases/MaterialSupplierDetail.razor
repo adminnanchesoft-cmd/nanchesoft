@@ -1,0 +1,457 @@
+@page "/purchases/suppliers/new"
+@page "/purchases/suppliers/{Id:guid}"
+@using Nanchesoft.Web.Services.Purchases
+@inject MaterialPurchaseApiService Api
+@inject NavigationManager Nav
+
+<PageTitle>@(_isNew ? "Nuevo Proveedor" : _model.Name) | Nanchesoft</PageTitle>
+
+<div class="ns-module-page">
+    <div class="ns-module-header">
+        <div class="ns-module-header__info">
+            <div class="ns-module-header__breadcrumb">
+                <a href="/purchases/suppliers">Proveedores</a> · @(_isNew ? "Nuevo" : _model.Code)
+            </div>
+            <h1 class="ns-module-header__title">
+                @if (_isNew) { <span>Nuevo Proveedor</span> }
+                else { <span>@_model.Name <span class="ns-status ns-status--@(_model.IsActive ? "green" : "gray") ms-2">@(_model.IsActive ? "Activo" : "Inactivo")</span></span> }
+            </h1>
+        </div>
+        <div class="ns-module-header__actions">
+            <button class="ns-btn ns-btn--ghost" @onclick="Back"><i class="bi bi-arrow-left"></i> Volver</button>
+            <button class="ns-btn ns-btn--primary" @onclick="SaveAsync" disabled="@_saving">
+                @if (_saving) { <span class="ns-spinner ns-spinner--sm"></span> } else { <i class="bi bi-floppy"></i> }
+                Guardar
+            </button>
+            @if (!_isNew)
+            {
+                <button class="ns-btn @(_model.IsActive ? "ns-btn--danger" : "ns-btn--success") ns-btn--sm"
+                        @onclick="ToggleActive">
+                    @(_model.IsActive ? "Desactivar" : "Reactivar")
+                </button>
+            }
+        </div>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(_error))
+    { <div class="ns-alert ns-alert--danger">@_error</div> }
+    @if (!string.IsNullOrWhiteSpace(_success))
+    { <div class="ns-alert ns-alert--success">@_success</div> }
+
+    @if (_loading)
+    {
+        <div class="ns-loader-center"><div class="ns-spinner"></div></div>
+    }
+    else
+    {
+        @* Tabs *@
+        <div class="ns-tab-bar mb-3">
+            @foreach (var t in _tabs)
+            {
+                <button class="ns-tab @(_tab == t.Key ? "ns-tab--active" : "")"
+                        @onclick="() => _tab = t.Key">@t.Value</button>
+            }
+        </div>
+
+        @* TAB: Datos generales *@
+        @if (_tab == "general")
+        {
+            <div class="ns-card ns-card--form mb-3">
+                <div class="ns-card__header"><h3>Identificación</h3></div>
+                <div class="ns-card__body">
+                    <div class="ns-form-grid ns-form-grid--3">
+                        <div class="ns-form-field">
+                            <label>Código <span class="req">*</span></label>
+                            <input class="ns-input" @bind="_model.Code" placeholder="PROV-001" />
+                        </div>
+                        <div class="ns-form-field ns-form-field--wide">
+                            <label>Razón social / Nombre <span class="req">*</span></label>
+                            <input class="ns-input" @bind="_model.Name" />
+                        </div>
+                        <div class="ns-form-field ns-form-field--wide">
+                            <label>Nombre corto / Alias</label>
+                            <input class="ns-input" @bind="_model.ShortName" placeholder="Nombre abreviado para listados" />
+                        </div>
+                        <div class="ns-form-field ns-form-field--wide">
+                            <label>Nombre legal</label>
+                            <input class="ns-input" @bind="_model.LegalName" placeholder="Razón social completa" />
+                        </div>
+                        <div class="ns-form-field">
+                            <label>Clasificación</label>
+                            <select class="ns-select" @bind="_model.Classification">
+                                <option value="">Seleccionar...</option>
+                                <option value="national">Nacional</option>
+                                <option value="international">Internacional</option>
+                                <option value="manufacturer">Fabricante</option>
+                                <option value="service">Servicio</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="ns-card ns-card--form mb-3">
+                <div class="ns-card__header"><h3>Datos de contacto</h3></div>
+                <div class="ns-card__body">
+                    <div class="ns-form-grid ns-form-grid--3">
+                        <div class="ns-form-field">
+                            <label>Correo electrónico</label>
+                            <input class="ns-input" type="email" @bind="_model.Email" />
+                        </div>
+                        <div class="ns-form-field">
+                            <label>Teléfono principal</label>
+                            <input class="ns-input" @bind="_model.Phone" placeholder="55 1234 5678" />
+                        </div>
+                        <div class="ns-form-field">
+                            <label>Teléfono 2</label>
+                            <input class="ns-input" @bind="_model.Phone2" />
+                        </div>
+                        <div class="ns-form-field">
+                            <label>Fax</label>
+                            <input class="ns-input" @bind="_model.Fax" />
+                        </div>
+                        <div class="ns-form-field">
+                            <label>Contacto ventas / Rep. comercial</label>
+                            <input class="ns-input" @bind="_model.SalesContact" placeholder="Nombre del contacto" />
+                        </div>
+                        <div class="ns-form-field">
+                            <label>Contacto cobranza</label>
+                            <input class="ns-input" @bind="_model.CollectionContact" />
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="ns-card ns-card--form mb-3">
+                <div class="ns-card__header"><h3>Dirección</h3></div>
+                <div class="ns-card__body">
+                    <div class="ns-form-grid ns-form-grid--3">
+                        <div class="ns-form-field ns-form-field--wide">
+                            <label>Calle y número</label>
+                            <input class="ns-input" @bind="_model.Address" />
+                        </div>
+                        <div class="ns-form-field">
+                            <label>Colonia</label>
+                            <input class="ns-input" @bind="_model.Colony" />
+                        </div>
+                        <div class="ns-form-field">
+                            <label>Ciudad</label>
+                            <input class="ns-input" @bind="_model.City" />
+                        </div>
+                        <div class="ns-form-field">
+                            <label>Estado</label>
+                            <input class="ns-input" @bind="_model.State" />
+                        </div>
+                        <div class="ns-form-field">
+                            <label>Código postal</label>
+                            <input class="ns-input" @bind="_model.PostalCode" maxlength="10" />
+                        </div>
+                        <div class="ns-form-field">
+                            <label>País</label>
+                            <input class="ns-input" @bind="_model.Country" />
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="ns-card ns-card--form mb-3">
+                <div class="ns-card__header"><h3>Observaciones</h3></div>
+                <div class="ns-card__body">
+                    <textarea class="ns-textarea" rows="3" @bind="_model.Notes"
+                              placeholder="Notas internas sobre el proveedor..."></textarea>
+                </div>
+            </div>
+        }
+
+        @* TAB: Datos fiscales *@
+        @if (_tab == "fiscal")
+        {
+            <div class="ns-card ns-card--form mb-3">
+                <div class="ns-card__header"><h3>Información fiscal</h3></div>
+                <div class="ns-card__body">
+                    <div class="ns-form-grid ns-form-grid--3">
+                        <div class="ns-form-field">
+                            <label>RFC</label>
+                            <input class="ns-input" @bind="_model.TaxId" placeholder="XAXX010101000"
+                                   style="text-transform:uppercase" maxlength="13" />
+                        </div>
+                        <div class="ns-form-field">
+                            <label>Régimen fiscal</label>
+                            <select class="ns-select" @bind="_model.FiscalRegime">
+                                <option value="">Seleccionar...</option>
+                                <option value="601">601 – General de Ley PF con Act. Empresariales</option>
+                                <option value="603">603 – Personas Morales con Fines no Lucrativos</option>
+                                <option value="605">605 – Sueldos y Salarios</option>
+                                <option value="606">606 – Arrendamiento</option>
+                                <option value="612">612 – Personas Físicas con Actividades Empresariales</option>
+                                <option value="616">616 – Sin obligaciones fiscales</option>
+                                <option value="621">621 – Incorporación Fiscal</option>
+                                <option value="625">625 – Régimen de las Actividades Empresariales</option>
+                                <option value="626">626 – Régimen Simplificado de Confianza</option>
+                                <option value="628">628 – Hidrocarburos</option>
+                                <option value="629">629 – De los Regímenes Fiscales Preferentes</option>
+                            </select>
+                        </div>
+                        <div class="ns-form-field">
+                            <label>Uso CFDI</label>
+                            <select class="ns-select" @bind="_model.CfdiUse">
+                                <option value="">Seleccionar...</option>
+                                <option value="G01">G01 – Adquisición de mercancias</option>
+                                <option value="G02">G02 – Devoluciones, descuentos o bonificaciones</option>
+                                <option value="G03">G03 – Gastos en general</option>
+                                <option value="I01">I01 – Construcciones</option>
+                                <option value="I02">I02 – Mobilario y equipo de oficina</option>
+                                <option value="I03">I03 – Equipo de transporte</option>
+                                <option value="I04">I04 – Equipo de computo y accesorios</option>
+                                <option value="I05">I05 – Dados, troqueles, moldes, matrices y herramental</option>
+                                <option value="I06">I06 – Comunicaciones telefónicas</option>
+                                <option value="I08">I08 – Otra maquinaria y equipo</option>
+                                <option value="P01">P01 – Por definir</option>
+                                <option value="S01">S01 – Sin efectos fiscales</option>
+                            </select>
+                        </div>
+                        <div class="ns-form-field">
+                            <label>Cuenta contable</label>
+                            <input class="ns-input" @bind="_model.AccountingAccount" placeholder="2100" />
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+
+        @* TAB: Condiciones comerciales *@
+        @if (_tab == "commercial")
+        {
+            <div class="ns-card ns-card--form mb-3">
+                <div class="ns-card__header"><h3>Condiciones de crédito</h3></div>
+                <div class="ns-card__body">
+                    <div class="ns-form-grid ns-form-grid--3">
+                        <div class="ns-form-field">
+                            <label>Días de crédito</label>
+                            <input class="ns-input" type="number" min="0" @bind="_model.PaymentTermDays" />
+                        </div>
+                        <div class="ns-form-field">
+                            <label>Límite de crédito</label>
+                            <input class="ns-input" type="number" min="0" step="1000" @bind="_model.CreditLimit" />
+                        </div>
+                        <div class="ns-form-field">
+                            <label>Saldo actual</label>
+                            <input class="ns-input" value="@_model.CurrentBalance.ToString("C")" disabled />
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="ns-card ns-card--form mb-3">
+                <div class="ns-card__header"><h3>Descuentos</h3></div>
+                <div class="ns-card__body">
+                    <div class="ns-form-grid ns-form-grid--4">
+                        <div class="ns-form-field">
+                            <label>Desc. pronto pago (%)</label>
+                            <input class="ns-input" type="number" min="0" max="100" step="0.01"
+                                   @bind="_model.DiscountPromptPayment" />
+                        </div>
+                        <div class="ns-form-field">
+                            <label>Descuento 1 (%)</label>
+                            <input class="ns-input" type="number" min="0" max="100" step="0.01"
+                                   @bind="_model.Discount1" />
+                        </div>
+                        <div class="ns-form-field">
+                            <label>Descuento 2 (%)</label>
+                            <input class="ns-input" type="number" min="0" max="100" step="0.01"
+                                   @bind="_model.Discount2" />
+                        </div>
+                        <div class="ns-form-field">
+                            <label>Descuento 3 (%)</label>
+                            <input class="ns-input" type="number" min="0" max="100" step="0.01"
+                                   @bind="_model.Discount3" />
+                        </div>
+                        <div class="ns-form-field">
+                            <label>Descuento 4 (%)</label>
+                            <input class="ns-input" type="number" min="0" max="100" step="0.01"
+                                   @bind="_model.Discount4" />
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+
+        @* TAB: Datos bancarios *@
+        @if (_tab == "bank")
+        {
+            <div class="ns-card ns-card--form mb-3">
+                <div class="ns-card__header"><h3>Método de pago preferido</h3></div>
+                <div class="ns-card__body">
+                    <div class="ns-form-grid ns-form-grid--3">
+                        <div class="ns-form-field">
+                            <label>Método de pago</label>
+                            <select class="ns-select" @bind="_model.PreferredPaymentMethod">
+                                <option value="transfer">Transferencia bancaria</option>
+                                <option value="check">Cheque</option>
+                                <option value="cash">Efectivo</option>
+                                <option value="card">Tarjeta</option>
+                                <option value="other">Otro</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="ns-card ns-card--form mb-3">
+                <div class="ns-card__header"><h3>Cuenta bancaria</h3></div>
+                <div class="ns-card__body">
+                    <div class="ns-form-grid ns-form-grid--3">
+                        <div class="ns-form-field">
+                            <label>Banco</label>
+                            <input class="ns-input" @bind="_model.BankName" placeholder="Nombre del banco" />
+                        </div>
+                        <div class="ns-form-field">
+                            <label>No. de cuenta</label>
+                            <input class="ns-input" @bind="_model.BankAccount" placeholder="XXXXXXXXXXXXXXXX" maxlength="20" />
+                        </div>
+                        <div class="ns-form-field">
+                            <label>CLABE interbancaria</label>
+                            <input class="ns-input" @bind="_model.BankClabe" placeholder="18 dígitos" maxlength="18" />
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+
+        @* TAB: Historial de compras *@
+        @if (_tab == "history" && !_isNew)
+        {
+            @if (_historyLoading)
+            {
+                <div class="ns-loader-center"><div class="ns-spinner"></div></div>
+            }
+            else if (_history.Any())
+            {
+                <div class="ns-table-container">
+                    <table class="ns-table">
+                        <thead>
+                            <tr>
+                                <th>OC</th>
+                                <th>Fecha</th>
+                                <th class="text-right">Total</th>
+                                <th>Estatus</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var h in _history)
+                            {
+                                <tr>
+                                    <td><span class="ns-folio">@h.Folio</span></td>
+                                    <td>@h.OrderDate.ToString("dd/MM/yyyy")</td>
+                                    <td class="text-right fw-semibold">@h.Total.ToString("C")</td>
+                                    <td><span class="ns-status ns-status--@StatusClass(h.Status)">@StatusLabel(h.Status)</span></td>
+                                </tr>
+                            }
+                        </tbody>
+                        <tfoot>
+                            <tr class="ns-table__totals">
+                                <td colspan="2" class="text-right fw-semibold">Total compras:</td>
+                                <td class="text-right fw-bold">@_history.Sum(h => h.Total).ToString("C")</td>
+                                <td></td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            }
+            else
+            {
+                <div class="ns-empty-state">
+                    <i class="bi bi-clock-history ns-empty-state__icon"></i>
+                    <p>Sin historial de compras para este proveedor.</p>
+                </div>
+            }
+        }
+    }
+</div>
+
+@code {
+    [Parameter] public Guid? Id { get; set; }
+
+    private MatSupplierDetail _model = new();
+    private bool _isNew;
+    private bool _loading = true;
+    private bool _saving;
+    private bool _historyLoading;
+    private string _tab = "general";
+    private string _error = string.Empty;
+    private string _success = string.Empty;
+    private List<SupplierHistoryItem> _history = new();
+
+    private readonly Dictionary<string, string> _tabs = new()
+    {
+        ["general"] = "Datos generales",
+        ["fiscal"] = "Datos fiscales",
+        ["commercial"] = "Condiciones comerciales",
+        ["bank"] = "Datos bancarios",
+        ["history"] = "Historial de compras"
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        _isNew = !Id.HasValue;
+        if (_isNew)
+        {
+            _model = new MatSupplierDetail { IsActive = true, Country = "México", PreferredPaymentMethod = "transfer" };
+            _loading = false;
+        }
+        else
+        {
+            var data = await Api.GetSupplierAsync(Id!.Value);
+            if (data is null) { Nav.NavigateTo("/purchases/suppliers"); return; }
+            _model = data;
+            _loading = false;
+            await LoadHistoryAsync();
+        }
+    }
+
+    private async Task LoadHistoryAsync()
+    {
+        if (_isNew) return;
+        _historyLoading = true;
+        try { _history = await Api.GetSupplierHistoryAsync(Id!.Value); }
+        finally { _historyLoading = false; }
+    }
+
+    private async Task SaveAsync()
+    {
+        _error = string.Empty; _success = string.Empty; _saving = true;
+        try
+        {
+            var id = await Api.SaveSupplierAsync(_model);
+            if (id != Guid.Empty)
+            {
+                _success = "Proveedor guardado correctamente.";
+                if (_isNew) Nav.NavigateTo($"/purchases/suppliers/{id}");
+            }
+            else { _error = "Error al guardar el proveedor."; }
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _saving = false; }
+    }
+
+    private async Task ToggleActive()
+    {
+        _model.IsActive = !_model.IsActive;
+        await SaveAsync();
+    }
+
+    private void Back() => Nav.NavigateTo("/purchases/suppliers");
+
+    private static string StatusClass(string s) => s switch
+    {
+        "draft" => "gray", "authorized" => "blue", "partially_received" => "yellow",
+        "received" => "green", "closed" => "green-dark", "cancelled" => "red", _ => "gray"
+    };
+
+    private static string StatusLabel(string s) => s switch
+    {
+        "draft" => "Borrador", "authorized" => "Autorizada",
+        "partially_received" => "Parcial", "received" => "Recibida",
+        "closed" => "Cerrada", "cancelled" => "Cancelada", _ => s
+    };
+}

@@ -70,6 +70,7 @@ public static class NanchesoftSchemaCatalog
         modelBuilder.Entity<DocumentFolio>().ToTable("document_folios", CoreSchema);
         modelBuilder.Entity<CompanySetting>().ToTable("company_settings", ConfigSchema);
         modelBuilder.Entity<Customer>().ToTable("customers", OrgSchema);
+        modelBuilder.Entity<CustomerLegalEntity>().ToTable("customer_legal_entities", OrgSchema);
         modelBuilder.Entity<Supplier>().ToTable("suppliers", OrgSchema);
         modelBuilder.Entity<ThirdPartyContact>().ToTable("third_party_contacts", OrgSchema);
         modelBuilder.Entity<ThirdPartyAddress>().ToTable("third_party_addresses", OrgSchema);
@@ -197,6 +198,11 @@ public static class NanchesoftSchemaCatalog
         modelBuilder.Entity<PurchaseInvoiceLine>().ToTable("purchase_invoice_lines", PurchaseSchema);
         modelBuilder.Entity<PurchaseReturn>().ToTable("purchase_returns", PurchaseSchema);
         modelBuilder.Entity<PurchaseReturnLine>().ToTable("purchase_return_lines", PurchaseSchema);
+        modelBuilder.Entity<PurchasePayment>().ToTable("purchase_payments", PurchaseSchema);
+        modelBuilder.Entity<PurchaseReceiptDiff>().ToTable("purchase_receipt_diffs", PurchaseSchema);
+        modelBuilder.Entity<PurchaseReceiptDiffLine>().ToTable("purchase_receipt_diff_lines", PurchaseSchema);
+        modelBuilder.Entity<MaterialStockBalance>().ToTable("material_stock_balances", InventorySchema);
+        modelBuilder.Entity<MaterialInventoryMovement>().ToTable("material_inventory_movements", InventorySchema);
         modelBuilder.Entity<StockBalance>().ToTable("stock_balances", InventorySchema);
         modelBuilder.Entity<InventoryMovement>().ToTable("inventory_movements", InventorySchema);
         modelBuilder.Entity<InventoryEntry>().ToTable("inventory_entries", InventorySchema);
@@ -253,6 +259,7 @@ public static class NanchesoftSchemaCatalog
         modelBuilder.Entity<AccountsReceivableAccount>().ToTable("accounts_receivable_accounts", FinanceSchema);
         modelBuilder.Entity<AccountsReceivableMovement>().ToTable("accounts_receivable_movements", FinanceSchema);
         modelBuilder.Entity<ReceiptApplication>().ToTable("receipt_applications", FinanceSchema);
+        modelBuilder.Entity<UserThemePreference>().ToTable("user_theme_preferences", AuthSchema);
         modelBuilder.Entity<AccountingAccount>().ToTable("accounting_accounts", AccountingSchema);
         modelBuilder.Entity<AccountingFiscalPeriod>().ToTable("accounting_fiscal_periods", AccountingSchema);
         modelBuilder.Entity<AccountingJournalEntry>().ToTable("accounting_journal_entries", AccountingSchema);

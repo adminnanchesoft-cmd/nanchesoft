@@ -14,8 +14,12 @@
     <link rel="icon" type="image/png" href="favicon.png" />
 
     <link rel="stylesheet" href="@Assets["lib/bootstrap/dist/css/bootstrap.min.css"]" />
-    <link rel="stylesheet" href="https://cdn3.devexpress.com/jslib/25.1.6/css/dx.light.css" />
-    <link rel="stylesheet" href="app.css?v=20260518" />
+    <link data-ns-theme rel="stylesheet" href="https://cdn3.devexpress.com/jslib/25.1.6/css/dx.light.css" />
+    <script>
+        (function(){function sh(h,f){var c=h.replace('#','');if(c.length===3)c=c[0]+c[0]+c[1]+c[1]+c[2]+c[2];var r=parseInt(c.slice(0,2),16),g=parseInt(c.slice(2,4),16),b=parseInt(c.slice(4,6),16);if(f>0){r=Math.max(0,Math.round(r*(1-f)));g=Math.max(0,Math.round(g*(1-f)));b=Math.max(0,Math.round(b*(1-f)));}else{var x=-f;r=Math.min(255,Math.round(r+(255-r)*x));g=Math.min(255,Math.round(g+(255-g)*x));b=Math.min(255,Math.round(b+(255-b)*x));}return'#'+r.toString(16).padStart(2,'0')+g.toString(16).padStart(2,'0')+b.toString(16).padStart(2,'0');}function rgb(h){var c=h.replace('#','');if(c.length===3)c=c[0]+c[0]+c[1]+c[1]+c[2]+c[2];return parseInt(c.slice(0,2),16)+','+parseInt(c.slice(2,4),16)+','+parseInt(c.slice(4,6),16);}try{var s=localStorage.getItem('nanchesoft.theme');if(s){var p=JSON.parse(s),r=document.documentElement,l=document.querySelector('link[data-ns-theme]');if(p&&p.t&&l)l.href='https://cdn3.devexpress.com/jslib/25.1.6/css/'+p.t+'.css';if(p.a){r.style.setProperty('--ns-accent',p.a);r.style.setProperty('--ns-accent-end',sh(p.a,0.14));r.style.setProperty('--ns-accent-soft',sh(p.a,-0.88));r.style.setProperty('--ns-accent-rgb',rgb(p.a));}if(p.s){r.style.setProperty('--ns-secondary',p.s);r.style.setProperty('--ns-secondary-end',sh(p.s,0.14));r.style.setProperty('--ns-secondary-rgb',rgb(p.s));}if(p.b)r.style.setProperty('--ns-background',p.b);}}catch(e){}})();
+    </script>
+    <script src="/js/theme.js"></script>
+    <link rel="stylesheet" href="app.css?v=20260524d" />
     <link rel="stylesheet" href="@Assets["Nanchesoft.Web.styles.css"]" />
 
     <ImportMap />
@@ -31,6 +35,7 @@
     <script src="/js/ns-crud-grid.js"></script>
     <script src="/js/ns-navigation.js"></script>
     <script src="/js/ns-shell.js"></script>
+    <script src="/js/constancia.js"></script>
     <script src="@Assets["_framework/blazor.web.js"]"></script>
 </body>
 

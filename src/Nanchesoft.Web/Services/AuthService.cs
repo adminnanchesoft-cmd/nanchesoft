@@ -13,6 +13,7 @@ public sealed class AuthService
     private readonly AuthState _authState;
     private readonly AppState _appState;
     private readonly IJSRuntime _jsRuntime;
+    private bool _jsReady;
 
     public AuthService(
         IHttpClientFactory httpClientFactory,
@@ -24,6 +25,13 @@ public sealed class AuthService
         _authState = authState;
         _appState = appState;
         _jsRuntime = jsRuntime;
+
+        // Auto-persist whenever auth state changes (e.g., company/branch switch)
+        _authState.OnChange += () =>
+        {
+            if (_jsReady && _authState.IsAuthenticated)
+                _ = PersistSessionAsync();
+        };
     }
 
     public async Task<LoginResult> LoginAsync(string usernameOrEmail, string password)
@@ -56,6 +64,7 @@ public sealed class AuthService
             };
         }
 
+        _jsReady = true;
         ApplyPayload(payload);
         await PersistSessionAsync();
 
@@ -99,6 +108,8 @@ public sealed class AuthService
 
     public async Task<bool> RestoreSessionAsync()
     {
+        _jsReady = true;
+
         if (_authState.IsAuthenticated)
             return true;
 
@@ -109,15 +120,57 @@ public sealed class AuthService
                 return false;
 
             var payload = JsonSerializer.Deserialize<LoginResponse>(json, JsonOptions);
-            if (payload is null || !payload.UserId.HasValue || (!payload.TenantId.HasValue && !payload.IsPlatformOwner))
+            if (payload is null || !payload.UserId.HasValue)
                 return false;
 
+            // If context is incomplete, recover it from the API using the stored userId
+            bool contextMissing = !payload.IsPlatformOwner
+                && (!payload.TenantId.HasValue
+                    || !payload.CompanyId.HasValue
+                    || string.IsNullOrWhiteSpace(payload.TenantName)
+                    || payload.TenantName is "Sin tenant"
+                    || string.IsNullOrWhiteSpace(payload.CompanyName)
+                    || payload.CompanyName is "Sin empresa");
+
+            if (contextMissing && payload.UserId.HasValue)
+            {
+                var recovered = await FetchContextByUserIdAsync(payload.UserId.Value);
+                if (recovered is not null)
+                {
+                    // Preserve user identity fields from localStorage, update context from API
+                    recovered.Token = payload.Token;
+                    recovered.RefreshToken = payload.RefreshToken;
+                    payload = recovered;
+                }
+                else if (!payload.TenantId.HasValue && !payload.IsPlatformOwner)
+                {
+                    return false;
+                }
+            }
+
             ApplyPayload(payload);
+            await PersistSessionAsync();
             return true;
         }
         catch
         {
             return false;
+        }
+    }
+
+    private async Task<LoginResponse?> FetchContextByUserIdAsync(Guid userId)
+    {
+        try
+        {
+            var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
+            var response = await client.GetAsync($"/api/auth/context/{userId}");
+            if (!response.IsSuccessStatusCode)
+                return null;
+            return await response.Content.ReadFromJsonAsync<LoginResponse>(JsonOptions);
+        }
+        catch
+        {
+            return null;
         }
     }
 
@@ -190,7 +243,7 @@ public sealed class AuthService
         return null;
     }
 
-    private async Task PersistSessionAsync()
+    public async Task PersistSessionAsync()
     {
         try
         {

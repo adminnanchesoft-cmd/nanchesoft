@@ -1,0 +1,445 @@
+@page "/purchases/material-receipts"
+@using Nanchesoft.Web.Services.Purchases
+@inject MaterialPurchaseApiService Api
+@inject NavigationManager Nav
+
+<PageTitle>Recepciones de Materiales | Nanchesoft</PageTitle>
+
+<div class="ns-module-page">
+    <div class="ns-module-header">
+        <div class="ns-module-header__info">
+            <div class="ns-module-header__breadcrumb">Compras · Materiales</div>
+            <h1 class="ns-module-header__title">Recepciones de Materiales</h1>
+            <p class="ns-module-header__subtitle">Entradas por revisión y compras con factura. El inventario se afecta al guardar.</p>
+        </div>
+        <div class="ns-module-header__actions">
+            <button class="ns-btn ns-btn--secondary" @onclick="LoadAsync"><i class="bi bi-arrow-clockwise"></i></button>
+            <button class="ns-btn ns-btn--outline" @onclick='() => NewReceipt("review")'>
+                <i class="bi bi-clipboard-check"></i> Entrada por Revisión
+            </button>
+            <button class="ns-btn ns-btn--primary" @onclick='() => NewReceipt("invoice")'>
+                <i class="bi bi-receipt"></i> Compra con Factura
+            </button>
+        </div>
+    </div>
+
+    @* Tabs tipo/estatus *@
+    <div class="ns-tab-bar">
+        @foreach (var t in _tabs)
+        {
+            <button class="ns-tab @(_tabFilter == t.Key ? "ns-tab--active" : "")"
+                    @onclick="() => SetTab(t.Key)">@t.Value</button>
+        }
+    </div>
+
+    @* KPIs *@
+    <div class="ns-kpi-row">
+        <div class="ns-kpi ns-kpi--gray"><div class="ns-kpi__label">Borrador</div><div class="ns-kpi__value">@_items.Count(x => x.Status == "draft")</div></div>
+        <div class="ns-kpi ns-kpi--purple"><div class="ns-kpi__label">Revisadas</div><div class="ns-kpi__value">@_items.Count(x => x.Status == "reviewed")</div></div>
+        <div class="ns-kpi ns-kpi--blue"><div class="ns-kpi__label">Autorizadas</div><div class="ns-kpi__value">@_items.Count(x => x.Status == "authorized")</div></div>
+        <div class="ns-kpi ns-kpi--yellow"><div class="ns-kpi__label">Pago pendiente</div><div class="ns-kpi__value">@_items.Count(x => x.PaymentStatus == "pending" && x.Status == "authorized")</div></div>
+        <div class="ns-kpi ns-kpi--green"><div class="ns-kpi__label">Pagadas</div><div class="ns-kpi__value">@_items.Count(x => x.PaymentStatus == "paid")</div></div>
+    </div>
+
+    @if (_loading)
+    {
+        <div class="ns-loader-center"><div class="ns-spinner"></div></div>
+    }
+    else
+    {
+        <div class="ns-table-container">
+            <table class="ns-table">
+                <thead>
+                    <tr>
+                        <th>Folio</th>
+                        <th>Tipo</th>
+                        <th>Fecha</th>
+                        <th>Proveedor</th>
+                        <th>OC Origen</th>
+                        <th>Doc. Proveedor</th>
+                        <th class="text-right">Total</th>
+                        <th class="text-right">Pagado</th>
+                        <th>Estatus</th>
+                        <th>Pago</th>
+                        <th class="text-center">Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var item in _filtered)
+                    {
+                        <tr class="ns-table__row" @ondblclick="() => Edit(item.Id)">
+                            <td><span class="ns-folio">@item.Folio</span></td>
+                            <td>
+                                <span class="ns-badge @(item.ReceiptType == "invoice" ? "ns-badge--blue" : "ns-badge--gray")">
+                                    @(item.ReceiptType == "invoice" ? "Factura" : "Revisión")
+                                </span>
+                            </td>
+                            <td>@item.ReceiptDate.ToString("dd/MM/yyyy")</td>
+                            <td>@item.SupplierName</td>
+                            <td class="text-muted">@item.OrderFolio</td>
+                            <td class="text-muted">@item.SupplierDocumentNumber</td>
+                            <td class="text-right">@item.Total.ToString("C")</td>
+                            <td class="text-right text-success">@item.PaidAmount.ToString("C")</td>
+                            <td>
+                                <span class="ns-status ns-status--@StatusClass(item.Status)">@StatusLabel(item.Status)</span>
+                                @if (item.HasDifferences)
+                                {
+                                    <span class="ns-badge ns-badge--warning ms-1" title="Tiene diferencias vs OC">⚠</span>
+                                }
+                            </td>
+                            <td><span class="ns-status ns-status--@PayStatusClass(item.PaymentStatus)">@PayStatusLabel(item.PaymentStatus)</span></td>
+                            <td class="text-center">
+                                <button class="ns-icon-btn" title="Ver detalle" @onclick="() => Edit(item.Id)"><i class="bi bi-eye"></i></button>
+                                @if (item.Status == "draft")
+                                {
+                                    <button class="ns-icon-btn ns-icon-btn--purple" title="Marcar revisada" @onclick="() => ReviewAsync(item.Id)">
+                                        <i class="bi bi-clipboard-check"></i>
+                                    </button>
+                                }
+                                @if (item.Status == "reviewed")
+                                {
+                                    <button class="ns-icon-btn ns-icon-btn--success" title="Autorizar" @onclick="() => OpenAuthorize(item.Id)">
+                                        <i class="bi bi-check-circle"></i>
+                                    </button>
+                                }
+                                @if (item.Status == "authorized" && item.PaymentStatus != "paid")
+                                {
+                                    <button class="ns-icon-btn ns-icon-btn--primary" title="Registrar pago" @onclick="() => OpenPayment(item.Id, item.Total, item.PaidAmount)">
+                                        <i class="bi bi-cash-stack"></i>
+                                    </button>
+                                }
+                                @if (item.ReceiptType == "review" && item.ConvertedToInvoiceId == null)
+                                {
+                                    <button class="ns-icon-btn ns-icon-btn--blue" title="Convertir a factura" @onclick="() => OpenConvert(item.Id)">
+                                        <i class="bi bi-arrow-right-circle"></i>
+                                    </button>
+                                }
+                            </td>
+                        </tr>
+                    }
+                    @if (!_filtered.Any())
+                    {
+                        <tr><td colspan="11" class="text-center text-muted py-3">Sin registros.</td></tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+
+    @* Authorize Dialog *@
+    @if (_showAuthorize)
+    {
+        <div class="ns-modal-overlay" @onclick="CloseDialogs">
+            <div class="ns-modal" @onclick:stopPropagation="true">
+                <div class="ns-modal__header"><h4>Autorizar Recepción</h4></div>
+                <div class="ns-modal__body">
+                    @if (_comparing)
+                    {
+                        <div class="ns-loader-center"><div class="ns-spinner"></div> Cargando comparativo...</div>
+                    }
+                    else if (_compareResult is not null && _compareResult.HasDifferences)
+                    {
+                        <div class="ns-alert ns-alert--warning mb-3">
+                            <strong>⚠ Se encontraron diferencias vs la OC.</strong> Revisa y confirma si deseas autorizar con ellas.
+                        </div>
+                        <table class="ns-table ns-table--compact">
+                            <thead>
+                                <tr>
+                                    <th>Material</th>
+                                    <th>Diferencia</th>
+                                    <th class="text-right">Pedido</th>
+                                    <th class="text-right">Recibido</th>
+                                    <th class="text-right">Δ</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var d in _compareResult.Differences)
+                                {
+                                    <tr>
+                                        <td>@d.MaterialName</td>
+                                        <td><span class="ns-badge ns-badge--@DiffBadge(d.DiffType)">@DiffLabel(d.DiffType)</span></td>
+                                        <td class="text-right">@d.OrderedQuantity.ToString("N2") × @d.OrderedUnitPrice.ToString("N4")</td>
+                                        <td class="text-right">@d.ReceivedQuantity.ToString("N2") × @d.ReceivedUnitPrice.ToString("N4")</td>
+                                        <td class="text-right text-danger">@d.TotalDiff.ToString("N2")</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                        <div class="ns-form-field mt-3">
+                            <label class="ns-check">
+                                <input type="checkbox" @bind="_authorizeDiffs" /> Autorizar con diferencias
+                            </label>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="ns-alert ns-alert--success">Sin diferencias detectadas vs la OC. ¿Autorizar?</div>
+                    }
+                    <div class="ns-form-field mt-2">
+                        <label>Notas de autorización</label>
+                        <textarea class="ns-textarea" rows="2" @bind="_authNotes"></textarea>
+                    </div>
+                </div>
+                <div class="ns-modal__footer">
+                    <button class="ns-btn ns-btn--ghost" @onclick="CloseDialogs">Cancelar</button>
+                    <button class="ns-btn ns-btn--success" @onclick="ConfirmAuthorize" disabled="@(!_authorizeDiffs && _compareResult?.HasDifferences == true)">
+                        <i class="bi bi-check-circle"></i> Autorizar
+                    </button>
+                </div>
+            </div>
+        </div>
+    }
+
+    @* Payment Dialog *@
+    @if (_showPayment)
+    {
+        <div class="ns-modal-overlay" @onclick="CloseDialogs">
+            <div class="ns-modal" @onclick:stopPropagation="true">
+                <div class="ns-modal__header"><h4>Registrar Pago</h4></div>
+                <div class="ns-modal__body">
+                    <div class="ns-form-grid ns-form-grid--2">
+                        <div class="ns-form-field ns-form-field--full">
+                            <label>Importe pendiente: <strong class="text-danger">@((_payTotal - _payPaid).ToString("C"))</strong></label>
+                        </div>
+                        <div class="ns-form-field">
+                            <label>Forma de pago</label>
+                            <select class="ns-select" @bind="_payment.PaymentMethod">
+                                <option value="transfer">Transferencia</option>
+                                <option value="cash">Efectivo</option>
+                                <option value="check">Cheque</option>
+                                <option value="card">Tarjeta</option>
+                                <option value="other">Otro</option>
+                            </select>
+                        </div>
+                        <div class="ns-form-field">
+                            <label>Cuenta bancaria</label>
+                            <select class="ns-select" @bind="_bankAccountStr">
+                                <option value="">Sin especificar</option>
+                                @foreach (var b in _lookups.BankAccounts)
+                                {
+                                    <option value="@b.Id">@b.Name</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="ns-form-field">
+                            <label>Monto a pagar <span class="req">*</span></label>
+                            <input class="ns-input text-right" type="number" step="0.01" @bind="_payment.Amount" />
+                        </div>
+                        <div class="ns-form-field">
+                            <label>Fecha de pago</label>
+                            <input class="ns-input" type="date" @bind="_payment.PaymentDate" />
+                        </div>
+                        <div class="ns-form-field ns-form-field--full">
+                            <label>Referencia</label>
+                            <input class="ns-input" @bind="_payment.Reference" />
+                        </div>
+                        <div class="ns-form-field ns-form-field--full">
+                            <label>Notas</label>
+                            <textarea class="ns-textarea" rows="2" @bind="_payment.Notes"></textarea>
+                        </div>
+                    </div>
+                </div>
+                <div class="ns-modal__footer">
+                    <button class="ns-btn ns-btn--ghost" @onclick="CloseDialogs">Cancelar</button>
+                    <button class="ns-btn ns-btn--primary" @onclick="ConfirmPayment">
+                        <i class="bi bi-cash-stack"></i> Registrar Pago
+                    </button>
+                </div>
+            </div>
+        </div>
+    }
+
+    @* Convert Dialog *@
+    @if (_showConvert)
+    {
+        <div class="ns-modal-overlay" @onclick="CloseDialogs">
+            <div class="ns-modal" @onclick:stopPropagation="true">
+                <div class="ns-modal__header"><h4>Convertir a Compra con Factura</h4></div>
+                <div class="ns-modal__body">
+                    <div class="ns-form-grid ns-form-grid--2">
+                        <div class="ns-form-field">
+                            <label>No. Factura del Proveedor <span class="req">*</span></label>
+                            <input class="ns-input" @bind="_convertInvoiceNumber" />
+                        </div>
+                        <div class="ns-form-field">
+                            <label>Fecha Factura</label>
+                            <input class="ns-input" type="date" @bind="_convertInvoiceDate" />
+                        </div>
+                    </div>
+                </div>
+                <div class="ns-modal__footer">
+                    <button class="ns-btn ns-btn--ghost" @onclick="CloseDialogs">Cancelar</button>
+                    <button class="ns-btn ns-btn--blue" @onclick="ConfirmConvert">
+                        <i class="bi bi-arrow-right-circle"></i> Convertir
+                    </button>
+                </div>
+            </div>
+        </div>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(_toast))
+    {
+        <div class="ns-toast ns-toast--@_toastType">@_toast</div>
+    }
+</div>
+
+@code {
+    private List<MatReceiptListItem> _items = new();
+    private List<MatReceiptListItem> _filtered = new();
+    private MatLookups _lookups = new();
+    private bool _loading = true;
+    private string _tabFilter = "";
+    private string _toast = string.Empty;
+    private string _toastType = "success";
+
+    // Authorize dialog
+    private bool _showAuthorize;
+    private bool _comparing;
+    private Guid _authorizeId;
+    private MatCompareResult? _compareResult;
+    private bool _authorizeDiffs;
+    private string _authNotes = string.Empty;
+
+    // Payment dialog
+    private bool _showPayment;
+    private Guid _paymentReceiptId;
+    private decimal _payTotal, _payPaid;
+    private MatPaymentModel _payment = new() { PaymentDate = DateTime.Today };
+    private string _bankAccountStr { get => _payment.BankAccountId?.ToString() ?? ""; set => _payment.BankAccountId = Guid.TryParse(value, out var g) ? g : null; }
+
+    // Convert dialog
+    private bool _showConvert;
+    private Guid _convertId;
+    private string _convertInvoiceNumber = string.Empty;
+    private DateTime? _convertInvoiceDate = DateTime.Today;
+
+    private readonly Dictionary<string, string> _tabs = new()
+    {
+        [""] = "Todos",
+        ["review"] = "Entradas Revisión",
+        ["invoice"] = "Compras Factura"
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        _lookups = await Api.GetLookupsAsync();
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        try
+        {
+            var result = await Api.GetReceiptsAsync(receiptType: string.IsNullOrEmpty(_tabFilter) ? null : _tabFilter, pageSize: 200);
+            _items = result.Items;
+            _filtered = _items;
+        }
+        finally { _loading = false; }
+    }
+
+    private async Task SetTab(string t) { _tabFilter = t; await LoadAsync(); }
+    private void NewReceipt(string type) => Nav.NavigateTo($"/purchases/material-receipts/new?type={type}");
+    private void Edit(Guid id) => Nav.NavigateTo($"/purchases/material-receipts/{id}");
+
+    private async Task ReviewAsync(Guid id)
+    {
+        var ok = await Api.ReviewReceiptAsync(id, "usuario");
+        if (ok) { ShowToast("Marcada como revisada. Ya no puede modificarse.", "success"); await LoadAsync(); }
+        else ShowToast("Error al marcar como revisada.", "danger");
+    }
+
+    private async Task OpenAuthorize(Guid id)
+    {
+        _authorizeId = id; _compareResult = null; _authorizeDiffs = false; _authNotes = "";
+        _showAuthorize = true; _comparing = true;
+        _compareResult = await Api.GetCompareAsync(id);
+        if (_compareResult is not null && !_compareResult.HasDifferences) _authorizeDiffs = true;
+        _comparing = false;
+    }
+
+    private async Task ConfirmAuthorize()
+    {
+        var result = await Api.AuthorizeReceiptAsync(_authorizeId, "usuario", _authorizeDiffs, _authNotes);
+        CloseDialogs();
+        if (result.Success)
+        {
+            ShowToast($"Recepción autorizada.{(result.DifsFound > 0 ? $" ({result.DifsFound} diferencias registradas)" : "")}", "success");
+            await LoadAsync();
+        }
+        else ShowToast("No se pudo autorizar.", "danger");
+    }
+
+    private void OpenPayment(Guid id, decimal total, decimal paid)
+    {
+        _paymentReceiptId = id; _payTotal = total; _payPaid = paid;
+        _payment = new MatPaymentModel { PurchaseReceiptId = id, PaymentDate = DateTime.Today, Amount = total - paid };
+        _showPayment = true;
+    }
+
+    private async Task ConfirmPayment()
+    {
+        _payment.PurchaseReceiptId = _paymentReceiptId;
+        await Api.RegisterPaymentAsync(_payment);
+        CloseDialogs();
+        ShowToast("Pago registrado correctamente.", "success");
+        await LoadAsync();
+    }
+
+    private void OpenConvert(Guid id) { _convertId = id; _convertInvoiceNumber = ""; _convertInvoiceDate = DateTime.Today; _showConvert = true; }
+
+    private async Task ConfirmConvert()
+    {
+        await Api.ConvertToInvoiceAsync(_convertId, "usuario", _convertInvoiceDate, _convertInvoiceNumber);
+        CloseDialogs();
+        ShowToast("Entrada convertida a Compra con Factura.", "success");
+        await LoadAsync();
+    }
+
+    private void CloseDialogs() { _showAuthorize = _showPayment = _showConvert = false; }
+
+    private void ShowToast(string msg, string type)
+    {
+        _toast = msg; _toastType = type;
+        _ = Task.Delay(4000).ContinueWith(_ => { _toast = ""; InvokeAsync(StateHasChanged); });
+    }
+
+    private static string StatusClass(string s) => s switch
+    {
+        "draft" => "gray", "reviewed" => "purple", "authorized" => "blue",
+        "rejected" => "red", "cancelled" => "red", _ => "gray"
+    };
+
+    private static string StatusLabel(string s) => s switch
+    {
+        "draft" => "Borrador", "reviewed" => "Revisada", "authorized" => "Autorizada",
+        "rejected" => "Rechazada", "cancelled" => "Cancelada", _ => s
+    };
+
+    private static string PayStatusClass(string s) => s switch
+    {
+        "pending" => "yellow", "partial" => "orange", "paid" => "green", _ => "gray"
+    };
+
+    private static string PayStatusLabel(string s) => s switch
+    {
+        "pending" => "Pend. pago", "partial" => "Pago parcial", "paid" => "Pagada", _ => "—"
+    };
+
+    private static string DiffBadge(string t) => t switch
+    {
+        "quantity_diff" => "warning", "cost_diff" => "warning",
+        "material_added" => "blue", "material_missing" => "danger",
+        "material_changed" => "orange", _ => "gray"
+    };
+
+    private static string DiffLabel(string t) => t switch
+    {
+        "quantity_diff" => "Cant. diferente", "cost_diff" => "Costo diferente",
+        "material_added" => "Material adicional", "material_missing" => "Material faltante",
+        "material_changed" => "Material cambiado", _ => t
+    };
+
+    // Expose ConvertedToInvoiceId in the list item — workaround since DTO doesn't have it
+    private Guid? _convertedId; // placeholder
+}

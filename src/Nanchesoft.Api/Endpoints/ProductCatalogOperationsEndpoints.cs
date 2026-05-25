@@ -284,11 +284,8 @@ public static class ProductCatalogOperationsEndpoints
         // Get all supplies for a product (with sizes)
         g.MapGet("/{productId:guid}", async (Guid productId, NanchesoftDbContext db) =>
         {
-            var supplies = await db.FinishedProductSupplies.AsNoTracking()
+            var supplyRows = await db.FinishedProductSupplies.AsNoTracking()
                 .Where(x => x.FinishedProductId == productId)
-                .Include(x => x.ProductComponent)
-                .Include(x => x.Sizes).ThenInclude(s => s.SizeRunSize)
-                .Include(x => x.Sizes).ThenInclude(s => s.MaterialItem)
                 .OrderBy(x => x.ProductComponent!.Code)
                 .Select(x => new FinishedProductSupplyDto
                 {
@@ -302,18 +299,45 @@ public static class ProductCatalogOperationsEndpoints
                     AuthorizedBy = x.AuthorizedBy ?? string.Empty,
                     Notes = x.Notes,
                     IsActive = x.IsActive,
-                    Sizes = x.Sizes.Select(s => new FinishedProductSupplySizeDto
-                    {
-                        FinishedProductSupplySizeId = s.Id,
-                        FinishedProductSupplyId = s.FinishedProductSupplyId,
-                        ProductSizeRunSizeId = s.ProductSizeRunSizeId,
-                        SizeLabel = s.SizeRunSize != null ? s.SizeRunSize.SizeCode : string.Empty,
-                        MaterialItemId = s.MaterialItemId,
-                        MaterialItemName = s.MaterialItem != null ? s.MaterialItem.Name : string.Empty,
-                        Notes = s.Notes
-                    }).OrderBy(s => s.SizeLabel).ToList()
+                    Sizes = new List<FinishedProductSupplySizeDto>()
                 }).ToListAsync();
-            return Results.Ok(supplies);
+
+            if (supplyRows.Count == 0)
+            {
+                return Results.Ok(supplyRows);
+            }
+
+            var supplyIds = supplyRows.Select(x => x.FinishedProductSupplyId).ToList();
+            var sizes = await db.FinishedProductSupplySizes.AsNoTracking()
+                .Where(s => supplyIds.Contains(s.FinishedProductSupplyId))
+                .OrderBy(s => s.FinishedProductSupplyId)
+                .ThenBy(s => s.SizeRunSize!.Sequence)
+                .ThenBy(s => s.SizeRunSize!.SizeCode)
+                .Select(s => new FinishedProductSupplySizeDto
+                {
+                    FinishedProductSupplySizeId = s.Id,
+                    FinishedProductSupplyId = s.FinishedProductSupplyId,
+                    ProductSizeRunSizeId = s.ProductSizeRunSizeId,
+                    SizeLabel = s.SizeRunSize != null ? s.SizeRunSize.SizeCode : string.Empty,
+                    MaterialItemId = s.MaterialItemId,
+                    MaterialItemName = s.MaterialItem != null ? s.MaterialItem.Name : string.Empty,
+                    Notes = s.Notes
+                })
+                .ToListAsync();
+
+            var sizesBySupplyId = sizes
+                .GroupBy(s => s.FinishedProductSupplyId)
+                .ToDictionary(group => group.Key, group => group.ToList());
+
+            foreach (var supply in supplyRows)
+            {
+                if (sizesBySupplyId.TryGetValue(supply.FinishedProductSupplyId, out var supplySizes))
+                {
+                    supply.Sizes = supplySizes;
+                }
+            }
+
+            return Results.Ok(supplyRows);
         });
 
         // Initialize supplies from consumption template
@@ -359,7 +383,6 @@ public static class ProductCatalogOperationsEndpoints
                         CreatedBy = "web-api"
                     };
                     db.FinishedProductSupplies.Add(supply);
-                    await db.SaveChangesAsync();
                     created++;
                 }
 
@@ -406,6 +429,34 @@ public static class ProductCatalogOperationsEndpoints
                 sz.Notes = req.Notes ?? string.Empty;
                 sz.UpdatedAt = DateTime.UtcNow;
                 sz.UpdatedBy = "web-api";
+            }
+            await db.SaveChangesAsync();
+            return Results.Ok(new { success = true });
+        });
+
+        // Batch save all rows for a product in one round-trip
+        g.MapPut("/{productId:guid}/sizes/batch", async (Guid productId, List<FinishedProductSupplyBatchRow> rows, NanchesoftDbContext db) =>
+        {
+            if (rows is null || rows.Count == 0) return Results.Ok(new { success = true });
+            var supplyIds = rows.Select(r => r.SupplyId).ToList();
+            var supplies = await db.FinishedProductSupplies
+                .Include(x => x.Sizes)
+                .Where(x => x.FinishedProductId == productId && supplyIds.Contains(x.Id) && !x.IsAuthorized)
+                .ToListAsync();
+            var now = DateTime.UtcNow;
+            foreach (var row in rows)
+            {
+                var supply = supplies.FirstOrDefault(s => s.Id == row.SupplyId);
+                if (supply is null) continue;
+                foreach (var req in row.Sizes)
+                {
+                    var sz = supply.Sizes.FirstOrDefault(s => s.ProductSizeRunSizeId == req.ProductSizeRunSizeId);
+                    if (sz is null) continue;
+                    sz.MaterialItemId = req.MaterialItemId;
+                    sz.Notes = req.Notes ?? string.Empty;
+                    sz.UpdatedAt = now;
+                    sz.UpdatedBy = "web-api";
+                }
             }
             await db.SaveChangesAsync();
             return Results.Ok(new { success = true });
@@ -861,6 +912,7 @@ public sealed class ProductConsumptionProfileDto : ProductConsumptionProfileRequ
 public sealed class FinishedProductSupplySizeDto { public Guid FinishedProductSupplySizeId { get; set; } public Guid FinishedProductSupplyId { get; set; } public Guid ProductSizeRunSizeId { get; set; } public string SizeLabel { get; set; } = string.Empty; public Guid? MaterialItemId { get; set; } public string MaterialItemName { get; set; } = string.Empty; public string Notes { get; set; } = string.Empty; }
 public sealed class FinishedProductSupplyDto { public Guid FinishedProductSupplyId { get; set; } public Guid FinishedProductId { get; set; } public Guid ProductComponentId { get; set; } public string ProductComponentCode { get; set; } = string.Empty; public string ProductComponentName { get; set; } = string.Empty; public bool IsAuthorized { get; set; } public DateTime? AuthorizedAt { get; set; } public string AuthorizedBy { get; set; } = string.Empty; public string Notes { get; set; } = string.Empty; public bool IsActive { get; set; } public List<FinishedProductSupplySizeDto> Sizes { get; set; } = new(); }
 public sealed class FinishedProductSupplySizeRequest { public Guid ProductSizeRunSizeId { get; set; } public Guid? MaterialItemId { get; set; } public string? Notes { get; set; } }
+public sealed class FinishedProductSupplyBatchRow { public Guid SupplyId { get; set; } public List<FinishedProductSupplySizeRequest> Sizes { get; set; } = []; }
 
 public sealed class MaterialSizeDistributionDetailDto { public Guid MaterialSizeDistributionDetailId { get; set; } public Guid MaterialSizeDistributionId { get; set; } public Guid ProductSizeRunSizeId { get; set; } public string SizeLabel { get; set; } = string.Empty; public Guid? MaterialItemId { get; set; } public string MaterialItemName { get; set; } = string.Empty; public string Notes { get; set; } = string.Empty; }
 public sealed class MaterialSizeDistributionDto { public Guid MaterialSizeDistributionId { get; set; } public Guid CompanyId { get; set; } public Guid MaterialSubfamilyId { get; set; } public string MaterialSubfamilyName { get; set; } = string.Empty; public Guid ProductSizeRunId { get; set; } public string ProductSizeRunName { get; set; } = string.Empty; public Guid? ProductLastId { get; set; } public string ProductLastName { get; set; } = string.Empty; public string Notes { get; set; } = string.Empty; public bool IsActive { get; set; } public List<MaterialSizeDistributionDetailDto> Details { get; set; } = new(); }

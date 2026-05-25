@@ -362,3 +362,76 @@ window.nsShell = (() => {
         dispose
     };
 })();
+
+// Descarga un archivo de texto desde Blazor (CSV, etc.)
+window.downloadFile = function (filename, mimeType, content) {
+    const blob = new Blob([content], { type: mimeType });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+};
+
+// Descarga un archivo binario (PDF) desde un string base64
+window.downloadFileBase64 = function (filename, base64Data) {
+    const byteChars = atob(base64Data);
+    const byteNums = new Array(byteChars.length);
+    for (let i = 0; i < byteChars.length; i++) byteNums[i] = byteChars.charCodeAt(i);
+    const blob = new Blob([new Uint8Array(byteNums)], { type: 'application/pdf' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+};
+
+window.nsImport = {
+    initDropZone: function (elementId, dotNetRef) {
+        const zone = document.getElementById(elementId);
+        if (!zone || zone._nsImportInit) return;
+        zone._nsImportInit = true;
+
+        // Capture phase ensures we get the event before any child element
+        zone.addEventListener('dragenter', e => { e.preventDefault(); }, true);
+        zone.addEventListener('dragover', e => {
+            e.preventDefault();
+            zone.classList.add('ns-import-dz-over');
+        }, true);
+        zone.addEventListener('dragleave', e => {
+            // Only clear when pointer leaves the zone itself, not a child
+            if (!zone.contains(e.relatedTarget)) {
+                zone.classList.remove('ns-import-dz-over');
+            }
+        }, true);
+        zone.addEventListener('drop', async e => {
+            e.preventDefault();
+            e.stopPropagation();
+            zone.classList.remove('ns-import-dz-over');
+            const file = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+            if (!file) return;
+            try {
+                const buf = await file.arrayBuffer();
+                // Intentar UTF-8 estricto; si trae caracteres de reemplazo (mojibake), reintentar Latin-1.
+                let text;
+                try {
+                    text = new TextDecoder('utf-8', { fatal: true }).decode(buf);
+                } catch (_) {
+                    text = new TextDecoder('iso-8859-1').decode(buf);
+                }
+                if (text.indexOf('�') >= 0) {
+                    text = new TextDecoder('iso-8859-1').decode(buf);
+                }
+                await dotNetRef.invokeMethodAsync('HandleDroppedCsv', text);
+            } catch (err) {
+                console.error('nsImport drop error:', err);
+            }
+        }, true);
+    }
+};

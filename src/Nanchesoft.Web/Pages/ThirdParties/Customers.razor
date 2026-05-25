@@ -1,5 +1,1240 @@
 @page "/third-parties/customers"
+@using System.Net.Http.Json
+@using System.Text.Json
+@using Microsoft.JSInterop
+@inject IHttpClientFactory HttpClientFactory
+@inject Nanchesoft.Web.State.AuthState AuthState
+@inject IJSRuntime JS
+@implements IDisposable
 
 <PageTitle>Clientes | Nanchesoft</PageTitle>
 
-<CatalogCrudPage CatalogKey="customers" />
+<style>
+    .cust-hero { background:linear-gradient(135deg,#0f172a 0%,#1e3a5f 45%,#2563eb 100%); color:#fff; padding:1.2rem 1.6rem; border-radius:14px; margin-bottom:1rem; box-shadow:0 4px 20px rgba(37,99,235,0.25); }
+    .cust-hero h1 { font-size:1.75rem; font-weight:900; margin:0 0 0.1rem 0; }
+    .cust-hero .sub { font-size:0.8rem; opacity:0.8; margin:0; }
+
+    .cust-table th { background:#1e293b; color:#e2e8f0; font-size:0.7rem; font-weight:700; text-transform:uppercase; letter-spacing:0.5px; padding:0.5rem 0.7rem; white-space:nowrap; }
+    .cust-table td { font-size:0.82rem; padding:0.4rem 0.7rem; vertical-align:middle; }
+    .cust-table tr:hover td { background:#eff6ff; cursor:pointer; }
+    .cust-table tr.selected td { background:#dbeafe !important; }
+
+    .panel-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.4); z-index:1040; display:flex; justify-content:flex-end; }
+    .side-panel { background:#fff; width:780px; max-width:98vw; height:100%; overflow-y:auto; box-shadow:-6px 0 24px rgba(0,0,0,0.18); display:flex; flex-direction:column; }
+    .panel-header { background:linear-gradient(90deg,#1e3a5f,#2563eb); color:#fff; padding:1rem 1.25rem; flex-shrink:0; }
+    .panel-body { flex:1; overflow-y:auto; padding:1.25rem; }
+
+    .tab-nav { display:flex; gap:0; border-bottom:2px solid #e5e7eb; margin-bottom:1rem; }
+    .tab-btn { padding:0.45rem 1rem; font-size:0.78rem; font-weight:600; border:none; background:none; color:#6b7280; cursor:pointer; border-bottom:2px solid transparent; margin-bottom:-2px; }
+    .tab-btn.active { color:#2563eb; border-bottom-color:#2563eb; }
+    .tab-btn:hover:not(.active) { color:#374151; }
+
+    .entity-card { border:1px solid #e5e7eb; border-radius:8px; padding:0.75rem; margin-bottom:0.6rem; background:#f8fafc; position:relative; }
+    .entity-card.primary-card { border-color:#2563eb; background:#eff6ff; }
+    .badge-primary { background:#2563eb; color:#fff; font-size:0.6rem; font-weight:700; border-radius:10px; padding:0.1rem 0.45rem; }
+    .badge-hasPdf { background:#059669; color:#fff; font-size:0.6rem; font-weight:700; border-radius:10px; padding:0.1rem 0.45rem; }
+    .entity-actions { position:absolute; top:0.5rem; right:0.5rem; display:flex; gap:0.25rem; }
+
+    .form-mini { background:#fff; border:1px solid #dbeafe; border-radius:8px; padding:0.85rem; margin-top:0.75rem; }
+    .section-lbl { font-size:0.66rem; font-weight:800; text-transform:uppercase; letter-spacing:0.8px; color:#6b7280; border-left:3px solid #2563eb; padding-left:0.45rem; margin-bottom:0.6rem; }
+
+    .pdf-zone { border:2px dashed #d1d5db; border-radius:6px; padding:0.75rem; text-align:center; font-size:0.78rem; color:#6b7280; cursor:pointer; }
+    .pdf-zone:hover { border-color:#2563eb; color:#2563eb; }
+
+    .quick-add-btn { font-size:0.72rem; color:#2563eb; background:none; border:none; padding:0; cursor:pointer; text-decoration:underline; }
+    .quick-add-btn:hover { color:#1d4ed8; }
+
+    .import-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:2000; display:flex; align-items:center; justify-content:center; }
+    .import-box { background:#fff; border-radius:16px; width:620px; max-width:96vw; max-height:92vh; overflow-y:auto; box-shadow:0 8px 40px rgba(0,0,0,.25); padding:1.5rem; }
+    .csf-drop-zone { border:2px dashed #93c5fd; border-radius:10px; padding:2rem 1rem; text-align:center; cursor:pointer; transition:all .2s; background:#f0f9ff; }
+    .csf-drop-zone:hover, .csf-drop-zone.dragging { border-color:#2563eb; background:#dbeafe; }
+    .csf-tab-btn { padding:0.4rem 1.1rem; font-size:0.8rem; font-weight:600; border:none; background:none; color:#6b7280; cursor:pointer; border-bottom:2px solid transparent; margin-bottom:-2px; }
+    .csf-tab-btn.active { color:#2563eb; border-bottom-color:#2563eb; }
+    .import-preview-tag { display:inline-block; background:#dbeafe; color:#1d4ed8; font-size:0.7rem; font-weight:700; border-radius:6px; padding:0.1rem 0.4rem; margin-bottom:0.5rem; }
+</style>
+
+<div class="container-fluid py-3">
+
+    @* ── Hero ──────────────────────────────────────────────────────────────── *@
+    <div class="cust-hero">
+        <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
+            <div>
+                <h1>Clientes</h1>
+                <p class="sub">Lista de precios, razones sociales, situación fiscal y sucursales por cliente</p>
+            </div>
+            <div class="d-flex gap-2 align-items-center">
+                <span class="badge bg-light text-dark fs-6 fw-bold">@_customers.Count</span>
+                <button class="btn btn-outline-light fw-semibold px-3" style="border-radius:8px;" @onclick="OpenImportModal">📄 Importar CSF</button>
+                <button class="btn btn-light fw-bold px-3" style="border-radius:8px;" @onclick="OpenNewCustomer">+ Nuevo cliente</button>
+            </div>
+        </div>
+    </div>
+
+    @* ── Alerts ───────────────────────────────────────────────────────────── *@
+    @if (!string.IsNullOrWhiteSpace(_msg))
+    {
+        <div class="alert alert-success alert-dismissible py-2 mb-2"><strong>✓</strong> @_msg <button type="button" class="btn-close" @onclick='() => _msg = string.Empty'></button></div>
+    }
+    @if (!string.IsNullOrWhiteSpace(_err))
+    {
+        <div class="alert alert-danger alert-dismissible py-2 mb-2"><strong>✗</strong> @_err <button type="button" class="btn-close" @onclick='() => _err = string.Empty'></button></div>
+    }
+
+    @* ── Filter bar ───────────────────────────────────────────────────────── *@
+    <div class="d-flex gap-2 mb-3 flex-wrap align-items-center">
+        <input class="form-control form-control-sm" style="width:260px;" placeholder="🔍 Buscar cliente..." @bind="_search" @bind:event="oninput" />
+        <select class="form-select form-select-sm" style="width:140px;" @bind="_filterActive">
+            <option value="">Todos</option>
+            <option value="true">Activos</option>
+            <option value="false">Inactivos</option>
+        </select>
+        <button class="btn btn-sm btn-outline-secondary" @onclick="LoadCustomersAsync">↺</button>
+    </div>
+
+    @* ── Customer table ───────────────────────────────────────────────────── *@
+    @if (_loading)
+    {
+        <div class="d-flex align-items-center gap-2 text-secondary py-4"><div class="spinner-border spinner-border-sm"></div> Cargando...</div>
+    }
+    else
+    {
+        var rows = FilteredCustomers;
+        @if (rows.Count == 0)
+        {
+            <div class="text-center py-5 text-secondary"><div style="font-size:2.5rem;opacity:0.2;">👥</div><div class="mt-2">Sin clientes registrados.</div></div>
+        }
+        else
+        {
+            <div class="card shadow-sm" style="border-radius:12px;overflow:hidden;border:none;">
+                <div class="table-responsive">
+                    <table class="table align-middle mb-0 cust-table">
+                        <thead><tr>
+                            <th>Código</th>
+                            <th>Cliente</th>
+                            <th>Razón social (principal)</th>
+                            <th>RFC</th>
+                            <th>Lista precios</th>
+                            <th>Crédito</th>
+                            <th>Estado</th>
+                            <th></th>
+                        </tr></thead>
+                        <tbody>
+                            @foreach (var c in rows)
+                            {
+                                <tr class="@(_selected?.CustomerId == c.CustomerId ? "selected" : "")" @onclick="() => OpenCustomerPanel(c)">
+                                    <td><span class="fw-bold" style="font-family:monospace;">@c.Code</span></td>
+                                    <td><span class="fw-semibold">@c.Name</span></td>
+                                    <td class="small text-secondary">@c.LegalName</td>
+                                    <td><span style="font-family:monospace;font-size:0.78rem;">@c.TaxId</span></td>
+                                    <td class="small">@(string.IsNullOrEmpty(c.PriceListName) ? "—" : c.PriceListName)</td>
+                                    <td class="text-end small">@(c.CreditLimit > 0 ? "$" + c.CreditLimit.ToString("N0") : "—")</td>
+                                    <td><span class="badge" style="background:@(c.IsActive?"#059669":"#6b7280");color:#fff;font-size:0.67rem;">@(c.IsActive?"Activo":"Inactivo")</span></td>
+                                    <td><button class="btn btn-sm btn-outline-primary" style="font-size:0.7rem;" @onclick:stopPropagation="true" @onclick="() => OpenCustomerPanel(c)">Editar ▸</button></td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+                <div class="px-3 py-2 text-secondary small border-top" style="background:#f8fafc;">@rows.Count cliente(s)</div>
+            </div>
+        }
+    }
+</div>
+
+@* ════════════════════════════════════════════════════════════════════════
+   IMPORT CSF MODAL
+════════════════════════════════════════════════════════════════════════ *@
+@if (_showImportModal)
+{
+    <div class="import-overlay" @onclick="async () => await CloseImportModal()">
+        <div class="import-box" @onclick:stopPropagation="true">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <div>
+                    <div style="font-size:1.05rem;font-weight:800;color:#1e3a5f;">Importar Constancia de Situación Fiscal</div>
+                    <div style="font-size:0.72rem;color:#6b7280;">El sistema extrae RFC, nombre, domicilio fiscal y régimen automáticamente</div>
+                </div>
+                <button class="btn-close" @onclick="async () => await CloseImportModal()"></button>
+            </div>
+
+            @if (_importParsed is null)
+            {
+                <div class="d-flex gap-0 border-bottom mb-3">
+                    <button class="csf-tab-btn @(_importTab==0?"active":"")" @onclick='() => _importTab=0'>PDF</button>
+                    <button class="csf-tab-btn @(_importTab==1?"active":"")" @onclick='() => _importTab=1'>Código QR</button>
+                </div>
+
+                @* Hidden file inputs — wired via JS change event in OnAfterRenderAsync *@
+                @* Labels trigger them natively (synchronous user gesture — no JS.InvokeVoidAsync needed) *@
+                <input id="csf-pdf-input" type="file" accept=".pdf" style="display:none;" />
+                <input id="csf-qr-input" type="file" accept="image/*" capture="environment" style="display:none;" />
+
+                @if (_importTab == 0)
+                {
+                    <label for="csf-pdf-input" class="csf-drop-zone" style="display:block;cursor:pointer;">
+                        <div style="font-size:2.5rem;opacity:0.35;line-height:1;">📄</div>
+                        <div class="fw-semibold mt-2 small">Arrastra aquí el PDF · Pega con Ctrl+V</div>
+                        <div class="text-primary small mt-1 fw-semibold">o haz clic aquí para seleccionar el archivo</div>
+                        <div class="text-secondary mt-1" style="font-size:0.73rem;">Constancia de Situación Fiscal del SAT (.pdf)</div>
+                    </label>
+                }
+                else
+                {
+                    <div class="text-center py-3">
+                        <div style="font-size:2.5rem;opacity:0.3;line-height:1;">📷</div>
+                        <div class="fw-semibold small mt-2 mb-3">Toma una foto al código QR de la Constancia</div>
+                        <label for="csf-qr-input" class="btn btn-primary btn-sm px-3" style="cursor:pointer;">
+                            📷 Abrir cámara / seleccionar imagen
+                        </label>
+                        <div class="mt-3 text-start">
+                            <div class="text-secondary small mb-1">O pega el texto del código QR (cadena original del SAT):</div>
+                            <textarea class="form-control form-control-sm" rows="3" @bind="_qrText" placeholder="||2025/01/01|XAXX010101000|CONSTANCIA DE SITUACIÓN FISCAL|...||"></textarea>
+                            <button class="btn btn-sm btn-outline-primary mt-2" @onclick="ParseQrTextAsync" disabled="@_importParsing">Extraer RFC del QR</button>
+                        </div>
+                    </div>
+                }
+
+                @if (!string.IsNullOrEmpty(_importError))
+                {
+                    <div class="alert alert-danger py-2 small mt-2">@_importError</div>
+                }
+                @if (_importParsing)
+                {
+                    <div class="d-flex justify-content-center align-items-center gap-2 mt-2">
+                        <div class="spinner-border spinner-border-sm text-primary"></div>
+                        <span class="small text-secondary">Procesando...</span>
+                    </div>
+                }
+            }
+            else
+            {
+                @* Preview parsed data *@
+                <div class="d-flex align-items-center gap-2 mb-3">
+                    <span class="import-preview-tag">Vista previa · Datos extraídos de la CSF</span>
+                    @if (!string.IsNullOrEmpty(_importParsed.Rfc))
+                    {
+                        <span class="fw-bold" style="font-family:monospace;color:#1d4ed8;">@_importParsed.Rfc</span>
+                    }
+                </div>
+                <div class="row g-2 mb-2">
+                    <div class="col-md-4">
+                        <label class="form-label small fw-semibold mb-1">RFC <span class="text-danger">*</span></label>
+                        <input class="form-control form-control-sm fw-bold" style="letter-spacing:1px;text-transform:uppercase;" @bind="_importParsed.Rfc" />
+                    </div>
+                    <div class="col-md-8">
+                        <label class="form-label small fw-semibold mb-1">Razón social / Nombre legal</label>
+                        <input class="form-control form-control-sm" @bind="_importParsed.LegalName" />
+                    </div>
+                </div>
+                <div class="row g-2 mb-2">
+                    <div class="col-md-5">
+                        <label class="form-label small fw-semibold mb-1">Calle</label>
+                        <input class="form-control form-control-sm" @bind="_importParsed.Street" />
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label small fw-semibold mb-1">No. Ext.</label>
+                        <input class="form-control form-control-sm" @bind="_importParsed.ExteriorNumber" />
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label small fw-semibold mb-1">No. Int.</label>
+                        <input class="form-control form-control-sm" @bind="_importParsed.InteriorNumber" />
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small fw-semibold mb-1">C.P.</label>
+                        <input class="form-control form-control-sm" @bind="_importParsed.ZipCode" />
+                    </div>
+                </div>
+                <div class="row g-2 mb-2">
+                    <div class="col-md-4">
+                        <label class="form-label small fw-semibold mb-1">Colonia</label>
+                        <input class="form-control form-control-sm" @bind="_importParsed.Neighborhood" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label small fw-semibold mb-1">Municipio</label>
+                        <input class="form-control form-control-sm" @bind="_importParsed.Municipality" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label small fw-semibold mb-1">Estado</label>
+                        <input class="form-control form-control-sm" @bind="_importParsed.State" />
+                    </div>
+                </div>
+                <div class="row g-2 mb-3">
+                    <div class="col-md-7">
+                        <label class="form-label small fw-semibold mb-1">Régimen fiscal</label>
+                        <select class="form-select form-select-sm" @bind="_importParsed.PrimaryFiscalRegime">
+                            <option value="">— Sin especificar —</option>
+                            <option value="601">601 - General de Ley Personas Morales</option>
+                            <option value="603">603 - Personas Morales con Fines no Lucrativos</option>
+                            <option value="605">605 - Sueldos y Salarios</option>
+                            <option value="606">606 - Arrendamiento</option>
+                            <option value="612">612 - Personas Físicas con Actividades Empresariales</option>
+                            <option value="616">616 - Sin obligaciones fiscales</option>
+                            <option value="621">621 - Incorporación Fiscal</option>
+                            <option value="625">625 - Plataformas Tecnológicas</option>
+                            <option value="626">626 - Régimen Simplificado de Confianza</option>
+                        </select>
+                    </div>
+                </div>
+                @if (!string.IsNullOrEmpty(_importError))
+                {
+                    <div class="alert alert-danger py-2 small">@_importError</div>
+                }
+                @if (!string.IsNullOrEmpty(_importSuccess))
+                {
+                    <div class="alert alert-success py-2 small">@_importSuccess</div>
+                }
+                <div class="d-flex justify-content-between align-items-center">
+                    <button class="btn btn-sm btn-outline-secondary" @onclick="ResetImport" disabled="@_importBusy">← Importar otro</button>
+                    <button class="btn btn-sm btn-primary px-4" disabled="@(_importBusy || !string.IsNullOrEmpty(_importSuccess))" @onclick="ConfirmImportAsync">
+                        @(_importBusy ? "Importando..." : "✓ Importar cliente")
+                    </button>
+                </div>
+            }
+        </div>
+    </div>
+}
+
+@* ════════════════════════════════════════════════════════════════════════
+   SIDE PANEL
+════════════════════════════════════════════════════════════════════════ *@
+@if (_panelOpen)
+{
+    <div class="panel-overlay" @onclick="ClosePanel">
+        <div class="side-panel" @onclick:stopPropagation="true">
+            <div class="panel-header">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <div style="font-size:1.1rem;font-weight:800;">@(_isNew ? "Nuevo cliente" : (_selected?.Name ?? "Cliente"))</div>
+                        @if (!_isNew && _selected is not null)
+                        {
+                            <div style="font-size:0.75rem;opacity:0.8;">@_selected.Code · @_selected.LegalName</div>
+                        }
+                    </div>
+                    <button class="btn-close btn-close-white" @onclick="ClosePanel"></button>
+                </div>
+                @if (!_isNew)
+                {
+                    <div class="tab-nav mt-2" style="border-color:rgba(255,255,255,0.25);">
+                        <button class="tab-btn @(_tab==0?"active":"")" style="color:@(_tab==0?"#fff":"rgba(255,255,255,0.65)");" @onclick='() => SetTab(0)'>General</button>
+                        <button class="tab-btn @(_tab==1?"active":"")" style="color:@(_tab==1?"#fff":"rgba(255,255,255,0.65)");" @onclick='() => SetTab(1)'>
+                            Razones sociales @(_legalEntities.Count > 0 ? $"({_legalEntities.Count})" : "")
+                        </button>
+                        <button class="tab-btn @(_tab==2?"active":"")" style="color:@(_tab==2?"#fff":"rgba(255,255,255,0.65)");" @onclick='() => SetTab(2)'>
+                            Sucursales @(_locations.Count > 0 ? $"({_locations.Count})" : "")
+                        </button>
+                    </div>
+                }
+            </div>
+            <div class="panel-body">
+
+                @* ─── TAB 0: GENERAL ────────────────────────────────────────── *@
+                @if (_isNew || _tab == 0)
+                {
+                    <div class="section-lbl">Datos generales</div>
+                    <div class="row g-2 mb-2">
+                        <div class="col-md-3">
+                            <label class="form-label small fw-semibold mb-1">Código <span class="text-danger">*</span></label>
+                            <input class="form-control form-control-sm" @bind="_fCode" placeholder="CLI-001" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-semibold mb-1">Nombre comercial <span class="text-danger">*</span></label>
+                            <input class="form-control form-control-sm" @bind="_fName" placeholder="Nombre del cliente" />
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label small fw-semibold mb-1">Activo</label>
+                            <select class="form-select form-select-sm" @bind="_fActive">
+                                <option value="true">Sí</option>
+                                <option value="false">No</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="row g-2 mb-2">
+                        <div class="col-md-6">
+                            <label class="form-label small fw-semibold mb-1">Razón social principal <span class="text-danger">*</span></label>
+                            <input class="form-control form-control-sm" @bind="_fLegalName" placeholder="Razón social para facturación" />
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label small fw-semibold mb-1">RFC principal <span class="text-danger">*</span></label>
+                            <input class="form-control form-control-sm" @bind="_fTaxId" placeholder="XAXX010101000" style="text-transform:uppercase;" />
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label small fw-semibold mb-1">Email</label>
+                            <input class="form-control form-control-sm" @bind="_fEmail" placeholder="contacto@@empresa.com" />
+                        </div>
+                    </div>
+                    <div class="row g-2 mb-2">
+                        <div class="col-md-4">
+                            <label class="form-label small fw-semibold mb-1">Lista de precios</label>
+                            <select class="form-select form-select-sm" @bind="_fPriceListId">
+                                <option value="">— Sin lista —</option>
+                                @foreach (var pl in _priceLists)
+                                {
+                                    <option value="@pl.Id">@pl.Name</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label small fw-semibold mb-1">Teléfono</label>
+                            <input class="form-control form-control-sm" @bind="_fPhone" />
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label small fw-semibold mb-1">Crédito ($)</label>
+                            <input type="number" class="form-control form-control-sm" min="0" @bind="_fCreditLimit" />
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label small fw-semibold mb-1">Plazo (días)</label>
+                            <input type="number" class="form-control form-control-sm" min="0" @bind="_fPaymentTermDays" />
+                        </div>
+                    </div>
+                    @if (!string.IsNullOrWhiteSpace(_formErr))
+                    {
+                        <div class="alert alert-danger py-2 small mt-1">@_formErr</div>
+                    }
+                    <div class="d-flex gap-2 justify-content-end mt-3">
+                        <button class="btn btn-outline-secondary btn-sm" @onclick="ClosePanel" disabled="@_busy">Cancelar</button>
+                        <button class="btn btn-primary btn-sm px-4" disabled="@_busy" @onclick="SaveCustomerAsync">
+                            @(_busy ? "Guardando..." : (_isNew ? "✓ Crear cliente" : "✓ Guardar cambios"))
+                        </button>
+                    </div>
+                }
+
+                @* ─── TAB 1: RAZONES SOCIALES ────────────────────────────────── *@
+                @if (!_isNew && _tab == 1)
+                {
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <div class="section-lbl mb-0">Razones sociales / entidades fiscales</div>
+                        <button class="btn btn-sm btn-primary px-3" style="font-size:0.78rem;border-radius:20px;" @onclick="() => { _showEntityForm = !_showEntityForm; _editingEntityId = null; ResetEntityForm(); }">
+                            @(_showEntityForm ? "✕ Cancelar" : "+ Nueva")
+                        </button>
+                    </div>
+
+                    @if (_showEntityForm)
+                    {
+                        <div class="form-mini mb-3">
+                            <div class="section-lbl">@(_editingEntityId is null ? "Nueva razón social" : "Editar razón social")</div>
+                            <div class="row g-2 mb-2">
+                                <div class="col-md-7">
+                                    <label class="form-label small fw-semibold mb-1">Razón social <span class="text-danger">*</span></label>
+                                    <input class="form-control form-control-sm" @bind="_eLegalName" placeholder="Nombre legal completo" />
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label small fw-semibold mb-1">RFC <span class="text-danger">*</span></label>
+                                    <input class="form-control form-control-sm" @bind="_eTaxId" placeholder="RFC" style="text-transform:uppercase;" />
+                                </div>
+                                <div class="col-md-2">
+                                    <label class="form-label small fw-semibold mb-1">Principal</label>
+                                    <div class="form-check mt-1"><input class="form-check-input" type="checkbox" @bind="_ePrimary" /><label class="form-check-label small">Sí</label></div>
+                                </div>
+                            </div>
+                            <div class="row g-2 mb-2">
+                                <div class="col-md-4">
+                                    <label class="form-label small fw-semibold mb-1">Régimen fiscal</label>
+                                    <select class="form-select form-select-sm" @bind="_eFiscalRegime">
+                                        <option value="">— Selecciona —</option>
+                                        <option value="601">601 - General de Ley Personas Morales</option>
+                                        <option value="603">603 - Personas Morales con Fines no Lucrativos</option>
+                                        <option value="605">605 - Sueldos y Salarios</option>
+                                        <option value="606">606 - Arrendamiento</option>
+                                        <option value="607">607 - Régimen de Enajenación o Adquisición de Bienes</option>
+                                        <option value="608">608 - Demás ingresos</option>
+                                        <option value="609">609 - Consolidación</option>
+                                        <option value="610">610 - Residentes en el Extranjero</option>
+                                        <option value="611">611 - Ingresos por Dividendos</option>
+                                        <option value="612">612 - Personas Físicas con Actividades Empresariales</option>
+                                        <option value="614">614 - Ingresos por intereses</option>
+                                        <option value="615">615 - Régimen de los ingresos por obtención de premios</option>
+                                        <option value="616">616 - Sin obligaciones fiscales</option>
+                                        <option value="620">620 - Sociedades Cooperativas de Producción</option>
+                                        <option value="621">621 - Incorporación Fiscal</option>
+                                        <option value="622">622 - Actividades Agrícolas, Ganaderas, Silvícolas y Pesqueras</option>
+                                        <option value="623">623 - Opcional para Grupos de Sociedades</option>
+                                        <option value="624">624 - Coordinados</option>
+                                        <option value="625">625 - Régimen de Actividades Empresariales con ingresos a través de Plataformas Tecnológicas</option>
+                                        <option value="626">626 - Régimen Simplificado de Confianza</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-2">
+                                    <label class="form-label small fw-semibold mb-1">C.P.</label>
+                                    <input class="form-control form-control-sm" @bind="_eZipCode" placeholder="00000" maxlength="5" />
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label small fw-semibold mb-1">Uso CFDI</label>
+                                    <select class="form-select form-select-sm" @bind="_eCfdiUse">
+                                        <option value="">— Sin especificar —</option>
+                                        <option value="G01">G01 - Adquisición de mercancias</option>
+                                        <option value="G03">G03 - Gastos en general</option>
+                                        <option value="I01">I01 - Construcciones</option>
+                                        <option value="I04">I04 - Equipo de computo</option>
+                                        <option value="D01">D01 - Honorarios médicos</option>
+                                        <option value="P01">P01 - Por definir</option>
+                                        <option value="S01">S01 - Sin efectos fiscales</option>
+                                        <option value="CP01">CP01 - Pagos</option>
+                                        <option value="CN01">CN01 - Nómina</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-3 d-flex align-items-end">
+                                    <div class="d-flex gap-2 w-100">
+                                        <button class="btn btn-outline-secondary btn-sm flex-fill" @onclick="() => _showEntityForm = false" disabled="@_busy">Cancelar</button>
+                                        <button class="btn btn-primary btn-sm flex-fill" disabled="@_busy" @onclick="SaveLegalEntityAsync">
+                                            @(_busy ? "..." : "✓ Guardar")
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    }
+
+                    @if (_loadingEntities)
+                    {
+                        <div class="text-secondary small py-2">Cargando...</div>
+                    }
+                    else if (_legalEntities.Count == 0)
+                    {
+                        <div class="text-center py-4 text-secondary small" style="border:2px dashed #d1d5db;border-radius:8px;">Sin razones sociales registradas. Agrega la primera.</div>
+                    }
+                    else
+                    {
+                        @foreach (var e in _legalEntities)
+                        {
+                            <div class="entity-card @(e.IsPrimary ? "primary-card" : "")">
+                                <div class="entity-actions">
+                                    @if (e.HasPdf)
+                                    {
+                                        <a href="/api/third-parties/fiscal-pdf/@e.FiscalSituationPdfPath" target="_blank" class="btn btn-sm btn-outline-success py-0 px-1" style="font-size:0.7rem;">PDF</a>
+                                    }
+                                    <button class="btn btn-sm btn-outline-primary py-0 px-1" style="font-size:0.7rem;" @onclick="() => StartEditEntity(e)">✎</button>
+                                    <button class="btn btn-sm btn-outline-danger py-0 px-1" style="font-size:0.7rem;" @onclick="() => DeleteLegalEntityAsync(e.LegalEntityId)" disabled="@_busy">✕</button>
+                                </div>
+                                <div class="d-flex gap-2 align-items-start flex-wrap">
+                                    <div class="flex-grow-1">
+                                        <div class="d-flex align-items-center gap-2 mb-1">
+                                            <span class="fw-semibold" style="font-size:0.88rem;">@e.LegalName</span>
+                                            @if (e.IsPrimary) { <span class="badge-primary">Principal</span> }
+                                            @if (e.HasPdf) { <span class="badge-hasPdf">✓ CSF</span> }
+                                        </div>
+                                        <div class="text-secondary small">RFC: <strong>@e.TaxId</strong>
+                                            @if (!string.IsNullOrEmpty(e.FiscalRegime)) { <span class="ms-2">Régimen: @e.FiscalRegime</span> }
+                                            @if (!string.IsNullOrEmpty(e.ZipCode)) { <span class="ms-2">C.P. @e.ZipCode</span> }
+                                            @if (!string.IsNullOrEmpty(e.CfdiUse)) { <span class="ms-2">Uso: @e.CfdiUse</span> }
+                                        </div>
+                                    </div>
+                                </div>
+                                @* PDF upload zone for this entity *@
+                                <div class="mt-2">
+                                    <label class="pdf-zone d-block" style="font-size:0.72rem;" title="Subir Constancia de Situación Fiscal (PDF)">
+                                        <input type="file" accept=".pdf" style="display:none;" @onchange="e2 => UploadPdfAsync(e.LegalEntityId, e2)" />
+                                        @(e.HasPdf ? "↑ Actualizar CSF (PDF)" : "+ Subir Constancia de Situación Fiscal (PDF)")
+                                    </label>
+                                </div>
+                                @if (_uploadingPdfFor == e.LegalEntityId)
+                                {
+                                    <div class="text-secondary small mt-1" style="font-style:italic;">Subiendo PDF...</div>
+                                }
+                            </div>
+                        }
+                    }
+                }
+
+                @* ─── TAB 2: SUCURSALES / UBICACIONES ───────────────────────── *@
+                @if (!_isNew && _tab == 2)
+                {
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <div class="section-lbl mb-0">Sucursales y direcciones de entrega</div>
+                        <button class="btn btn-sm btn-primary px-3" style="font-size:0.78rem;border-radius:20px;" @onclick="() => { _showLocForm = !_showLocForm; _editingLocId = null; ResetLocForm(); }">
+                            @(_showLocForm ? "✕ Cancelar" : "+ Nueva sucursal")
+                        </button>
+                    </div>
+
+                    @if (_showLocForm)
+                    {
+                        <div class="form-mini mb-3">
+                            <div class="section-lbl">@(_editingLocId is null ? "Nueva sucursal / dirección" : "Editar sucursal")</div>
+                            <div class="row g-2 mb-2">
+                                <div class="col-md-5">
+                                    <label class="form-label small fw-semibold mb-1">Nombre sucursal / ubicación</label>
+                                    <input class="form-control form-control-sm" @bind="_lName" placeholder="Ej. Sucursal Centro, Almacén Norte..." />
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label small fw-semibold mb-1">Tipo</label>
+                                    <select class="form-select form-select-sm" @bind="_lAddressType">
+                                        <option value="Principal">Principal</option>
+                                        <option value="Sucursal">Sucursal</option>
+                                        <option value="Almacén">Almacén</option>
+                                        <option value="Fiscal">Fiscal</option>
+                                        <option value="Entrega">Entrega</option>
+                                        <option value="Otro">Otro</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-2">
+                                    <label class="form-label small fw-semibold mb-1">Principal</label>
+                                    <div class="form-check mt-1"><input class="form-check-input" type="checkbox" @bind="_lPrimary" /><label class="form-check-label small">Sí</label></div>
+                                </div>
+                                <div class="col-md-2 d-flex align-items-end">
+                                    <div class="d-flex gap-1 w-100">
+                                        <button class="btn btn-outline-secondary btn-sm flex-fill" @onclick="() => _showLocForm = false" disabled="@_busy">✕</button>
+                                        <button class="btn btn-primary btn-sm flex-fill" disabled="@_busy" @onclick="SaveLocationAsync">✓</button>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="row g-2 mb-2">
+                                <div class="col-md-5">
+                                    <label class="form-label small fw-semibold mb-1">Calle</label>
+                                    <input class="form-control form-control-sm" @bind="_lStreet" placeholder="Calle..." />
+                                </div>
+                                <div class="col-md-2">
+                                    <label class="form-label small fw-semibold mb-1">No. Ext.</label>
+                                    <input class="form-control form-control-sm" @bind="_lExtNum" />
+                                </div>
+                                <div class="col-md-2">
+                                    <label class="form-label small fw-semibold mb-1">No. Int.</label>
+                                    <input class="form-control form-control-sm" @bind="_lIntNum" />
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label small fw-semibold mb-1">Colonia</label>
+                                    <input class="form-control form-control-sm" @bind="_lNeighborhood" />
+                                </div>
+                            </div>
+                            <div class="row g-2">
+                                <div class="col-md-2">
+                                    <label class="form-label small fw-semibold mb-1">C.P.</label>
+                                    <input class="form-control form-control-sm" @bind="_lZip" maxlength="5" />
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label small fw-semibold mb-1">Referencias</label>
+                                    <input class="form-control form-control-sm" @bind="_lReference" placeholder="Entre calles, señas..." />
+                                </div>
+                            </div>
+                        </div>
+                    }
+
+                    @if (_loadingLocs)
+                    {
+                        <div class="text-secondary small py-2">Cargando...</div>
+                    }
+                    else if (_locations.Count == 0)
+                    {
+                        <div class="text-center py-4 text-secondary small" style="border:2px dashed #d1d5db;border-radius:8px;">Sin sucursales registradas. Agrega la primera.</div>
+                    }
+                    else
+                    {
+                        @foreach (var loc in _locations)
+                        {
+                            <div class="entity-card @(loc.IsPrimary ? "primary-card" : "")">
+                                <div class="entity-actions">
+                                    <button class="btn btn-sm btn-outline-primary py-0 px-1" style="font-size:0.7rem;" @onclick="() => StartEditLocation(loc)">✎</button>
+                                    <button class="btn btn-sm btn-outline-danger py-0 px-1" style="font-size:0.7rem;" @onclick="() => DeleteLocationAsync(loc.LocationId)" disabled="@_busy">✕</button>
+                                </div>
+                                <div class="d-flex align-items-start gap-2 flex-wrap">
+                                    <div class="flex-grow-1">
+                                        <div class="d-flex align-items-center gap-2 mb-1">
+                                            @if (!string.IsNullOrEmpty(loc.LocationName))
+                                            {
+                                                <span class="fw-semibold" style="font-size:0.88rem;">@loc.LocationName</span>
+                                            }
+                                            <span class="badge bg-light text-dark border" style="font-size:0.62rem;">@loc.AddressType</span>
+                                            @if (loc.IsPrimary) { <span class="badge-primary">Principal</span> }
+                                        </div>
+                                        <div class="text-secondary small">
+                                            @if (!string.IsNullOrEmpty(loc.Street))
+                                            {
+                                                <span>@loc.Street @loc.ExteriorNumber @loc.InteriorNumber</span>
+                                            }
+                                            @if (!string.IsNullOrEmpty(loc.Neighborhood)) { <span class="ms-1">· @loc.Neighborhood</span> }
+                                            @if (!string.IsNullOrEmpty(loc.ZipCode)) { <span class="ms-1">· C.P. @loc.ZipCode</span> }
+                                        </div>
+                                        @if (!string.IsNullOrEmpty(loc.Reference))
+                                        {
+                                            <div class="text-secondary" style="font-size:0.72rem;font-style:italic;">@loc.Reference</div>
+                                        }
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    }
+                }
+
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    // ─── State ────────────────────────────────────────────────────────────────
+    private bool _loading = true;
+    private bool _busy;
+    private string _msg = string.Empty;
+    private string _err = string.Empty;
+    private string _search = string.Empty;
+    private string _filterActive = "true";
+
+    private List<CustomerListItem> _customers = [];
+    private CustomerListItem? _selected;
+    private bool _panelOpen;
+    private bool _isNew;
+    private int _tab;
+
+    // General form
+    private string _formErr = string.Empty;
+    private string _fCode = string.Empty;
+    private string _fName = string.Empty;
+    private string _fLegalName = string.Empty;
+    private string _fTaxId = string.Empty;
+    private string _fEmail = string.Empty;
+    private string _fPhone = string.Empty;
+    private string _fPriceListId = string.Empty;
+    private string _fActive = "true";
+    private decimal _fCreditLimit;
+    private int _fPaymentTermDays;
+
+    // Legal entities tab
+    private bool _loadingEntities;
+    private List<LegalEntityItem> _legalEntities = [];
+    private bool _showEntityForm;
+    private Guid? _editingEntityId;
+    private string _eLegalName = string.Empty;
+    private string _eTaxId = string.Empty;
+    private string _eFiscalRegime = string.Empty;
+    private string _eZipCode = string.Empty;
+    private string _eCfdiUse = string.Empty;
+    private bool _ePrimary;
+    private Guid? _uploadingPdfFor;
+
+    // Locations tab
+    private bool _loadingLocs;
+    private List<LocationItem> _locations = [];
+    private bool _showLocForm;
+    private Guid? _editingLocId;
+    private string _lName = string.Empty;
+    private string _lAddressType = "Principal";
+    private string _lStreet = string.Empty;
+    private string _lExtNum = string.Empty;
+    private string _lIntNum = string.Empty;
+    private string _lNeighborhood = string.Empty;
+    private string _lZip = string.Empty;
+    private string _lReference = string.Empty;
+    private bool _lPrimary;
+
+    // Catalogs
+    private List<PriceListOption> _priceLists = [];
+
+    // Import CSF
+    private bool _showImportModal;
+    private int _importTab;
+    private bool _importParsing;
+    private bool _importBusy;
+    private string _importError = string.Empty;
+    private string _importSuccess = string.Empty;
+    private string _qrText = string.Empty;
+    private ImportPreview? _importParsed;
+    private DotNetObjectReference<Customers>? _dotNetRef;
+
+    private List<CustomerListItem> FilteredCustomers
+    {
+        get
+        {
+            var r = _customers.AsEnumerable();
+            if (!string.IsNullOrWhiteSpace(_search))
+            {
+                var q = _search.Trim().ToLowerInvariant();
+                r = r.Where(c => c.Code.ToLowerInvariant().Contains(q) || c.Name.ToLowerInvariant().Contains(q) || c.LegalName.ToLowerInvariant().Contains(q) || c.TaxId.ToLowerInvariant().Contains(q));
+            }
+            if (_filterActive == "true") r = r.Where(c => c.IsActive);
+            else if (_filterActive == "false") r = r.Where(c => !c.IsActive);
+            return r.ToList();
+        }
+    }
+
+    // ─── Init ─────────────────────────────────────────────────────────────────
+    protected override async Task OnInitializedAsync()
+    {
+        var client = HttpClientFactory.CreateClient("Nanchesoft.Api");
+        var t1 = LoadCustomersAsync();
+        var t2 = client.GetFromJsonAsync<List<PriceListOption>>("/api/products/price-lists");
+        await Task.WhenAll(t1, t2.ContinueWith(t => { _priceLists = t.Result ?? []; }));
+    }
+
+    private async Task LoadCustomersAsync()
+    {
+        _loading = true; _err = string.Empty;
+        try
+        {
+            var client = HttpClientFactory.CreateClient("Nanchesoft.Api");
+            var all = await client.GetFromJsonAsync<List<CustomerListItem>>("/api/third-parties/customers") ?? [];
+            var tid = AuthState.TenantId;
+            _customers = tid.HasValue ? all.Where(c => c.TenantId == tid.Value).ToList() : all;
+        }
+        catch (Exception ex) { _err = ex.Message; }
+        finally { _loading = false; }
+    }
+
+    // ─── Panel ────────────────────────────────────────────────────────────────
+    private void OpenNewCustomer()
+    {
+        _isNew = true;
+        _selected = null;
+        _tab = 0;
+        ResetGeneralForm();
+        _panelOpen = true;
+    }
+
+    private async Task OpenCustomerPanel(CustomerListItem c)
+    {
+        _selected = c;
+        _isNew = false;
+        _tab = 0;
+        LoadGeneralForm(c);
+        _showEntityForm = false;
+        _showLocForm = false;
+        _panelOpen = true;
+        await Task.WhenAll(LoadLegalEntitiesAsync(), LoadLocationsAsync());
+    }
+
+    private void ClosePanel() { _panelOpen = false; _selected = null; _formErr = string.Empty; }
+
+    private async Task SetTab(int t)
+    {
+        _tab = t;
+        _showEntityForm = false;
+        _showLocForm = false;
+        if (t == 1 && _legalEntities.Count == 0) await LoadLegalEntitiesAsync();
+        if (t == 2 && _locations.Count == 0) await LoadLocationsAsync();
+    }
+
+    // ─── General form ─────────────────────────────────────────────────────────
+    private void ResetGeneralForm()
+    {
+        _fCode = _fName = _fLegalName = _fTaxId = _fEmail = _fPhone = _fPriceListId = string.Empty;
+        _fActive = "true"; _fCreditLimit = 0; _fPaymentTermDays = 0; _formErr = string.Empty;
+    }
+
+    private void LoadGeneralForm(CustomerListItem c)
+    {
+        _fCode = c.Code; _fName = c.Name; _fLegalName = c.LegalName; _fTaxId = c.TaxId;
+        _fEmail = c.Email; _fPhone = c.Phone; _fActive = c.IsActive ? "true" : "false";
+        _fCreditLimit = c.CreditLimit; _fPaymentTermDays = c.PaymentTermDays;
+        _fPriceListId = c.PriceListId?.ToString("D") ?? string.Empty;
+        _formErr = string.Empty;
+    }
+
+    private async Task SaveCustomerAsync()
+    {
+        _formErr = string.Empty;
+        if (string.IsNullOrWhiteSpace(_fCode)) { _formErr = "El código es obligatorio."; return; }
+        if (string.IsNullOrWhiteSpace(_fName)) { _formErr = "El nombre es obligatorio."; return; }
+        if (string.IsNullOrWhiteSpace(_fLegalName)) { _formErr = "La razón social es obligatoria."; return; }
+        if (string.IsNullOrWhiteSpace(_fTaxId)) { _formErr = "El RFC es obligatorio."; return; }
+
+        _busy = true;
+        try
+        {
+            var client = HttpClientFactory.CreateClient("Nanchesoft.Api");
+            var payload = new
+            {
+                code = _fCode.Trim(),
+                name = _fName.Trim(),
+                legalName = _fLegalName.Trim(),
+                taxId = _fTaxId.Trim().ToUpper(),
+                email = _fEmail.Trim(),
+                phone = _fPhone.Trim(),
+                creditLimit = _fCreditLimit,
+                paymentTermDays = _fPaymentTermDays,
+                isActive = _fActive == "true",
+                priceListId = Guid.TryParse(_fPriceListId, out var pl) ? pl : (Guid?)null
+            };
+
+            HttpResponseMessage resp;
+            if (_isNew)
+                resp = await client.PostAsJsonAsync("/api/third-parties/customers", payload);
+            else
+                resp = await client.PutAsJsonAsync($"/api/third-parties/customers/{_selected!.CustomerId}", payload);
+
+            if (resp.IsSuccessStatusCode)
+            {
+                _msg = _isNew ? "Cliente creado." : "Cliente actualizado.";
+                await LoadCustomersAsync();
+                if (!_isNew && _selected is not null)
+                {
+                    var updated = _customers.FirstOrDefault(c => c.CustomerId == _selected.CustomerId);
+                    if (updated is not null) { _selected = updated; LoadGeneralForm(updated); }
+                }
+                else { ClosePanel(); }
+            }
+            else
+            {
+                var body = await resp.Content.ReadFromJsonAsync<JsonElement>();
+                _formErr = body.TryGetProperty("message", out var m) ? m.GetString() ?? "Error." : "Error al guardar.";
+            }
+        }
+        catch (Exception ex) { _formErr = ex.Message; }
+        finally { _busy = false; }
+    }
+
+    // ─── Legal entities ───────────────────────────────────────────────────────
+    private async Task LoadLegalEntitiesAsync()
+    {
+        if (_selected is null) return;
+        _loadingEntities = true;
+        try
+        {
+            var client = HttpClientFactory.CreateClient("Nanchesoft.Api");
+            _legalEntities = await client.GetFromJsonAsync<List<LegalEntityItem>>(
+                $"/api/third-parties/customers/{_selected.CustomerId}/legal-entities") ?? [];
+        }
+        catch { _legalEntities = []; }
+        finally { _loadingEntities = false; }
+    }
+
+    private void ResetEntityForm() { _eLegalName = _eTaxId = _eFiscalRegime = _eZipCode = _eCfdiUse = string.Empty; _ePrimary = false; }
+
+    private void StartEditEntity(LegalEntityItem e)
+    {
+        _editingEntityId = e.LegalEntityId;
+        _eLegalName = e.LegalName; _eTaxId = e.TaxId;
+        _eFiscalRegime = e.FiscalRegime; _eZipCode = e.ZipCode;
+        _eCfdiUse = e.CfdiUse; _ePrimary = e.IsPrimary;
+        _showEntityForm = true;
+    }
+
+    private async Task SaveLegalEntityAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_eLegalName) || string.IsNullOrWhiteSpace(_eTaxId)) return;
+        _busy = true;
+        try
+        {
+            var client = HttpClientFactory.CreateClient("Nanchesoft.Api");
+            var payload = new { legalName = _eLegalName.Trim(), taxId = _eTaxId.Trim(), fiscalRegime = _eFiscalRegime, zipCode = _eZipCode, cfdiUse = _eCfdiUse, isPrimary = _ePrimary, userId = "web" };
+            HttpResponseMessage resp;
+            if (_editingEntityId is null)
+                resp = await client.PostAsJsonAsync($"/api/third-parties/customers/{_selected!.CustomerId}/legal-entities", payload);
+            else
+                resp = await client.PutAsJsonAsync($"/api/third-parties/customers/{_selected!.CustomerId}/legal-entities/{_editingEntityId}", payload);
+
+            if (resp.IsSuccessStatusCode)
+            {
+                _showEntityForm = false; _editingEntityId = null; ResetEntityForm();
+                await LoadLegalEntitiesAsync();
+            }
+        }
+        catch { }
+        finally { _busy = false; }
+    }
+
+    private async Task DeleteLegalEntityAsync(Guid id)
+    {
+        _busy = true;
+        try
+        {
+            var client = HttpClientFactory.CreateClient("Nanchesoft.Api");
+            await client.DeleteAsync($"/api/third-parties/customers/{_selected!.CustomerId}/legal-entities/{id}");
+            await LoadLegalEntitiesAsync();
+        }
+        catch { }
+        finally { _busy = false; }
+    }
+
+    private async Task UploadPdfAsync(Guid entityId, ChangeEventArgs e)
+    {
+        if (e.Value is not Microsoft.AspNetCore.Components.Forms.IBrowserFile file) return;
+        _uploadingPdfFor = entityId;
+        try
+        {
+            using var content = new MultipartFormDataContent();
+            var stream = file.OpenReadStream(maxAllowedSize: 5 * 1024 * 1024);
+            content.Add(new StreamContent(stream), "file", file.Name);
+            var client = HttpClientFactory.CreateClient("Nanchesoft.Api");
+            var resp = await client.PostAsync($"/api/third-parties/customers/{_selected!.CustomerId}/legal-entities/{entityId}/fiscal-pdf", content);
+            if (resp.IsSuccessStatusCode) { _msg = "PDF subido correctamente."; await LoadLegalEntitiesAsync(); }
+            else { _err = "Error al subir el PDF."; }
+        }
+        catch (Exception ex) { _err = ex.Message; }
+        finally { _uploadingPdfFor = null; }
+    }
+
+    // ─── Locations ────────────────────────────────────────────────────────────
+    private async Task LoadLocationsAsync()
+    {
+        if (_selected is null) return;
+        _loadingLocs = true;
+        try
+        {
+            var client = HttpClientFactory.CreateClient("Nanchesoft.Api");
+            _locations = await client.GetFromJsonAsync<List<LocationItem>>(
+                $"/api/third-parties/customers/{_selected.CustomerId}/locations") ?? [];
+        }
+        catch { _locations = []; }
+        finally { _loadingLocs = false; }
+    }
+
+    private void ResetLocForm() { _lName = _lStreet = _lExtNum = _lIntNum = _lNeighborhood = _lZip = _lReference = string.Empty; _lAddressType = "Principal"; _lPrimary = false; }
+
+    private void StartEditLocation(LocationItem loc)
+    {
+        _editingLocId = loc.LocationId;
+        _lName = loc.LocationName; _lAddressType = loc.AddressType;
+        _lStreet = loc.Street; _lExtNum = loc.ExteriorNumber; _lIntNum = loc.InteriorNumber;
+        _lNeighborhood = loc.Neighborhood; _lZip = loc.ZipCode; _lReference = loc.Reference;
+        _lPrimary = loc.IsPrimary;
+        _showLocForm = true;
+    }
+
+    private async Task SaveLocationAsync()
+    {
+        _busy = true;
+        try
+        {
+            var client = HttpClientFactory.CreateClient("Nanchesoft.Api");
+            var payload = new { locationName = _lName, addressType = _lAddressType, street = _lStreet, exteriorNumber = _lExtNum, interiorNumber = _lIntNum, neighborhood = _lNeighborhood, zipCode = _lZip, reference = _lReference, isPrimary = _lPrimary, userId = "web" };
+            HttpResponseMessage resp;
+            if (_editingLocId is null)
+                resp = await client.PostAsJsonAsync($"/api/third-parties/customers/{_selected!.CustomerId}/locations", payload);
+            else
+                resp = await client.PutAsJsonAsync($"/api/third-parties/customers/{_selected!.CustomerId}/locations/{_editingLocId}", payload);
+
+            if (resp.IsSuccessStatusCode)
+            {
+                _showLocForm = false; _editingLocId = null; ResetLocForm();
+                await LoadLocationsAsync();
+            }
+        }
+        catch { }
+        finally { _busy = false; }
+    }
+
+    private async Task DeleteLocationAsync(Guid id)
+    {
+        _busy = true;
+        try
+        {
+            var client = HttpClientFactory.CreateClient("Nanchesoft.Api");
+            await client.DeleteAsync($"/api/third-parties/customers/{_selected!.CustomerId}/locations/{id}");
+            await LoadLocationsAsync();
+        }
+        catch { }
+        finally { _busy = false; }
+    }
+
+    // ─── Import CSF ───────────────────────────────────────────────────────────
+    private void OpenImportModal()
+    {
+        ResetImport();
+        _dotNetRef ??= DotNetObjectReference.Create(this);
+        _showImportModal = true;
+        // JS wiring happens in OnAfterRenderAsync once the DOM is ready
+    }
+
+    private async Task CloseImportModal()
+    {
+        _showImportModal = false;
+        ResetImport();
+        try { await JS.InvokeVoidAsync("constanciaHelper.dispose"); } catch { }
+    }
+
+    private void ResetImport()
+    {
+        _importParsed = null; _importError = string.Empty; _importSuccess = string.Empty;
+        _qrText = string.Empty; _importParsing = false; _importBusy = false; _importTab = 0;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        // Re-wire on every render while the modal is in file-selection state.
+        // wireFileInput is idempotent (guarded by _nsCsfWired on the element),
+        // so multiple calls are safe even across Blazor re-renders.
+        if (_showImportModal && _importParsed is null)
+        {
+            _dotNetRef ??= DotNetObjectReference.Create(this);
+            try
+            {
+                await JS.InvokeVoidAsync("constanciaHelper.init", _dotNetRef);
+                await JS.InvokeVoidAsync("constanciaHelper.wireFileInput", "csf-pdf-input", true);
+                await JS.InvokeVoidAsync("constanciaHelper.wireFileInput", "csf-qr-input", false);
+            }
+            catch { }
+        }
+    }
+
+    [JSInvokable]
+    public async Task SetParsing(bool value)
+    {
+        _importParsing = value;
+        _importError = string.Empty;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    [JSInvokable]
+    public async Task ReceiveParsedData(string json)
+    {
+        try { _importParsed = JsonSerializer.Deserialize<ImportPreview>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true }); }
+        catch { _importError = "Error al leer los datos extraídos del PDF."; }
+        _importParsing = false;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    [JSInvokable]
+    public async Task ReceiveParseError(string message)
+    {
+        _importError = message;
+        _importParsing = false;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    [JSInvokable]
+    public async Task ReceiveQrText(string qrText)
+    {
+        _importParsing = false;
+        try
+        {
+            var client = HttpClientFactory.CreateClient("Nanchesoft.Api");
+            var resp = await client.PostAsJsonAsync("/api/third-parties/parse-constancia-qr", new { qrText });
+            if (resp.IsSuccessStatusCode)
+            {
+                var result = await resp.Content.ReadFromJsonAsync<JsonElement>();
+                if (result.TryGetProperty("found", out var found) && found.GetBoolean() &&
+                    result.TryGetProperty("rfc", out var rfcProp))
+                    _importParsed = new ImportPreview { Rfc = rfcProp.GetString() ?? string.Empty };
+                else
+                    _importError = "No se encontró RFC válido en el código QR.";
+            }
+            else _importError = "No se pudo procesar el texto del QR.";
+        }
+        catch (Exception ex) { _importError = ex.Message; }
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task ParseQrTextAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_qrText)) return;
+        _importParsing = true; _importError = string.Empty;
+        try
+        {
+            var client = HttpClientFactory.CreateClient("Nanchesoft.Api");
+            var resp = await client.PostAsJsonAsync("/api/third-parties/parse-constancia-qr", new { qrText = _qrText });
+            if (resp.IsSuccessStatusCode)
+            {
+                var result = await resp.Content.ReadFromJsonAsync<JsonElement>();
+                if (result.TryGetProperty("found", out var found) && found.GetBoolean() &&
+                    result.TryGetProperty("rfc", out var rfcProp))
+                    _importParsed = new ImportPreview { Rfc = rfcProp.GetString() ?? string.Empty };
+                else
+                    _importError = "No se encontró un RFC válido en el texto del QR.";
+            }
+        }
+        catch (Exception ex) { _importError = ex.Message; }
+        finally { _importParsing = false; }
+    }
+
+    private async Task ConfirmImportAsync()
+    {
+        if (_importParsed is null || string.IsNullOrWhiteSpace(_importParsed.Rfc)) return;
+        _importBusy = true; _importError = string.Empty;
+        try
+        {
+            var tenantId = AuthState.TenantId ?? Guid.Empty;
+            var companyId = AuthState.CompanyId ?? Guid.Empty;
+            var client = HttpClientFactory.CreateClient("Nanchesoft.Api");
+            var resp = await client.PostAsJsonAsync(
+                $"/api/third-parties/import-constancia?tenantId={tenantId}&companyId={companyId}",
+                new
+                {
+                    rfc = _importParsed.Rfc.Trim().ToUpper(),
+                    legalName = _importParsed.LegalName,
+                    zipCode = _importParsed.ZipCode,
+                    street = _importParsed.Street,
+                    exteriorNumber = _importParsed.ExteriorNumber,
+                    interiorNumber = _importParsed.InteriorNumber,
+                    neighborhood = _importParsed.Neighborhood,
+                    municipality = _importParsed.Municipality,
+                    state = _importParsed.State,
+                    fiscalRegimeCode = _importParsed.PrimaryFiscalRegime,
+                    userId = "web"
+                });
+
+            if (resp.IsSuccessStatusCode)
+            {
+                var result = await resp.Content.ReadFromJsonAsync<JsonElement>();
+                var msg = result.TryGetProperty("message", out var mp) ? mp.GetString() : null;
+                _importSuccess = msg ?? "Importado correctamente.";
+                await LoadCustomersAsync();
+            }
+            else
+            {
+                var body = await resp.Content.ReadFromJsonAsync<JsonElement>();
+                _importError = body.TryGetProperty("message", out var m) ? m.GetString() ?? "Error." : "Error al importar.";
+            }
+        }
+        catch (Exception ex) { _importError = ex.Message; }
+        finally { _importBusy = false; }
+    }
+
+    public void Dispose() => _dotNetRef?.Dispose();
+
+    // ─── Models ───────────────────────────────────────────────────────────────
+    private sealed class CustomerListItem
+    {
+        public Guid CustomerId { get; set; }
+        public Guid TenantId { get; set; }
+        public Guid CompanyId { get; set; }
+        public string Code { get; set; } = string.Empty;
+        public string Name { get; set; } = string.Empty;
+        public string LegalName { get; set; } = string.Empty;
+        public string TaxId { get; set; } = string.Empty;
+        public string Email { get; set; } = string.Empty;
+        public string Phone { get; set; } = string.Empty;
+        public decimal CreditLimit { get; set; }
+        public int PaymentTermDays { get; set; }
+        public bool IsActive { get; set; }
+        public Guid? PriceListId { get; set; }
+        public string PriceListName { get; set; } = string.Empty;
+    }
+
+    private sealed class LegalEntityItem
+    {
+        public Guid LegalEntityId { get; set; }
+        public string LegalName { get; set; } = string.Empty;
+        public string TaxId { get; set; } = string.Empty;
+        public string FiscalRegime { get; set; } = string.Empty;
+        public string ZipCode { get; set; } = string.Empty;
+        public string CfdiUse { get; set; } = string.Empty;
+        public string FiscalSituationPdfPath { get; set; } = string.Empty;
+        public bool HasPdf { get; set; }
+        public bool IsPrimary { get; set; }
+    }
+
+    private sealed class LocationItem
+    {
+        public Guid LocationId { get; set; }
+        public string LocationName { get; set; } = string.Empty;
+        public string AddressType { get; set; } = string.Empty;
+        public string Street { get; set; } = string.Empty;
+        public string ExteriorNumber { get; set; } = string.Empty;
+        public string InteriorNumber { get; set; } = string.Empty;
+        public string Neighborhood { get; set; } = string.Empty;
+        public string ZipCode { get; set; } = string.Empty;
+        public string Reference { get; set; } = string.Empty;
+        public bool IsPrimary { get; set; }
+        public string FullAddress { get; set; } = string.Empty;
+    }
+
+    private sealed class PriceListOption
+    {
+        public Guid Id { get; set; }
+        public string Name { get; set; } = string.Empty;
+    }
+
+    private sealed class ImportPreview
+    {
+        public bool ParsedSuccessfully { get; set; }
+        public string Rfc { get; set; } = string.Empty;
+        public string LegalName { get; set; } = string.Empty;
+        public string FirstName { get; set; } = string.Empty;
+        public string LastName1 { get; set; } = string.Empty;
+        public string LastName2 { get; set; } = string.Empty;
+        public string ZipCode { get; set; } = string.Empty;
+        public string Street { get; set; } = string.Empty;
+        public string ExteriorNumber { get; set; } = string.Empty;
+        public string InteriorNumber { get; set; } = string.Empty;
+        public string Neighborhood { get; set; } = string.Empty;
+        public string Municipality { get; set; } = string.Empty;
+        public string State { get; set; } = string.Empty;
+        public string PrimaryFiscalRegime { get; set; } = string.Empty;
+    }
+}
