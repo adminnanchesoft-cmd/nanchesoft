@@ -170,7 +170,8 @@
       "Bash(journalctl -u nanchesoft-web.service --since \"5 minutes ago\" --no-pager)",
       "Bash(journalctl -u nanchesoft-web.service --since \"10 minutes ago\" --no-pager)",
       "Bash(nginx *)",
-      "Bash(journalctl -u nanchesoft-api.service --since \"3 min ago\" --no-pager)"
+      "Bash(journalctl -u nanchesoft-api.service --since \"3 min ago\" --no-pager)",
+      "Bash(journalctl -u nanchesoft-api -n 30 --no-pager)"
     ]
   }
 }

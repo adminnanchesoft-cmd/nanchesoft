@@ -1,3 +1,4 @@
+using ClosedXML.Excel;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
@@ -868,7 +869,404 @@ public static class AccountingEndpoints
             return Results.Ok(result);
         });
 
+        // ── Catálogo de cuentas: grupos de empresas ────────────────────────────
+
+        group.MapGet("/group-companies", async (NanchesoftDbContext dbContext) =>
+        {
+            var context = await ResolveContextAsync(dbContext);
+            if (context is null) return Results.Ok(new List<CatalogGroupCompanyDto>());
+
+            var groups = await dbContext.Set<AccountingGroupCompany>()
+                .Where(x => x.TenantId == context.TenantId && x.IsActive)
+                .OrderBy(x => x.Name)
+                .ToListAsync();
+
+            var result = new List<CatalogGroupCompanyDto>();
+            foreach (var g in groups)
+            {
+                var members = await dbContext.Set<AccountingGroupCompanyMember>()
+                    .Where(x => x.GroupCompanyId == g.Id && x.IsActive)
+                    .OrderBy(x => x.CompanyName)
+                    .Select(x => x.CompanyName)
+                    .ToListAsync();
+                result.Add(new CatalogGroupCompanyDto(g.Id, g.Name, members));
+            }
+            return Results.Ok(result);
+        });
+
+        // ── Importación: parsear Excel (preview sin escritura a BD) ───────────
+
+        group.MapPost("/catalog-import/parse", async (NanchesoftDbContext dbContext, IFormFile file) =>
+        {
+            if (file is null || file.Length == 0)
+                return Results.BadRequest("No se recibió archivo.");
+
+            var ext = Path.GetExtension(file.FileName).ToLowerInvariant();
+            if (ext != ".xlsx")
+                return Results.BadRequest("Solo se aceptan archivos .xlsx");
+
+            var context = await ResolveContextAsync(dbContext);
+            if (context is null)
+                return Results.BadRequest("No hay contexto contable disponible.");
+
+            try
+            {
+                using var stream = file.OpenReadStream();
+                using var wb = new XLWorkbook(stream);
+                var ws = wb.Worksheet(1);
+
+                // Detectar empresas desde fila 7 (columnas D=4 en adelante, pares SI/NO)
+                var companies = new List<(string Name, int SiCol, int NoCol)>();
+                int col = 4;
+                while (col <= 26)
+                {
+                    var compName = ws.Cell(7, col).GetString().Trim();
+                    if (string.IsNullOrWhiteSpace(compName)) break;
+                    companies.Add((compName, col, col + 1));
+                    col += 2;
+                }
+
+                var lastRow = ws.LastRowUsed()?.RowNumber() ?? 8;
+                var accounts = new List<CatalogImportAccountRowDto>();
+                var codeSeen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                int duplicates = 0;
+
+                for (int row = 9; row <= lastRow; row++)
+                {
+                    var code = ws.Cell(row, 2).GetString().Trim();
+                    var name = ws.Cell(row, 3).GetString().Trim();
+
+                    if (string.IsNullOrWhiteSpace(code) && string.IsNullOrWhiteSpace(name))
+                        continue;
+
+                    var applies = new Dictionary<string, bool?>();
+                    foreach (var (compName, siCol, noCol) in companies)
+                    {
+                        var siVal = ws.Cell(row, siCol).GetString().Trim();
+                        var noVal = ws.Cell(row, noCol).GetString().Trim();
+                        if (siVal.Equals("X", StringComparison.OrdinalIgnoreCase))
+                            applies[compName] = true;
+                        else if (noVal.Equals("X", StringComparison.OrdinalIgnoreCase))
+                            applies[compName] = false;
+                        else
+                            applies[compName] = null;
+                    }
+
+                    string status;
+                    string? message = null;
+
+                    if (string.IsNullOrWhiteSpace(code))
+                    {
+                        status = "error";
+                        message = "Código vacío";
+                    }
+                    else if (!codeSeen.Add(code))
+                    {
+                        status = "duplicate";
+                        message = "Código duplicado en el archivo";
+                        duplicates++;
+                    }
+                    else
+                    {
+                        status = "valid";
+                    }
+
+                    var (level, parentCode) = DetectAccountLevel(code);
+                    accounts.Add(new CatalogImportAccountRowDto(row, code, name, level, parentCode, status, message, applies));
+                }
+
+                // Detectar cuentas que ya existen en BD para ese tenant
+                var allCodes = accounts.Where(a => a.Status == "valid").Select(a => a.Code).ToList();
+                var existingCodes = await dbContext.Set<AccountingAccount>()
+                    .Where(x => x.TenantId == context.TenantId && allCodes.Contains(x.Code))
+                    .Select(x => x.Code)
+                    .ToListAsync();
+                var existingSet = new HashSet<string>(existingCodes, StringComparer.OrdinalIgnoreCase);
+
+                foreach (var acct in accounts.Where(a => a.Status == "valid" && existingSet.Contains(a.Code)))
+                {
+                    // Mark as existing (will be updated on confirm)
+                    accounts[accounts.IndexOf(acct)] = acct with { Status = "existing", Message = "Ya existe, se actualizará el nombre" };
+                }
+
+                var warnings = new List<string>();
+                if (companies.Count == 0)
+                    warnings.Add("No se detectaron empresas en la fila 7.");
+
+                var preview = new CatalogImportPreviewDto(
+                    FileName: file.FileName,
+                    DetectedCompanies: companies.Select(c => c.Name).ToList(),
+                    Accounts: accounts,
+                    TotalAccounts: accounts.Count,
+                    ValidAccounts: accounts.Count(a => a.Status is "valid" or "existing"),
+                    ExistingAccounts: accounts.Count(a => a.Status == "existing"),
+                    DuplicateAccounts: duplicates,
+                    ErrorAccounts: accounts.Count(a => a.Status == "error"),
+                    Warnings: warnings);
+
+                return Results.Ok(preview);
+            }
+            catch (Exception ex)
+            {
+                return Results.BadRequest($"Error al leer el archivo Excel: {ex.Message}");
+            }
+        }).DisableAntiforgery();
+
+        // ── Importación: confirmar y guardar en BD ────────────────────────────
+
+        group.MapPost("/catalog-import/confirm", async (NanchesoftDbContext dbContext, CatalogImportConfirmRequest request) =>
+        {
+            var context = await ResolveContextAsync(dbContext);
+            if (context is null)
+                return Results.BadRequest("No hay contexto contable disponible.");
+
+            if (string.IsNullOrWhiteSpace(request.GroupCompanyName))
+                return Results.BadRequest("El nombre del grupo de empresas es obligatorio.");
+
+            if (request.Accounts == null || request.Accounts.Count == 0)
+                return Results.BadRequest("No hay cuentas para importar.");
+
+            // Encontrar o crear grupo de empresas
+            var grp = await dbContext.Set<AccountingGroupCompany>()
+                .FirstOrDefaultAsync(x => x.TenantId == context.TenantId && x.Name == request.GroupCompanyName);
+
+            if (grp is null)
+            {
+                grp = new AccountingGroupCompany
+                {
+                    Id = Guid.NewGuid(),
+                    TenantId = context.TenantId,
+                    Name = request.GroupCompanyName,
+                    IsActive = true,
+                    CreatedAt = DateTime.UtcNow,
+                    CreatedBy = "import"
+                };
+                dbContext.Set<AccountingGroupCompany>().Add(grp);
+                await dbContext.SaveChangesAsync();
+            }
+
+            // Detectar todas las empresas del request
+            var allCompanyNames = request.Accounts
+                .SelectMany(a => a.CompanyApplies.Keys)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            // Crear miembros del grupo si no existen
+            foreach (var compName in allCompanyNames)
+            {
+                var exists = await dbContext.Set<AccountingGroupCompanyMember>()
+                    .AnyAsync(x => x.GroupCompanyId == grp.Id && x.CompanyName == compName);
+                if (!exists)
+                {
+                    dbContext.Set<AccountingGroupCompanyMember>().Add(new AccountingGroupCompanyMember
+                    {
+                        Id = Guid.NewGuid(),
+                        TenantId = context.TenantId,
+                        GroupCompanyId = grp.Id,
+                        CompanyName = compName,
+                        IsActive = true,
+                        CreatedAt = DateTime.UtcNow
+                    });
+                }
+            }
+            await dbContext.SaveChangesAsync();
+
+            // Cargar cuentas existentes del grupo
+            var existingAccounts = await dbContext.Set<AccountingAccount>()
+                .Where(x => x.TenantId == context.TenantId && x.GroupCompanyId == grp.Id)
+                .ToListAsync();
+            var existingMap = existingAccounts.ToDictionary(x => x.Code, StringComparer.OrdinalIgnoreCase);
+
+            // Registrar importación
+            var importLog = new AccountingImport
+            {
+                Id = Guid.NewGuid(),
+                TenantId = context.TenantId,
+                GroupCompanyId = grp.Id,
+                FileName = request.FileName,
+                UserId = "import",
+                Status = "importing",
+                TotalRows = request.Accounts.Count,
+                CreatedAt = DateTime.UtcNow
+            };
+            dbContext.Set<AccountingImport>().Add(importLog);
+            await dbContext.SaveChangesAsync();
+
+            int created = 0, updated = 0, errors = 0;
+            var newAccountMap = new Dictionary<string, Guid>(StringComparer.OrdinalIgnoreCase);
+
+            // Primera pasada: crear/actualizar cuentas
+            foreach (var row in request.Accounts.Where(a => !string.IsNullOrWhiteSpace(a.Code)))
+            {
+                try
+                {
+                    if (existingMap.TryGetValue(row.Code, out var existing))
+                    {
+                        existing.Name = row.Name;
+                        existing.UpdatedAt = DateTime.UtcNow;
+                        existing.UpdatedBy = "import";
+                        newAccountMap[row.Code] = existing.Id;
+                        updated++;
+                    }
+                    else
+                    {
+                        var acct = new AccountingAccount
+                        {
+                            Id = Guid.NewGuid(),
+                            TenantId = context.TenantId,
+                            CompanyId = grp.Id,
+                            GroupCompanyId = grp.Id,
+                            Code = row.Code,
+                            Name = row.Name,
+                            AccountType = "Asset",
+                            Nature = "Debit",
+                            AllowsPosting = row.Level == 3,
+                            IsActive = true,
+                            CreatedAt = DateTime.UtcNow,
+                            CreatedBy = "import"
+                        };
+                        dbContext.Set<AccountingAccount>().Add(acct);
+                        newAccountMap[row.Code] = acct.Id;
+                        created++;
+                    }
+
+                    dbContext.Set<AccountingImportDetail>().Add(new AccountingImportDetail
+                    {
+                        Id = Guid.NewGuid(),
+                        ImportId = importLog.Id,
+                        ExcelRow = row.ExcelRow,
+                        AccountCode = row.Code,
+                        AccountName = row.Name,
+                        Status = "valid"
+                    });
+                }
+                catch
+                {
+                    errors++;
+                    dbContext.Set<AccountingImportDetail>().Add(new AccountingImportDetail
+                    {
+                        Id = Guid.NewGuid(),
+                        ImportId = importLog.Id,
+                        ExcelRow = row.ExcelRow,
+                        AccountCode = row.Code,
+                        AccountName = row.Name,
+                        Status = "error",
+                        ErrorMessage = "Error al procesar la cuenta"
+                    });
+                }
+            }
+            await dbContext.SaveChangesAsync();
+
+            // Segunda pasada: asignar cuentas padre
+            var allGroupAccounts = await dbContext.Set<AccountingAccount>()
+                .Where(x => x.TenantId == context.TenantId && x.GroupCompanyId == grp.Id)
+                .ToListAsync();
+            var accountByCode = allGroupAccounts.ToDictionary(x => x.Code, StringComparer.OrdinalIgnoreCase);
+
+            foreach (var row in request.Accounts.Where(a => a.ParentCode != null))
+            {
+                if (!newAccountMap.TryGetValue(row.Code, out var acctId)) continue;
+                if (!accountByCode.TryGetValue(row.ParentCode!, out var parentAcct)) continue;
+
+                var acct = allGroupAccounts.FirstOrDefault(x => x.Id == acctId);
+                if (acct != null && acct.ParentAccountId == null)
+                {
+                    acct.ParentAccountId = parentAcct.Id;
+                }
+            }
+            await dbContext.SaveChangesAsync();
+
+            // Tercera pasada: upsert accounting_account_companies (SI/NO)
+            foreach (var row in request.Accounts.Where(a => !string.IsNullOrWhiteSpace(a.Code)))
+            {
+                if (!newAccountMap.TryGetValue(row.Code, out var acctId)) continue;
+
+                foreach (var (compName, applies) in row.CompanyApplies)
+                {
+                    var rel = await dbContext.Set<AccountingAccountCompany>()
+                        .FirstOrDefaultAsync(x => x.AccountId == acctId && x.CompanyName == compName);
+
+                    if (rel is null)
+                    {
+                        dbContext.Set<AccountingAccountCompany>().Add(new AccountingAccountCompany
+                        {
+                            Id = Guid.NewGuid(),
+                            TenantId = context.TenantId,
+                            AccountId = acctId,
+                            CompanyName = compName,
+                            Applies = applies,
+                            ImportSource = "excel",
+                            CreatedAt = DateTime.UtcNow
+                        });
+                    }
+                    else
+                    {
+                        rel.Applies = applies;
+                    }
+                }
+            }
+
+            importLog.Status = errors == 0 ? "imported" : "imported_with_errors";
+            importLog.ValidRows = created + updated;
+            importLog.ErrorRows = errors;
+            await dbContext.SaveChangesAsync();
+
+            return Results.Ok(new CatalogImportResultDto(
+                Success: errors == 0,
+                ImportId: importLog.Id,
+                GroupCompanyId: grp.Id,
+                GroupCompanyName: grp.Name,
+                Created: created,
+                Updated: updated,
+                Errors: errors,
+                Message: errors == 0
+                    ? $"Importación exitosa: {created} cuentas creadas, {updated} actualizadas."
+                    : $"Importación con errores: {created} creadas, {updated} actualizadas, {errors} errores."));
+        });
+
+        // ── Historial de importaciones ────────────────────────────────────────
+
+        group.MapGet("/catalog-import/imports", async (NanchesoftDbContext dbContext) =>
+        {
+            var context = await ResolveContextAsync(dbContext);
+            if (context is null) return Results.Ok(new List<CatalogImportHistoryRowDto>());
+
+            var rows = await dbContext.Set<AccountingImport>()
+                .Where(x => x.TenantId == context.TenantId)
+                .OrderByDescending(x => x.CreatedAt)
+                .Take(50)
+                .Select(x => new CatalogImportHistoryRowDto(
+                    x.Id,
+                    x.FileName,
+                    x.Status,
+                    x.TotalRows,
+                    x.ValidRows,
+                    x.ErrorRows,
+                    x.CreatedAt))
+                .ToListAsync();
+
+            return Results.Ok(rows);
+        });
+
         return app;
+    }
+
+    private static (int Level, string? ParentCode) DetectAccountLevel(string code)
+    {
+        if (string.IsNullOrWhiteSpace(code)) return (1, null);
+        var parts = code.Split('-');
+        if (parts.Length != 3) return (1, null);
+
+        bool subZero = parts[1].All(c => c == '0');
+        bool detailZero = parts[2].All(c => c == '0');
+
+        if (subZero && detailZero) return (1, null);
+        if (!subZero && detailZero)
+        {
+            var parentCode = $"{parts[0]}-{new string('0', parts[1].Length)}-{parts[2]}";
+            return (2, parentCode);
+        }
+        return (3, $"{parts[0]}-{parts[1]}-{new string('0', parts[2].Length)}");
     }
 
     private static async Task<AccountingMonthlyClosePreviewDto> BuildMonthlyClosePreviewAsync(NanchesoftDbContext dbContext, ContextInfo context, int year, int month)
@@ -2257,4 +2655,55 @@ public static class AccountingEndpoints
 
     private sealed record DefaultAccountBundle(AccountingAccount? Cash, AccountingAccount? Banks, AccountingAccount? Customers, AccountingAccount? Suppliers, AccountingAccount? Sales, AccountingAccount? Expenses);
     private sealed record ExistingAutomaticEntryInfo(Guid JournalEntryId, string Folio, string Status);
+
+    // ── DTOs: Importación de catálogo de cuentas ──────────────────────────────
+
+    public sealed record CatalogGroupCompanyDto(Guid Id, string Name, List<string> Members);
+
+    public sealed record CatalogImportPreviewDto(
+        string FileName,
+        List<string> DetectedCompanies,
+        List<CatalogImportAccountRowDto> Accounts,
+        int TotalAccounts,
+        int ValidAccounts,
+        int ExistingAccounts,
+        int DuplicateAccounts,
+        int ErrorAccounts,
+        List<string> Warnings);
+
+    public sealed record CatalogImportAccountRowDto(
+        int ExcelRow,
+        string Code,
+        string Name,
+        int Level,
+        string? ParentCode,
+        string Status,
+        string? Message,
+        Dictionary<string, bool?> CompanyApplies);
+
+    public sealed class CatalogImportConfirmRequest
+    {
+        public string FileName { get; set; } = string.Empty;
+        public string GroupCompanyName { get; set; } = string.Empty;
+        public List<CatalogImportAccountRowDto> Accounts { get; set; } = new();
+    }
+
+    public sealed record CatalogImportResultDto(
+        bool Success,
+        Guid ImportId,
+        Guid GroupCompanyId,
+        string GroupCompanyName,
+        int Created,
+        int Updated,
+        int Errors,
+        string Message);
+
+    public sealed record CatalogImportHistoryRowDto(
+        Guid Id,
+        string FileName,
+        string Status,
+        int TotalRows,
+        int ValidRows,
+        int ErrorRows,
+        DateTime CreatedAt);
 }

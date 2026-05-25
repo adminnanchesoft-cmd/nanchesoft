@@ -249,6 +249,16 @@ public sealed class NanchesoftDbContext : DbContext
     public DbSet<AccountsReceivableMovement> AccountsReceivableMovements => Set<AccountsReceivableMovement>();
     public DbSet<ReceiptApplication> ReceiptApplications => Set<ReceiptApplication>();
 
+    // Accounting
+    public DbSet<AccountingAccount> AccountingAccounts => Set<AccountingAccount>();
+
+    // Accounting catalog import
+    public DbSet<AccountingGroupCompany> AccountingGroupCompanies => Set<AccountingGroupCompany>();
+    public DbSet<AccountingGroupCompanyMember> AccountingGroupCompanyMembers => Set<AccountingGroupCompanyMember>();
+    public DbSet<AccountingAccountCompany> AccountingAccountCompanies => Set<AccountingAccountCompany>();
+    public DbSet<AccountingImport> AccountingImports => Set<AccountingImport>();
+    public DbSet<AccountingImportDetail> AccountingImportDetails => Set<AccountingImportDetail>();
+
     // User preferences
     public DbSet<UserThemePreference> UserThemePreferences => Set<UserThemePreference>();
 

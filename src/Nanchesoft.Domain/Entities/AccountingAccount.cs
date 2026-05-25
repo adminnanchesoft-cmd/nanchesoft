@@ -9,6 +9,7 @@ public class AccountingAccount
     public string Name { get; set; } = string.Empty;
     public string AccountType { get; set; } = "Asset";
     public string Nature { get; set; } = "Debit";
+    public Guid? GroupCompanyId { get; set; }
     public Guid? ParentAccountId { get; set; }
     public bool AllowsPosting { get; set; } = true;
     public bool IsActive { get; set; } = true;

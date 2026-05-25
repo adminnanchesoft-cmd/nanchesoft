@@ -1,3 +1,4 @@
+using System.Net.Http.Headers;
 using System.Net.Http.Json;
 
 namespace Nanchesoft.Web.Services.Accounting;
@@ -142,6 +143,46 @@ public sealed class AccountingApiService
         response.EnsureSuccessStatusCode();
         return await response.Content.ReadFromJsonAsync<AccountingMonthlyCloseGenerateResultDto>() ?? new(false, Guid.Empty, null, "No se recibió respuesta del servidor.");
     }
+
+    // ── Importación de catálogo de cuentas ────────────────────────────────────
+
+    public async Task<List<CatalogGroupCompanyDto>> GetGroupCompaniesAsync()
+        => await _httpClient.GetFromJsonAsync<List<CatalogGroupCompanyDto>>("/api/accounting/group-companies") ?? [];
+
+    public async Task<(bool Ok, CatalogImportPreviewDto? Preview, string? Error)> ParseCatalogExcelAsync(
+        Stream fileStream, string fileName)
+    {
+        using var content = new MultipartFormDataContent();
+        var fileContent = new StreamContent(fileStream);
+        fileContent.Headers.ContentType = new MediaTypeHeaderValue(
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+        content.Add(fileContent, "file", fileName);
+
+        var response = await _httpClient.PostAsync("/api/accounting/catalog-import/parse", content);
+        if (!response.IsSuccessStatusCode)
+        {
+            var err = await response.Content.ReadAsStringAsync();
+            return (false, null, err);
+        }
+        var preview = await response.Content.ReadFromJsonAsync<CatalogImportPreviewDto>();
+        return (true, preview, null);
+    }
+
+    public async Task<(bool Ok, CatalogImportResultDto? Result, string? Error)> ConfirmCatalogImportAsync(
+        CatalogImportConfirmRequest request)
+    {
+        var response = await _httpClient.PostAsJsonAsync("/api/accounting/catalog-import/confirm", request);
+        if (!response.IsSuccessStatusCode)
+        {
+            var err = await response.Content.ReadAsStringAsync();
+            return (false, null, err);
+        }
+        var result = await response.Content.ReadFromJsonAsync<CatalogImportResultDto>();
+        return (true, result, null);
+    }
+
+    public async Task<List<CatalogImportHistoryRowDto>> GetCatalogImportHistoryAsync()
+        => await _httpClient.GetFromJsonAsync<List<CatalogImportHistoryRowDto>>("/api/accounting/catalog-import/imports") ?? [];
 }
 
 public sealed class AccountingLookupsDto
@@ -457,3 +498,67 @@ public sealed class AccountingMonthlyCloseEntryLineDto
 
 public sealed record AccountingMonthlyCloseGenerateRequest(int Year, int Month);
 public sealed record AccountingMonthlyCloseGenerateResultDto(bool Success, Guid JournalEntryId, string? JournalFolio, string Message);
+
+// ── DTOs: Importación de catálogo de cuentas ─────────────────────────────────
+
+public sealed class CatalogGroupCompanyDto
+{
+    public Guid Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public List<string> Members { get; set; } = new();
+}
+
+public sealed class CatalogImportPreviewDto
+{
+    public string FileName { get; set; } = string.Empty;
+    public List<string> DetectedCompanies { get; set; } = new();
+    public List<CatalogImportAccountRowDto> Accounts { get; set; } = new();
+    public int TotalAccounts { get; set; }
+    public int ValidAccounts { get; set; }
+    public int ExistingAccounts { get; set; }
+    public int DuplicateAccounts { get; set; }
+    public int ErrorAccounts { get; set; }
+    public List<string> Warnings { get; set; } = new();
+}
+
+public sealed class CatalogImportAccountRowDto
+{
+    public int ExcelRow { get; set; }
+    public string Code { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
+    public int Level { get; set; }
+    public string? ParentCode { get; set; }
+    public string Status { get; set; } = "valid";
+    public string? Message { get; set; }
+    public Dictionary<string, bool?> CompanyApplies { get; set; } = new();
+}
+
+public sealed class CatalogImportConfirmRequest
+{
+    public string FileName { get; set; } = string.Empty;
+    public string GroupCompanyName { get; set; } = string.Empty;
+    public List<CatalogImportAccountRowDto> Accounts { get; set; } = new();
+}
+
+public sealed class CatalogImportResultDto
+{
+    public bool Success { get; set; }
+    public Guid ImportId { get; set; }
+    public Guid GroupCompanyId { get; set; }
+    public string GroupCompanyName { get; set; } = string.Empty;
+    public int Created { get; set; }
+    public int Updated { get; set; }
+    public int Errors { get; set; }
+    public string Message { get; set; } = string.Empty;
+}
+
+public sealed class CatalogImportHistoryRowDto
+{
+    public Guid Id { get; set; }
+    public string FileName { get; set; } = string.Empty;
+    public string Status { get; set; } = string.Empty;
+    public int TotalRows { get; set; }
+    public int ValidRows { get; set; }
+    public int ErrorRows { get; set; }
+    public DateTime CreatedAt { get; set; }
+}

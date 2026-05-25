@@ -1,0 +1,167 @@
+@page "/accounting/control-center"
+@inject NavigationManager Nav
+@using Microsoft.AspNetCore.Components
+
+<PageTitle>Contabilidad | Nanchesoft</PageTitle>
+
+<div class="acc-shell">
+    <header class="acc-topbar">
+        <div class="acc-brand">
+            <div class="acc-brand-badge">NS</div>
+            <div>
+                <div class="acc-brand-title">Nanchesoft ERP</div>
+                <div class="acc-brand-subtitle">Contabilidad</div>
+            </div>
+        </div>
+
+        <div class="acc-search-wrap">
+            <span class="acc-search-icon">⌕</span>
+            <input class="acc-search" placeholder="Buscar módulo, pantalla o proceso..." />
+        </div>
+
+        <div class="acc-top-actions">
+            <button class="acc-icon-btn" type="button">◌</button>
+            <div class="acc-profile">
+                <div class="acc-avatar">D</div>
+                <div>
+                    <div class="acc-profile-name">David</div>
+                    <div class="acc-profile-role">ERP Owner</div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <nav class="acc-module-tabs" aria-label="Módulos principales">
+        @foreach (var tab in ModuleTabs)
+        {
+            <button type="button"
+                    class="acc-tab @(tab.IsActive ? "is-active" : null)"
+                    @onclick="() => Go(tab.Route)">
+                @tab.Label
+            </button>
+        }
+    </nav>
+
+    <section class="acc-hero">
+        <div class="acc-hero-overlay"></div>
+        <img class="acc-hero-image" src="images/hero-contabilidad.svg" alt="Contabilidad" />
+
+        <div class="acc-hero-content">
+            <div class="acc-hero-main">
+                <div class="acc-hero-title-wrap">
+                    <div class="acc-hero-title">Contabilidad</div>
+                    <div class="acc-hero-subtitle">Catálogo, pólizas y reportes</div>
+                </div>
+
+                <div class="acc-kpi-strip">
+                    @foreach (var kpi in Kpis)
+                    {
+                        <div class="acc-kpi-card">
+                            <div class="acc-kpi-icon">@kpi.Icon</div>
+                            <div class="acc-kpi-value">@kpi.Value</div>
+                            <div class="acc-kpi-label">@kpi.Label</div>
+                        </div>
+                    }
+                </div>
+
+                <div class="acc-breadcrumb">Inicio <span>›</span> Contabilidad</div>
+
+                <div class="acc-process-grid">
+                    @foreach (var card in ProcessCards)
+                    {
+                        <button type="button" class="acc-process-card" @onclick="() => Go(card.Route)">
+                            <div class="acc-process-visual">
+                                <div class="acc-process-icon">@card.Icon</div>
+                            </div>
+                            <div class="acc-process-body">
+                                <div class="acc-process-title">@card.Title</div>
+                                <div class="acc-process-text">@card.Description</div>
+                            </div>
+                            <div class="acc-process-arrow">›</div>
+                        </button>
+                    }
+                </div>
+            </div>
+
+            <aside class="acc-right-rail">
+                <div class="acc-right-card">
+                    <div class="acc-right-title">Quick Access</div>
+                    <div class="acc-quick-grid">
+                        @foreach (var quick in QuickAccess)
+                        {
+                            <button type="button" class="acc-quick-item" @onclick="() => Go(quick.Route)">
+                                <div class="acc-quick-code">@quick.Code</div>
+                                <div class="acc-quick-label">@quick.Label</div>
+                            </button>
+                        }
+                    </div>
+                </div>
+
+                <div class="acc-right-card is-collapsed">
+                    <div class="acc-right-title">Favoritos</div>
+                    <div class="acc-muted">Tus accesos fijados aparecerán aquí.</div>
+                </div>
+
+                <div class="acc-right-card">
+                    <div class="acc-right-title">Focus today</div>
+                    <div class="acc-focus-item">
+                        <div class="acc-focus-badge">📊</div>
+                        <div>
+                            <div class="acc-focus-title">Cierre mensual</div>
+                            <div class="acc-focus-text">Verificar pólizas pendientes</div>
+                        </div>
+                        <div class="acc-focus-day">Hoy</div>
+                    </div>
+                </div>
+            </aside>
+        </div>
+    </section>
+</div>
+
+@code {
+    private void Go(string route) => Nav.NavigateTo(route);
+
+    private readonly List<ModuleTabVm> ModuleTabs =
+    [
+        new("Inicio", "/dashboard", false),
+        new("Compras", "/purchases/control-center", false),
+        new("Inventario", "/inventory/stock-balances", false),
+        new("Ventas", "/sales/invoices", false),
+        new("Contabilidad", "/accounting/control-center", true),
+        new("Nómina", "/payroll/periods", false),
+        new("Finanzas", "/finance/treasury-dashboard", false),
+        new("Más", "/administration/document-series", false)
+    ];
+
+    private readonly List<KpiVm> Kpis =
+    [
+        new("📒", "247", "Cuentas"),
+        new("📄", "84", "Pólizas"),
+        new("⚖️", "6", "Empresas"),
+        new("✅", "3", "Cierres"),
+        new("📈", "$128K", "Resultado")
+    ];
+
+    private readonly List<ProcessCardVm> ProcessCards =
+    [
+        new("📒", "Catálogo de Cuentas", "Importa y administra el catálogo contable multiempresa", "/accounting/import-catalog"),
+        new("📄", "Pólizas Contables", "Registra, revisa y autoriza pólizas de diario", "/accounting/journal-entries"),
+        new("⚖️", "Balanza de Comprobación", "Genera la balanza por período y empresa", "/accounting/trial-balance"),
+        new("📊", "Estados Financieros", "Estado de resultados y balance general", "/accounting/financial-statements"),
+        new("🗓️", "Cierre de Período", "Ejecuta el proceso de cierre mensual y anual", "/accounting/period-close"),
+        new("⚙️", "Configuración", "Parámetros contables, tipos de póliza y series", "/accounting/settings")
+    ];
+
+    private readonly List<QuickAccessVm> QuickAccess =
+    [
+        new("CAT", "Catálogo", "/accounting/import-catalog"),
+        new("POL", "Pólizas", "/accounting/journal-entries"),
+        new("BAL", "Balanza", "/accounting/trial-balance"),
+        new("EST", "Estados", "/accounting/financial-statements")
+    ];
+
+    private sealed record ModuleTabVm(string Label, string Route, bool IsActive);
+    private sealed record KpiVm(string Icon, string Value, string Label);
+    private sealed record ProcessCardVm(string Icon, string Title, string Description, string Route);
+    private sealed record QuickAccessVm(string Code, string Label, string Route);
+}

@@ -1,0 +1,1385 @@
+@page "/accounting/import-catalog"
+@using Nanchesoft.Web.Services.Accounting
+@using Microsoft.AspNetCore.Components.Forms
+@inject AccountingApiService Api
+@inject IJSRuntime JS
+@implements IAsyncDisposable
+
+<PageTitle>Importar catálogo de cuentas | Nanchesoft</PageTitle>
+
+<style>
+    /* ── Variables ───────────────────────────────────────── */
+    :root {
+        --ic-navy: #0f172a;
+        --ic-blue: #3b82f6;
+        --ic-blue-light: #eff6ff;
+        --ic-emerald: #10b981;
+        --ic-emerald-light: #ecfdf5;
+        --ic-amber: #f59e0b;
+        --ic-red: #ef4444;
+        --ic-red-light: #fef2f2;
+        --ic-slate: #64748b;
+        --ic-slate-100: #f1f5f9;
+        --ic-slate-200: #e2e8f0;
+        --ic-slate-700: #334155;
+        --ic-mono: 'Courier New', 'Consolas', monospace;
+    }
+
+    /* ── Page header ─────────────────────────────────────── */
+    .ic-page-header {
+        background: linear-gradient(135deg, var(--ic-navy) 0%, #1e3a5f 100%);
+        color: white;
+        padding: 28px 32px 24px;
+        margin: -1rem -1rem 0;
+        border-bottom: 3px solid var(--ic-blue);
+        position: relative;
+        overflow: hidden;
+    }
+    .ic-page-header::before {
+        content: '';
+        position: absolute;
+        right: -60px;
+        top: -60px;
+        width: 240px;
+        height: 240px;
+        border: 40px solid rgba(59,130,246,.12);
+        border-radius: 50%;
+        pointer-events: none;
+    }
+    .ic-page-header::after {
+        content: '';
+        position: absolute;
+        right: 40px;
+        bottom: -40px;
+        width: 120px;
+        height: 120px;
+        border: 24px solid rgba(16,185,129,.1);
+        border-radius: 50%;
+        pointer-events: none;
+    }
+    .ic-page-header__breadcrumb {
+        font-size: .75rem;
+        letter-spacing: .08em;
+        text-transform: uppercase;
+        opacity: .6;
+        margin-bottom: 6px;
+    }
+    .ic-page-header__title {
+        font-size: 1.6rem;
+        font-weight: 700;
+        letter-spacing: -.02em;
+        margin: 0 0 4px;
+    }
+    .ic-page-header__subtitle {
+        font-size: .875rem;
+        opacity: .75;
+        margin: 0;
+    }
+
+    /* ── Stepper ─────────────────────────────────────────── */
+    .ic-stepper {
+        display: flex;
+        align-items: center;
+        padding: 28px 0 20px;
+        gap: 0;
+    }
+    .ic-step {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 8px;
+        flex: 0 0 auto;
+        position: relative;
+        z-index: 1;
+    }
+    .ic-step__circle {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 700;
+        font-size: .9rem;
+        transition: all .25s ease;
+        position: relative;
+    }
+    .ic-step__label {
+        font-size: .72rem;
+        font-weight: 600;
+        letter-spacing: .04em;
+        text-transform: uppercase;
+        white-space: nowrap;
+        transition: color .25s ease;
+    }
+    .ic-step--pending .ic-step__circle {
+        background: white;
+        border: 2px solid var(--ic-slate-200);
+        color: var(--ic-slate);
+    }
+    .ic-step--pending .ic-step__label { color: var(--ic-slate); }
+    .ic-step--active .ic-step__circle {
+        background: var(--ic-blue);
+        border: 2px solid var(--ic-blue);
+        color: white;
+        box-shadow: 0 0 0 5px rgba(59,130,246,.18);
+    }
+    .ic-step--active .ic-step__label { color: var(--ic-blue); }
+    .ic-step--done .ic-step__circle {
+        background: var(--ic-emerald);
+        border: 2px solid var(--ic-emerald);
+        color: white;
+    }
+    .ic-step--done .ic-step__label { color: var(--ic-emerald); }
+    .ic-step-line {
+        flex: 1;
+        height: 2px;
+        margin-top: -24px;
+        transition: background .3s ease;
+    }
+    .ic-step-line--done { background: var(--ic-emerald); }
+    .ic-step-line--pending { background: var(--ic-slate-200); }
+
+    /* ── Upload zone ─────────────────────────────────────── */
+    .ic-upload-zone {
+        border: 2px dashed var(--ic-slate-200);
+        border-radius: 16px;
+        background: var(--ic-slate-100);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 52px 24px;
+        gap: 12px;
+        cursor: pointer;
+        transition: all .2s ease;
+        position: relative;
+        overflow: hidden;
+    }
+    .ic-upload-zone::before {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background: radial-gradient(ellipse at 50% 120%, rgba(59,130,246,.06) 0%, transparent 70%);
+        pointer-events: none;
+    }
+    .ic-upload-zone:hover,
+    .ic-upload-zone--over {
+        border-color: var(--ic-blue);
+        background: var(--ic-blue-light);
+        transform: translateY(-2px);
+        box-shadow: 0 8px 32px rgba(59,130,246,.12);
+    }
+    .ic-upload-zone--over { border-style: solid; }
+    .ic-upload-zone__icon { color: var(--ic-slate); transition: color .2s; }
+    .ic-upload-zone:hover .ic-upload-zone__icon,
+    .ic-upload-zone--over .ic-upload-zone__icon { color: var(--ic-blue); }
+    .ic-upload-zone__title {
+        font-size: 1.05rem;
+        font-weight: 600;
+        color: var(--ic-slate-700);
+    }
+    .ic-upload-zone__sub { font-size: .85rem; color: var(--ic-slate); }
+    .ic-upload-btn {
+        background: var(--ic-blue);
+        color: white;
+        border: none;
+        padding: 9px 22px;
+        border-radius: 8px;
+        font-size: .875rem;
+        font-weight: 600;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        transition: background .15s ease, transform .1s ease;
+        margin-top: 4px;
+    }
+    .ic-upload-btn:hover { background: #2563eb; transform: translateY(-1px); }
+
+    /* ── File pill ───────────────────────────────────────── */
+    .ic-file-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        background: var(--ic-emerald-light);
+        border: 1.5px solid rgba(16,185,129,.3);
+        border-radius: 10px;
+        padding: 10px 18px;
+        font-size: .875rem;
+        color: #065f46;
+        font-weight: 500;
+        animation: ic-fade-in .3s ease;
+    }
+
+    /* ── Info box ────────────────────────────────────────── */
+    .ic-info-box {
+        background: white;
+        border: 1.5px solid var(--ic-slate-200);
+        border-left: 4px solid var(--ic-blue);
+        border-radius: 10px;
+        padding: 16px 20px;
+        font-size: .855rem;
+        color: var(--ic-slate-700);
+    }
+    .ic-info-box li { margin-bottom: 4px; }
+    .ic-info-box code {
+        background: var(--ic-slate-100);
+        padding: 1px 5px;
+        border-radius: 4px;
+        font-family: var(--ic-mono);
+        font-size: .82rem;
+        color: var(--ic-navy);
+    }
+
+    /* ── Card styles ─────────────────────────────────────── */
+    .ic-card {
+        background: white;
+        border: 1.5px solid var(--ic-slate-200);
+        border-radius: 14px;
+        overflow: hidden;
+        box-shadow: 0 1px 8px rgba(15,23,42,.05);
+        animation: ic-fade-in .3s ease;
+    }
+    .ic-card-header {
+        padding: 16px 22px;
+        border-bottom: 1.5px solid var(--ic-slate-200);
+        font-weight: 700;
+        font-size: .9rem;
+        letter-spacing: -.01em;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+    }
+    .ic-card-header--blue {
+        background: linear-gradient(90deg, var(--ic-navy) 0%, #1e3a5f 100%);
+        color: white;
+        border-bottom-color: rgba(255,255,255,.1);
+    }
+    .ic-card-header--green {
+        background: linear-gradient(90deg, #064e3b 0%, #065f46 100%);
+        color: white;
+    }
+    .ic-card-header--red {
+        background: linear-gradient(90deg, #7f1d1d 0%, #991b1b 100%);
+        color: white;
+    }
+    .ic-card-body { padding: 22px; }
+    .ic-card-footer {
+        padding: 14px 22px;
+        background: var(--ic-slate-100);
+        border-top: 1.5px solid var(--ic-slate-200);
+        display: flex;
+        gap: 10px;
+        align-items: center;
+    }
+
+    /* ── KPI strip ───────────────────────────────────────── */
+    .ic-kpi-strip {
+        display: flex;
+        gap: 12px;
+        flex-wrap: wrap;
+        margin-bottom: 20px;
+    }
+    .ic-kpi {
+        flex: 1;
+        min-width: 110px;
+        background: white;
+        border: 1.5px solid var(--ic-slate-200);
+        border-radius: 12px;
+        padding: 14px 18px;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+    }
+    .ic-kpi__num {
+        font-size: 1.8rem;
+        font-weight: 800;
+        letter-spacing: -.04em;
+        line-height: 1;
+    }
+    .ic-kpi__label {
+        font-size: .72rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: .06em;
+        color: var(--ic-slate);
+    }
+    .ic-kpi--green { border-color: rgba(16,185,129,.3); background: var(--ic-emerald-light); }
+    .ic-kpi--green .ic-kpi__num { color: #065f46; }
+    .ic-kpi--blue { border-color: rgba(59,130,246,.3); background: var(--ic-blue-light); }
+    .ic-kpi--blue .ic-kpi__num { color: #1d4ed8; }
+    .ic-kpi--amber { border-color: rgba(245,158,11,.3); background: #fffbeb; }
+    .ic-kpi--amber .ic-kpi__num { color: #92400e; }
+    .ic-kpi--red { border-color: rgba(239,68,68,.3); background: var(--ic-red-light); }
+    .ic-kpi--red .ic-kpi__num { color: #991b1b; }
+    .ic-kpi--slate { border-color: var(--ic-slate-200); }
+    .ic-kpi--slate .ic-kpi__num { color: var(--ic-slate-700); }
+
+    /* ── Company pills ───────────────────────────────────── */
+    .ic-company-pill {
+        display: inline-flex;
+        align-items: center;
+        background: var(--ic-navy);
+        color: white;
+        border-radius: 6px;
+        padding: 3px 10px;
+        font-size: .72rem;
+        font-weight: 700;
+        letter-spacing: .04em;
+        text-transform: uppercase;
+    }
+
+    /* ── Filter tabs ─────────────────────────────────────── */
+    .ic-filter-tabs {
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+        padding: 0 22px 16px;
+    }
+    .ic-filter-tab {
+        padding: 5px 14px;
+        border-radius: 20px;
+        font-size: .8rem;
+        font-weight: 600;
+        border: 1.5px solid;
+        cursor: pointer;
+        transition: all .15s ease;
+        background: transparent;
+    }
+    .ic-filter-tab--all        { border-color: var(--ic-slate-200); color: var(--ic-slate-700); }
+    .ic-filter-tab--all.active { background: var(--ic-slate-700); color: white; border-color: var(--ic-slate-700); }
+    .ic-filter-tab--valid        { border-color: rgba(16,185,129,.4); color: #065f46; }
+    .ic-filter-tab--valid.active { background: var(--ic-emerald); color: white; border-color: var(--ic-emerald); }
+    .ic-filter-tab--error        { border-color: rgba(239,68,68,.4); color: #991b1b; }
+    .ic-filter-tab--error.active { background: var(--ic-red); color: white; border-color: var(--ic-red); }
+    .ic-filter-tab--duplicate        { border-color: rgba(245,158,11,.4); color: #92400e; }
+    .ic-filter-tab--duplicate.active { background: var(--ic-amber); color: white; border-color: var(--ic-amber); }
+
+    /* ── Accounts table ──────────────────────────────────── */
+    .ic-table-wrap {
+        overflow-x: auto;
+        max-height: 440px;
+        border-top: 1.5px solid var(--ic-slate-200);
+    }
+    .ic-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: .8rem;
+        white-space: nowrap;
+    }
+    .ic-table thead th {
+        background: var(--ic-navy);
+        color: rgba(255,255,255,.85);
+        padding: 10px 12px;
+        font-weight: 600;
+        font-size: .72rem;
+        letter-spacing: .05em;
+        text-transform: uppercase;
+        position: sticky;
+        top: 0;
+        z-index: 2;
+        border-right: 1px solid rgba(255,255,255,.08);
+    }
+    .ic-table thead th:last-child { border-right: none; }
+    .ic-table tbody tr { border-bottom: 1px solid var(--ic-slate-200); transition: background .1s; }
+    .ic-table tbody tr:hover { background: var(--ic-slate-100); }
+    .ic-table tbody td { padding: 8px 12px; color: var(--ic-slate-700); vertical-align: middle; }
+    .ic-table tbody tr.row-error td { background: #fff5f5; }
+    .ic-table tbody tr.row-duplicate td { background: #fffbeb; }
+    .ic-table tbody tr.row-existing td { background: #eff6ff; }
+    .ic-code { font-family: var(--ic-mono); font-size: .8rem; color: var(--ic-navy); font-weight: 600; }
+    .ic-level-indicator {
+        display: inline-block;
+        font-family: var(--ic-mono);
+        color: #94a3b8;
+        font-size: .9em;
+        margin-right: 2px;
+    }
+    .ic-applies--yes {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 22px;
+        height: 22px;
+        background: var(--ic-emerald);
+        color: white;
+        border-radius: 50%;
+        font-size: .7rem;
+        font-weight: 700;
+    }
+    .ic-applies--no {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 22px;
+        height: 22px;
+        background: var(--ic-slate-200);
+        color: var(--ic-slate);
+        border-radius: 50%;
+        font-size: .7rem;
+    }
+    .ic-applies--na { color: #cbd5e1; font-size: .85rem; }
+
+    /* ── Status badges ───────────────────────────────────── */
+    .ic-badge {
+        display: inline-block;
+        padding: 2px 9px;
+        border-radius: 20px;
+        font-size: .7rem;
+        font-weight: 700;
+        letter-spacing: .04em;
+        text-transform: uppercase;
+    }
+    .ic-badge--valid    { background: var(--ic-emerald-light); color: #065f46; border: 1px solid rgba(16,185,129,.3); }
+    .ic-badge--existing { background: var(--ic-blue-light); color: #1d4ed8; border: 1px solid rgba(59,130,246,.3); }
+    .ic-badge--duplicate { background: #fffbeb; color: #92400e; border: 1px solid rgba(245,158,11,.3); }
+    .ic-badge--error    { background: var(--ic-red-light); color: #991b1b; border: 1px solid rgba(239,68,68,.3); }
+    .ic-badge--imported { background: var(--ic-emerald-light); color: #065f46; border: 1px solid rgba(16,185,129,.3); }
+    .ic-badge--imported_with_errors { background: #fffbeb; color: #92400e; border: 1px solid rgba(245,158,11,.3); }
+    .ic-badge--failed   { background: var(--ic-red-light); color: #991b1b; border: 1px solid rgba(239,68,68,.3); }
+    .ic-badge--pending  { background: var(--ic-slate-100); color: var(--ic-slate); border: 1px solid var(--ic-slate-200); }
+
+    /* ── Buttons ─────────────────────────────────────────── */
+    .ic-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        padding: 9px 20px;
+        border-radius: 9px;
+        font-size: .875rem;
+        font-weight: 600;
+        border: none;
+        cursor: pointer;
+        transition: all .15s ease;
+    }
+    .ic-btn:disabled { opacity: .5; cursor: not-allowed; }
+    .ic-btn--primary  { background: var(--ic-blue); color: white; }
+    .ic-btn--primary:not(:disabled):hover { background: #2563eb; transform: translateY(-1px); box-shadow: 0 4px 16px rgba(37,99,235,.3); }
+    .ic-btn--success  { background: var(--ic-emerald); color: white; }
+    .ic-btn--success:not(:disabled):hover { background: #059669; transform: translateY(-1px); box-shadow: 0 4px 16px rgba(5,150,105,.3); }
+    .ic-btn--ghost    { background: white; color: var(--ic-slate-700); border: 1.5px solid var(--ic-slate-200); }
+    .ic-btn--ghost:hover { background: var(--ic-slate-100); }
+    .ic-btn--outline  { background: transparent; color: var(--ic-blue); border: 1.5px solid var(--ic-blue); }
+    .ic-btn--outline:hover { background: var(--ic-blue-light); }
+
+    /* ── Confirm step ────────────────────────────────────── */
+    .ic-group-input {
+        border: 1.5px solid var(--ic-slate-200);
+        border-radius: 10px;
+        padding: 11px 16px;
+        font-size: .9rem;
+        width: 100%;
+        outline: none;
+        transition: border-color .15s, box-shadow .15s;
+        font-weight: 500;
+        color: var(--ic-navy);
+    }
+    .ic-group-input:focus {
+        border-color: var(--ic-blue);
+        box-shadow: 0 0 0 3px rgba(59,130,246,.15);
+    }
+    .ic-group-chip {
+        display: inline-flex;
+        align-items: center;
+        background: var(--ic-slate-100);
+        border: 1.5px solid var(--ic-slate-200);
+        border-radius: 8px;
+        padding: 4px 13px;
+        font-size: .78rem;
+        font-weight: 600;
+        color: var(--ic-slate-700);
+        cursor: pointer;
+        transition: all .15s;
+    }
+    .ic-group-chip:hover { background: var(--ic-blue-light); border-color: var(--ic-blue); color: var(--ic-blue); }
+    .ic-summary-list { list-style: none; padding: 0; margin: 0; }
+    .ic-summary-list li {
+        display: flex;
+        align-items: baseline;
+        gap: 10px;
+        padding: 7px 0;
+        border-bottom: 1px solid var(--ic-slate-200);
+        font-size: .875rem;
+        color: var(--ic-slate-700);
+    }
+    .ic-summary-list li:last-child { border-bottom: none; }
+    .ic-summary-num {
+        font-size: 1.1rem;
+        font-weight: 800;
+        min-width: 36px;
+        line-height: 1;
+    }
+
+    /* ── Result step ─────────────────────────────────────── */
+    .ic-result-kpi-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+        gap: 16px;
+        margin-bottom: 24px;
+    }
+    .ic-result-kpi {
+        border-radius: 14px;
+        padding: 22px 20px;
+        text-align: center;
+        position: relative;
+        overflow: hidden;
+    }
+    .ic-result-kpi::before {
+        content: '';
+        position: absolute;
+        bottom: -20px;
+        right: -20px;
+        width: 80px;
+        height: 80px;
+        border-radius: 50%;
+        opacity: .12;
+    }
+    .ic-result-kpi--created { background: linear-gradient(135deg, #ecfdf5, #d1fae5); }
+    .ic-result-kpi--created .ic-result-kpi__num { color: #065f46; }
+    .ic-result-kpi--created::before { background: #10b981; }
+    .ic-result-kpi--updated { background: linear-gradient(135deg, #eff6ff, #dbeafe); }
+    .ic-result-kpi--updated .ic-result-kpi__num { color: #1d4ed8; }
+    .ic-result-kpi--updated::before { background: #3b82f6; }
+    .ic-result-kpi--errors  { background: linear-gradient(135deg, #fff5f5, #fee2e2); }
+    .ic-result-kpi--errors .ic-result-kpi__num  { color: #991b1b; }
+    .ic-result-kpi--errors::before  { background: #ef4444; }
+    .ic-result-kpi--group   { background: linear-gradient(135deg, var(--ic-navy), #1e3a5f); }
+    .ic-result-kpi--group .ic-result-kpi__num { color: white; font-size: 1rem; }
+    .ic-result-kpi--group .ic-result-kpi__label { color: rgba(255,255,255,.6); }
+    .ic-result-kpi__num   { font-size: 2.2rem; font-weight: 900; letter-spacing: -.04em; line-height: 1; margin-bottom: 6px; }
+    .ic-result-kpi__label { font-size: .7rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--ic-slate); }
+    .ic-success-banner {
+        background: linear-gradient(90deg, var(--ic-emerald-light), #d1fae5);
+        border: 1.5px solid rgba(16,185,129,.3);
+        border-radius: 12px;
+        padding: 16px 22px;
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        color: #065f46;
+        font-weight: 600;
+        margin-bottom: 20px;
+    }
+    .ic-error-banner {
+        background: linear-gradient(90deg, #fff5f5, #fee2e2);
+        border: 1.5px solid rgba(239,68,68,.3);
+        border-radius: 12px;
+        padding: 16px 22px;
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        color: #991b1b;
+        font-weight: 600;
+        margin-bottom: 20px;
+    }
+
+    /* ── History table ───────────────────────────────────── */
+    .ic-history-table { width: 100%; border-collapse: collapse; font-size: .83rem; }
+    .ic-history-table th {
+        background: var(--ic-slate-100);
+        padding: 9px 16px;
+        font-size: .7rem;
+        font-weight: 700;
+        letter-spacing: .05em;
+        text-transform: uppercase;
+        color: var(--ic-slate);
+        border-bottom: 1.5px solid var(--ic-slate-200);
+        text-align: left;
+    }
+    .ic-history-table td {
+        padding: 10px 16px;
+        border-bottom: 1px solid var(--ic-slate-200);
+        color: var(--ic-slate-700);
+        vertical-align: middle;
+    }
+    .ic-history-table tr:last-child td { border-bottom: none; }
+    .ic-history-table tr:hover td { background: var(--ic-slate-100); }
+
+    /* ── Error alert ─────────────────────────────────────── */
+    .ic-alert-error {
+        background: var(--ic-red-light);
+        border: 1.5px solid rgba(239,68,68,.3);
+        border-radius: 10px;
+        padding: 13px 18px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        color: #991b1b;
+        font-size: .875rem;
+        font-weight: 500;
+        margin-bottom: 20px;
+        animation: ic-fade-in .25s ease;
+    }
+    .ic-alert-close {
+        margin-left: auto;
+        background: none;
+        border: none;
+        color: #991b1b;
+        cursor: pointer;
+        font-size: 1.1rem;
+        opacity: .6;
+        padding: 0;
+        line-height: 1;
+    }
+    .ic-alert-close:hover { opacity: 1; }
+
+    /* ── Row number badge ────────────────────────────────── */
+    .ic-row-num {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 26px;
+        height: 20px;
+        background: var(--ic-slate-100);
+        border-radius: 4px;
+        font-size: .7rem;
+        font-weight: 600;
+        color: var(--ic-slate);
+    }
+
+    /* ── Animations ──────────────────────────────────────── */
+    @@keyframes ic-fade-in {
+        from { opacity: 0; transform: translateY(6px); }
+        to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .ic-section { animation: ic-fade-in .3s ease; }
+
+    /* ── Responsive ──────────────────────────────────────── */
+    @@media (max-width: 640px) {
+        .ic-page-header { padding: 20px 16px 18px; margin: -1rem -1rem 0; }
+        .ic-page-header__title { font-size: 1.25rem; }
+        .ic-stepper { gap: 0; }
+        .ic-step__label { display: none; }
+    }
+</style>
+
+@* ── Page header ─────────────────────────────────────────────── *@
+<div class="ic-page-header">
+    <div class="ic-page-header__breadcrumb">Contabilidad &rsaquo; Importar catálogo de cuentas</div>
+    <h1 class="ic-page-header__title">
+        <span class="bi bi-file-earmark-spreadsheet me-2" style="font-size:1.3rem;opacity:.9;"></span>
+        Importar catálogo de cuentas
+    </h1>
+    <p class="ic-page-header__subtitle">Carga tu catálogo contable desde Excel. El sistema detecta empresas, jerarquías y asignaciones SI / NO por empresa.</p>
+</div>
+
+<div style="padding:24px 0 0;">
+
+    @* ── Stepper ────────────────────────────────────────────────── *@
+    <div class="ic-stepper">
+        @StepNode(1, "Cargar archivo", "bi-upload")
+        <div class="ic-step-line @(_step > 1 ? "ic-step-line--done" : "ic-step-line--pending")"></div>
+        @StepNode(2, "Vista previa", "bi-table")
+        <div class="ic-step-line @(_step > 2 ? "ic-step-line--done" : "ic-step-line--pending")"></div>
+        @StepNode(3, "Confirmar", "bi-check2-all")
+        <div class="ic-step-line @(_step > 3 ? "ic-step-line--done" : "ic-step-line--pending")"></div>
+        @StepNode(4, "Resultado", "bi-stars")
+    </div>
+
+    @* ── Alerta global ──────────────────────────────────────────── *@
+    @if (!string.IsNullOrEmpty(_error))
+    {
+        <div class="ic-alert-error">
+            <span class="bi bi-exclamation-circle-fill fs-5"></span>
+            <span>@_error</span>
+            <button class="ic-alert-close" @onclick='() => _error = string.Empty'>&times;</button>
+        </div>
+    }
+
+    @* ══════════════════════════════════════════════════════════════
+       PASO 1: CARGAR ARCHIVO
+    ══════════════════════════════════════════════════════════════ *@
+    @if (_step == 1)
+    {
+        <div class="ic-section">
+            <div class="ic-card mb-4">
+                <div class="ic-card-header ic-card-header--blue">
+                    <span style="display:flex;align-items:center;gap:9px;">
+                        <span class="bi bi-cloud-upload fs-5"></span>
+                        Paso 1 — Seleccionar archivo Excel (.xlsx)
+                    </span>
+                </div>
+                <div class="ic-card-body">
+
+                    @* Zona drag & drop *@
+                    <div id="catalog-dz"
+                         class="ic-upload-zone @(_dragging ? "ic-upload-zone--over" : "")"
+                         @ondragover:preventDefault
+                         @ondragover="OnDragOver"
+                         @ondragleave="OnDragLeave"
+                         @ondrop:preventDefault
+                         @ondrop="OnDropAsync">
+
+                        <span class="bi bi-file-earmark-excel ic-upload-zone__icon" style="font-size:3rem;"></span>
+                        <div class="ic-upload-zone__title">Arrastra tu archivo Excel aquí</div>
+                        <div class="ic-upload-zone__sub">Soporta archivos .xlsx hasta 20 MB</div>
+                        <label class="ic-upload-btn">
+                            <span class="bi bi-folder2-open"></span>
+                            Seleccionar archivo
+                            <InputFile OnChange="OnFileSelectedAsync" accept=".xlsx" style="display:none" />
+                        </label>
+                    </div>
+
+                    @if (_selectedFileName is not null)
+                    {
+                        <div class="mt-3">
+                            <div class="ic-file-pill">
+                                <span class="bi bi-file-earmark-excel-fill" style="font-size:1.2rem;color:#059669;"></span>
+                                <span>@_selectedFileName</span>
+                                <span class="bi bi-check-circle-fill" style="color:#059669;margin-left:auto;"></span>
+                            </div>
+                        </div>
+                    }
+
+                    <div style="margin-top:20px;">
+                        <button class="ic-btn ic-btn--primary" @onclick="ParseExcelAsync"
+                                disabled="@(_selectedFile == null || _loading)">
+                            @if (_loading)
+                            {
+                                <span class="spinner-border spinner-border-sm"></span>
+                                <span>Analizando…</span>
+                            }
+                            else
+                            {
+                                <span class="bi bi-search"></span>
+                                <span>Analizar archivo</span>
+                            }
+                        </button>
+                    </div>
+
+                    @* Instrucciones *@
+                    <div class="ic-info-box mt-4">
+                        <div style="font-weight:700;color:var(--ic-navy);margin-bottom:10px;display:flex;align-items:center;gap:8px;">
+                            <span class="bi bi-info-circle-fill" style="color:var(--ic-blue);"></span>
+                            Estructura esperada del archivo
+                        </div>
+                        <ul class="mb-0" style="line-height:2;padding-left:16px;">
+                            <li><strong>Fila 7:</strong> Nombres de empresas (columnas D, F, H, J, L, N…)</li>
+                            <li><strong>Fila 8:</strong> Encabezados <code>SI</code> / <code>NO</code> por empresa</li>
+                            <li><strong>Fila 9+:</strong> Cuentas contables</li>
+                            <li><strong>Columna B:</strong> Código de cuenta — ej. <code>100-00-000</code></li>
+                            <li><strong>Columna C:</strong> Nombre de cuenta</li>
+                            <li>Marca con <code>X</code> en <strong>SI</strong> si la cuenta aplica a esa empresa</li>
+                            <li>Marca con <code>X</code> en <strong>NO</strong> si explícitamente no aplica</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            @* Historial *@
+            @if (_history.Count > 0)
+            {
+                <div class="ic-card">
+                    <div class="ic-card-header">
+                        <span style="display:flex;align-items:center;gap:8px;">
+                            <span class="bi bi-clock-history" style="color:var(--ic-blue);"></span>
+                            Historial de importaciones recientes
+                        </span>
+                        <span class="ic-badge ic-badge--pending">@_history.Count</span>
+                    </div>
+                    <div style="overflow-x:auto;">
+                        <table class="ic-history-table">
+                            <thead>
+                                <tr>
+                                    <th>Archivo</th>
+                                    <th>Estado</th>
+                                    <th style="text-align:center;">Total</th>
+                                    <th style="text-align:center;">Válidas</th>
+                                    <th style="text-align:center;">Errores</th>
+                                    <th>Fecha</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var h in _history)
+                                {
+                                    <tr>
+                                        <td style="font-family:var(--ic-mono);font-size:.78rem;color:var(--ic-navy);">@h.FileName</td>
+                                        <td><span class="ic-badge ic-badge--@h.Status">@h.Status.Replace("_", " ")</span></td>
+                                        <td style="text-align:center;font-weight:600;">@h.TotalRows</td>
+                                        <td style="text-align:center;color:#065f46;font-weight:600;">@h.ValidRows</td>
+                                        <td style="text-align:center;color:@(h.ErrorRows > 0 ? "#991b1b" : "var(--ic-slate)");font-weight:600;">@h.ErrorRows</td>
+                                        <td style="color:var(--ic-slate);font-size:.78rem;">@h.CreatedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+
+    @* ══════════════════════════════════════════════════════════════
+       PASO 2: VISTA PREVIA
+    ══════════════════════════════════════════════════════════════ *@
+    @if (_step == 2 && _preview is not null)
+    {
+        <div class="ic-section">
+            @* KPI strip *@
+            <div class="ic-kpi-strip">
+                <div class="ic-kpi ic-kpi--green">
+                    <div class="ic-kpi__num">@_preview.ValidAccounts</div>
+                    <div class="ic-kpi__label">Válidas</div>
+                </div>
+                @if (_preview.ExistingAccounts > 0)
+                {
+                    <div class="ic-kpi ic-kpi--blue">
+                        <div class="ic-kpi__num">@_preview.ExistingAccounts</div>
+                        <div class="ic-kpi__label">Existentes</div>
+                    </div>
+                }
+                @if (_preview.DuplicateAccounts > 0)
+                {
+                    <div class="ic-kpi ic-kpi--amber">
+                        <div class="ic-kpi__num">@_preview.DuplicateAccounts</div>
+                        <div class="ic-kpi__label">Duplicadas</div>
+                    </div>
+                }
+                @if (_preview.ErrorAccounts > 0)
+                {
+                    <div class="ic-kpi ic-kpi--red">
+                        <div class="ic-kpi__num">@_preview.ErrorAccounts</div>
+                        <div class="ic-kpi__label">Errores</div>
+                    </div>
+                }
+                <div class="ic-kpi ic-kpi--slate">
+                    <div class="ic-kpi__num">@_preview.DetectedCompanies.Count</div>
+                    <div class="ic-kpi__label">Empresas</div>
+                </div>
+            </div>
+
+            <div class="ic-card mb-4">
+                <div class="ic-card-header">
+                    <span style="display:flex;align-items:center;gap:9px;color:var(--ic-navy);">
+                        <span class="bi bi-table" style="color:var(--ic-blue);"></span>
+                        Vista previa del catálogo
+                        <span style="color:var(--ic-slate);font-weight:400;font-size:.8rem;">— @_preview.FileName</span>
+                    </span>
+                    @* Empresas detectadas *@
+                    <div style="display:flex;gap:5px;flex-wrap:wrap;max-width:60%;">
+                        @foreach (var c in _preview.DetectedCompanies)
+                        {
+                            <span class="ic-company-pill">@c</span>
+                        }
+                    </div>
+                </div>
+
+                @* Advertencias *@
+                @foreach (var w in _preview.Warnings)
+                {
+                    <div style="padding:10px 22px;background:#fffbeb;border-bottom:1px solid rgba(245,158,11,.2);font-size:.83rem;color:#92400e;display:flex;align-items:center;gap:8px;">
+                        <span class="bi bi-exclamation-triangle-fill"></span>@w
+                    </div>
+                }
+
+                @* Filtros *@
+                <div class="ic-filter-tabs">
+                    <button class="ic-filter-tab ic-filter-tab--all @(_viewFilter == "all" ? "active" : "")"
+                            @onclick='() => _viewFilter = "all"'>
+                        Todas <strong>(@_preview.TotalAccounts)</strong>
+                    </button>
+                    <button class="ic-filter-tab ic-filter-tab--valid @(_viewFilter == "valid" ? "active" : "")"
+                            @onclick='() => _viewFilter = "valid"'>
+                        Válidas
+                    </button>
+                    @if (_preview.ErrorAccounts > 0)
+                    {
+                        <button class="ic-filter-tab ic-filter-tab--error @(_viewFilter == "error" ? "active" : "")"
+                                @onclick='() => _viewFilter = "error"'>
+                            Con error
+                        </button>
+                    }
+                    @if (_preview.DuplicateAccounts > 0)
+                    {
+                        <button class="ic-filter-tab ic-filter-tab--duplicate @(_viewFilter == "duplicate" ? "active" : "")"
+                                @onclick='() => _viewFilter = "duplicate"'>
+                            Duplicadas
+                        </button>
+                    }
+                </div>
+
+                @* Tabla *@
+                <div class="ic-table-wrap">
+                    <table class="ic-table">
+                        <thead>
+                            <tr>
+                                <th style="min-width:44px;text-align:center;">#</th>
+                                <th style="min-width:130px;">Código</th>
+                                <th style="min-width:260px;">Nombre de cuenta</th>
+                                <th style="min-width:44px;text-align:center;">Niv</th>
+                                <th style="min-width:120px;">Cuenta padre</th>
+                                @foreach (var c in _preview.DetectedCompanies)
+                                {
+                                    <th style="min-width:72px;text-align:center;font-size:.65rem;max-width:72px;overflow:hidden;text-overflow:ellipsis;">@c</th>
+                                }
+                                <th style="min-width:90px;">Estado</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var acct in FilteredAccounts())
+                            {
+                                <tr class="@(acct.Status == "error" ? "row-error" : acct.Status == "duplicate" ? "row-duplicate" : acct.Status == "existing" ? "row-existing" : "")">
+                                    <td style="text-align:center;"><span class="ic-row-num">@acct.ExcelRow</span></td>
+                                    <td>
+                                        <span style="padding-left:@((acct.Level - 1) * 16)px;display:inline-flex;align-items:center;gap:3px;">
+                                            @if (acct.Level == 2)
+                                            {
+                                                <span class="ic-level-indicator">├─</span>
+                                            }
+                                            else if (acct.Level == 3)
+                                            {
+                                                <span class="ic-level-indicator">└──</span>
+                                            }
+                                            <span class="ic-code">@acct.Code</span>
+                                        </span>
+                                    </td>
+                                    <td style="color:var(--ic-navy);font-weight:@(acct.Level == 1 ? "700" : "400");">@acct.Name</td>
+                                    <td style="text-align:center;">
+                                        <span style="display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;font-size:.7rem;font-weight:700;background:@LevelColor(acct.Level).Bg;color:@LevelColor(acct.Level).Fg;">@acct.Level</span>
+                                    </td>
+                                    <td class="ic-code" style="font-size:.75rem;color:var(--ic-slate);">@acct.ParentCode</td>
+                                    @foreach (var c in _preview.DetectedCompanies)
+                                    {
+                                        <td style="text-align:center;">
+                                            @if (acct.CompanyApplies.TryGetValue(c, out var applies))
+                                            {
+                                                @if (applies == true)
+                                                {
+                                                    <span class="ic-applies--yes" title="SI">✓</span>
+                                                }
+                                                else if (applies == false)
+                                                {
+                                                    <span class="ic-applies--no" title="NO">✗</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="ic-applies--na">—</span>
+                                                }
+                                            }
+                                            else
+                                            {
+                                                <span class="ic-applies--na">—</span>
+                                            }
+                                        </td>
+                                    }
+                                    <td>
+                                        <span class="ic-badge ic-badge--@acct.Status">@acct.Status</span>
+                                        @if (!string.IsNullOrEmpty(acct.Message))
+                                        {
+                                            <div style="font-size:.68rem;color:var(--ic-slate);margin-top:2px;">@acct.Message</div>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="ic-card-footer">
+                    <button class="ic-btn ic-btn--ghost" @onclick="() => _step = 1">
+                        <span class="bi bi-arrow-left"></span> Volver
+                    </button>
+                    @if (_preview.ValidAccounts > 0)
+                    {
+                        <button class="ic-btn ic-btn--primary" @onclick="() => _step = 3">
+                            Continuar a confirmar <span class="bi bi-arrow-right"></span>
+                        </button>
+                    }
+                </div>
+            </div>
+        </div>
+    }
+
+    @* ══════════════════════════════════════════════════════════════
+       PASO 3: CONFIRMAR
+    ══════════════════════════════════════════════════════════════ *@
+    @if (_step == 3 && _preview is not null)
+    {
+        <div class="ic-section">
+            <div class="ic-card mb-4">
+                <div class="ic-card-header ic-card-header--blue">
+                    <span style="display:flex;align-items:center;gap:9px;">
+                        <span class="bi bi-check2-all fs-5"></span>
+                        Paso 3 — Confirmar importación
+                    </span>
+                </div>
+                <div class="ic-card-body">
+
+                    @* Grupo de empresas *@
+                    <div style="max-width:480px;margin-bottom:20px;">
+                        <label style="display:block;font-weight:700;font-size:.85rem;color:var(--ic-navy);margin-bottom:8px;letter-spacing:-.01em;">
+                            Nombre del grupo de empresas
+                            <span style="color:var(--ic-red);margin-left:3px;">*</span>
+                        </label>
+                        <input class="ic-group-input" @bind="_groupName"
+                               placeholder="Ej. GRUPO PRINCIPAL" />
+                        <div style="font-size:.78rem;color:var(--ic-slate);margin-top:6px;">
+                            Agrupa las empresas del catálogo. Puedes usar uno existente o crear uno nuevo.
+                        </div>
+                    </div>
+
+                    @* Grupos existentes *@
+                    @if (_existingGroups.Count > 0)
+                    {
+                        <div style="margin-bottom:24px;">
+                            <div style="font-size:.77rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--ic-slate);margin-bottom:8px;">
+                                Grupos existentes
+                            </div>
+                            <div style="display:flex;gap:7px;flex-wrap:wrap;">
+                                @foreach (var g in _existingGroups)
+                                {
+                                    <button class="ic-group-chip" @onclick="() => _groupName = g.Name">
+                                        <span class="bi bi-collection me-1" style="font-size:.8rem;"></span>
+                                        @g.Name
+                                        <span style="color:var(--ic-slate);margin-left:6px;font-size:.7rem;">(@g.Members.Count)</span>
+                                    </button>
+                                }
+                            </div>
+                        </div>
+                    }
+
+                    @* Resumen *@
+                    <div style="background:var(--ic-slate-100);border-radius:12px;padding:20px 22px;">
+                        <div style="font-size:.77rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--ic-slate);margin-bottom:14px;">
+                            Resumen de la importación
+                        </div>
+                        <ul class="ic-summary-list">
+                            <li>
+                                <span class="ic-summary-num" style="color:#065f46;">@_preview.ValidAccounts</span>
+                                <span>cuentas a crear o actualizar</span>
+                            </li>
+                            <li>
+                                <span class="ic-summary-num" style="color:var(--ic-navy);">@_preview.DetectedCompanies.Count</span>
+                                <span>empresas: <strong>@string.Join(", ", _preview.DetectedCompanies)</strong></span>
+                            </li>
+                            @if (_preview.ExistingAccounts > 0)
+                            {
+                                <li>
+                                    <span class="ic-summary-num" style="color:#1d4ed8;">@_preview.ExistingAccounts</span>
+                                    <span>ya existentes — se actualizará el nombre</span>
+                                </li>
+                            }
+                            @if (_preview.ErrorAccounts > 0)
+                            {
+                                <li>
+                                    <span class="ic-summary-num" style="color:var(--ic-red);">@_preview.ErrorAccounts</span>
+                                    <span style="color:#991b1b;">con error — no se importarán</span>
+                                </li>
+                            }
+                            @if (_preview.DuplicateAccounts > 0)
+                            {
+                                <li>
+                                    <span class="ic-summary-num" style="color:var(--ic-amber);">@_preview.DuplicateAccounts</span>
+                                    <span style="color:#92400e;">duplicadas en el archivo — no se importarán</span>
+                                </li>
+                            }
+                        </ul>
+                    </div>
+
+                </div>
+                <div class="ic-card-footer">
+                    <button class="ic-btn ic-btn--ghost" @onclick="() => _step = 2">
+                        <span class="bi bi-arrow-left"></span> Volver
+                    </button>
+                    <button class="ic-btn ic-btn--success" @onclick="ConfirmImportAsync"
+                            disabled="@(string.IsNullOrWhiteSpace(_groupName) || _loading)">
+                        @if (_loading)
+                        {
+                            <span class="spinner-border spinner-border-sm"></span>
+                            <span>Importando…</span>
+                        }
+                        else
+                        {
+                            <span class="bi bi-cloud-upload"></span>
+                            <span>Importar catálogo</span>
+                        }
+                    </button>
+                </div>
+            </div>
+        </div>
+    }
+
+    @* ══════════════════════════════════════════════════════════════
+       PASO 4: RESULTADO
+    ══════════════════════════════════════════════════════════════ *@
+    @if (_step == 4 && _result is not null)
+    {
+        <div class="ic-section">
+            <div class="ic-card mb-4">
+                <div class="ic-card-header @(_result.Success ? "ic-card-header--green" : "ic-card-header--red")">
+                    <span style="display:flex;align-items:center;gap:9px;">
+                        <span class="bi @(_result.Success ? "bi-check-circle-fill" : "bi-x-circle-fill") fs-5"></span>
+                        Paso 4 — @(_result.Success ? "¡Importación exitosa!" : "Importación con errores")
+                    </span>
+                </div>
+                <div class="ic-card-body">
+
+                    @* KPI grid *@
+                    <div class="ic-result-kpi-grid">
+                        <div class="ic-result-kpi ic-result-kpi--created">
+                            <div class="ic-result-kpi__num">@_result.Created</div>
+                            <div class="ic-result-kpi__label">Cuentas creadas</div>
+                        </div>
+                        <div class="ic-result-kpi ic-result-kpi--updated">
+                            <div class="ic-result-kpi__num">@_result.Updated</div>
+                            <div class="ic-result-kpi__label">Actualizadas</div>
+                        </div>
+                        <div class="ic-result-kpi ic-result-kpi--errors">
+                            <div class="ic-result-kpi__num">@_result.Errors</div>
+                            <div class="ic-result-kpi__label">Errores</div>
+                        </div>
+                        <div class="ic-result-kpi ic-result-kpi--group">
+                            <div class="ic-result-kpi__num">@_result.GroupCompanyName</div>
+                            <div class="ic-result-kpi__label">Grupo</div>
+                        </div>
+                    </div>
+
+                    @* Banner *@
+                    @if (_result.Success)
+                    {
+                        <div class="ic-success-banner">
+                            <span class="bi bi-check-circle-fill" style="font-size:1.4rem;flex-shrink:0;"></span>
+                            <span>@_result.Message</span>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="ic-error-banner">
+                            <span class="bi bi-exclamation-triangle-fill" style="font-size:1.4rem;flex-shrink:0;"></span>
+                            <span>@_result.Message</span>
+                        </div>
+                    }
+
+                    <div style="display:flex;gap:10px;flex-wrap:wrap;">
+                        <button class="ic-btn ic-btn--outline" @onclick="ResetWizard">
+                            <span class="bi bi-arrow-counterclockwise"></span>
+                            Nueva importación
+                        </button>
+                        <a class="ic-btn ic-btn--ghost" href="/accounting/chart-of-accounts"
+                           style="text-decoration:none;">
+                            <span class="bi bi-list-ul"></span>
+                            Ver catálogo contable
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+
+</div>
+
+@code {
+    private int _step = 1;
+    private bool _loading = false;
+    private bool _dragging = false;
+    private string _error = string.Empty;
+    private string _viewFilter = "all";
+    private string _groupName = string.Empty;
+
+    private IBrowserFile? _selectedFile;
+    private string? _selectedFileName;
+
+    private CatalogImportPreviewDto? _preview;
+    private CatalogImportResultDto? _result;
+    private List<CatalogImportHistoryRowDto> _history = new();
+    private List<CatalogGroupCompanyDto> _existingGroups = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        _history = await Api.GetCatalogImportHistoryAsync();
+        _existingGroups = await Api.GetGroupCompaniesAsync();
+    }
+
+    // ── Drag & drop handlers ─────────────────────────────────────────
+
+    private void OnDragOver() => _dragging = true;
+    private void OnDragLeave() => _dragging = false;
+
+    private async Task OnDropAsync(DragEventArgs e)
+    {
+        _dragging = false;
+        // Drag & drop de archivos requiere JSInterop avanzado; el usuario puede usar el botón
+        await Task.CompletedTask;
+    }
+
+    private async Task OnFileSelectedAsync(InputFileChangeEventArgs e)
+    {
+        _selectedFile = e.File;
+        _selectedFileName = e.File.Name;
+        _error = string.Empty;
+        await Task.CompletedTask;
+    }
+
+    // ── Paso 1→2: Parsear Excel ──────────────────────────────────────
+
+    private async Task ParseExcelAsync()
+    {
+        if (_selectedFile is null) return;
+
+        _loading = true;
+        _error = string.Empty;
+        StateHasChanged();
+
+        try
+        {
+            await using var stream = _selectedFile.OpenReadStream(maxAllowedSize: 20 * 1024 * 1024);
+            var (ok, preview, err) = await Api.ParseCatalogExcelAsync(stream, _selectedFile.Name);
+
+            if (!ok || preview is null)
+            {
+                _error = err ?? "Error al analizar el archivo.";
+                return;
+            }
+
+            if (preview.TotalAccounts == 0)
+            {
+                _error = "No se encontraron cuentas en el archivo. Verifica que los datos comiencen en la fila 9.";
+                return;
+            }
+
+            _preview = preview;
+            _step = 2;
+            _viewFilter = "all";
+        }
+        catch (Exception ex)
+        {
+            _error = $"Error: {ex.Message}";
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    // ── Paso 3→4: Confirmar importación ─────────────────────────────
+
+    private async Task ConfirmImportAsync()
+    {
+        if (_preview is null || string.IsNullOrWhiteSpace(_groupName)) return;
+
+        _loading = true;
+        _error = string.Empty;
+        StateHasChanged();
+
+        try
+        {
+            var request = new CatalogImportConfirmRequest
+            {
+                FileName = _preview.FileName,
+                GroupCompanyName = _groupName.Trim(),
+                Accounts = _preview.Accounts
+                    .Where(a => a.Status is "valid" or "existing")
+                    .ToList()
+            };
+
+            var (ok, result, err) = await Api.ConfirmCatalogImportAsync(request);
+            if (!ok || result is null)
+            {
+                _error = err ?? "Error al confirmar la importación.";
+                return;
+            }
+
+            _result = result;
+            _step = 4;
+            _history = await Api.GetCatalogImportHistoryAsync();
+            _existingGroups = await Api.GetGroupCompaniesAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = $"Error: {ex.Message}";
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    // ── Reset ────────────────────────────────────────────────────────
+
+    private void ResetWizard()
+    {
+        _step = 1;
+        _selectedFile = null;
+        _selectedFileName = null;
+        _preview = null;
+        _result = null;
+        _error = string.Empty;
+        _groupName = string.Empty;
+        _viewFilter = "all";
+    }
+
+    // ── Helpers de UI ────────────────────────────────────────────────
+
+    private string StepCss(int s) =>
+        s == _step ? "ns-import-step--active" :
+        s < _step ? "ns-import-step--done" :
+        "ns-import-step--pending";
+
+    private IEnumerable<CatalogImportAccountRowDto> FilteredAccounts() =>
+        _viewFilter == "all"
+            ? (_preview?.Accounts ?? Enumerable.Empty<CatalogImportAccountRowDto>())
+            : (_preview?.Accounts ?? Enumerable.Empty<CatalogImportAccountRowDto>())
+                .Where(a => a.Status == _viewFilter);
+
+    private static string RowCss(string status) => status switch
+    {
+        "error" => "table-danger",
+        "duplicate" => "table-warning",
+        "existing" => "table-info",
+        _ => ""
+    };
+
+    private static string RowBadge(string status) => status switch
+    {
+        "valid" => "bg-success",
+        "existing" => "bg-info text-dark",
+        "duplicate" => "bg-warning text-dark",
+        "error" => "bg-danger",
+        _ => "bg-secondary"
+    };
+
+    private static string StatusBadge(string status) => status switch
+    {
+        "imported" => "bg-success",
+        "imported_with_errors" => "bg-warning text-dark",
+        "failed" => "bg-danger",
+        _ => "bg-secondary"
+    };
+
+    private static (string Bg, string Fg) LevelColor(int level) => level switch
+    {
+        1 => ("#0f172a", "white"),
+        2 => ("#3b82f6", "white"),
+        _ => ("#e2e8f0", "#64748b")
+    };
+
+    // ── Render helpers ───────────────────────────────────────────────
+
+    private RenderFragment StepNode(int num, string label, string icon) => __builder =>
+    {
+        var css = num == _step ? "ic-step--active" : num < _step ? "ic-step--done" : "ic-step--pending";
+        __builder.OpenElement(0, "div");
+        __builder.AddAttribute(1, "class", $"ic-step {css}");
+        __builder.OpenElement(2, "div");
+        __builder.AddAttribute(3, "class", "ic-step__circle");
+        if (num < _step)
+        {
+            __builder.AddMarkupContent(4, "<span class=\"bi bi-check-lg\"></span>");
+        }
+        else
+        {
+            __builder.AddContent(5, num);
+        }
+        __builder.CloseElement();
+        __builder.OpenElement(6, "div");
+        __builder.AddAttribute(7, "class", "ic-step__label");
+        __builder.AddContent(8, label);
+        __builder.CloseElement();
+        __builder.CloseElement();
+    };
+
+    public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+}
