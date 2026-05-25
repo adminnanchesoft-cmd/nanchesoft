@@ -219,6 +219,12 @@ public sealed class MaterialPurchaseApiService
         var url = companyId.HasValue ? $"/api/mat/reports/pending-receipts?companyId={companyId}" : "/api/mat/reports/pending-receipts";
         return Client.GetFromJsonAsync<List<MatPendingReceiptItem>>(url, _opts) ?? Task.FromResult(new List<MatPendingReceiptItem>());
     }
+
+    public Task<MatPaymentPreview?> GetPaymentPreviewAsync(Guid id)
+        => Client.GetFromJsonAsync<MatPaymentPreview>($"/api/mat/payments/{id}", _opts);
+
+    public Task<MatMovementPreview?> GetMovementPreviewAsync(Guid id)
+        => Client.GetFromJsonAsync<MatMovementPreview>($"/api/mat/inventory/movement/{id}", _opts);
 }
 
 // ── DTOs ─────────────────────────────────────────────────────
@@ -328,6 +334,11 @@ public sealed class MatOrderDetail
     public Guid Id { get; set; }
     public string Folio { get; set; } = string.Empty;
     public string SupplierName { get; set; } = string.Empty;
+    public string SupplierRfc { get; set; } = string.Empty;
+    public string SupplierAddress { get; set; } = string.Empty;
+    public string CompanyName { get; set; } = string.Empty;
+    public string CompanyRfc { get; set; } = string.Empty;
+    public string WarehouseName { get; set; } = string.Empty;
     public Guid? CompanyId { get; set; }
     public Guid? BranchId { get; set; }
     public Guid? SupplierId { get; set; }
@@ -369,6 +380,7 @@ public sealed class MatOrderLineDetail
     // Display helpers
     public string? MaterialName { get; set; }
     public string? MaterialCode { get; set; }
+    public string? UnitName { get; set; }
 }
 
 public sealed class MatReceiptListItem
@@ -395,6 +407,11 @@ public sealed class MatReceiptDetail
     public Guid Id { get; set; }
     public string Folio { get; set; } = string.Empty;
     public string SupplierName { get; set; } = string.Empty;
+    public string SupplierRfc { get; set; } = string.Empty;
+    public string CompanyName { get; set; } = string.Empty;
+    public string CompanyRfc { get; set; } = string.Empty;
+    public string WarehouseName { get; set; } = string.Empty;
+    public string OrderFolio { get; set; } = string.Empty;
     public Guid? CompanyId { get; set; }
     public Guid? BranchId { get; set; }
     public Guid? SupplierId { get; set; }
@@ -441,6 +458,7 @@ public sealed class MatReceiptLineDetail
     public string Notes { get; set; } = string.Empty;
     public string? MaterialName { get; set; }
     public string? MaterialCode { get; set; }
+    public string? UnitName { get; set; }
 }
 
 public sealed class MatCompareResult
@@ -566,3 +584,45 @@ public sealed record SaveResult(bool Success = false, Guid Id = default, string?
     string? PaymentStatus = null);
 public sealed record IdResult(Guid Id);
 public sealed record AuthorizeResult(bool Success, string Status, int DifsFound);
+
+public sealed class MatPaymentPreview
+{
+    public Guid Id { get; set; }
+    public string Folio { get; set; } = string.Empty;
+    public DateTime PaymentDate { get; set; }
+    public string PaymentMethod { get; set; } = string.Empty;
+    public decimal Amount { get; set; }
+    public string Reference { get; set; } = string.Empty;
+    public string Notes { get; set; } = string.Empty;
+    public string Status { get; set; } = string.Empty;
+    public string SupplierName { get; set; } = string.Empty;
+    public string SupplierRfc { get; set; } = string.Empty;
+    public string BankAccount { get; set; } = string.Empty;
+    public string ReceiptFolio { get; set; } = string.Empty;
+    public DateTime? ReceiptDate { get; set; }
+    public decimal ReceiptTotal { get; set; }
+    public string CompanyName { get; set; } = string.Empty;
+    public string CompanyRfc { get; set; } = string.Empty;
+}
+
+public sealed class MatMovementPreview
+{
+    public Guid Id { get; set; }
+    public DateTime MovementDate { get; set; }
+    public string MovementType { get; set; } = string.Empty;
+    public string DocumentType { get; set; } = string.Empty;
+    public string DocumentFolio { get; set; } = string.Empty;
+    public decimal QuantityIn { get; set; }
+    public decimal QuantityOut { get; set; }
+    public decimal BalanceAfter { get; set; }
+    public decimal UnitCost { get; set; }
+    public decimal TotalCost { get; set; }
+    public string Notes { get; set; } = string.Empty;
+    public string UserName { get; set; } = string.Empty;
+    public string MaterialCode { get; set; } = string.Empty;
+    public string MaterialName { get; set; } = string.Empty;
+    public string WarehouseName { get; set; } = string.Empty;
+    public string SupplierName { get; set; } = string.Empty;
+    public string CompanyName { get; set; } = string.Empty;
+    public string CompanyRfc { get; set; } = string.Empty;
+}

@@ -360,8 +360,8 @@
             if (result.Success || result.Id != Guid.Empty)
             {
                 _success = "OC guardada correctamente.";
-                if (_isNew) Nav.NavigateTo($"/purchases/material-orders/{result.Id}");
-                else { var refreshed = await Api.GetOrderAsync(_model.Id); if (refreshed != null) _model = refreshed; }
+                var targetId = result.Id != Guid.Empty ? result.Id : _model.Id;
+                Nav.NavigateTo($"/purchases/material-orders/{targetId}/preview");
             }
         }
         catch (Exception ex) { _error = $"Error al guardar: {ex.Message}"; }

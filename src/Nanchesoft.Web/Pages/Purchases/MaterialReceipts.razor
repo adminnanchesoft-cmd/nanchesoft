@@ -380,10 +380,15 @@
     private async Task ConfirmPayment()
     {
         _payment.PurchaseReceiptId = _paymentReceiptId;
-        await Api.RegisterPaymentAsync(_payment);
+        var result = await Api.RegisterPaymentAsync(_payment);
         CloseDialogs();
-        ShowToast("Pago registrado correctamente.", "success");
-        await LoadAsync();
+        if (result.Id != Guid.Empty)
+            Nav.NavigateTo($"/purchases/material-payments/{result.Id}/preview");
+        else
+        {
+            ShowToast("Pago registrado correctamente.", "success");
+            await LoadAsync();
+        }
     }
 
     private void OpenConvert(Guid id) { _convertId = id; _convertInvoiceNumber = ""; _convertInvoiceDate = DateTime.Today; _showConvert = true; }

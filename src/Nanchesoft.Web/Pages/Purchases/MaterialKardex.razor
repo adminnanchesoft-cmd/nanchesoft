@@ -79,6 +79,7 @@
                         <th class="text-right">Costo total</th>
                         <th>Usuario</th>
                         <th>Notas</th>
+                        <th style="width:50px"></th>
                     </tr>
                 </thead>
                 <tbody>
@@ -100,11 +101,16 @@
                             <td class="text-right">@m.TotalCost.ToString("N2")</td>
                             <td class="text-muted">@m.UserName</td>
                             <td class="text-muted small">@m.Notes</td>
+                            <td>
+                                <a href="/purchases/inventory-movements/@m.Id/preview" class="ns-btn ns-btn--ghost ns-btn--xs" title="Ver documento">
+                                    <i class="bi bi-file-text"></i>
+                                </a>
+                            </td>
                         </tr>
                     }
                     @if (!_kardex.Movements.Any())
                     {
-                        <tr><td colspan="11" class="text-center text-muted py-3">Sin movimientos en el período.</td></tr>
+                        <tr><td colspan="12" class="text-center text-muted py-3">Sin movimientos en el período.</td></tr>
                     }
                 </tbody>
             </table>

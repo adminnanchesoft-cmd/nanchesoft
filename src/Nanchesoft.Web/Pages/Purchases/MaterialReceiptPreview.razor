@@ -1,0 +1,225 @@
+@page "/purchases/material-receipts/{Id:guid}/preview"
+@using Nanchesoft.Web.Services.Purchases
+@inject MaterialPurchaseApiService Api
+@inject NavigationManager Nav
+
+<PageTitle>@(_doc?.ReceiptType == "purchase_invoice" ? "Factura" : "Recepción") @(_doc?.Folio ?? "") | Nanchesoft</PageTitle>
+
+<div class="ns-doc-preview">
+    @if (_loading)
+    {
+        <div class="ns-loader-center"><div class="ns-spinner"></div></div>
+    }
+    else if (_doc is null)
+    {
+        <div class="ns-alert ns-alert--danger">No se encontró la recepción.</div>
+    }
+    else
+    {
+        <div class="ns-doc-preview__toolbar ns-no-print">
+            <button class="ns-btn ns-btn--ghost" @onclick='() => Nav.NavigateTo($"/purchases/material-receipts/{Id}")'>
+                <i class="bi bi-arrow-left"></i> Regresar
+            </button>
+            <button class="ns-btn ns-btn--secondary" @onclick="Print">
+                <i class="bi bi-printer"></i> Imprimir
+            </button>
+            <button class="ns-btn ns-btn--ghost" @onclick='() => Nav.NavigateTo("/purchases/material-receipts")'>
+                <i class="bi bi-list-ul"></i> Lista
+            </button>
+            <span class="ns-badge ns-badge--@StatusClass(_doc.Status) ms-auto">@StatusLabel(_doc.Status)</span>
+        </div>
+
+        <div class="ns-doc-paper">
+            @* Header *@
+            <div class="ns-doc-paper__header">
+                <div class="ns-doc-paper__company">
+                    <div class="ns-doc-paper__company-name">@(string.IsNullOrWhiteSpace(_doc.CompanyName) ? "Nanchesoft ERP" : _doc.CompanyName)</div>
+                    @if (!string.IsNullOrWhiteSpace(_doc.CompanyRfc))
+                    { <div class="ns-doc-paper__company-rfc">RFC: @_doc.CompanyRfc</div> }
+                </div>
+                <div class="ns-doc-paper__title-block">
+                    <div class="ns-doc-paper__doc-type">@DocTypeTitle(_doc.ReceiptType)</div>
+                    <div class="ns-doc-paper__folio">@_doc.Folio</div>
+                </div>
+            </div>
+
+            @* Meta *@
+            <div class="ns-doc-paper__meta">
+                <div class="ns-doc-paper__meta-block">
+                    <div class="ns-doc-paper__meta-label">Proveedor</div>
+                    <div class="ns-doc-paper__meta-value">@_doc.SupplierName</div>
+                    @if (!string.IsNullOrWhiteSpace(_doc.SupplierRfc))
+                    { <div style="font-size:11px;color:#6b7280">RFC: @_doc.SupplierRfc</div> }
+                </div>
+                <div class="ns-doc-paper__meta-block">
+                    <div class="ns-doc-paper__meta-label">Fecha de recepción</div>
+                    <div class="ns-doc-paper__meta-value">@_doc.ReceiptDate?.ToString("dd/MM/yyyy")</div>
+                </div>
+                <div class="ns-doc-paper__meta-block">
+                    <div class="ns-doc-paper__meta-label">Almacén destino</div>
+                    <div class="ns-doc-paper__meta-value">@(string.IsNullOrWhiteSpace(_doc.WarehouseName) ? "—" : _doc.WarehouseName)</div>
+                </div>
+                <div class="ns-doc-paper__meta-block">
+                    <div class="ns-doc-paper__meta-label">Orden de compra referencia</div>
+                    <div class="ns-doc-paper__meta-value">@(string.IsNullOrWhiteSpace(_doc.OrderFolio) ? "—" : _doc.OrderFolio)</div>
+                </div>
+                @if (!string.IsNullOrWhiteSpace(_doc.SupplierDocumentNumber))
+                {
+                    <div class="ns-doc-paper__meta-block">
+                        <div class="ns-doc-paper__meta-label">Factura / Remisión proveedor</div>
+                        <div class="ns-doc-paper__meta-value">@_doc.SupplierDocumentNumber</div>
+                        @if (_doc.SupplierDocumentDate.HasValue)
+                        { <div style="font-size:11px;color:#6b7280">@_doc.SupplierDocumentDate.Value.ToString("dd/MM/yyyy")</div> }
+                    </div>
+                }
+                <div class="ns-doc-paper__meta-block">
+                    <div class="ns-doc-paper__meta-label">Estado de pago</div>
+                    <div class="ns-doc-paper__meta-value">@PaymentStatusLabel(_doc.PaymentStatus)</div>
+                </div>
+            </div>
+
+            @* Lines *@
+            <div class="ns-doc-paper__section-title">Materiales recibidos</div>
+            <table class="ns-doc-paper__table">
+                <thead>
+                    <tr>
+                        <th style="width:32px">#</th>
+                        <th style="width:90px">Código</th>
+                        <th>Descripción</th>
+                        <th style="width:60px">U.M.</th>
+                        <th class="text-right" style="width:80px">Qty OC</th>
+                        <th class="text-right" style="width:80px">Qty Rec.</th>
+                        <th class="text-right" style="width:90px">P. Unit.</th>
+                        <th class="text-right" style="width:80px">IVA</th>
+                        <th class="text-right" style="width:90px">Total</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @{ var i = 1; }
+                    @foreach (var l in _doc.Lines)
+                    {
+                        <tr>
+                            <td style="color:#9ca3af">@(i++)</td>
+                            <td style="font-family:monospace;font-size:11px">@l.MaterialCode</td>
+                            <td>@(string.IsNullOrWhiteSpace(l.MaterialName) ? l.Description : l.MaterialName)</td>
+                            <td style="color:#6b7280">@l.UnitName</td>
+                            <td class="text-right" style="color:#9ca3af">@(l.OrderedQuantity > 0 ? l.OrderedQuantity.ToString("N3") : "—")</td>
+                            <td class="text-right fw-semibold">@l.Quantity.ToString("N3")</td>
+                            <td class="text-right">@l.UnitPrice.ToString("N4")</td>
+                            <td class="text-right">@(l.TaxAmount > 0 ? l.TaxAmount.ToString("N2") : "—")</td>
+                            <td class="text-right fw-semibold">@l.LineTotal.ToString("N2")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+
+            @* Totals *@
+            <div class="ns-doc-paper__totals">
+                <div class="ns-doc-paper__totals-box">
+                    <div class="ns-doc-paper__totals-row"><span>Subtotal</span><span>@_doc.Subtotal.ToString("C")</span></div>
+                    <div class="ns-doc-paper__totals-row"><span>IVA</span><span>@_doc.TaxAmount.ToString("C")</span></div>
+                    <div class="ns-doc-paper__totals-row ns-doc-paper__totals-row--grand"><span>Total</span><span>@_doc.Total.ToString("C")</span></div>
+                    @if (_doc.PaidAmount > 0)
+                    {
+                        <div class="ns-doc-paper__totals-row" style="color:#059669"><span>Pagado</span><span>@_doc.PaidAmount.ToString("C")</span></div>
+                        <div class="ns-doc-paper__totals-row" style="color:#dc2626"><span>Saldo</span><span>@((_doc.Total - _doc.PaidAmount).ToString("C"))</span></div>
+                    }
+                </div>
+            </div>
+
+            @* Payments *@
+            @if (_doc.Payments.Any())
+            {
+                <div class="ns-doc-paper__section-title">Pagos registrados</div>
+                <table class="ns-doc-paper__table">
+                    <thead>
+                        <tr>
+                            <th>Folio pago</th>
+                            <th>Fecha</th>
+                            <th>Forma de pago</th>
+                            <th class="text-right">Monto</th>
+                            <th>Referencia</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var p in _doc.Payments)
+                        {
+                            <tr>
+                                <td style="font-family:monospace;font-size:11px">@p.Folio</td>
+                                <td>@p.PaymentDate.ToString("dd/MM/yyyy")</td>
+                                <td>@PayMethodLabel(p.PaymentMethod)</td>
+                                <td class="text-right">@p.Amount.ToString("C")</td>
+                                <td>@p.Reference</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+
+            @if (!string.IsNullOrWhiteSpace(_doc.Notes))
+            { <div class="ns-doc-paper__notes"><strong>Notas:</strong> @_doc.Notes</div> }
+
+            @* Auth info *@
+            @if (_doc.Status is "reviewed" or "authorized")
+            {
+                <div style="margin-top:16px;padding:8px 12px;background:#f0fdf4;border-radius:4px;font-size:12px;color:#166534">
+                    <i class="bi bi-check-circle-fill me-1"></i>
+                    @if (_doc.Status == "authorized")
+                    { <span>Autorizada por <strong>@_doc.AuthorizedBy</strong> el @_doc.AuthorizedAt?.ToString("dd/MM/yyyy HH:mm")</span> }
+                    else
+                    { <span>Revisada por <strong>@_doc.ReviewedBy</strong> el @_doc.ReviewedAt?.ToString("dd/MM/yyyy HH:mm")</span> }
+                </div>
+            }
+
+            <div class="ns-doc-paper__signatures">
+                <div class="ns-doc-paper__sig-line">Recibió</div>
+                <div class="ns-doc-paper__sig-line">Revisó / Autorizó</div>
+                <div class="ns-doc-paper__sig-line">Proveedor / Transportista</div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+    [Inject] private IJSRuntime JS { get; set; } = default!;
+
+    private MatReceiptDetail? _doc;
+    private bool _loading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try { _doc = await Api.GetReceiptAsync(Id); }
+        finally { _loading = false; }
+    }
+
+    private async Task Print() => await JS.InvokeVoidAsync("window.print");
+
+    private static string DocTypeTitle(string t) => t switch
+    {
+        "purchase_invoice" => "Entrada por Compra (Factura)",
+        "review" => "Recepción de Materiales",
+        _ => "Entrada de Almacén"
+    };
+
+    private static string StatusClass(string s) => s switch
+    {
+        "draft" => "gray", "reviewed" => "purple", "authorized" => "blue",
+        "rejected" => "red", "cancelled" => "red", _ => "gray"
+    };
+    private static string StatusLabel(string s) => s switch
+    {
+        "draft" => "Borrador", "reviewed" => "Revisada", "authorized" => "Autorizada",
+        "rejected" => "Rechazada", "cancelled" => "Cancelada", _ => s
+    };
+    private static string PaymentStatusLabel(string s) => s switch
+    {
+        "pending" => "Pendiente de pago", "partial" => "Pago parcial",
+        "paid" => "Pagada", _ => s
+    };
+    private static string PayMethodLabel(string m) => m switch
+    {
+        "transfer" => "Transferencia", "cash" => "Efectivo", "check" => "Cheque",
+        "card" => "Tarjeta", _ => m
+    };
+}

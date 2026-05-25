@@ -438,8 +438,8 @@
             if (result.Success || result.Id != Guid.Empty)
             {
                 _success = "Recepción guardada. Inventario actualizado.";
-                if (_isNew) Nav.NavigateTo($"/purchases/material-receipts/{result.Id}");
-                else { var r = await Api.GetReceiptAsync(_model.Id); if (r is not null) _model = r; }
+                var targetId = result.Id != Guid.Empty ? result.Id : _model.Id;
+                Nav.NavigateTo($"/purchases/material-receipts/{targetId}/preview");
             }
         }
         catch (Exception ex) { _error = $"Error: {ex.Message}"; }

@@ -205,6 +205,8 @@ public static class MaterialPurchaseEndpoints
                 .Include(x => x.Lines).ThenInclude(l => l.Tax)
                 .FirstOrDefaultAsync(x => x.Id == id);
             if (order is null) return Results.NotFound();
+            var company = await db.Companies.AsNoTracking().FirstOrDefaultAsync(c => c.Id == order.CompanyId);
+            var warehouse = await db.Warehouses.AsNoTracking().FirstOrDefaultAsync(w => w.Id == order.WarehouseId);
             return Results.Ok(new
             {
                 order.Id, order.Folio, order.CompanyId, order.BranchId, order.SupplierId,
@@ -213,13 +215,19 @@ public static class MaterialPurchaseEndpoints
                 order.Status, order.Subtotal, order.TaxAmount, order.Total, order.ReceivedTotal,
                 order.ApprovedAt, order.ApprovedBy,
                 SupplierName = order.Supplier != null ? order.Supplier.Name : "",
+                SupplierRfc = order.Supplier != null ? order.Supplier.TaxId : "",
+                SupplierAddress = order.Supplier != null ? $"{order.Supplier.City}, {order.Supplier.State}" : "",
+                WarehouseName = warehouse != null ? warehouse.Name : "",
+                CompanyName = company != null ? (string.IsNullOrWhiteSpace(company.LegalName) ? company.Name : company.LegalName) : "",
+                CompanyRfc = company != null ? company.TaxId : "",
                 Lines = order.Lines.Select(l => new
                 {
                     l.Id, l.MaterialItemId, l.ItemId, l.UnitId, l.TaxId,
                     l.Description, l.Quantity, l.ReceivedQuantity, l.PendingQuantity,
                     l.UnitPrice, l.DiscountAmount, l.TaxAmount, l.LineTotal, l.Notes,
                     MaterialName = l.MaterialItem != null ? l.MaterialItem.Name : l.Description,
-                    MaterialCode = l.MaterialItem != null ? l.MaterialItem.Code : ""
+                    MaterialCode = l.MaterialItem != null ? l.MaterialItem.Code : "",
+                    UnitName = l.Unit != null ? l.Unit.Name : ""
                 }).OrderBy(l => l.Description).ToList()
             });
         });
@@ -387,6 +395,8 @@ public static class MaterialPurchaseEndpoints
                 .Include(x => x.Payments)
                 .FirstOrDefaultAsync(x => x.Id == id);
             if (r is null) return Results.NotFound();
+            var company = await db.Companies.AsNoTracking().FirstOrDefaultAsync(c => c.Id == r.CompanyId);
+            var warehouse = await db.Warehouses.AsNoTracking().FirstOrDefaultAsync(w => w.Id == r.WarehouseId);
             return Results.Ok(new
             {
                 r.Id, r.Folio, r.CompanyId, r.BranchId, r.SupplierId, r.WarehouseId,
@@ -395,13 +405,19 @@ public static class MaterialPurchaseEndpoints
                 r.Status, r.PaymentStatus, r.PaidAmount, r.HasDifferences, r.DifferencesAuthorized,
                 r.ReviewedAt, r.ReviewedBy, r.AuthorizedAt, r.AuthorizedBy, r.ConvertedToInvoiceId,
                 SupplierName = r.Supplier != null ? r.Supplier.Name : "",
+                SupplierRfc = r.Supplier != null ? r.Supplier.TaxId : "",
+                OrderFolio = r.PurchaseOrder != null ? r.PurchaseOrder.Folio : "",
+                WarehouseName = warehouse != null ? warehouse.Name : "",
+                CompanyName = company != null ? (string.IsNullOrWhiteSpace(company.LegalName) ? company.Name : company.LegalName) : "",
+                CompanyRfc = company != null ? company.TaxId : "",
                 Lines = r.Lines.Select(l => new
                 {
                     l.Id, l.PurchaseOrderLineId, l.MaterialItemId, l.ItemId, l.UnitId, l.TaxId,
                     l.Description, l.Quantity, l.UnitPrice, l.DiscountAmount, l.TaxAmount, l.LineTotal,
                     l.OrderedQuantity, l.OrderedUnitPrice, l.Notes,
                     MaterialName = l.MaterialItem != null ? l.MaterialItem.Name : l.Description,
-                    MaterialCode = l.MaterialItem != null ? l.MaterialItem.Code : ""
+                    MaterialCode = l.MaterialItem != null ? l.MaterialItem.Code : "",
+                    UnitName = l.Unit != null ? l.Unit.Name : ""
                 }).OrderBy(l => l.Description).ToList(),
                 Payments = r.Payments.Select(p => new
                 {
@@ -717,6 +733,30 @@ public static class MaterialPurchaseEndpoints
                 .ToListAsync();
             return Results.Ok(payments);
         });
+
+        g.MapGet("/{id:guid}", async (Guid id, NanchesoftDbContext db) =>
+        {
+            var p = await db.PurchasePayments.AsNoTracking()
+                .Include(x => x.Supplier)
+                .Include(x => x.BankAccount)
+                .Include(x => x.PurchaseReceipt)
+                .FirstOrDefaultAsync(x => x.Id == id);
+            if (p is null) return Results.NotFound();
+            var company = await db.Companies.AsNoTracking().FirstOrDefaultAsync(c => c.Id == p.CompanyId);
+            return Results.Ok(new
+            {
+                p.Id, p.Folio, p.PaymentDate, p.PaymentMethod, p.Amount,
+                p.Reference, p.Notes, p.Status,
+                SupplierName = p.Supplier != null ? p.Supplier.Name : "",
+                SupplierRfc = p.Supplier != null ? p.Supplier.TaxId : "",
+                BankAccount = p.BankAccount != null ? p.BankAccount.AccountNumber : "",
+                ReceiptFolio = p.PurchaseReceipt != null ? p.PurchaseReceipt.Folio : "",
+                ReceiptDate = p.PurchaseReceipt != null ? (DateTime?)p.PurchaseReceipt.ReceiptDate : null,
+                ReceiptTotal = p.PurchaseReceipt != null ? p.PurchaseReceipt.Total : 0m,
+                CompanyName = company != null ? (string.IsNullOrWhiteSpace(company.LegalName) ? company.Name : company.LegalName) : "",
+                CompanyRfc = company != null ? company.TaxId : ""
+            });
+        });
     }
 
     // ══════════════════════════════════════════════════════════
@@ -779,6 +819,29 @@ public static class MaterialPurchaseEndpoints
                 .Select(x => new { x.Code, x.Name }).FirstOrDefaultAsync();
 
             return Results.Ok(new { material, movements });
+        });
+
+        g.MapGet("/movement/{id:guid}", async (Guid id, NanchesoftDbContext db) =>
+        {
+            var mov = await db.MaterialInventoryMovements.AsNoTracking()
+                .Include(x => x.MaterialItem)
+                .Include(x => x.Warehouse)
+                .Include(x => x.Supplier)
+                .FirstOrDefaultAsync(x => x.Id == id);
+            if (mov is null) return Results.NotFound();
+            var company = await db.Companies.AsNoTracking().FirstOrDefaultAsync(c => c.Id == mov.CompanyId);
+            return Results.Ok(new
+            {
+                mov.Id, mov.MovementDate, mov.MovementType, mov.DocumentType, mov.DocumentFolio,
+                mov.QuantityIn, mov.QuantityOut, mov.BalanceAfter, mov.UnitCost, mov.TotalCost,
+                mov.Notes, mov.UserName,
+                MaterialCode = mov.MaterialItem != null ? mov.MaterialItem.Code : "",
+                MaterialName = mov.MaterialItem != null ? mov.MaterialItem.Name : "",
+                WarehouseName = mov.Warehouse != null ? mov.Warehouse.Name : "",
+                SupplierName = mov.Supplier != null ? mov.Supplier.Name : "",
+                CompanyName = company != null ? (string.IsNullOrWhiteSpace(company.LegalName) ? company.Name : company.LegalName) : "",
+                CompanyRfc = company != null ? company.TaxId : ""
+            });
         });
     }
 

@@ -1,0 +1,170 @@
+@page "/purchases/material-orders/{Id:guid}/preview"
+@using Nanchesoft.Web.Services.Purchases
+@inject MaterialPurchaseApiService Api
+@inject NavigationManager Nav
+
+<PageTitle>OC @(_doc?.Folio ?? "") | Nanchesoft</PageTitle>
+
+<div class="ns-doc-preview">
+    @if (_loading)
+    {
+        <div class="ns-loader-center"><div class="ns-spinner"></div></div>
+    }
+    else if (_doc is null)
+    {
+        <div class="ns-alert ns-alert--danger">No se encontró la orden de compra.</div>
+    }
+    else
+    {
+        <div class="ns-doc-preview__toolbar ns-no-print">
+            <button class="ns-btn ns-btn--ghost" @onclick='() => Nav.NavigateTo($"/purchases/material-orders/{Id}")'>
+                <i class="bi bi-arrow-left"></i> Regresar
+            </button>
+            <button class="ns-btn ns-btn--secondary" @onclick="Print">
+                <i class="bi bi-printer"></i> Imprimir
+            </button>
+            <button class="ns-btn ns-btn--ghost" @onclick='() => Nav.NavigateTo("/purchases/material-orders")'>
+                <i class="bi bi-list-ul"></i> Lista de OC
+            </button>
+            <span class="ns-badge ns-badge--@StatusClass(_doc.Status) ms-auto">@StatusLabel(_doc.Status)</span>
+        </div>
+
+        <div class="ns-doc-paper">
+            @* Header *@
+            <div class="ns-doc-paper__header">
+                <div class="ns-doc-paper__company">
+                    <div class="ns-doc-paper__company-name">@(string.IsNullOrWhiteSpace(_doc.CompanyName) ? "Nanchesoft ERP" : _doc.CompanyName)</div>
+                    @if (!string.IsNullOrWhiteSpace(_doc.CompanyRfc))
+                    { <div class="ns-doc-paper__company-rfc">RFC: @_doc.CompanyRfc</div> }
+                </div>
+                <div class="ns-doc-paper__title-block">
+                    <div class="ns-doc-paper__doc-type">Orden de Compra de Materiales</div>
+                    <div class="ns-doc-paper__folio">@_doc.Folio</div>
+                </div>
+            </div>
+
+            @* Meta *@
+            <div class="ns-doc-paper__meta">
+                <div class="ns-doc-paper__meta-block">
+                    <div class="ns-doc-paper__meta-label">Proveedor</div>
+                    <div class="ns-doc-paper__meta-value">@_doc.SupplierName</div>
+                    @if (!string.IsNullOrWhiteSpace(_doc.SupplierRfc))
+                    { <div style="font-size:11px;color:#6b7280">RFC: @_doc.SupplierRfc</div> }
+                    @if (!string.IsNullOrWhiteSpace(_doc.SupplierAddress))
+                    { <div style="font-size:11px;color:#6b7280">@_doc.SupplierAddress</div> }
+                </div>
+                <div class="ns-doc-paper__meta-block">
+                    <div class="ns-doc-paper__meta-label">Fecha de orden</div>
+                    <div class="ns-doc-paper__meta-value">@_doc.OrderDate?.ToString("dd/MM/yyyy")</div>
+                </div>
+                <div class="ns-doc-paper__meta-block">
+                    <div class="ns-doc-paper__meta-label">Almacén destino</div>
+                    <div class="ns-doc-paper__meta-value">@(string.IsNullOrWhiteSpace(_doc.WarehouseName) ? "—" : _doc.WarehouseName)</div>
+                </div>
+                <div class="ns-doc-paper__meta-block">
+                    <div class="ns-doc-paper__meta-label">Entrega estimada</div>
+                    <div class="ns-doc-paper__meta-value">@(_doc.SupplierDeliveryDate.HasValue ? _doc.SupplierDeliveryDate.Value.ToString("dd/MM/yyyy") : "—")</div>
+                </div>
+                <div class="ns-doc-paper__meta-block">
+                    <div class="ns-doc-paper__meta-label">Comprador</div>
+                    <div class="ns-doc-paper__meta-value">@(string.IsNullOrWhiteSpace(_doc.BuyerName) ? "—" : _doc.BuyerName)</div>
+                </div>
+                <div class="ns-doc-paper__meta-block">
+                    <div class="ns-doc-paper__meta-label">Días de crédito</div>
+                    <div class="ns-doc-paper__meta-value">@_doc.PaymentTermDays días</div>
+                </div>
+            </div>
+
+            @* Lines *@
+            <div class="ns-doc-paper__section-title">Materiales solicitados</div>
+            <table class="ns-doc-paper__table">
+                <thead>
+                    <tr>
+                        <th style="width:32px">#</th>
+                        <th style="width:90px">Código</th>
+                        <th>Descripción</th>
+                        <th style="width:60px">U.M.</th>
+                        <th class="text-right" style="width:80px">Cantidad</th>
+                        <th class="text-right" style="width:90px">P. Unit.</th>
+                        <th class="text-right" style="width:80px">Desc.</th>
+                        <th class="text-right" style="width:80px">IVA</th>
+                        <th class="text-right" style="width:90px">Total</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @{ var i = 1; }
+                    @foreach (var l in _doc.Lines)
+                    {
+                        <tr>
+                            <td style="color:#9ca3af">@(i++)</td>
+                            <td style="font-family:monospace;font-size:11px">@l.MaterialCode</td>
+                            <td>@(string.IsNullOrWhiteSpace(l.MaterialName) ? l.Description : l.MaterialName)</td>
+                            <td style="color:#6b7280">@l.UnitName</td>
+                            <td class="text-right">@l.Quantity.ToString("N3")</td>
+                            <td class="text-right">@l.UnitPrice.ToString("N4")</td>
+                            <td class="text-right">@(l.DiscountAmount > 0 ? l.DiscountAmount.ToString("N2") : "—")</td>
+                            <td class="text-right">@(l.TaxAmount > 0 ? l.TaxAmount.ToString("N2") : "—")</td>
+                            <td class="text-right fw-semibold">@l.LineTotal.ToString("N2")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+
+            @* Totals *@
+            <div class="ns-doc-paper__totals">
+                <div class="ns-doc-paper__totals-box">
+                    <div class="ns-doc-paper__totals-row">
+                        <span>Subtotal</span><span>@_doc.Subtotal.ToString("C")</span>
+                    </div>
+                    <div class="ns-doc-paper__totals-row">
+                        <span>IVA</span><span>@_doc.TaxAmount.ToString("C")</span>
+                    </div>
+                    <div class="ns-doc-paper__totals-row ns-doc-paper__totals-row--grand">
+                        <span>Total</span><span>@_doc.Total.ToString("C")</span>
+                    </div>
+                </div>
+            </div>
+
+            @* Notes *@
+            @if (!string.IsNullOrWhiteSpace(_doc.Notes))
+            {
+                <div class="ns-doc-paper__notes"><strong>Notas:</strong> @_doc.Notes</div>
+            }
+
+            @* Signatures *@
+            <div class="ns-doc-paper__signatures">
+                <div class="ns-doc-paper__sig-line">Elaboró</div>
+                <div class="ns-doc-paper__sig-line">Autorizó</div>
+                <div class="ns-doc-paper__sig-line">Proveedor</div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+    [Inject] private IJSRuntime JS { get; set; } = default!;
+
+    private MatOrderDetail? _doc;
+    private bool _loading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try { _doc = await Api.GetOrderAsync(Id); }
+        finally { _loading = false; }
+    }
+
+    private async Task Print() => await JS.InvokeVoidAsync("window.print");
+
+    private static string StatusClass(string s) => s switch
+    {
+        "draft" => "gray", "authorized" => "blue", "partially_received" => "yellow",
+        "received" => "green", "closed" => "green-dark", "cancelled" => "red", _ => "gray"
+    };
+    private static string StatusLabel(string s) => s switch
+    {
+        "draft" => "Borrador", "authorized" => "Autorizada",
+        "partially_received" => "Parcialmente recibida", "received" => "Recibida",
+        "closed" => "Cerrada", "cancelled" => "Cancelada", _ => s
+    };
+}
