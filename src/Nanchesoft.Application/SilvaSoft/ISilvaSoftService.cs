@@ -1,0 +1,49 @@
+namespace Nanchesoft.Application.SilvaSoft;
+
+/// <summary>
+/// Servicio de integración con SilvaSoft SQL Server.
+///
+/// ─── DISEÑO MULTI-TENANT ────────────────────────────────────────────────────
+/// Todos los métodos reciben empresaId. El servicio obtiene las credenciales
+/// de la empresa desde ISilvaSoftConexionRepository y abre su propia conexión.
+/// Cada empresa puede tener un servidor SilvaSoft distinto.
+///
+/// ─── ARQUITECTURA FUTURA: AGENTE LOCAL ──────────────────────────────────────
+/// SilvaSoft corre on-premise y Nanchesoft está en la nube. Opciones:
+///
+///   Opción A (implementación actual):
+///     Nanchesoft → SqlClient → SQL Server SilvaSoft (requiere IP pública o VPN)
+///
+///   Opción B (implementación futura):
+///     Nanchesoft → HTTP → SilvaSoftAgente (Windows Service local)
+///                          └→ SqlClient → SQL Server SilvaSoft
+///
+///   Para cambiar a opción B, basta con registrar en DI:
+///     services.AddScoped&lt;ISilvaSoftService, RemoteSilvaSoftAgentService&gt;();
+///   sin tocar ninguna otra capa.
+///
+/// ─── SINCRONIZACIÓN FUTURA ──────────────────────────────────────────────────
+///   - Manual: usuario dispara desde la pantalla de Nanchesoft
+///   - Automática: IHostedService o Hangfire con cron configurable por tenant
+///   - Incremental: trackear fecha_ultima_sincronizacion por entidad
+///   - Bidireccional: importar de SilvaSoft + exportar precios/stock a SilvaSoft
+///   - Logs: cada operación queda registrada en silvasoft_sync_logs con duración
+///   - Reintentos: política de retry con backoff exponencial (Polly)
+/// </summary>
+public interface ISilvaSoftService
+{
+    /// <summary>
+    /// Prueba la conexión SQL Server de la empresa.
+    /// Devuelve: éxito, mensaje descriptivo y tiempo de respuesta en ms.
+    /// </summary>
+    Task<(bool Exitoso, string Mensaje, long TiempoMs)> ProbarConexionAsync(
+        Guid empresaId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Consulta TOP {top} registros de la tabla composicion en SilvaSoft.
+    /// Req. 16: detecta columnas dinámicamente — no falla si la estructura varía.
+    /// Incluye metadata de columnas para construir el DataGrid en el cliente.
+    /// </summary>
+    Task<SilvaSoftComposicionResultado> ObtenerComposicionesAsync(
+        Guid empresaId, int top = 100, CancellationToken ct = default);
+}
