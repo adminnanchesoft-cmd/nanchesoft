@@ -239,6 +239,7 @@ app.MapPayrollCalculatedEndpoints();
 app.MapPayrollDisbursementEndpoints();
 app.MapPayrollFiscalEndpoints();
 app.MapPayrollMvpEndpoints();
+app.MapPayrollReportEndpoints();
 app.MapProductTechnicalCostingEndpoints();
 app.MapProductTechnicalCenterEndpoints();
 app.MapConsumptionTemplateEndpoints();

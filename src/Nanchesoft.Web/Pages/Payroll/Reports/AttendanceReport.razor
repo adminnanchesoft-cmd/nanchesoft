@@ -1,0 +1,227 @@
+@page "/payroll/reports/attendance"
+@using Nanchesoft.Web.Services.HumanResources
+@inject PayrollOperationsApiService Svc
+@inject HumanResourcesApiService HrSvc
+@inject IJSRuntime JS
+
+<PageTitle>Reporte de asistencia | Nanchesoft</PageTitle>
+
+<div class="d-flex align-items-center justify-content-between mb-3">
+    <h4 class="mb-0">Reporte de asistencia por periodo</h4>
+    <div class="d-flex gap-2">
+        <button class="btn btn-outline-secondary btn-sm" @onclick="ExportCsvAsync" disabled="@(!_rows.Any())">
+            Exportar CSV
+        </button>
+        <button class="btn btn-outline-dark btn-sm" @onclick="PrintAsync" disabled="@(!_rows.Any())">
+            Imprimir
+        </button>
+    </div>
+</div>
+
+<!-- Filtros -->
+<div class="card shadow-sm mb-3">
+    <div class="card-body py-2">
+        <div class="row g-2 align-items-end">
+            <div class="col-md-3">
+                <label class="form-label form-label-sm mb-1">Periodo</label>
+                <select class="form-select form-select-sm" @bind="_periodId">
+                    <option value="">— Todos —</option>
+                    @foreach (var p in _periods)
+                    {
+                        <option value="@p.PayrollPeriodId">@($"{p.Code} · {p.Name}")</option>
+                    }
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label form-label-sm mb-1">Departamento</label>
+                <select class="form-select form-select-sm" @bind="_departmentId">
+                    <option value="">— Todos —</option>
+                    @foreach (var d in _departments)
+                    {
+                        <option value="@d.DepartmentId">@d.Name</option>
+                    }
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label form-label-sm mb-1">Colaborador</label>
+                <select class="form-select form-select-sm" @bind="_employeeId">
+                    <option value="">— Todos —</option>
+                    @foreach (var e in _employees)
+                    {
+                        <option value="@e.EmployeeId">@e.FullName</option>
+                    }
+                </select>
+            </div>
+            <div class="col-auto">
+                <button class="btn btn-primary btn-sm" @onclick="LoadAsync" disabled="@_loading">
+                    @if (_loading) { <span class="spinner-border spinner-border-sm me-1"></span> }
+                    Buscar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@if (_error != null)
+{
+    <div class="alert alert-danger py-2">@_error</div>
+}
+else if (_loading)
+{
+    <div class="text-center py-5 text-muted">Cargando...</div>
+}
+else if (_searched && !_rows.Any())
+{
+    <div class="text-center py-5 text-muted">No hay registros para los filtros seleccionados.</div>
+}
+else if (_rows.Any())
+{
+    <!-- Totales rápidos -->
+    <div class="row g-3 mb-3">
+        <div class="col-6 col-md-2">
+            <div class="card shadow-sm text-center py-2">
+                <div class="fs-5 fw-bold text-primary">@_rows.Count</div>
+                <div class="text-muted small">Colaboradores</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-2">
+            <div class="card shadow-sm text-center py-2">
+                <div class="fs-5 fw-bold">@_rows.Sum(r => r.AttendanceDays)</div>
+                <div class="text-muted small">Días asistencia</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-2">
+            <div class="card shadow-sm text-center py-2">
+                <div class="fs-5 fw-bold text-info">@(_rows.Sum(r => r.WorkedHours).ToString("N1"))h</div>
+                <div class="text-muted small">Hrs trabajadas</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-2">
+            <div class="card shadow-sm text-center py-2">
+                <div class="fs-5 fw-bold text-warning">@_rows.Sum(r => r.DelayMinutes) min</div>
+                <div class="text-muted small">Retardos</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-2">
+            <div class="card shadow-sm text-center py-2">
+                <div class="fs-5 fw-bold text-success">@(_rows.Sum(r => r.OvertimeHours).ToString("N1"))h</div>
+                <div class="text-muted small">Horas extra</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-2">
+            <div class="card shadow-sm text-center py-2">
+                <div class="fs-5 fw-bold text-danger">@(_rows.Sum(r => r.AbsenceUnits).ToString("N1"))</div>
+                <div class="text-muted small">Faltas</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card shadow-sm">
+        <div class="card-body p-0">
+            <div style="overflow-x:auto">
+                <table class="table table-sm table-hover mb-0" style="min-width:900px" id="attendance-table">
+                    <thead class="table-light">
+                        <tr>
+                            <th>No.</th>
+                            <th>Colaborador</th>
+                            <th>Departamento</th>
+                            <th class="text-end">Días asist.</th>
+                            <th class="text-end">Hrs trab.</th>
+                            <th class="text-end">Retardos</th>
+                            <th class="text-end">HE</th>
+                            <th class="text-end">Faltas</th>
+                            <th class="text-end">Salida temp.</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var r in _rows)
+                        {
+                            <tr>
+                                <td><code class="small">@r.EmployeeNumber</code></td>
+                                <td>@r.EmployeeName</td>
+                                <td class="text-muted small">@r.DepartmentName</td>
+                                <td class="text-end">@r.AttendanceDays</td>
+                                <td class="text-end">@r.WorkedHours.ToString("N1")</td>
+                                <td class="text-end @(r.DelayMinutes > 0 ? "text-warning fw-semibold" : "")">
+                                    @(r.DelayMinutes > 0 ? $"{r.DelayMinutes} min" : "—")
+                                </td>
+                                <td class="text-end @(r.OvertimeHours > 0 ? "text-success" : "")">
+                                    @(r.OvertimeHours > 0 ? $"{r.OvertimeHours:N1}h" : "—")
+                                </td>
+                                <td class="text-end @(r.AbsenceUnits > 0 ? "text-danger fw-semibold" : "")">
+                                    @(r.AbsenceUnits > 0 ? r.AbsenceUnits.ToString("N1") : "—")
+                                </td>
+                                <td class="text-end @(r.EarlyLeaveMinutes > 0 ? "text-warning" : "")">
+                                    @(r.EarlyLeaveMinutes > 0 ? $"{r.EarlyLeaveMinutes} min" : "—")
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                    <tfoot class="table-secondary fw-semibold">
+                        <tr>
+                            <td colspan="3">Totales</td>
+                            <td class="text-end">@_rows.Sum(r => r.AttendanceDays)</td>
+                            <td class="text-end">@(_rows.Sum(r => r.WorkedHours).ToString("N1"))h</td>
+                            <td class="text-end">@_rows.Sum(r => r.DelayMinutes) min</td>
+                            <td class="text-end">@(_rows.Sum(r => r.OvertimeHours).ToString("N1"))h</td>
+                            <td class="text-end">@(_rows.Sum(r => r.AbsenceUnits).ToString("N1"))</td>
+                            <td class="text-end">@_rows.Sum(r => r.EarlyLeaveMinutes) min</td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    bool _loading;
+    bool _searched;
+    string? _error;
+    string _periodId = string.Empty;
+    string _departmentId = string.Empty;
+    string _employeeId = string.Empty;
+    List<PayrollPeriodDto> _periods = [];
+    List<DepartmentDto> _departments = [];
+    List<EmployeeSimpleLookup> _employees = [];
+    List<AttendanceReportRow> _rows = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        var t1 = HrSvc.GetPeriodsForSelectionAsync();
+        var t2 = HrSvc.GetDepartmentSimpleListAsync();
+        var t3 = HrSvc.GetEmployeeSimpleListAsync();
+        await Task.WhenAll(t1, t2, t3);
+        _periods = t1.Result;
+        _departments = t2.Result;
+        _employees = t3.Result;
+    }
+
+    async Task LoadAsync()
+    {
+        _loading = true; _error = null; _rows = []; StateHasChanged();
+        try
+        {
+            var periodId = Guid.TryParse(_periodId, out var p) ? p : (Guid?)null;
+            var deptId   = Guid.TryParse(_departmentId, out var d) ? d : (Guid?)null;
+            var empId    = Guid.TryParse(_employeeId, out var e) ? e : (Guid?)null;
+            _rows = await Svc.GetAttendanceReportAsync(periodId, empId, deptId);
+            _searched = true;
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _loading = false; }
+    }
+
+    async Task ExportCsvAsync()
+    {
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine("No.,Colaborador,Departamento,Días asist.,Hrs trab.,Retardos (min),HE (hrs),Faltas,Salida temp. (min)");
+        foreach (var r in _rows)
+            sb.AppendLine($"{r.EmployeeNumber},{CsvEsc(r.EmployeeName)},{CsvEsc(r.DepartmentName)},{r.AttendanceDays},{r.WorkedHours:N1},{r.DelayMinutes},{r.OvertimeHours:N1},{r.AbsenceUnits:N1},{r.EarlyLeaveMinutes}");
+        await JS.InvokeVoidAsync("downloadFile", "reporte_asistencia.csv", "text/csv", sb.ToString());
+    }
+
+    async Task PrintAsync() => await JS.InvokeVoidAsync("eval", "window.print()");
+
+    static string CsvEsc(string s) => s.Contains(',') || s.Contains('"') ? $"\"{s.Replace("\"", "\"\"")}\"" : s;
+}

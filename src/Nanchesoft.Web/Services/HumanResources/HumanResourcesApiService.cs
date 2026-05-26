@@ -1972,6 +1972,13 @@ public sealed class HumanResourcesApiService
         }).OrderBy(e => e.FullName).ToList();
     }
 
+    public async Task<List<DepartmentDto>> GetDepartmentSimpleListAsync()
+    {
+        var c = CreateScopedClient();
+        var rows = await c.GetFromJsonAsync<List<DepartmentDto>>("/api/hr/departments") ?? [];
+        return rows.Where(d => d.IsActive).OrderBy(d => d.Name).ToList();
+    }
+
     public async Task<List<NomPayrollIncidentTypeDto>> GetIncidentTypeLookupsAsync()
     {
         var c = CreateScopedClient();

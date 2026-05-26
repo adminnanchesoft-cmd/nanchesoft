@@ -1,0 +1,140 @@
+@page "/payroll/reports/clock-import-log"
+@using Nanchesoft.Web.Services.HumanResources
+@inject PayrollOperationsApiService Svc
+@inject IJSRuntime JS
+
+<PageTitle>Historial importación reloj | Nanchesoft</PageTitle>
+
+<div class="d-flex align-items-center justify-content-between mb-3">
+    <h4 class="mb-0">Historial de importaciones del reloj</h4>
+    <div class="d-flex gap-2">
+        <button class="btn btn-outline-secondary btn-sm" @onclick="LoadAsync" disabled="@_loading">Actualizar</button>
+        <button class="btn btn-outline-dark btn-sm" @onclick="PrintAsync" disabled="@(!_rows.Any())">Imprimir</button>
+    </div>
+</div>
+
+@if (_error != null)
+{
+    <div class="alert alert-danger py-2">@_error</div>
+}
+else if (_loading)
+{
+    <div class="text-center py-5 text-muted">Cargando...</div>
+}
+else if (!_rows.Any())
+{
+    <div class="text-center py-5 text-muted">No hay importaciones registradas.</div>
+}
+else
+{
+    <div class="row g-3 mb-3">
+        <div class="col-6 col-md-3">
+            <div class="card shadow-sm text-center py-2">
+                <div class="fs-5 fw-bold text-primary">@_rows.Count</div>
+                <div class="text-muted small">Importaciones</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="card shadow-sm text-center py-2">
+                <div class="fs-5 fw-bold text-success">@_rows.Sum(r => r.RowsCreated)</div>
+                <div class="text-muted small">Registros creados</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="card shadow-sm text-center py-2">
+                <div class="fs-5 fw-bold text-warning">@_rows.Sum(r => r.RowsSkipped)</div>
+                <div class="text-muted small">Omitidos</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="card shadow-sm text-center py-2">
+                <div class="fs-5 fw-bold text-danger">@_rows.Sum(r => r.RowsError)</div>
+                <div class="text-muted small">Con error</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card shadow-sm">
+        <div class="card-body p-0">
+            <div style="overflow-x:auto">
+                <table class="table table-sm table-hover mb-0" style="min-width:900px">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Fecha importación</th>
+                            <th>Archivo</th>
+                            <th>Formato</th>
+                            <th class="text-end">Tamaño</th>
+                            <th class="text-end">Leídos</th>
+                            <th class="text-end text-success">Creados</th>
+                            <th class="text-end text-warning">Omitidos</th>
+                            <th class="text-end text-danger">Errores</th>
+                            <th>Estado</th>
+                            <th>Usuario</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var r in _rows)
+                        {
+                            <tr>
+                                <td class="text-nowrap">@r.ImportedAt.ToString("dd/MM/yyyy HH:mm")</td>
+                                <td class="text-truncate" style="max-width:200px" title="@r.FileName">@r.FileName</td>
+                                <td><span class="badge bg-secondary">@r.FileFormat</span></td>
+                                <td class="text-end text-muted small">@FormatSize(r.FileSizeBytes)</td>
+                                <td class="text-end">@r.RowsRead</td>
+                                <td class="text-end text-success fw-semibold">@r.RowsCreated</td>
+                                <td class="text-end @(r.RowsSkipped > 0 ? "text-warning" : "")">@r.RowsSkipped</td>
+                                <td class="text-end @(r.RowsError > 0 ? "text-danger fw-semibold" : "")">@r.RowsError</td>
+                                <td>
+                                    @if (r.Status == "ok" || r.Status == "success")
+                                    {
+                                        <span class="badge bg-success">OK</span>
+                                    }
+                                    else if (r.Status == "partial")
+                                    {
+                                        <span class="badge bg-warning text-dark">Parcial</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-danger">@r.Status</span>
+                                    }
+                                </td>
+                                <td class="text-muted small">@r.ImportedBy</td>
+                            </tr>
+                            @if (!string.IsNullOrWhiteSpace(r.ErrorSummary))
+                            {
+                                <tr class="table-danger">
+                                    <td colspan="10" class="small text-danger ps-3">@r.ErrorSummary</td>
+                                </tr>
+                            }
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    bool _loading = true;
+    string? _error;
+    List<ClockImportHistoryItem> _rows = [];
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    async Task LoadAsync()
+    {
+        _loading = true; _error = null; StateHasChanged();
+        try { _rows = await Svc.GetClockImportHistoryAsync(); }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _loading = false; }
+    }
+
+    async Task PrintAsync() => await JS.InvokeVoidAsync("eval", "window.print()");
+
+    static string FormatSize(long bytes) => bytes switch
+    {
+        >= 1_048_576 => $"{bytes / 1_048_576.0:N1} MB",
+        >= 1_024     => $"{bytes / 1_024.0:N1} KB",
+        _            => $"{bytes} B"
+    };
+}

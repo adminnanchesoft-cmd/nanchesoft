@@ -565,6 +565,43 @@ public sealed class PayrollOperationsApiService
 
     private sealed class OperationalGenerateResult { public int Created { get; set; } public int Deleted { get; set; } }
 
+    // ── Fase 9: Reportes operativos ────────────────────────────────────────
+
+    public async Task<List<AttendanceReportRow>> GetAttendanceReportAsync(Guid? periodId, Guid? employeeId, Guid? departmentId)
+    {
+        var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
+        var qs = BuildQs(("periodId", periodId), ("employeeId", employeeId), ("departmentId", departmentId));
+        return await client.GetFromJsonAsync<List<AttendanceReportRow>>($"/api/payroll/reports/attendance{qs}") ?? [];
+    }
+
+    public async Task<List<LatenessReportRow>> GetLatenessReportAsync(Guid? periodId, Guid? employeeId, Guid? departmentId, DateTime? from, DateTime? to)
+    {
+        var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
+        var qs = BuildQs(("periodId", periodId), ("employeeId", employeeId), ("departmentId", departmentId));
+        if (from.HasValue) qs += (qs == "?" ? "" : "&") + $"from={from.Value:yyyy-MM-dd}";
+        if (to.HasValue) qs += (qs == "?" ? "" : "&") + $"to={to.Value:yyyy-MM-dd}";
+        return await client.GetFromJsonAsync<List<LatenessReportRow>>($"/api/payroll/reports/lateness{qs}") ?? [];
+    }
+
+    public async Task<List<OvertimeReportRow>> GetOvertimeReportAsync(Guid? periodId, Guid? employeeId, Guid? departmentId)
+    {
+        var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
+        var qs = BuildQs(("periodId", periodId), ("employeeId", employeeId), ("departmentId", departmentId));
+        return await client.GetFromJsonAsync<List<OvertimeReportRow>>($"/api/payroll/reports/overtime{qs}") ?? [];
+    }
+
+    public async Task<List<ClockImportHistoryItem>> GetClockImportHistoryAsync()
+    {
+        var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
+        return await client.GetFromJsonAsync<List<ClockImportHistoryItem>>("/api/payroll/clock/import-history") ?? [];
+    }
+
+    private static string BuildQs(params (string Key, Guid? Value)[] pairs)
+    {
+        var parts = pairs.Where(p => p.Value.HasValue).Select(p => $"{p.Key}={p.Value:D}").ToList();
+        return parts.Count > 0 ? "?" + string.Join("&", parts) : "";
+    }
+
     private async Task<CatalogViewDefinition> GetTimeClockAsync()
     {
         var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
@@ -2542,4 +2579,59 @@ public sealed class OperationalPrePayrollSummary
     public string PeriodName { get; set; } = string.Empty;
     public bool IsClosed { get; set; }
     public List<OperationalPrePayrollEmployeeRow> Rows { get; set; } = [];
+}
+
+public sealed class AttendanceReportRow
+{
+    public Guid EmployeeId { get; set; }
+    public string EmployeeNumber { get; set; } = string.Empty;
+    public string EmployeeName { get; set; } = string.Empty;
+    public string DepartmentName { get; set; } = string.Empty;
+    public int AttendanceDays { get; set; }
+    public decimal WorkedHours { get; set; }
+    public int DelayMinutes { get; set; }
+    public decimal OvertimeHours { get; set; }
+    public decimal AbsenceUnits { get; set; }
+    public int EarlyLeaveMinutes { get; set; }
+}
+
+public sealed class LatenessReportRow
+{
+    public Guid EmployeeId { get; set; }
+    public string EmployeeNumber { get; set; } = string.Empty;
+    public string EmployeeName { get; set; } = string.Empty;
+    public string DepartmentName { get; set; } = string.Empty;
+    public DateTime WorkDate { get; set; }
+    public int DelayMinutes { get; set; }
+    public decimal AbsenceUnits { get; set; }
+    public int EarlyLeaveMinutes { get; set; }
+    public string Notes { get; set; } = string.Empty;
+}
+
+public sealed class OvertimeReportRow
+{
+    public Guid EmployeeId { get; set; }
+    public string EmployeeNumber { get; set; } = string.Empty;
+    public string EmployeeName { get; set; } = string.Empty;
+    public string DepartmentName { get; set; } = string.Empty;
+    public int OvertimeDays { get; set; }
+    public decimal TotalOvertimeHours { get; set; }
+    public decimal HourlyRate { get; set; }
+    public decimal EstimatedAmount { get; set; }
+}
+
+public sealed class ClockImportHistoryItem
+{
+    public Guid ClockImportId { get; set; }
+    public string FileName { get; set; } = string.Empty;
+    public long FileSizeBytes { get; set; }
+    public string FileFormat { get; set; } = string.Empty;
+    public DateTime ImportedAt { get; set; }
+    public string ImportedBy { get; set; } = string.Empty;
+    public int RowsRead { get; set; }
+    public int RowsCreated { get; set; }
+    public int RowsSkipped { get; set; }
+    public int RowsError { get; set; }
+    public string Status { get; set; } = string.Empty;
+    public string ErrorSummary { get; set; } = string.Empty;
 }
