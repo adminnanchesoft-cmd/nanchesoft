@@ -46,6 +46,8 @@ public sealed class EmployeeIncident : BaseEntity
     public decimal Amount { get; set; }
     public string Notes { get; set; } = string.Empty;
     public string Status { get; set; } = "draft";
+    public string Origin { get; set; } = "manual"; // manual|auto|policy-auto|recurring
+    public bool ManuallyEdited { get; set; }
     public bool IsDeleted { get; set; }
     public DateTime? DeletedAt { get; set; }
     public string? DeletedBy { get; set; }

@@ -1956,6 +1956,100 @@ public sealed class HumanResourcesApiService
         public bool IsActive { get; set; }
     }
 
+    // ── Manual Incidents ────────────────────────────────────────────────────
+
+    public async Task<List<EmployeeSimpleLookup>> GetEmployeeSimpleListAsync()
+    {
+        var c = CreateScopedClient();
+        var full = await c.GetFromJsonAsync<List<EmployeeDto>>("/api/hr/employees") ?? [];
+        return full.Where(e => e.IsActive).Select(e => new EmployeeSimpleLookup
+        {
+            EmployeeId = e.EmployeeId,
+            EmployeeNumber = e.EmployeeNumber,
+            FullName = string.IsNullOrWhiteSpace(e.FullName)
+                ? string.Join(" ", new[] { e.FirstName, e.MiddleName, e.LastName, e.SecondLastName }.Where(s => !string.IsNullOrWhiteSpace(s)))
+                : e.FullName
+        }).OrderBy(e => e.FullName).ToList();
+    }
+
+    public async Task<List<NomPayrollIncidentTypeDto>> GetIncidentTypeLookupsAsync()
+    {
+        var c = CreateScopedClient();
+        return await c.GetFromJsonAsync<List<NomPayrollIncidentTypeDto>>("/api/payroll/incident-types") ?? [];
+    }
+
+    public async Task<List<PayrollPeriodDto>> GetPeriodsForSelectionAsync()
+    {
+        var c = CreateScopedClient();
+        var rows = await c.GetFromJsonAsync<List<PayrollPeriodDto>>("/api/payroll/periods") ?? [];
+        return rows.Where(x => x.IsActive).OrderByDescending(x => x.StartDate).ToList();
+    }
+
+    public async Task<List<EmployeeIncidentDto>> GetManualIncidentsAsync(Guid? periodId = null, Guid? employeeId = null)
+    {
+        var c = CreateScopedClient();
+        var qs = "";
+        if (periodId.HasValue) qs += $"periodId={periodId:D}";
+        if (employeeId.HasValue) qs += (qs.Length > 0 ? "&" : "") + $"employeeId={employeeId:D}";
+        var url = "/api/hr/incidents" + (qs.Length > 0 ? "?" + qs : "");
+        return await c.GetFromJsonAsync<List<EmployeeIncidentDto>>(url) ?? [];
+    }
+
+    public async Task<(bool Ok, string? Error)> CreateManualIncidentAsync(ManualIncidentRequest req)
+    {
+        var c = CreateScopedClient();
+        var response = await c.PostAsJsonAsync("/api/hr/incidents", req);
+        if (response.IsSuccessStatusCode) return (true, null);
+        var msg = await TryReadErrorAsync(response);
+        return (false, msg);
+    }
+
+    public async Task<(bool Ok, string? Error)> UpdateManualIncidentAsync(Guid id, ManualIncidentRequest req)
+    {
+        var c = CreateScopedClient();
+        var response = await c.PutAsJsonAsync($"/api/hr/incidents/{id:D}", req);
+        if (response.IsSuccessStatusCode) return (true, null);
+        var msg = await TryReadErrorAsync(response);
+        return (false, msg);
+    }
+
+    public async Task<(bool Ok, string? Error)> DeleteManualIncidentAsync(Guid id)
+    {
+        var c = CreateScopedClient();
+        var response = await c.DeleteAsync($"/api/hr/incidents/{id:D}");
+        if (response.IsSuccessStatusCode) return (true, null);
+        var msg = await TryReadErrorAsync(response);
+        return (false, msg);
+    }
+
+    public async Task<(bool Ok, int Created, string? Error)> BulkCreateIncidentsAsync(BulkIncidentItem req)
+    {
+        var c = CreateScopedClient();
+        var response = await c.PostAsJsonAsync("/api/hr/incidents/bulk", req);
+        if (response.IsSuccessStatusCode)
+        {
+            var result = await response.Content.ReadFromJsonAsync<BulkResult>();
+            return (true, result?.Created ?? 0, null);
+        }
+        var msg = await TryReadErrorAsync(response);
+        return (false, 0, msg);
+    }
+
+    private static async Task<string?> TryReadErrorAsync(HttpResponseMessage response)
+    {
+        try
+        {
+            var content = await response.Content.ReadAsStringAsync();
+            if (string.IsNullOrWhiteSpace(content)) return "Error desconocido.";
+            using var doc = System.Text.Json.JsonDocument.Parse(content);
+            if (doc.RootElement.TryGetProperty("message", out var m)) return m.GetString();
+            return content;
+        }
+        catch { return "Error al procesar respuesta del servidor."; }
+    }
+
+    private sealed class BulkResult { public int Created { get; set; } }
+
     private static async Task EnsureSuccessAsync(HttpResponseMessage response)
     {
         if (response.IsSuccessStatusCode)
@@ -2141,6 +2235,8 @@ public sealed class EmployeeIncidentDto
     public decimal Amount { get; set; }
     public string Notes { get; set; } = string.Empty;
     public string Status { get; set; } = string.Empty;
+    public string Origin { get; set; } = "manual";
+    public bool ManuallyEdited { get; set; }
     public bool IsActive { get; set; }
 }
 
@@ -2484,4 +2580,41 @@ public sealed class AttendancePolicyRuleItem
     public int SortOrder { get; set; }
     public string Notes { get; set; } = string.Empty;
     public bool IsActive { get; set; }
+}
+
+public sealed class ManualIncidentRequest
+{
+    public Guid? TenantId { get; set; }
+    public Guid? CompanyId { get; set; }
+    public Guid? EmployeeId { get; set; }
+    public Guid? PayrollPeriodId { get; set; }
+    public Guid? NomPayrollIncidentTypeId { get; set; }
+    public DateTime? IncidentDate { get; set; }
+    public decimal Quantity { get; set; }
+    public decimal Amount { get; set; }
+    public string Notes { get; set; } = string.Empty;
+    public string Status { get; set; } = "draft";
+    public string Origin { get; set; } = "manual";
+    public bool ManuallyEdited { get; set; } = true;
+    public bool IsActive { get; set; } = true;
+}
+
+public sealed class BulkIncidentItem
+{
+    public Guid? TenantId { get; set; }
+    public Guid? CompanyId { get; set; }
+    public Guid? PayrollPeriodId { get; set; }
+    public Guid? NomPayrollIncidentTypeId { get; set; }
+    public DateTime? IncidentDate { get; set; }
+    public decimal Quantity { get; set; }
+    public decimal Amount { get; set; }
+    public string Notes { get; set; } = string.Empty;
+    public List<Guid> EmployeeIds { get; set; } = [];
+}
+
+public sealed class EmployeeSimpleLookup
+{
+    public Guid EmployeeId { get; set; }
+    public string EmployeeNumber { get; set; } = string.Empty;
+    public string FullName { get; set; } = string.Empty;
 }

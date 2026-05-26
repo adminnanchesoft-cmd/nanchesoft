@@ -87,6 +87,7 @@ public static class HumanResourcesEndpoints
         var incidents = app.MapGroup("/api/hr/incidents").WithTags("HrEmployeeIncidents");
         incidents.MapGet("/", GetEmployeeIncidentsAsync);
         incidents.MapPost("/", CreateEmployeeIncidentAsync);
+        incidents.MapPost("/bulk", BulkCreateEmployeeIncidentsAsync);
         incidents.MapPut("/{id:guid}", UpdateEmployeeIncidentAsync);
         incidents.MapDelete("/{id:guid}", DeleteEmployeeIncidentAsync);
 
@@ -949,10 +950,16 @@ var branchId = ApiTenantScope.ResolveBranchId(httpContext);
         var companyId = ApiTenantScope.ResolveCompanyId(httpContext);
         var branchId = ApiTenantScope.ResolveBranchId(httpContext);
 
+        var qs = httpContext.Request.Query;
+        Guid? periodId = qs.TryGetValue("periodId", out var pv) && Guid.TryParse(pv, out var pg) ? pg : null;
+        Guid? employeeId = qs.TryGetValue("employeeId", out var ev) && Guid.TryParse(ev, out var eg) ? eg : null;
+
         var rows = await db.EmployeeIncidents.AsNoTracking()
             .Where(x => (!tenantId.HasValue || x.TenantId == tenantId.Value)
                      && (!companyId.HasValue || x.CompanyId == companyId.Value))
             .Where(x => !branchId.HasValue || !x.BranchId.HasValue || x.BranchId == branchId.Value)
+            .Where(x => !periodId.HasValue || x.PayrollPeriodId == periodId.Value)
+            .Where(x => !employeeId.HasValue || x.EmployeeId == employeeId.Value)
             .Where(x => !x.IsDeleted)
             .Include(x => x.Company)
             .Include(x => x.Branch)
@@ -987,6 +994,8 @@ var branchId = ApiTenantScope.ResolveBranchId(httpContext);
                 Amount = x.Amount,
                 Notes = x.Notes,
                 Status = x.Status,
+                Origin = x.Origin,
+                ManuallyEdited = x.ManuallyEdited,
                 IsActive = x.IsActive
             })
             .ToListAsync();
@@ -1038,6 +1047,8 @@ var branchId = ApiTenantScope.ResolveBranchId(httpContext);
             Amount = request.Amount,
             Notes = NormalizeText(request.Notes),
             Status = NormalizeStatus(request.Status, "draft"),
+            Origin = string.IsNullOrWhiteSpace(request.Origin) ? "manual" : request.Origin,
+            ManuallyEdited = request.ManuallyEdited,
             IsActive = request.IsActive,
             CreatedBy = "web-api"
         };
@@ -1045,6 +1056,59 @@ var branchId = ApiTenantScope.ResolveBranchId(httpContext);
         db.EmployeeIncidents.Add(entity);
         await db.SaveChangesAsync();
         return Results.Ok(new { success = true, id = entity.Id });
+    }
+
+    private static async Task<IResult> BulkCreateEmployeeIncidentsAsync(HttpContext httpContext, BulkIncidentRequest request, NanchesoftDbContext db)
+    {
+        var context = await ResolveDefaultContextAsync(httpContext, db);
+        var tenantId = request.TenantId ?? context.TenantId;
+        var companyId = request.CompanyId ?? context.CompanyId;
+
+        if (!tenantId.HasValue || !companyId.HasValue)
+            return Results.BadRequest(new { message = "No existe contexto de tenant/empresa." });
+        if (request.EmployeeIds is null || request.EmployeeIds.Count == 0)
+            return Results.BadRequest(new { message = "Debe seleccionar al menos un empleado." });
+        if (!request.NomPayrollIncidentTypeId.HasValue)
+            return Results.BadRequest(new { message = "payroll_incident_type_id es obligatorio." });
+
+        var incidentType = await ResolveIncidentTypeAsync(db, tenantId.Value, companyId.Value, request.NomPayrollIncidentTypeId.Value);
+        if (incidentType is null)
+            return Results.BadRequest(new { message = "El tipo de incidencia debe existir en el catálogo formal." });
+
+        if (request.PayrollPeriodId.HasValue)
+        {
+            var period = await db.PayrollPeriods.AsNoTracking()
+                .FirstOrDefaultAsync(x => x.Id == request.PayrollPeriodId.Value);
+            if (period?.IsClosed == true)
+                return Results.BadRequest(new { message = "El periodo está cerrado; no se pueden agregar incidencias." });
+        }
+
+        var incidentDate = request.IncidentDate?.Date ?? DateTime.UtcNow.Date;
+        var created = 0;
+        foreach (var empId in request.EmployeeIds.Distinct())
+        {
+            db.EmployeeIncidents.Add(new EmployeeIncident
+            {
+                TenantId = tenantId.Value,
+                CompanyId = companyId.Value,
+                EmployeeId = empId,
+                PayrollPeriodId = request.PayrollPeriodId,
+                PayrollIncidentTypeId = incidentType.Id,
+                IncidentDate = incidentDate,
+                IncidentType = incidentType.Code,
+                Quantity = request.Quantity,
+                Amount = request.Amount,
+                Notes = NormalizeText(request.Notes),
+                Status = "draft",
+                Origin = "manual",
+                ManuallyEdited = true,
+                IsActive = true,
+                CreatedBy = "web-api"
+            });
+            created++;
+        }
+        await db.SaveChangesAsync();
+        return Results.Ok(new { success = true, created });
     }
 
     private static async Task<IResult> UpdateEmployeeIncidentAsync(Guid id, EmployeeIncidentRequest request, NanchesoftDbContext db)
@@ -1083,6 +1147,7 @@ var branchId = ApiTenantScope.ResolveBranchId(httpContext);
         entity.Amount = request.Amount;
         entity.Notes = NormalizeText(request.Notes, entity.Notes);
         entity.Status = NormalizeStatus(request.Status, entity.Status);
+        entity.ManuallyEdited = true;
         entity.IsActive = request.IsActive;
         entity.UpdatedAt = DateTime.UtcNow;
         entity.UpdatedBy = "web-api";
@@ -2657,7 +2722,22 @@ public class EmployeeIncidentRequest
     public decimal Amount { get; set; }
     public string? Notes { get; set; }
     public string? Status { get; set; }
+    public string? Origin { get; set; }
+    public bool ManuallyEdited { get; set; }
     public bool IsActive { get; set; } = true;
+}
+
+public sealed class BulkIncidentRequest
+{
+    public Guid? TenantId { get; set; }
+    public Guid? CompanyId { get; set; }
+    public Guid? PayrollPeriodId { get; set; }
+    public Guid? NomPayrollIncidentTypeId { get; set; }
+    public DateTime? IncidentDate { get; set; }
+    public decimal Quantity { get; set; }
+    public decimal Amount { get; set; }
+    public string? Notes { get; set; }
+    public List<Guid> EmployeeIds { get; set; } = [];
 }
 
 public sealed class EmployeeIncidentDto : EmployeeIncidentRequest

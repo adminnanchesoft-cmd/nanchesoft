@@ -1,0 +1,296 @@
+@page "/payroll/bulk-incidents"
+@using Nanchesoft.Web.Services.HumanResources
+@inject HumanResourcesApiService Api
+
+<PageTitle>Aplicación masiva de incidencias | Nanchesoft</PageTitle>
+
+<div class="d-flex align-items-center justify-content-between mb-3">
+    <h4 class="mb-0">Aplicación masiva de incidencias</h4>
+</div>
+
+@if (!string.IsNullOrWhiteSpace(_msg))
+{
+    <div class="alert @(_msgOk ? "alert-success" : "alert-danger") alert-dismissible py-2">
+        @_msg
+        <button type="button" class="btn-close btn-sm" @onclick="() => _msg = null"></button>
+    </div>
+}
+
+<div class="row g-3">
+    <!-- Panel izquierdo: parámetros -->
+    <div class="col-lg-4">
+        <div class="card shadow-sm h-100">
+            <div class="card-header py-2 fw-semibold">Parámetros de incidencia</div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <label class="form-label form-label-sm">Periodo nómina</label>
+                    <select class="form-select form-select-sm" @onchange="OnPeriodChanged">
+                        <option value="">— Sin periodo —</option>
+                        @foreach (var p in _periods)
+                        {
+                            <option value="@p.PayrollPeriodId">@p.Code · @p.Name</option>
+                        }
+                    </select>
+                    @if (_selectedPeriod?.IsClosed == true)
+                    {
+                        <div class="text-danger small mt-1">Este periodo está cerrado.</div>
+                    }
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label form-label-sm">Tipo de incidencia *</label>
+                    <select class="form-select form-select-sm" @onchange="OnTypeChanged">
+                        <option value="">— Seleccionar —</option>
+                        @foreach (var t in _incidentTypes)
+                        {
+                            <option value="@t.NomPayrollIncidentTypeId">[@t.Code] @t.Name</option>
+                        }
+                    </select>
+                    @if (_selectedType != null)
+                    {
+                        <div class="text-muted small mt-1">
+                            Categoría: @_selectedType.IncidentCategory · Efecto: @_selectedType.AffectType
+                        </div>
+                    }
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label form-label-sm">Fecha de incidencia *</label>
+                    <input type="date" class="form-control form-control-sm" @bind="_incidentDate" />
+                </div>
+
+                <div class="row g-2 mb-3">
+                    <div class="col-6">
+                        <label class="form-label form-label-sm">Cantidad</label>
+                        <input type="number" class="form-control form-control-sm" @bind="_quantity"
+                               step="0.5" min="0"
+                               disabled="@(!(_selectedType?.RequiresQuantity ?? true))" />
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label form-label-sm">Monto</label>
+                        <input type="number" class="form-control form-control-sm" @bind="_amount"
+                               step="0.01" min="0"
+                               disabled="@(!(_selectedType?.RequiresAmount ?? true))" />
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label form-label-sm">Notas</label>
+                    <input type="text" class="form-control form-control-sm" @bind="_notes" maxlength="500" />
+                </div>
+
+                <button class="btn btn-primary w-100" @onclick="ApplyBulkAsync"
+                        disabled="@(_applying || _selectedPeriod?.IsClosed == true || _selectedEmployees.Count == 0 || _selectedTypeId == null)">
+                    @if (_applying)
+                    {
+                        <span class="spinner-border spinner-border-sm me-1"></span>
+                        <span>Aplicando...</span>
+                    }
+                    else
+                    {
+                        <span>Aplicar a @_selectedEmployees.Count colaborador(es)</span>
+                    }
+                </button>
+
+                @if (_resultCreated > 0)
+                {
+                    <div class="alert alert-success mt-3 py-2 small">
+                        Se crearon <strong>@_resultCreated</strong> incidencias correctamente.
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+
+    <!-- Panel derecho: selección de empleados -->
+    <div class="col-lg-8">
+        <div class="card shadow-sm h-100">
+            <div class="card-header d-flex align-items-center justify-content-between py-2">
+                <span class="fw-semibold">Colaboradores</span>
+                <div class="d-flex gap-2">
+                    <input type="text" class="form-control form-control-sm" placeholder="Buscar..."
+                           style="width:200px" @oninput="OnSearch" />
+                    <button class="btn btn-outline-secondary btn-sm" @onclick="SelectAll">Todos</button>
+                    <button class="btn btn-outline-secondary btn-sm" @onclick="ClearAll">Ninguno</button>
+                </div>
+            </div>
+            <div class="card-body p-0" style="max-height:600px;overflow-y:auto">
+                <table class="table table-hover table-sm mb-0">
+                    <thead class="table-light sticky-top">
+                        <tr>
+                            <th style="width:40px">
+                                <input type="checkbox" @onchange="ToggleAll"
+                                       checked="@(_selectedEmployees.Count == _filteredEmployees.Count && _filteredEmployees.Count > 0)" />
+                            </th>
+                            <th>Número</th>
+                            <th>Nombre</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var emp in _filteredEmployees)
+                        {
+                            <tr style="cursor:pointer" @onclick="() => ToggleEmployee(emp.EmployeeId)">
+                                <td>
+                                    <input type="checkbox" checked="@_selectedEmployees.Contains(emp.EmployeeId)"
+                                           @onclick:stopPropagation="true"
+                                           @onchange="() => ToggleEmployee(emp.EmployeeId)" />
+                                </td>
+                                <td><code>@emp.EmployeeNumber</code></td>
+                                <td>@emp.FullName</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+                @if (_filteredEmployees.Count == 0)
+                {
+                    <div class="text-center py-4 text-muted">Sin resultados.</div>
+                }
+            </div>
+            <div class="card-footer py-1 text-muted small">
+                @_selectedEmployees.Count de @_employees.Count seleccionados
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    bool _applying;
+    string? _msg;
+    bool _msgOk;
+    int _resultCreated;
+
+    List<PayrollPeriodDto> _periods = [];
+    List<EmployeeSimpleLookup> _employees = [];
+    List<EmployeeSimpleLookup> _filteredEmployees = [];
+    List<NomPayrollIncidentTypeDto> _incidentTypes = [];
+    HashSet<Guid> _selectedEmployees = [];
+
+    PayrollPeriodDto? _selectedPeriod;
+    Guid? _selectedPeriodId;
+    NomPayrollIncidentTypeDto? _selectedType;
+    Guid? _selectedTypeId;
+
+    DateTime _incidentDate = DateTime.Today;
+    decimal _quantity = 1;
+    decimal _amount;
+    string _notes = string.Empty;
+    string _search = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var t1 = Api.GetPeriodsForSelectionAsync();
+        var t2 = Api.GetEmployeeSimpleListAsync();
+        var t3 = Api.GetIncidentTypeLookupsAsync();
+        await Task.WhenAll(t1, t2, t3);
+        _periods = t1.Result;
+        _employees = t2.Result;
+        _filteredEmployees = _employees;
+        _incidentTypes = t3.Result;
+    }
+
+    void OnPeriodChanged(ChangeEventArgs e)
+    {
+        if (Guid.TryParse(e.Value?.ToString(), out var id))
+        {
+            _selectedPeriodId = id;
+            _selectedPeriod = _periods.FirstOrDefault(p => p.PayrollPeriodId == id);
+        }
+        else
+        {
+            _selectedPeriodId = null;
+            _selectedPeriod = null;
+        }
+    }
+
+    void OnTypeChanged(ChangeEventArgs e)
+    {
+        if (Guid.TryParse(e.Value?.ToString(), out var id))
+        {
+            _selectedTypeId = id;
+            _selectedType = _incidentTypes.FirstOrDefault(t => t.NomPayrollIncidentTypeId == id);
+        }
+        else
+        {
+            _selectedTypeId = null;
+            _selectedType = null;
+        }
+    }
+
+    void OnSearch(ChangeEventArgs e)
+    {
+        _search = e.Value?.ToString() ?? string.Empty;
+        ApplyFilter();
+    }
+
+    void ApplyFilter()
+    {
+        if (string.IsNullOrWhiteSpace(_search))
+            _filteredEmployees = _employees;
+        else
+        {
+            var q = _search.ToLowerInvariant();
+            _filteredEmployees = _employees.Where(e =>
+                e.FullName.ToLowerInvariant().Contains(q) ||
+                e.EmployeeNumber.ToLowerInvariant().Contains(q)).ToList();
+        }
+    }
+
+    void ToggleEmployee(Guid id)
+    {
+        if (_selectedEmployees.Contains(id))
+            _selectedEmployees.Remove(id);
+        else
+            _selectedEmployees.Add(id);
+    }
+
+    void ToggleAll(ChangeEventArgs e)
+    {
+        var check = (bool)(e.Value ?? false);
+        if (check) foreach (var e2 in _filteredEmployees) _selectedEmployees.Add(e2.EmployeeId);
+        else foreach (var e2 in _filteredEmployees) _selectedEmployees.Remove(e2.EmployeeId);
+    }
+
+    void SelectAll()
+    {
+        foreach (var e in _employees) _selectedEmployees.Add(e.EmployeeId);
+    }
+
+    void ClearAll() => _selectedEmployees.Clear();
+
+    async Task ApplyBulkAsync()
+    {
+        if (_selectedEmployees.Count == 0) { _msg = "Seleccione al menos un colaborador."; _msgOk = false; return; }
+        if (_selectedTypeId == null) { _msg = "Seleccione el tipo de incidencia."; _msgOk = false; return; }
+
+        _applying = true;
+        _resultCreated = 0;
+        _msg = null;
+
+        var req = new BulkIncidentItem
+        {
+            PayrollPeriodId = _selectedPeriodId,
+            NomPayrollIncidentTypeId = _selectedTypeId,
+            IncidentDate = _incidentDate,
+            Quantity = _quantity,
+            Amount = _amount,
+            Notes = _notes,
+            EmployeeIds = _selectedEmployees.ToList()
+        };
+
+        var (ok, created, error) = await Api.BulkCreateIncidentsAsync(req);
+        _applying = false;
+
+        if (ok)
+        {
+            _resultCreated = created;
+            _msg = $"Se aplicó la incidencia a {created} colaborador(es).";
+            _msgOk = true;
+            _selectedEmployees.Clear();
+        }
+        else
+        {
+            _msg = error ?? "Error al aplicar incidencias.";
+            _msgOk = false;
+        }
+    }
+}
