@@ -90,6 +90,8 @@ builder.Services.AddScoped<ServiceBillingApiService>();
 builder.Services.AddScoped<ProductionApiService>();
 builder.Services.AddScoped<Nanchesoft.Web.Services.Ai.AiAssistantApiService>();
 builder.Services.AddScoped<Nanchesoft.Web.Services.Portal.PortalApiService>();
+builder.Services.AddScoped<Nanchesoft.Web.State.ThemeState>();
+builder.Services.AddScoped<Nanchesoft.Web.Services.ThemeService>();
 
 var app = builder.Build();
 
