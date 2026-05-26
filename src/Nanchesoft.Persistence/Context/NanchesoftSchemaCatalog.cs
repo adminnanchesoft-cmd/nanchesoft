@@ -21,7 +21,7 @@ public static class NanchesoftSchemaCatalog
     public const string SalesSchema = "sales";
     public const string SubscriptionSchema = "subscription";
     public const string ProductionSchema = "production";
-    public const string IntegrationSchema = "integration";
+    public const string IntegrationSchema = "integraciones";
 
     public static IReadOnlyList<string> AllSchemas { get; } = new[]
     {
@@ -270,8 +270,8 @@ public static class NanchesoftSchemaCatalog
         modelBuilder.Entity<AiConversation>().ToTable("ai_conversations", AiSchema);
         modelBuilder.Entity<AiMessage>().ToTable("ai_messages", AiSchema);
 
-        // SilvaSoft integration
-        modelBuilder.Entity<SilvaSoftConfig>().ToTable("silvasoft_configs", IntegrationSchema);
+        // SilvaSoft integration — schema "integraciones"
+        modelBuilder.Entity<SilvaSoftConexion>().ToTable("silvasoft_conexiones", IntegrationSchema);
         modelBuilder.Entity<SilvaSoftSyncLog>().ToTable("silvasoft_sync_logs", IntegrationSchema);
     }
 
