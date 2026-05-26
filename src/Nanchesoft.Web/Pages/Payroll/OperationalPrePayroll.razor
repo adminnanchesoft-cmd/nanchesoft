@@ -22,6 +22,18 @@
                 <span>Generar prenómina desde incidencias</span>
             }
         </button>
+        @if (_summary?.IsClosed == false)
+        {
+            <button class="btn btn-warning btn-sm" @onclick="CloseAsync" disabled="@(_closing || _selectedPeriodId == null)">
+                @(_closing ? "Cerrando..." : "Cerrar periodo")
+            </button>
+        }
+        else if (_summary?.IsClosed == true)
+        {
+            <button class="btn btn-outline-success btn-sm" @onclick="ReopenAsync" disabled="@(_closing || _selectedPeriodId == null)">
+                @(_closing ? "Reabriendo..." : "Reabrir periodo")
+            </button>
+        }
     </div>
 </div>
 
@@ -211,6 +223,7 @@ else
 @code {
     bool _loading;
     bool _generating;
+    bool _closing;
     string? _msg;
     bool _msgOk;
     Guid? _selectedPeriodId;
@@ -259,5 +272,31 @@ else
             _msg = error ?? "Error al generar.";
             _msgOk = false;
         }
+    }
+
+    async Task CloseAsync()
+    {
+        if (!_selectedPeriodId.HasValue) return;
+        _closing = true;
+        _msg = null;
+        StateHasChanged();
+        var (ok, error) = await HrSvc.ClosePeriodAsync(_selectedPeriodId.Value);
+        _closing = false;
+        _msg = ok ? "Periodo cerrado correctamente." : (error ?? "Error al cerrar.");
+        _msgOk = ok;
+        if (ok) await LoadAsync();
+    }
+
+    async Task ReopenAsync()
+    {
+        if (!_selectedPeriodId.HasValue) return;
+        _closing = true;
+        _msg = null;
+        StateHasChanged();
+        var (ok, error) = await HrSvc.ReopenPeriodAsync(_selectedPeriodId.Value);
+        _closing = false;
+        _msg = ok ? "Periodo reabierto correctamente." : (error ?? "Error al reabrir.");
+        _msgOk = ok;
+        if (ok) await LoadAsync();
     }
 }

@@ -1992,6 +1992,44 @@ public sealed class HumanResourcesApiService
         return rows.Where(x => x.IsActive).OrderByDescending(x => x.StartDate).ToList();
     }
 
+    public async Task<(bool Ok, string? Error)> CreatePeriodAsync(PayrollPeriodRequest req)
+    {
+        var c = CreateScopedClient();
+        var response = await c.PostAsJsonAsync("/api/payroll/periods", req);
+        if (response.IsSuccessStatusCode) return (true, null);
+        return (false, await TryReadErrorAsync(response));
+    }
+
+    public async Task<(bool Ok, string? Error)> UpdatePeriodAsync(Guid id, PayrollPeriodRequest req)
+    {
+        var c = CreateScopedClient();
+        var response = await c.PutAsJsonAsync($"/api/payroll/periods/{id:D}", req);
+        if (response.IsSuccessStatusCode) return (true, null);
+        return (false, await TryReadErrorAsync(response));
+    }
+
+    public async Task<List<PayrollPeriodDto>> GetAllPeriodsAsync()
+    {
+        var c = CreateScopedClient();
+        return await c.GetFromJsonAsync<List<PayrollPeriodDto>>("/api/payroll/periods") ?? [];
+    }
+
+    public async Task<(bool Ok, string? Error)> ClosePeriodAsync(Guid id)
+    {
+        var c = CreateScopedClient();
+        var response = await c.PostAsync($"/api/payroll/periods/{id:D}/close", null);
+        if (response.IsSuccessStatusCode) return (true, null);
+        return (false, await TryReadErrorAsync(response));
+    }
+
+    public async Task<(bool Ok, string? Error)> ReopenPeriodAsync(Guid id)
+    {
+        var c = CreateScopedClient();
+        var response = await c.PostAsync($"/api/payroll/periods/{id:D}/reopen", null);
+        if (response.IsSuccessStatusCode) return (true, null);
+        return (false, await TryReadErrorAsync(response));
+    }
+
     public async Task<List<EmployeeIncidentDto>> GetManualIncidentsAsync(Guid? periodId = null, Guid? employeeId = null)
     {
         var c = CreateScopedClient();

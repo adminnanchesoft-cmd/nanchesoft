@@ -136,6 +136,8 @@ public static class HumanResourcesEndpoints
         periods.MapPost("/", CreatePayrollPeriodAsync);
         periods.MapPut("/{id:guid}", UpdatePayrollPeriodAsync);
         periods.MapDelete("/{id:guid}", DeletePayrollPeriodAsync);
+        periods.MapPost("/{id:guid}/close", ClosePayrollPeriodAsync);
+        periods.MapPost("/{id:guid}/reopen", ReopenPayrollPeriodAsync);
 
         var concepts = app.MapGroup("/api/payroll/concepts").WithTags("PayrollConcepts");
         concepts.MapGet("/", GetPayrollConceptsAsync);
@@ -1642,6 +1644,43 @@ var branchId = ApiTenantScope.ResolveBranchId(httpContext);
         db.PayrollPeriods.Remove(entity);
         await db.SaveChangesAsync();
         return Results.Ok(new { success = true });
+    }
+
+    private static async Task<IResult> ClosePayrollPeriodAsync(Guid id, NanchesoftDbContext db)
+    {
+        var entity = await db.PayrollPeriods.FirstOrDefaultAsync(x => x.Id == id);
+        if (entity is null)
+            return Results.NotFound(new { message = "No se encontró el periodo." });
+        if (entity.IsClosed)
+            return Results.BadRequest(new { message = "El periodo ya está cerrado." });
+
+        var hasDraft = await db.EmployeeIncidents
+            .AnyAsync(x => x.PayrollPeriodId == id && x.Status == "draft" && !x.IsDeleted);
+        if (hasDraft)
+            return Results.BadRequest(new { message = "Existen incidencias en borrador. Apruébalas o elimínalas antes de cerrar el periodo." });
+
+        entity.IsClosed = true;
+        entity.Status = "cerrado";
+        entity.UpdatedAt = DateTime.UtcNow;
+        entity.UpdatedBy = "web-api";
+        await db.SaveChangesAsync();
+        return Results.Ok(new { success = true, message = "Periodo cerrado correctamente." });
+    }
+
+    private static async Task<IResult> ReopenPayrollPeriodAsync(Guid id, NanchesoftDbContext db)
+    {
+        var entity = await db.PayrollPeriods.FirstOrDefaultAsync(x => x.Id == id);
+        if (entity is null)
+            return Results.NotFound(new { message = "No se encontró el periodo." });
+        if (!entity.IsClosed)
+            return Results.BadRequest(new { message = "El periodo ya está abierto." });
+
+        entity.IsClosed = false;
+        entity.Status = "captura";
+        entity.UpdatedAt = DateTime.UtcNow;
+        entity.UpdatedBy = "web-api";
+        await db.SaveChangesAsync();
+        return Results.Ok(new { success = true, message = "Periodo reabierto correctamente." });
     }
 
     private static async Task<IResult> GetPayrollPeriodTypesAsync(HttpContext httpContext, NanchesoftDbContext db)
