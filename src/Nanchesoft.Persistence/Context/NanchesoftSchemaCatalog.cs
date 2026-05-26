@@ -157,6 +157,7 @@ public static class NanchesoftSchemaCatalog
         modelBuilder.Entity<HrRecurringIncidentRule>().ToTable("hr_recurring_incident_rules", HrSchema);
         modelBuilder.Entity<HrEmployeeImportLog>().ToTable("hr_employee_import_logs", HrSchema);
         modelBuilder.Entity<PayrollPeriodType>().ToTable("payroll_period_types", PayrollSchema);
+        modelBuilder.Entity<PayrollPeriodType>().Property(x => x.QuinceaAdjustType).HasColumnName("quincena_adjust_type");
         modelBuilder.Entity<PayrollPeriod>().ToTable("payroll_periods", PayrollSchema);
         modelBuilder.Entity<NomPayrollIncidentType>().ToTable("nom_payroll_incident_types", PayrollSchema);
         modelBuilder.Entity<PayrollConcept>().ToTable("payroll_concepts", PayrollSchema);
