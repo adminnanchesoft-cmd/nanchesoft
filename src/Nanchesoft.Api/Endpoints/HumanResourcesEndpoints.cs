@@ -170,7 +170,159 @@ public static class HumanResourcesEndpoints
         runLines.MapPut("/{id:guid}", UpdatePayrollRunLineAsync);
         runLines.MapDelete("/{id:guid}", DeletePayrollRunLineAsync);
 
+        app.MapGet("/api/payroll/executive-dashboard", GetPayrollExecutiveDashboardAsync).WithTags("PayrollDashboard");
+
         return app;
+    }
+
+    private static async Task<IResult> GetPayrollExecutiveDashboardAsync(HttpContext httpContext, NanchesoftDbContext db)
+    {
+        var companyId = ApiTenantScope.ResolveCompanyId(httpContext);
+        var tenantId  = ApiTenantScope.ResolveTenantId(httpContext);
+
+        // Resolve company if not in header
+        if (!companyId.HasValue && tenantId.HasValue)
+            companyId = await db.Companies.Where(x => x.TenantId == tenantId.Value).OrderBy(x => x.CreatedAt).Select(x => (Guid?)x.Id).FirstOrDefaultAsync();
+        if (!companyId.HasValue)
+            companyId = await db.Companies.OrderBy(x => x.CreatedAt).Select(x => (Guid?)x.Id).FirstOrDefaultAsync();
+
+        // KPIs base
+        var activeEmployees = companyId.HasValue
+            ? await db.Employees.CountAsync(e => e.CompanyId == companyId.Value && e.IsActive)
+            : 0;
+
+        // Last 12 payroll runs ordered by run_date desc
+        var recentRunsRaw = await db.PayrollRuns.AsNoTracking()
+            .Where(r => (!companyId.HasValue || r.CompanyId == companyId.Value) && r.IsActive)
+            .OrderByDescending(r => r.RunDate)
+            .Take(12)
+            .Select(r => new {
+                r.Id, r.Folio, r.RunDate, r.Status,
+                r.EmployeeCount, r.GrossAmount, r.DeductionsAmount, r.NetAmount,
+                PeriodId = r.PayrollPeriodId
+            })
+            .ToListAsync();
+
+        // Period labels
+        var periodIds = recentRunsRaw.Select(r => r.PeriodId).Where(id => id != Guid.Empty).Distinct().ToList();
+        var periodLabels = await db.PayrollPeriods.AsNoTracking()
+            .Where(p => periodIds.Contains(p.Id))
+            .Select(p => new { p.Id, p.StartDate, p.EndDate })
+            .ToDictionaryAsync(p => p.Id, p => $"{p.StartDate:MMM yy}");
+
+        var recentRuns = recentRunsRaw.Select(r => new {
+            r.Folio,
+            period = r.PeriodId != Guid.Empty && periodLabels.TryGetValue(r.PeriodId, out var lbl) ? lbl : r.RunDate.ToString("MMM yy"),
+            date   = r.RunDate.ToString("dd/MM/yyyy"),
+            r.Status,
+            employees = r.EmployeeCount,
+            gross  = Math.Round(r.GrossAmount, 2),
+            net    = Math.Round(r.NetAmount, 2),
+            deductions = Math.Round(r.DeductionsAmount, 2)
+        }).ToList();
+
+        // Trend: last 12 runs chronologically
+        var runTrend = recentRuns.AsEnumerable().Reverse().Select(r => new {
+            r.period, r.gross, r.net, r.employees
+        }).ToList();
+
+        // Last run KPIs
+        var lastRun = recentRunsRaw.FirstOrDefault();
+        decimal lastGross = lastRun?.GrossAmount ?? 0;
+        decimal lastNet   = lastRun?.NetAmount   ?? 0;
+        int lastEmpCount  = lastRun?.EmployeeCount ?? 0;
+        decimal costPerEmp = lastEmpCount > 0 ? Math.Round(lastGross / lastEmpCount, 2) : 0;
+
+        // Department breakdown from run lines (latest run)
+        var deptBreakdown = new List<object>();
+        if (lastRun != null)
+        {
+            var deptData = await db.PayrollRunLines.AsNoTracking()
+                .Where(l => l.PayrollRunId == lastRun.Id && l.IsActive)
+                .GroupBy(l => l.DepartmentId)
+                .Select(g => new { DeptId = (Guid?)g.Key, Gross = g.Sum(l => l.GrossAmount), Count = g.Count() })
+                .OrderByDescending(g => g.Gross)
+                .Take(10)
+                .ToListAsync();
+
+            var deptIds = deptData.Where(d => d.DeptId.HasValue).Select(d => d.DeptId!.Value).ToList();
+            var deptNames = await db.Departments.AsNoTracking()
+                .Where(d => deptIds.Contains(d.Id))
+                .Select(d => new { d.Id, d.Name })
+                .ToDictionaryAsync(d => d.Id, d => d.Name);
+
+            deptBreakdown = deptData.Select(d => (object)new {
+                name    = d.DeptId.HasValue && deptNames.TryGetValue(d.DeptId.Value, out var n) ? n : "Sin departamento",
+                gross   = Math.Round(d.Gross, 2),
+                count   = d.Count
+            }).ToList();
+        }
+
+        // Incident summary (last 90 days)
+        var since = DateTime.UtcNow.AddDays(-90);
+        var incidentSummary = await db.EmployeeIncidents.AsNoTracking()
+            .Where(i => (!companyId.HasValue || i.CompanyId == companyId.Value)
+                     && !i.IsDeleted
+                     && i.IncidentDate >= since)
+            .GroupBy(i => i.IncidentType)
+            .Select(g => new { type = g.Key, count = g.Count(), amount = g.Sum(i => i.Amount) })
+            .OrderByDescending(g => g.count)
+            .Take(8)
+            .ToListAsync();
+
+        var absenceCount = incidentSummary
+            .Where(i => i.type != null && (i.type.Contains("falta", StringComparison.OrdinalIgnoreCase) || i.type.Contains("ausencia", StringComparison.OrdinalIgnoreCase)))
+            .Sum(i => i.count);
+
+        // Top employees by gross (last run)
+        var topEmployees = new List<object>();
+        if (lastRun != null)
+        {
+            var topData = await db.PayrollRunLines.AsNoTracking()
+                .Where(l => l.PayrollRunId == lastRun.Id && l.IsActive)
+                .OrderByDescending(l => l.GrossAmount)
+                .Take(10)
+                .Select(l => new { l.EmployeeId, l.GrossAmount, l.NetAmount, l.DepartmentId })
+                .ToListAsync();
+
+            var empIds  = topData.Select(t => t.EmployeeId).Distinct().ToList();
+            var empNames = await db.Employees.AsNoTracking()
+                .Where(e => empIds.Contains(e.Id))
+                .Select(e => new { e.Id, Name = e.FirstName + " " + e.LastName })
+                .ToDictionaryAsync(e => e.Id, e => e.Name);
+
+            var tdeptIds  = topData.Where(t => t.DepartmentId.HasValue).Select(t => t.DepartmentId!.Value).Distinct().ToList();
+            var tdeptNames = await db.Departments.AsNoTracking()
+                .Where(d => tdeptIds.Contains(d.Id))
+                .Select(d => new { d.Id, d.Name })
+                .ToDictionaryAsync(d => d.Id, d => d.Name);
+
+            topEmployees = topData.Select(t => (object)new {
+                name       = empNames.TryGetValue(t.EmployeeId, out var en) ? en : "—",
+                department = t.DepartmentId.HasValue && tdeptNames.TryGetValue(t.DepartmentId.Value, out var dn) ? dn : "—",
+                gross      = Math.Round(t.GrossAmount, 2),
+                net        = Math.Round(t.NetAmount, 2)
+            }).ToList();
+        }
+
+        return Results.Ok(new {
+            kpis = new {
+                activeEmployees,
+                lastRunGross      = Math.Round(lastGross, 2),
+                lastRunNet        = Math.Round(lastNet, 2),
+                lastRunEmployees  = lastEmpCount,
+                costPerEmployee   = costPerEmp,
+                lastRunDate       = lastRun?.RunDate.ToString("dd/MM/yyyy"),
+                lastRunFolio      = lastRun?.Folio,
+                absenceCount,
+                incidentCount     = incidentSummary.Sum(i => i.count)
+            },
+            runTrend,
+            departmentBreakdown = deptBreakdown,
+            incidentSummary,
+            topEmployees,
+            recentRuns
+        });
     }
 
     private static async Task<(Guid? TenantId, Guid? CompanyId, Guid? BranchId)> ResolveDefaultContextAsync(HttpContext httpContext, NanchesoftDbContext db)

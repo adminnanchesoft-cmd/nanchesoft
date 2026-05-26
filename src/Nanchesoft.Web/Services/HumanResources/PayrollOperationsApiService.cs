@@ -289,6 +289,15 @@ public sealed class PayrollOperationsApiService
         }
     }
 
+    // ── Dashboard ejecutivo ─────────────────────────────────────────────────────
+
+    public async Task<PayrollExecutiveDashboardDto?> GetExecutiveDashboardAsync()
+    {
+        var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
+        try { return await client.GetFromJsonAsync<PayrollExecutiveDashboardDto>("/api/payroll/executive-dashboard"); }
+        catch { return null; }
+    }
+
     // ── Tipos de período ────────────────────────────────────────────────────────
 
     public async Task<List<PayrollPeriodTypeDto>> GetPeriodTypesAsync()
@@ -2730,4 +2739,69 @@ public sealed class PunchPreviewRow
     public string PunchType { get; set; } = string.Empty;
     public string Status { get; set; } = string.Empty;
     public string Message { get; set; } = string.Empty;
+}
+
+public sealed class PayrollExecutiveDashboardDto
+{
+    public PayrollExecutiveKpisDto Kpis { get; set; } = new();
+    public List<PayrollRunTrendDto> RunTrend { get; set; } = [];
+    public List<PayrollDeptBreakdownDto> DepartmentBreakdown { get; set; } = [];
+    public List<PayrollIncidentSummaryDto> IncidentSummary { get; set; } = [];
+    public List<PayrollTopEmployeeDto> TopEmployees { get; set; } = [];
+    public List<PayrollRecentRunDto> RecentRuns { get; set; } = [];
+}
+
+public sealed class PayrollExecutiveKpisDto
+{
+    public int ActiveEmployees { get; set; }
+    public decimal LastRunGross { get; set; }
+    public decimal LastRunNet { get; set; }
+    public int LastRunEmployees { get; set; }
+    public decimal CostPerEmployee { get; set; }
+    public string? LastRunDate { get; set; }
+    public string? LastRunFolio { get; set; }
+    public int AbsenceCount { get; set; }
+    public int IncidentCount { get; set; }
+}
+
+public sealed class PayrollRunTrendDto
+{
+    public string Period { get; set; } = string.Empty;
+    public decimal Gross { get; set; }
+    public decimal Net { get; set; }
+    public int Employees { get; set; }
+}
+
+public sealed class PayrollDeptBreakdownDto
+{
+    public string Name { get; set; } = string.Empty;
+    public decimal Gross { get; set; }
+    public int Count { get; set; }
+}
+
+public sealed class PayrollIncidentSummaryDto
+{
+    public string? Type { get; set; }
+    public int Count { get; set; }
+    public decimal Amount { get; set; }
+}
+
+public sealed class PayrollTopEmployeeDto
+{
+    public string Name { get; set; } = string.Empty;
+    public string Department { get; set; } = string.Empty;
+    public decimal Gross { get; set; }
+    public decimal Net { get; set; }
+}
+
+public sealed class PayrollRecentRunDto
+{
+    public string Folio { get; set; } = string.Empty;
+    public string Period { get; set; } = string.Empty;
+    public string Date { get; set; } = string.Empty;
+    public string Status { get; set; } = string.Empty;
+    public int Employees { get; set; }
+    public decimal Gross { get; set; }
+    public decimal Net { get; set; }
+    public decimal Deductions { get; set; }
 }

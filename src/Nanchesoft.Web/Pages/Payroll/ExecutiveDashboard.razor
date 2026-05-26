@@ -1,0 +1,359 @@
+@page "/payroll/executive-dashboard"
+@using Nanchesoft.Web.Services.HumanResources
+@inject PayrollOperationsApiService Api
+@inject NavigationManager Nav
+
+<PageTitle>Dashboard Nómina | Nanchesoft</PageTitle>
+
+<div class="pex-shell">
+
+    @* ── Header ── *@
+    <div class="pex-header">
+        <div>
+            <div class="pex-eyebrow">Nómina · Ejecutivo</div>
+            <h1 class="pex-title">Dashboard de Nómina</h1>
+            <p class="pex-sub">Resumen ejecutivo · Última actualización: @DateTime.Now.ToString("dd/MM/yyyy HH:mm")</p>
+        </div>
+        <button class="pex-reload-btn" @onclick="LoadAsync" disabled="@_loading">
+            @if (_loading) { <span class="pex-spin">↻</span> } else { <span>↻ Actualizar</span> }
+        </button>
+    </div>
+
+    @if (_loading)
+    {
+        <div class="pex-loading">
+            <div class="pex-loader"></div>
+            <span>Cargando datos...</span>
+        </div>
+    }
+    else if (_data is null)
+    {
+        <div class="pex-empty">
+            <div class="pex-empty-icon">📊</div>
+            <div class="pex-empty-title">Sin datos disponibles</div>
+            <div class="pex-empty-sub">Aún no hay corridas de nómina registradas para esta empresa.</div>
+            <a href="/payroll/procesar" class="pex-btn-primary" style="margin-top:16px;display:inline-block;">Ir a Procesar nómina</a>
+        </div>
+    }
+    else
+    {
+        var k = _data.Kpis;
+
+        @* ── KPI row ── *@
+        <div class="pex-kpi-row">
+            <div class="pex-kpi pex-kpi--blue">
+                <div class="pex-kpi-label">Empleados activos</div>
+                <div class="pex-kpi-value">@k.ActiveEmployees.ToString("N0")</div>
+                <div class="pex-kpi-meta">en empresa</div>
+            </div>
+            <div class="pex-kpi pex-kpi--green">
+                <div class="pex-kpi-label">Costo bruto última corrida</div>
+                <div class="pex-kpi-value">@k.LastRunGross.ToString("C0")</div>
+                <div class="pex-kpi-meta">@k.LastRunFolio · @k.LastRunDate</div>
+            </div>
+            <div class="pex-kpi pex-kpi--teal">
+                <div class="pex-kpi-label">Neto a pagar</div>
+                <div class="pex-kpi-value">@k.LastRunNet.ToString("C0")</div>
+                <div class="pex-kpi-meta">@k.LastRunEmployees empleado(s) en corrida</div>
+            </div>
+            <div class="pex-kpi pex-kpi--violet">
+                <div class="pex-kpi-label">Costo por empleado</div>
+                <div class="pex-kpi-value">@k.CostPerEmployee.ToString("C0")</div>
+                <div class="pex-kpi-meta">promedio última corrida</div>
+            </div>
+            <div class="pex-kpi pex-kpi--amber">
+                <div class="pex-kpi-label">Incidencias (90 días)</div>
+                <div class="pex-kpi-value">@k.IncidentCount.ToString("N0")</div>
+                <div class="pex-kpi-meta">@k.AbsenceCount falta(s) registrada(s)</div>
+            </div>
+        </div>
+
+        @* ── Charts row ── *@
+        <div class="pex-charts-row">
+
+            @* Tendencia de costo *@
+            <div class="pex-panel pex-panel--trend">
+                <div class="pex-panel-head">
+                    <div class="pex-panel-title">Tendencia de costo</div>
+                    <div class="pex-panel-sub">Últimas @_data.RunTrend.Count corrida(s)</div>
+                </div>
+                @if (_data.RunTrend.Count == 0)
+                {
+                    <div class="pex-chart-empty">Sin corridas registradas</div>
+                }
+                else
+                {
+                    var maxVal = _data.RunTrend.Max(r => r.Gross);
+                    <div class="pex-bar-chart">
+                        @foreach (var r in _data.RunTrend)
+                        {
+                            var pctGross = maxVal > 0 ? (double)r.Gross / (double)maxVal * 100 : 0;
+                            var pctNet   = maxVal > 0 ? (double)r.Net   / (double)maxVal * 100 : 0;
+                            <div class="pex-bar-group">
+                                <div class="pex-bar-wrap">
+                                    <div class="pex-bar-track">
+                                        <div class="pex-bar pex-bar--gross" style="height:@pctGross.ToString("F0")%" title="Bruto: @r.Gross.ToString("C0")"></div>
+                                    </div>
+                                    <div class="pex-bar-track">
+                                        <div class="pex-bar pex-bar--net" style="height:@pctNet.ToString("F0")%" title="Neto: @r.Net.ToString("C0")"></div>
+                                    </div>
+                                </div>
+                                <div class="pex-bar-label">@r.Period</div>
+                            </div>
+                        }
+                    </div>
+                    <div class="pex-legend">
+                        <span class="pex-legend-dot pex-legend-dot--gross"></span><span>Bruto</span>
+                        <span class="pex-legend-dot pex-legend-dot--net" style="margin-left:12px;"></span><span>Neto</span>
+                    </div>
+                }
+            </div>
+
+            @* Distribución departamental *@
+            <div class="pex-panel pex-panel--dept">
+                <div class="pex-panel-head">
+                    <div class="pex-panel-title">Por departamento</div>
+                    <div class="pex-panel-sub">Bruto última corrida</div>
+                </div>
+                @if (_data.DepartmentBreakdown.Count == 0)
+                {
+                    <div class="pex-chart-empty">Sin líneas de corrida disponibles</div>
+                }
+                else
+                {
+                    var maxDept = _data.DepartmentBreakdown.Max(d => d.Gross);
+                    <div class="pex-hbar-list">
+                        @foreach (var d in _data.DepartmentBreakdown)
+                        {
+                            var pct = maxDept > 0 ? (double)d.Gross / (double)maxDept * 100 : 0;
+                            <div class="pex-hbar-item">
+                                <div class="pex-hbar-name" title="@d.Name">@(d.Name.Length > 22 ? d.Name[..22] + "…" : d.Name)</div>
+                                <div class="pex-hbar-track">
+                                    <div class="pex-hbar-fill" style="width:@pct.ToString("F0")%"></div>
+                                </div>
+                                <div class="pex-hbar-val">@d.Gross.ToString("C0")</div>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+
+        </div>
+
+        @* ── Bottom row ── *@
+        <div class="pex-bottom-row">
+
+            @* Incidencias *@
+            <div class="pex-panel">
+                <div class="pex-panel-head">
+                    <div class="pex-panel-title">Incidencias por tipo</div>
+                    <div class="pex-panel-sub">Últimos 90 días</div>
+                </div>
+                @if (_data.IncidentSummary.Count == 0)
+                {
+                    <div class="pex-chart-empty">Sin incidencias en el período</div>
+                }
+                else
+                {
+                    <table class="pex-table">
+                        <thead><tr><th>Tipo</th><th class="pex-tr">Cantidad</th><th class="pex-tr">Importe</th></tr></thead>
+                        <tbody>
+                            @foreach (var i in _data.IncidentSummary)
+                            {
+                                <tr>
+                                    <td><span class="pex-badge">@(i.Type ?? "—")</span></td>
+                                    <td class="pex-tr">@i.Count</td>
+                                    <td class="pex-tr">@i.Amount.ToString("C2")</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+            </div>
+
+            @* Top empleados *@
+            <div class="pex-panel">
+                <div class="pex-panel-head">
+                    <div class="pex-panel-title">Top empleados por costo</div>
+                    <div class="pex-panel-sub">Última corrida · Top 10</div>
+                </div>
+                @if (_data.TopEmployees.Count == 0)
+                {
+                    <div class="pex-chart-empty">Sin líneas de corrida disponibles</div>
+                }
+                else
+                {
+                    <table class="pex-table">
+                        <thead><tr><th>#</th><th>Colaborador</th><th>Departamento</th><th class="pex-tr">Bruto</th><th class="pex-tr">Neto</th></tr></thead>
+                        <tbody>
+                            @{ int rank = 1; }
+                            @foreach (var e in _data.TopEmployees)
+                            {
+                                <tr>
+                                    <td class="pex-rank">@rank</td>
+                                    <td>@e.Name</td>
+                                    <td class="pex-muted">@e.Department</td>
+                                    <td class="pex-tr">@e.Gross.ToString("C0")</td>
+                                    <td class="pex-tr pex-net">@e.Net.ToString("C0")</td>
+                                </tr>
+                                rank++;
+                            }
+                        </tbody>
+                    </table>
+                }
+            </div>
+
+        </div>
+
+        @* ── Corridas recientes ── *@
+        <div class="pex-panel" style="margin-top:20px;">
+            <div class="pex-panel-head">
+                <div class="pex-panel-title">Historial de corridas</div>
+                <div class="pex-panel-sub">Últimas @_data.RecentRuns.Count</div>
+                <a href="/payroll/runs" class="pex-link">Ver todas →</a>
+            </div>
+            @if (_data.RecentRuns.Count == 0)
+            {
+                <div class="pex-chart-empty">Sin corridas registradas</div>
+            }
+            else
+            {
+                <table class="pex-table">
+                    <thead>
+                        <tr>
+                            <th>Folio</th><th>Período</th><th>Fecha</th>
+                            <th class="pex-tr">Empleados</th>
+                            <th class="pex-tr">Bruto</th>
+                            <th class="pex-tr">Deducciones</th>
+                            <th class="pex-tr">Neto</th>
+                            <th>Estatus</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var r in _data.RecentRuns)
+                        {
+                            <tr>
+                                <td><code>@r.Folio</code></td>
+                                <td>@r.Period</td>
+                                <td>@r.Date</td>
+                                <td class="pex-tr">@r.Employees</td>
+                                <td class="pex-tr">@r.Gross.ToString("C0")</td>
+                                <td class="pex-tr pex-red">@r.Deductions.ToString("C0")</td>
+                                <td class="pex-tr pex-net">@r.Net.ToString("C0")</td>
+                                <td><span class="pex-status pex-status--@r.Status.ToLower()">@r.Status</span></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        </div>
+
+    }
+</div>
+
+<style>
+.pex-shell { padding: 24px 28px; max-width: 1280px; margin: 0 auto; font-family: 'Segoe UI', sans-serif; }
+.pex-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 24px; }
+.pex-eyebrow { font-size: .72rem; font-weight: 700; color: #1d4ed8; text-transform: uppercase; letter-spacing: .6px; margin-bottom: 4px; }
+.pex-title { font-size: 1.6rem; font-weight: 800; color: #0f172a; margin: 0 0 4px; }
+.pex-sub { font-size: .8rem; color: #64748b; margin: 0; }
+.pex-reload-btn { padding: 8px 18px; border-radius: 8px; border: 1px solid #cbd5e1; background: #f8fafc; color: #0f172a; cursor: pointer; font-size: .85rem; font-weight: 600; display: flex; align-items: center; gap: 6px; }
+.pex-reload-btn:hover { background: #eff6ff; border-color: #93c5fd; }
+.pex-spin { display: inline-block; animation: spin .8s linear infinite; font-size: 1.1rem; }
+@@keyframes spin { to { transform: rotate(360deg); } }
+
+.pex-loading { display: flex; gap: 12px; align-items: center; padding: 48px 0; color: #64748b; }
+.pex-loader { width: 24px; height: 24px; border: 3px solid #e2e8f0; border-top-color: #1d4ed8; border-radius: 50%; animation: spin .7s linear infinite; }
+.pex-empty { text-align: center; padding: 64px 24px; }
+.pex-empty-icon { font-size: 3rem; margin-bottom: 12px; }
+.pex-empty-title { font-size: 1.1rem; font-weight: 700; color: #0f172a; }
+.pex-empty-sub { font-size: .9rem; color: #64748b; margin-top: 6px; }
+
+/* KPI row */
+.pex-kpi-row { display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px; margin-bottom: 20px; }
+.pex-kpi { border-radius: 14px; padding: 16px 18px; border: 1px solid; }
+.pex-kpi--blue   { background: #eff6ff; border-color: #bfdbfe; }
+.pex-kpi--green  { background: #f0fdf4; border-color: #bbf7d0; }
+.pex-kpi--teal   { background: #f0fdfa; border-color: #99f6e4; }
+.pex-kpi--violet { background: #f5f3ff; border-color: #ddd6fe; }
+.pex-kpi--amber  { background: #fffbeb; border-color: #fde68a; }
+.pex-kpi-label { font-size: .7rem; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: .4px; margin-bottom: 6px; }
+.pex-kpi-value { font-size: 1.55rem; font-weight: 800; color: #0f172a; line-height: 1.1; }
+.pex-kpi-meta  { font-size: .72rem; color: #94a3b8; margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* Charts row */
+.pex-charts-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+.pex-panel { background: #fff; border: 1px solid #e2e8f0; border-radius: 14px; padding: 18px 20px; }
+.pex-panel-head { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
+.pex-panel-title { font-size: .95rem; font-weight: 700; color: #0f172a; }
+.pex-panel-sub   { font-size: .75rem; color: #94a3b8; margin-left: auto; }
+.pex-link { font-size: .8rem; color: #1d4ed8; text-decoration: none; font-weight: 600; }
+.pex-chart-empty { text-align: center; padding: 32px 0; color: #94a3b8; font-size: .85rem; }
+
+/* Bar chart (vertical) */
+.pex-bar-chart { display: flex; gap: 6px; align-items: flex-end; height: 160px; padding-bottom: 28px; position: relative; overflow-x: auto; }
+.pex-bar-group  { display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 40px; }
+.pex-bar-wrap   { display: flex; gap: 3px; align-items: flex-end; height: 130px; }
+.pex-bar-track  { width: 14px; height: 100%; display: flex; align-items: flex-end; }
+.pex-bar        { width: 100%; border-radius: 4px 4px 0 0; min-height: 2px; transition: height .3s; }
+.pex-bar--gross { background: #1d4ed8; }
+.pex-bar--net   { background: #22c55e; }
+.pex-bar-label  { font-size: .65rem; color: #94a3b8; white-space: nowrap; margin-top: 4px; }
+.pex-legend { display: flex; align-items: center; gap: 6px; font-size: .75rem; color: #64748b; margin-top: 8px; }
+.pex-legend-dot { width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0; }
+.pex-legend-dot--gross { background: #1d4ed8; }
+.pex-legend-dot--net   { background: #22c55e; }
+
+/* Horizontal bars */
+.pex-hbar-list { display: flex; flex-direction: column; gap: 10px; }
+.pex-hbar-item { display: flex; align-items: center; gap: 10px; font-size: .8rem; }
+.pex-hbar-name  { width: 140px; flex-shrink: 0; color: #0f172a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pex-hbar-track { flex: 1; height: 10px; background: #f1f5f9; border-radius: 6px; overflow: hidden; }
+.pex-hbar-fill  { height: 100%; background: linear-gradient(90deg, #1d4ed8, #3b82f6); border-radius: 6px; min-width: 2px; transition: width .3s; }
+.pex-hbar-val   { width: 80px; flex-shrink: 0; text-align: right; color: #475569; font-weight: 600; }
+
+/* Bottom row */
+.pex-bottom-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+
+/* Tables */
+.pex-table { width: 100%; border-collapse: collapse; font-size: .82rem; }
+.pex-table th { padding: 8px 10px; text-align: left; font-size: .7rem; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: .3px; border-bottom: 2px solid #e2e8f0; background: #f8fafc; }
+.pex-table td { padding: 8px 10px; border-bottom: 1px solid #f1f5f9; color: #0f172a; }
+.pex-table tbody tr:hover { background: #f8fafc; }
+.pex-tr    { text-align: right; }
+.pex-muted { color: #94a3b8; font-size: .78rem; }
+.pex-net   { color: #16a34a; font-weight: 600; }
+.pex-red   { color: #dc2626; }
+.pex-rank  { color: #94a3b8; font-weight: 700; font-size: .8rem; width: 28px; }
+.pex-badge { display: inline-block; background: #f1f5f9; color: #475569; border-radius: 6px; padding: 2px 8px; font-size: .78rem; font-weight: 600; text-transform: capitalize; }
+.pex-status { display: inline-block; padding: 3px 10px; border-radius: 99px; font-size: .74rem; font-weight: 600; }
+.pex-status--abierto   { background: #dbeafe; color: #1d4ed8; }
+.pex-status--cerrado   { background: #dcfce7; color: #16a34a; }
+.pex-status--borrador  { background: #f1f5f9; color: #64748b; }
+.pex-status--calculado { background: #fef9c3; color: #92400e; }
+.pex-btn-primary { background: #1d4ed8; color: #fff; padding: 10px 22px; border-radius: 8px; font-weight: 600; font-size: .9rem; text-decoration: none; }
+
+@@media (max-width: 1100px) {
+    .pex-kpi-row { grid-template-columns: repeat(3, 1fr); }
+}
+@@media (max-width: 768px) {
+    .pex-charts-row, .pex-bottom-row { grid-template-columns: 1fr; }
+    .pex-kpi-row { grid-template-columns: repeat(2, 1fr); }
+    .pex-shell { padding: 16px; }
+}
+</style>
+
+@code {
+    private PayrollExecutiveDashboardDto? _data;
+    private bool _loading = true;
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        StateHasChanged();
+        _data = await Api.GetExecutiveDashboardAsync();
+        _loading = false;
+    }
+}
