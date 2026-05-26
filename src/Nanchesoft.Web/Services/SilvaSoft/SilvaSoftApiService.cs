@@ -1,6 +1,7 @@
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Nanchesoft.Web.State;
 
 namespace Nanchesoft.Web.Services.SilvaSoft;
 
@@ -13,9 +14,38 @@ namespace Nanchesoft.Web.Services.SilvaSoft;
 public sealed class SilvaSoftApiService
 {
     private readonly IHttpClientFactory _http;
-    private HttpClient Client => _http.CreateClient("Nanchesoft.Api");
+    private readonly AppState _appState;
+    private readonly AuthState _authState;
+    private readonly TenantContextAccessor _tenantAccessor;
 
-    public SilvaSoftApiService(IHttpClientFactory http) => _http = http;
+    // ApiTenantScopeHandler lee TenantContextAccessor vía AsyncLocal.
+    // Ese AsyncLocal NO persiste entre eventos SignalR, así que lo refrescamos
+    // aquí usando los estados del circuit-scope (que sí tienen los valores reales).
+    private HttpClient Client
+    {
+        get
+        {
+            _tenantAccessor.Set(
+                _appState.CurrentTenantId,
+                _appState.CurrentCompanyId,
+                _appState.CurrentBranchId,
+                _authState.UserId,
+                _authState.IsPlatformOwner);
+            return _http.CreateClient("Nanchesoft.Api");
+        }
+    }
+
+    public SilvaSoftApiService(
+        IHttpClientFactory http,
+        AppState appState,
+        AuthState authState,
+        TenantContextAccessor tenantAccessor)
+    {
+        _http = http;
+        _appState = appState;
+        _authState = authState;
+        _tenantAccessor = tenantAccessor;
+    }
 
     // ── Configuración ─────────────────────────────────────────────────────────
 
