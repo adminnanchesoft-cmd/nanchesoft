@@ -255,6 +255,7 @@ app.MapTenantEndpoints();
 app.MapPlanEndpoints();
 app.MapSubscriptionControlEndpoints();
 app.MapUniversalImportEndpoints();
+app.MapSilvaSoftEndpoints();
 app.MapAiAssistantEndpoints();
 app.MapAiModuleEndpoints();
 app.MapPortalEndpoints();
