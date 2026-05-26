@@ -1,0 +1,266 @@
+@page "/payroll/reports/lista-de-raya"
+@using Nanchesoft.Web.Services.HumanResources
+@inject PayrollOperationsApiService Svc
+@inject HumanResourcesApiService HrSvc
+@inject IJSRuntime JS
+
+<PageTitle>Lista de raya operativa | Nanchesoft</PageTitle>
+
+<div class="d-flex align-items-center justify-content-between mb-3 d-print-none">
+    <h4 class="mb-0">Lista de raya operativa</h4>
+    <div class="d-flex gap-2">
+        <button class="btn btn-outline-secondary btn-sm" @onclick="ExportCsvAsync" disabled="@(_summary == null)">Exportar CSV</button>
+        <button class="btn btn-outline-dark btn-sm" @onclick="PrintAsync" disabled="@(_summary == null)">Imprimir</button>
+    </div>
+</div>
+@if (_summary != null)
+{
+    <h4 class="mb-0 d-none d-print-block">Lista de raya — @_summary.PeriodName</h4>
+    <p class="text-muted small mb-3 d-none d-print-block">Generado: @DateTime.Now.ToString("dd/MM/yyyy HH:mm")</p>
+}
+
+<!-- Filtros -->
+<div class="card shadow-sm mb-3 d-print-none">
+    <div class="card-body py-2">
+        <div class="row g-2 align-items-center">
+            <div class="col-md-4">
+                <label class="form-label form-label-sm mb-1">Periodo</label>
+                <select class="form-select form-select-sm" @onchange="OnPeriodChanged">
+                    <option value="">— Seleccionar periodo —</option>
+                    @foreach (var p in _periods)
+                    {
+                        <option value="@p.PayrollPeriodId">@($"{p.Code} · {p.Name} ({p.StartDate:dd/MM} – {p.EndDate:dd/MM/yy})")</option>
+                    }
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label form-label-sm mb-1">Filtrar departamento</label>
+                <select class="form-select form-select-sm" @bind="_filterSearch">
+                    <option value="">— Todos —</option>
+                    @foreach (var d in _departments)
+                    {
+                        <option value="@d.Name">@d.Name</option>
+                    }
+                </select>
+            </div>
+            <div class="col-auto pt-4 d-flex align-items-center gap-2">
+                <div class="form-check mb-0">
+                    <input class="form-check-input" type="checkbox" id="chkSig" @bind="_showSignatureColumn" />
+                    <label class="form-check-label small" for="chkSig">Columna firma</label>
+                </div>
+            </div>
+            @if (_summary != null)
+            {
+                <div class="col-auto pt-4">
+                    @if (_summary.IsClosed)
+                    { <span class="badge bg-danger">Periodo cerrado</span> }
+                    else
+                    { <span class="badge bg-success">Periodo abierto</span> }
+                </div>
+                <div class="col-auto pt-4 text-muted small">
+                    @FilteredRows.Count colaboradores
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+@if (_loading)
+{
+    <div class="text-center py-5 text-muted">Cargando...</div>
+}
+else if (_summary == null)
+{
+    <div class="text-center py-5 text-muted">Selecciona un periodo para ver la lista de raya.</div>
+}
+else
+{
+    var rows = FilteredRows;
+
+    <!-- Resumen -->
+    <div class="row g-3 mb-3 d-print-none">
+        <div class="col-6 col-md-2">
+            <div class="card shadow-sm text-center py-2">
+                <div class="fs-5 fw-bold text-primary">@rows.Count</div>
+                <div class="text-muted small">Colaboradores</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-2">
+            <div class="card shadow-sm text-center py-2">
+                <div class="fs-5 fw-bold">@rows.Sum(r => r.AttendanceDays)</div>
+                <div class="text-muted small">Días asistencia</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-2">
+            <div class="card shadow-sm text-center py-2">
+                <div class="fs-5 fw-bold text-success">@rows.Sum(r => r.PeriodSalary + r.IncidentPerceptionsTotal + r.AdjustmentPerceptionsTotal).ToString("C0")</div>
+                <div class="text-muted small">Total percepciones</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-2">
+            <div class="card shadow-sm text-center py-2">
+                <div class="fs-5 fw-bold text-danger">@rows.Sum(r => r.IncidentDeductionsTotal + r.AdjustmentDeductionsTotal).ToString("C0")</div>
+                <div class="text-muted small">Total deducciones</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-2">
+            <div class="card shadow-sm text-center py-2">
+                @{ var totalNet = rows.Sum(r => r.PeriodSalary + r.IncidentPerceptionsTotal + r.AdjustmentPerceptionsTotal - r.IncidentDeductionsTotal - r.AdjustmentDeductionsTotal); }
+                <div class="fs-5 fw-bold @(totalNet >= 0 ? "text-success" : "text-danger")">@totalNet.ToString("C0")</div>
+                <div class="text-muted small">Neto estimado</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-2">
+            <div class="card shadow-sm text-center py-2">
+                <div class="fs-5 fw-bold text-info">@rows.Sum(r => r.AbsenceUnits).ToString("N1")</div>
+                <div class="text-muted small">Faltas totales</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabla lista de raya -->
+    <div class="card shadow-sm">
+        <div class="card-header py-2 d-flex justify-content-between align-items-center">
+            <span class="fw-semibold">Lista de raya — @_summary.PeriodName</span>
+            <span class="text-muted small d-print-none">@rows.Count registros</span>
+        </div>
+        <div class="card-body p-0">
+            <div style="overflow-x:auto">
+                <table class="table table-sm table-bordered mb-0 lista-de-raya-table">
+                    <thead class="table-dark">
+                        <tr>
+                            <th style="width:50px" class="text-center">No.</th>
+                            <th>Colaborador</th>
+                            <th class="text-center" style="width:65px">Días<br/>asist.</th>
+                            <th class="text-end" style="width:110px">Sueldo<br/>periodo</th>
+                            <th class="text-end" style="width:100px">Percepciones<br/>adicionales</th>
+                            <th class="text-end" style="width:100px">Deducciones</th>
+                            <th class="text-end" style="width:110px">Neto a<br/>pagar</th>
+                            @if (_showSignatureColumn)
+                            {
+                                <th style="width:160px">Firma / Huella</th>
+                            }
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @{ int seq = 0; }
+                        @foreach (var r in rows)
+                        {
+                            seq++;
+                            var percs = r.PeriodSalary + r.IncidentPerceptionsTotal + r.AdjustmentPerceptionsTotal;
+                            var deds  = r.IncidentDeductionsTotal + r.AdjustmentDeductionsTotal;
+                            var net   = percs - deds;
+                            <tr>
+                                <td class="text-center text-muted small">@seq</td>
+                                <td>
+                                    <div class="fw-semibold small">@r.EmployeeName</div>
+                                    <code class="text-muted" style="font-size:0.7em">@r.EmployeeNumber</code>
+                                </td>
+                                <td class="text-center">@r.AttendanceDays</td>
+                                <td class="text-end">@r.PeriodSalary.ToString("C2")</td>
+                                <td class="text-end @(r.IncidentPerceptionsTotal + r.AdjustmentPerceptionsTotal > 0 ? "text-success" : "text-muted")">
+                                    @((r.IncidentPerceptionsTotal + r.AdjustmentPerceptionsTotal) > 0
+                                        ? (r.IncidentPerceptionsTotal + r.AdjustmentPerceptionsTotal).ToString("C2")
+                                        : "—")
+                                </td>
+                                <td class="text-end @(deds > 0 ? "text-danger" : "text-muted")">
+                                    @(deds > 0 ? deds.ToString("C2") : "—")
+                                </td>
+                                <td class="text-end fw-semibold @(net >= 0 ? "text-success" : "text-danger")">@net.ToString("C2")</td>
+                                @if (_showSignatureColumn)
+                                {
+                                    <td>&nbsp;</td>
+                                }
+                            </tr>
+                        }
+                    </tbody>
+                    <tfoot class="table-secondary fw-bold">
+                        <tr>
+                            <td colspan="2" class="text-end">TOTALES</td>
+                            <td class="text-center">@rows.Sum(r => r.AttendanceDays)</td>
+                            <td class="text-end">@rows.Sum(r => r.PeriodSalary).ToString("C2")</td>
+                            <td class="text-end text-success">@rows.Sum(r => r.IncidentPerceptionsTotal + r.AdjustmentPerceptionsTotal).ToString("C2")</td>
+                            <td class="text-end text-danger">@rows.Sum(r => r.IncidentDeductionsTotal + r.AdjustmentDeductionsTotal).ToString("C2")</td>
+                            <td class="text-end">@totalNet.ToString("C2")</td>
+                            @if (_showSignatureColumn) { <td></td> }
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Pie para impresión -->
+    <div class="d-none d-print-block mt-4">
+        <div class="row">
+            <div class="col-4 text-center border-top pt-2">Elaboró</div>
+            <div class="col-4 text-center border-top pt-2">Revisó</div>
+            <div class="col-4 text-center border-top pt-2">Autorizó</div>
+        </div>
+    </div>
+}
+
+@code {
+    bool _loading;
+    bool _showSignatureColumn = true;
+    string _filterSearch = string.Empty;
+    Guid? _selectedPeriodId;
+    OperationalPrePayrollSummary? _summary;
+    List<PayrollPeriodDto> _periods = [];
+    List<DepartmentDto> _departments = [];
+
+    List<OperationalPrePayrollEmployeeRow> FilteredRows =>
+        _summary == null ? [] :
+        string.IsNullOrEmpty(_filterSearch)
+            ? _summary.Rows
+            : _summary.Rows.Where(r => r.EmployeeName.Contains(_filterSearch, StringComparison.OrdinalIgnoreCase)
+                                    || r.EmployeeNumber.Contains(_filterSearch, StringComparison.OrdinalIgnoreCase))
+                           .ToList();
+
+    protected override async Task OnInitializedAsync()
+    {
+        var (periods, depts) = (
+            HrSvc.GetAllPeriodsAsync(),
+            HrSvc.GetDepartmentSimpleListAsync()
+        );
+        _periods = await periods;
+        _departments = await depts;
+    }
+
+    async Task OnPeriodChanged(ChangeEventArgs e)
+    {
+        _selectedPeriodId = Guid.TryParse(e.Value?.ToString(), out var id) ? id : null;
+        _summary = null;
+        _filterSearch = string.Empty;
+        if (_selectedPeriodId.HasValue) await LoadAsync();
+    }
+
+    async Task LoadAsync()
+    {
+        if (!_selectedPeriodId.HasValue) return;
+        _loading = true; StateHasChanged();
+        try { _summary = await Svc.GetOperationalPrePayrollAsync(_selectedPeriodId.Value); }
+        finally { _loading = false; }
+    }
+
+    async Task ExportCsvAsync()
+    {
+        if (_summary == null) return;
+        var rows = FilteredRows;
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine("No.,No. Empleado,Colaborador,Días asist.,Sueldo periodo,Percepciones adicionales,Deducciones,Neto a pagar");
+        int seq = 0;
+        foreach (var r in rows)
+        {
+            seq++;
+            var percs = r.IncidentPerceptionsTotal + r.AdjustmentPerceptionsTotal;
+            var deds  = r.IncidentDeductionsTotal + r.AdjustmentDeductionsTotal;
+            var net   = r.PeriodSalary + percs - deds;
+            sb.AppendLine($"{seq},{r.EmployeeNumber},{CsvEsc(r.EmployeeName)},{r.AttendanceDays},{r.PeriodSalary:N2},{percs:N2},{deds:N2},{net:N2}");
+        }
+        await JS.InvokeVoidAsync("downloadFile", $"lista_de_raya_{_summary.PeriodName}.csv", "text/csv", sb.ToString());
+    }
+
+    async Task PrintAsync() => await JS.InvokeVoidAsync("eval", "window.print()");
+    static string CsvEsc(string s) => s.Contains(',') || s.Contains('"') ? $"\"{s.Replace("\"", "\"\"")}\"" : s;
+}
