@@ -1,0 +1,114 @@
+@page "/integration/silvasoft/logs"
+@rendermode InteractiveServer
+@using Nanchesoft.Web.Services.SilvaSoft
+@inject SilvaSoftApiService SilvaSoft
+
+<PageTitle>Logs SilvaSoft</PageTitle>
+
+<div class="ns-page-header">
+    <div class="ns-page-header__left">
+        <div class="ns-page-header__breadcrumb">Integración › SilvaSoft</div>
+        <h1 class="ns-page-header__title">Logs de sincronización</h1>
+        <p class="ns-page-header__subtitle">Historial de todas las operaciones de importación desde SilvaSoft.</p>
+    </div>
+    <div class="ns-page-header__actions">
+        <button class="ns-btn ns-btn--outline" @onclick="LoadAsync">Actualizar</button>
+    </div>
+</div>
+
+@if (_data is null)
+{
+    <div class="text-muted mt-4"><span class="spinner-border spinner-border-sm me-2"></span>Cargando…</div>
+}
+else if (_data.Rows.Count == 0)
+{
+    <div class="ns-empty-state mt-4"><p>Sin registros de sincronización todavía.</p></div>
+}
+else
+{
+    <div class="ns-section mt-3">
+        <div class="text-muted small mb-2">@_data.Total registros totales</div>
+        <div class="ns-table-wrap">
+            <table class="ns-table">
+                <thead>
+                    <tr>
+                        <th>Operación</th>
+                        <th>Estado</th>
+                        <th class="text-end">Leídos</th>
+                        <th class="text-end">Importados</th>
+                        <th class="text-end">Omitidos</th>
+                        <th>Iniciado</th>
+                        <th>Duración</th>
+                        <th>Error</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var r in _data.Rows)
+                    {
+                        <tr>
+                            <td><code>@r.Operation</code></td>
+                            <td>
+                                @if (r.Status == "ok")
+                                {
+                                    <span class="ns-badge ns-badge--green">ok</span>
+                                }
+                                else if (r.Status == "error")
+                                {
+                                    <span class="ns-badge ns-badge--red">error</span>
+                                }
+                                else
+                                {
+                                    <span class="ns-badge">@r.Status</span>
+                                }
+                            </td>
+                            <td class="text-end">@r.RecordsRead</td>
+                            <td class="text-end">@r.RecordsImported</td>
+                            <td class="text-end">@r.RecordsSkipped</td>
+                            <td class="text-muted small">@r.StartedAt.ToLocalTime().ToString("dd/MM/yy HH:mm")</td>
+                            <td class="text-muted small">
+                                @if (r.FinishedAt.HasValue)
+                                {
+                                    var dur = r.FinishedAt.Value - r.StartedAt;
+                                    @(dur.TotalSeconds < 60
+                                        ? $"{dur.TotalSeconds:N1}s"
+                                        : $"{dur.TotalMinutes:N1}m")
+                                }
+                            </td>
+                            <td class="text-danger small" style="max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
+                                title="@r.ErrorMessage">
+                                @r.ErrorMessage
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        @if (_data.Total > _data.PageSize)
+        {
+            <div class="d-flex gap-2 mt-3 align-items-center">
+                <button class="ns-btn ns-btn--outline ns-btn--sm" @onclick="PrevPage" disabled="@(_page == 1)">‹ Anterior</button>
+                <span class="text-muted small">Pág. @_page de @((int)Math.Ceiling((double)_data.Total / _data.PageSize))</span>
+                <button class="ns-btn ns-btn--outline ns-btn--sm" @onclick="NextPage"
+                        disabled="@(_page * _data.PageSize >= _data.Total)">
+                    Siguiente ›
+                </button>
+            </div>
+        }
+    </div>
+}
+
+@code {
+    private SilvaSoftLogPage? _data;
+    private int _page = 1;
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _data = await SilvaSoft.GetLogsAsync(_page);
+    }
+
+    private async Task PrevPage() { if (_page > 1) { _page--; await LoadAsync(); } }
+    private async Task NextPage() { _page++; await LoadAsync(); }
+}
