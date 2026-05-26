@@ -362,3 +362,164 @@ window.nsShell = (() => {
         dispose
     };
 })();
+
+// Descarga un archivo de texto desde Blazor (CSV, etc.)
+window.downloadFile = function (filename, mimeType, content) {
+    const blob = new Blob([content], { type: mimeType });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+};
+
+// Descarga un archivo binario (PDF por defecto) desde un string base64.
+// Acepta opcionalmente el mime-type como tercer argumento para CSV/XLSX/XML.
+window.downloadFileBase64 = function (filename, base64Data, mimeType) {
+    const byteChars = atob(base64Data);
+    const byteNums = new Array(byteChars.length);
+    for (let i = 0; i < byteChars.length; i++) byteNums[i] = byteChars.charCodeAt(i);
+    const blob = new Blob([new Uint8Array(byteNums)], { type: mimeType || 'application/pdf' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+};
+
+// Alias enterprise para mimes arbitrarios.
+window.nanchesoftDownload = function (filename, base64Data, mimeType) {
+    window.downloadFileBase64(filename, base64Data, mimeType);
+};
+
+window.nsImport = {
+    initDropZone: function (elementId, dotNetRef) {
+        const zone = document.getElementById(elementId);
+        if (!zone || zone._nsImportInit) return;
+        zone._nsImportInit = true;
+
+        // Capture phase ensures we get the event before any child element
+        zone.addEventListener('dragenter', e => { e.preventDefault(); }, true);
+        zone.addEventListener('dragover', e => {
+            e.preventDefault();
+            zone.classList.add('ns-import-dz-over');
+        }, true);
+        zone.addEventListener('dragleave', e => {
+            // Only clear when pointer leaves the zone itself, not a child
+            if (!zone.contains(e.relatedTarget)) {
+                zone.classList.remove('ns-import-dz-over');
+            }
+        }, true);
+        zone.addEventListener('drop', async e => {
+            e.preventDefault();
+            e.stopPropagation();
+            zone.classList.remove('ns-import-dz-over');
+            const file = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+            if (!file) return;
+            try {
+                const buf = await file.arrayBuffer();
+                // Intentar UTF-8 estricto; si trae caracteres de reemplazo (mojibake), reintentar Latin-1.
+                let text;
+                try {
+                    text = new TextDecoder('utf-8', { fatal: true }).decode(buf);
+                } catch (_) {
+                    text = new TextDecoder('iso-8859-1').decode(buf);
+                }
+                if (text.indexOf('�') >= 0) {
+                    text = new TextDecoder('iso-8859-1').decode(buf);
+                }
+                await dotNetRef.invokeMethodAsync('HandleDroppedCsv', text);
+            } catch (err) {
+                console.error('nsImport drop error:', err);
+            }
+        }, true);
+    },
+
+    initBinaryFileDropZone: function (elementId, dotNetRef) {
+        const zone = document.getElementById(elementId);
+        if (!zone || zone._nsBinaryImportInit) return;
+        zone._nsBinaryImportInit = true;
+        const fileInput = zone.querySelector('input[type="file"]');
+
+        const readFile = async file => {
+            if (!file) return;
+            const base64 = await new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => {
+                    const result = typeof reader.result === "string" ? reader.result : "";
+                    const commaIndex = result.indexOf(",");
+                    resolve(commaIndex >= 0 ? result.substring(commaIndex + 1) : result);
+                };
+                reader.onerror = () => reject(reader.error || new Error("No se pudo leer el archivo."));
+                reader.readAsDataURL(file);
+            });
+            await dotNetRef.invokeMethodAsync(
+                "HandleDroppedFile",
+                file.name || "",
+                file.type || "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                base64);
+        };
+
+        const findFile = event => {
+            if (event.dataTransfer && event.dataTransfer.files && event.dataTransfer.files.length > 0) {
+                return event.dataTransfer.files[0];
+            }
+            if (event.clipboardData && event.clipboardData.files && event.clipboardData.files.length > 0) {
+                return event.clipboardData.files[0];
+            }
+            return null;
+        };
+
+        const dragEnter = e => { e.preventDefault(); };
+        const dragOver = e => {
+            e.preventDefault();
+            zone.classList.add("ns-import-dz-over");
+        };
+        const dragLeave = e => {
+            if (!zone.contains(e.relatedTarget)) {
+                zone.classList.remove("ns-import-dz-over");
+            }
+        };
+        const drop = async e => {
+            e.preventDefault();
+            e.stopPropagation();
+            zone.classList.remove("ns-import-dz-over");
+            const file = findFile(e);
+            try {
+                await readFile(file);
+            } catch (err) {
+                console.error("nsImport binary drop error:", err);
+            }
+        };
+        const paste = async e => {
+            const file = findFile(e);
+            if (!file) return;
+            e.preventDefault();
+            try {
+                await readFile(file);
+            } catch (err) {
+                console.error("nsImport binary paste error:", err);
+            }
+        };
+
+        zone.addEventListener("dragenter", dragEnter, true);
+        zone.addEventListener("dragover", dragOver, true);
+        zone.addEventListener("dragleave", dragLeave, true);
+        zone.addEventListener("drop", drop, true);
+        zone.addEventListener("paste", paste, true);
+
+        if (fileInput) {
+            fileInput.addEventListener("dragenter", dragEnter, true);
+            fileInput.addEventListener("dragover", dragOver, true);
+            fileInput.addEventListener("dragleave", dragLeave, true);
+            fileInput.addEventListener("drop", drop, true);
+            fileInput.addEventListener("paste", paste, true);
+        }
+    }
+};
