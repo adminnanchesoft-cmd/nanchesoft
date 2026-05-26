@@ -1,0 +1,344 @@
+@page "/settings/appearance"
+@using Nanchesoft.Web.Services
+@using Nanchesoft.Web.State
+@inject ThemeService ThemeService
+@inject ThemeState ThemeState
+@inject AuthState AuthState
+@inject IJSRuntime JS
+
+<PageTitle>Apariencia | Nanchesoft</PageTitle>
+
+<div class="ns-appearance">
+
+    <div class="ns-appearance__header">
+        <h1 class="ns-appearance__title">Apariencia</h1>
+        <p class="ns-appearance__sub">Personaliza el tema, colores y modo de apariencia de tu espacio de trabajo.</p>
+    </div>
+
+    @if (_saving)
+    {
+        <div class="ns-appearance__toast ns-appearance__toast--ok">Preferencias guardadas.</div>
+    }
+
+    <div class="ns-appearance__body">
+
+        @* AUTO MODE *@
+        <section class="ns-appearance__card">
+            <div class="ns-appearance__card-head">
+                <div>
+                    <div class="ns-appearance__card-title">Modo automático</div>
+                    <div class="ns-appearance__card-sub">Aplica paletas de color según la fecha (temporadas y festividades mexicanas).</div>
+                </div>
+                <label class="ns-toggle">
+                    <input type="checkbox" checked="@_autoMode" @onchange="OnAutoModeChanged" />
+                    <span class="ns-toggle__track"></span>
+                </label>
+            </div>
+
+            @if (_autoMode)
+            {
+                <div class="ns-appearance__auto-preview">
+                    @{
+                        var (autoAccent, autoSecondary) = ThemeService.GetCurrentColors();
+                        var paletteName = ThemeService.GetActivePaletteName();
+                    }
+                    <div class="ns-appearance__swatch" style="background:@autoAccent;" title="Color principal activo"></div>
+                    <div class="ns-appearance__swatch" style="background:@autoSecondary;" title="Color secundario activo"></div>
+                    <span class="ns-appearance__auto-label">
+                        <strong>@paletteName</strong> · @DateTime.Today.ToString("dd/MM/yyyy")
+                    </span>
+                </div>
+            }
+        </section>
+
+        @* PALETAS POR TEMPORADA Y FESTIVIDADES *@
+        <section class="ns-appearance__card">
+            <div class="ns-appearance__card-title">Temas por temporada y días festivos</div>
+            <div class="ns-appearance__card-sub">Selecciona una paleta predefinida. Aplica los colores de acento y secundario al instante; guarda para conservarla.</div>
+
+            <div class="ns-appearance__palette-group">
+                <div class="ns-appearance__palette-label">Temporadas</div>
+                <div class="ns-appearance__palette-grid">
+                    @foreach (var p in _seasonPalettes)
+                    {
+                        <button type="button"
+                                class="ns-appearance__palette-btn @(IsPaletteActive(p) ? "is-active" : "")"
+                                @onclick="() => ApplyPaletteAsync(p)"
+                                title="Aplicar paleta @p.Name">
+                            <span class="ns-appearance__palette-swatch" style="background:@p.Accent;"></span>
+                            <span class="ns-appearance__palette-swatch" style="background:@p.Secondary;"></span>
+                            <span class="ns-appearance__palette-name">@p.Icon @p.Name</span>
+                        </button>
+                    }
+                </div>
+            </div>
+
+            <div class="ns-appearance__palette-group">
+                <div class="ns-appearance__palette-label">Días festivos mexicanos</div>
+                <div class="ns-appearance__palette-grid">
+                    @foreach (var p in _holidayPalettes)
+                    {
+                        <button type="button"
+                                class="ns-appearance__palette-btn @(IsPaletteActive(p) ? "is-active" : "")"
+                                @onclick="() => ApplyPaletteAsync(p)"
+                                title="Aplicar paleta @p.Name">
+                            <span class="ns-appearance__palette-swatch" style="background:@p.Accent;"></span>
+                            <span class="ns-appearance__palette-swatch" style="background:@p.Secondary;"></span>
+                            <span class="ns-appearance__palette-name">@p.Icon @p.Name</span>
+                        </button>
+                    }
+                </div>
+            </div>
+        </section>
+
+        @* TEMA DEVEXTREME *@
+        <section class="ns-appearance__card">
+            <div class="ns-appearance__card-title">Tema base</div>
+            <div class="ns-appearance__card-sub">
+                Define el aspecto general de controles, grillas y formularios.
+                @if (_autoMode)
+                {
+                    <span style="color:#7c3aed;font-weight:600;"> · En modo automático los colores de acento cambian por temporada, pero el tema base es el que elijas aquí.</span>
+                }
+            </div>
+
+            <div class="ns-appearance__theme-grid">
+                @foreach (var theme in _themes)
+                {
+                    <button type="button"
+                            class="ns-appearance__theme-btn @(_selectedTheme == theme.Value ? "is-selected" : "")"
+                            @onclick="() => SelectThemeAsync(theme.Value)">
+                        <div class="ns-appearance__theme-preview ns-appearance__theme-preview--@theme.CssClass">
+                            <div class="ns-appearance__theme-preview-bar"></div>
+                            <div class="ns-appearance__theme-preview-row"></div>
+                            <div class="ns-appearance__theme-preview-row ns-appearance__theme-preview-row--short"></div>
+                        </div>
+                        <div class="ns-appearance__theme-name">@theme.Label</div>
+                    </button>
+                }
+            </div>
+        </section>
+
+        @* COLORES *@
+        <section class="ns-appearance__card @(_autoMode ? "ns-appearance__card--dimmed" : "")">
+            <div class="ns-appearance__card-title">Colores personalizados</div>
+            <div class="ns-appearance__card-sub">Se aplican como variables CSS al layout. Deja en blanco para usar el tema por defecto.</div>
+
+            <div class="ns-appearance__colors">
+                <label class="ns-appearance__color-field">
+                    <span>Color principal</span>
+                    <div class="ns-appearance__color-input-wrap">
+                        <input type="color" value="@_accentColor" disabled="@_autoMode"
+                               @oninput="OnAccentInput" />
+                        <input type="text" class="ns-appearance__color-hex"
+                               value="@_accentColor" disabled="@_autoMode"
+                               maxlength="7"
+                               @onchange="OnAccentHexChange" />
+                    </div>
+                </label>
+
+                <label class="ns-appearance__color-field">
+                    <span>Color secundario</span>
+                    <div class="ns-appearance__color-input-wrap">
+                        <input type="color" value="@(_secondaryColor.Length == 7 ? _secondaryColor : "#888888")" disabled="@_autoMode"
+                               @oninput="OnSecondaryInput" />
+                        <input type="text" class="ns-appearance__color-hex"
+                               value="@_secondaryColor" disabled="@_autoMode"
+                               maxlength="7"
+                               @onchange="OnSecondaryHexChange" />
+                    </div>
+                </label>
+
+                <label class="ns-appearance__color-field">
+                    <span>Fondo</span>
+                    <div class="ns-appearance__color-input-wrap">
+                        <input type="color" value="@(_backgroundColor.Length == 7 ? _backgroundColor : "#f5f5f5")" disabled="@_autoMode"
+                               @oninput="OnBackgroundInput" />
+                        <input type="text" class="ns-appearance__color-hex"
+                               value="@_backgroundColor" disabled="@_autoMode"
+                               maxlength="7"
+                               @onchange="OnBackgroundHexChange" />
+                        <button type="button" class="ns-appearance__color-clear" title="Quitar fondo"
+                                @onclick="ClearBackground">×</button>
+                    </div>
+                </label>
+            </div>
+        </section>
+
+        @* ACTIONS *@
+        <div class="ns-appearance__actions">
+            <button type="button" class="ns-btn ns-btn--primary" @onclick="SaveAsync" disabled="@_saving">
+                @(_saving ? "Guardando…" : "Guardar preferencias")
+            </button>
+            <button type="button" class="ns-btn" @onclick="ResetAsync">
+                Restablecer por defecto
+            </button>
+        </div>
+
+    </div>
+</div>
+
+@code {
+    private string _selectedTheme = "generic.light";
+    private string _accentColor = "#3557ff";
+    private string _secondaryColor = string.Empty;
+    private string _backgroundColor = string.Empty;
+    private bool _autoMode;
+    private bool _saving;
+
+    private static readonly ThemeOption[] _themes =
+    [
+        new("Claro",           "generic.light",               "light"),
+        new("Oscuro",          "generic.dark",                "dark"),
+        new("Fluent Claro",    "fluent.saas.light",           "fluent-light"),
+        new("Fluent Oscuro",   "fluent.saas.dark",            "fluent-dark"),
+        new("Material Claro",  "material.blue.light.compact", "material-light"),
+        new("Material Oscuro", "material.blue.dark.compact",  "material-dark"),
+    ];
+
+    private static readonly PaletteOption[] _seasonPalettes =
+    [
+        new("Primavera", "#7CB342", "#F06292", "🌸"),
+        new("Verano",    "#00ACC1", "#1976D2", "☀️"),
+        new("Otoño",     "#EF6C00", "#8D6E63", "🍂"),
+        new("Invierno",  "#1E88E5", "#546E7A", "❄️"),
+    ];
+
+    private static readonly PaletteOption[] _holidayPalettes =
+    [
+        new("Navidad",          "#C62828", "#2E7D32", "🎄"),
+        new("Año Nuevo",        "#B8860B", "#283593", "🎆"),
+        new("San Valentín",     "#E91E63", "#880E4F", "❤️"),
+        new("Día de Muertos",   "#FF6F00", "#6A1B9A", "💀"),
+        new("Independencia MX", "#1B5E20", "#B71C1C", "🇲🇽"),
+        new("Semana Santa",     "#6D4C41", "#F57F17", "✝️"),
+    ];
+
+    private bool IsPaletteActive(PaletteOption p) =>
+        string.Equals(_accentColor, p.Accent, StringComparison.OrdinalIgnoreCase) &&
+        string.Equals(_secondaryColor, p.Secondary, StringComparison.OrdinalIgnoreCase);
+
+    private async Task ApplyPaletteAsync(PaletteOption p)
+    {
+        _accentColor = p.Accent;
+        _secondaryColor = p.Secondary;
+        await PreviewAsync();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+
+        if (!ThemeState.IsLoaded)
+            await ThemeService.LoadAsync();
+
+        _selectedTheme = ThemeState.ThemeName;
+        _accentColor = ThemeState.AccentColor;
+        _secondaryColor = ThemeState.SecondaryColor;
+        _backgroundColor = ThemeState.BackgroundColor;
+        _autoMode = ThemeState.AutoModeEnabled;
+
+        StateHasChanged();
+    }
+
+    private async Task SelectThemeAsync(string themeName)
+    {
+        _selectedTheme = themeName;
+        await PreviewAsync();
+    }
+
+    private async Task OnAutoModeChanged(ChangeEventArgs e)
+    {
+        _autoMode = (bool)(e.Value ?? false);
+        ThemeState.SetAutoMode(_autoMode);
+        await PreviewAsync();
+    }
+
+    private async Task OnAccentInput(ChangeEventArgs e)
+    {
+        _accentColor = e.Value?.ToString() ?? _accentColor;
+        await PreviewAsync();
+    }
+
+    private async Task OnAccentHexChange(ChangeEventArgs e)
+    {
+        var val = e.Value?.ToString() ?? string.Empty;
+        if (val.StartsWith('#') && (val.Length == 4 || val.Length == 7))
+            _accentColor = val;
+        await PreviewAsync();
+    }
+
+    private async Task OnSecondaryInput(ChangeEventArgs e)
+    {
+        _secondaryColor = e.Value?.ToString() ?? _secondaryColor;
+        await PreviewAsync();
+    }
+
+    private async Task OnSecondaryHexChange(ChangeEventArgs e)
+    {
+        var val = e.Value?.ToString() ?? string.Empty;
+        if (val.StartsWith('#') && (val.Length == 4 || val.Length == 7))
+            _secondaryColor = val;
+        await PreviewAsync();
+    }
+
+    private async Task OnBackgroundInput(ChangeEventArgs e)
+    {
+        _backgroundColor = e.Value?.ToString() ?? _backgroundColor;
+        await PreviewAsync();
+    }
+
+    private async Task OnBackgroundHexChange(ChangeEventArgs e)
+    {
+        var val = e.Value?.ToString() ?? string.Empty;
+        if (val.StartsWith('#') && (val.Length == 4 || val.Length == 7))
+            _backgroundColor = val;
+        else if (string.IsNullOrWhiteSpace(val))
+            _backgroundColor = string.Empty;
+        await PreviewAsync();
+    }
+
+    private async Task ClearBackground()
+    {
+        _backgroundColor = string.Empty;
+        await PreviewAsync();
+    }
+
+    private async Task PreviewAsync()
+    {
+        var (previewAccent, previewSecondary) = _autoMode
+            ? ThemeService.GetCurrentColors()
+            : (_accentColor, _secondaryColor);
+
+        try
+        {
+            await JS.InvokeVoidAsync("nsTheme.apply", _selectedTheme, previewAccent, previewSecondary, _backgroundColor);
+        }
+        catch
+        {
+            // JS not ready or circuit reconnecting — ignore, theme will apply on next render
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        _saving = true;
+        await ThemeService.SaveAsync(_selectedTheme, _accentColor, _secondaryColor, _backgroundColor, _autoMode);
+        await Task.Delay(900);
+        _saving = false;
+    }
+
+    private async Task ResetAsync()
+    {
+        _selectedTheme = "generic.light";
+        _accentColor = "#3557ff";
+        _secondaryColor = string.Empty;
+        _backgroundColor = string.Empty;
+        _autoMode = false;
+        await ThemeService.SaveAsync(_selectedTheme, _accentColor, _secondaryColor, _backgroundColor, _autoMode);
+        try { await JS.InvokeVoidAsync("nsTheme.reset"); } catch { }
+    }
+
+    private sealed record ThemeOption(string Label, string Value, string CssClass);
+    private sealed record PaletteOption(string Name, string Accent, string Secondary, string Icon);
+}

@@ -1,0 +1,180 @@
+@inherits LayoutComponentBase
+@using Nanchesoft.Web.State
+@using Nanchesoft.Web.Services.Portal
+@inject AuthState Auth
+@inject NavigationManager Nav
+@inject PortalApiService PortalSvc
+
+<div class="portal-shell">
+    <!-- Sidebar -->
+    <aside class="portal-sidebar">
+        <div class="portal-sidebar__brand">
+            <div class="portal-sidebar__avatar">
+                @(Auth.FirstName?.Length > 0 ? Auth.FirstName[0].ToString().ToUpper() : "?")
+            </div>
+            <div class="portal-sidebar__name">
+                <div class="portal-sidebar__fullname">@Auth.DisplayName</div>
+                <div class="portal-sidebar__company">@Auth.CompanyName</div>
+            </div>
+        </div>
+
+        <nav class="portal-sidebar__nav">
+            <NavLink class="portal-nav-item" href="/mi-portal" Match="NavLinkMatch.All">
+                <span class="portal-nav-icon">🏠</span>
+                <span>Inicio</span>
+            </NavLink>
+            <NavLink class="portal-nav-item" href="/mi-portal/recibos">
+                <span class="portal-nav-icon">💰</span>
+                <span>Mis recibos</span>
+            </NavLink>
+            <NavLink class="portal-nav-item" href="/mi-portal/incidencias">
+                <span class="portal-nav-icon">📋</span>
+                <span>Mis incidencias</span>
+            </NavLink>
+            <NavLink class="portal-nav-item" href="/mi-portal/vacaciones">
+                <span class="portal-nav-icon">🏖️</span>
+                <span>Vacaciones</span>
+            </NavLink>
+            <NavLink class="portal-nav-item" href="/mi-portal/perfil">
+                <span class="portal-nav-icon">👤</span>
+                <span>Mi perfil</span>
+            </NavLink>
+        </nav>
+
+        <div class="portal-sidebar__footer">
+            <a class="portal-nav-item portal-nav-item--muted" href="/payroll">
+                <span class="portal-nav-icon">⬅️</span>
+                <span>Regresar al ERP</span>
+            </a>
+        </div>
+    </aside>
+
+    <!-- Main content -->
+    <main class="portal-main">
+        <div class="portal-content">
+            @Body
+        </div>
+    </main>
+</div>
+
+<style>
+    /* ── Portal Shell ─────────────────────────────────────────── */
+    .portal-shell {
+        display: flex;
+        min-height: 100vh;
+        background: #f8fafc;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    }
+
+    /* ── Sidebar ──────────────────────────────────────────────── */
+    .portal-sidebar {
+        width: 240px;
+        background: #1e293b;
+        color: #e2e8f0;
+        display: flex;
+        flex-direction: column;
+        padding: 0;
+        position: sticky;
+        top: 0;
+        height: 100vh;
+        overflow-y: auto;
+        flex-shrink: 0;
+    }
+
+    .portal-sidebar__brand {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 20px 16px;
+        border-bottom: 1px solid #334155;
+    }
+
+    .portal-sidebar__avatar {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 700;
+        font-size: 16px;
+        color: #fff;
+        flex-shrink: 0;
+    }
+
+    .portal-sidebar__name { flex: 1; min-width: 0; }
+    .portal-sidebar__fullname { font-size: 13px; font-weight: 600; color: #f1f5f9; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .portal-sidebar__company { font-size: 11px; color: #94a3b8; margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+    .portal-sidebar__nav { flex: 1; padding: 12px 8px; display: flex; flex-direction: column; gap: 2px; }
+
+    .portal-nav-item {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 9px 12px;
+        border-radius: 8px;
+        color: #94a3b8;
+        text-decoration: none;
+        font-size: 14px;
+        font-weight: 500;
+        transition: background 0.15s, color 0.15s;
+    }
+    .portal-nav-item:hover { background: #334155; color: #e2e8f0; }
+    .portal-nav-item.active { background: #3b82f6; color: #fff; }
+    .portal-nav-item--muted { color: #64748b; font-size: 13px; }
+
+    .portal-nav-icon { font-size: 16px; width: 20px; text-align: center; flex-shrink: 0; }
+
+    .portal-sidebar__footer { padding: 12px 8px; border-top: 1px solid #334155; }
+
+    /* ── Main ─────────────────────────────────────────────────── */
+    .portal-main { flex: 1; overflow-y: auto; min-width: 0; }
+    .portal-content { padding: 24px; max-width: 960px; }
+
+    /* ── Cards ────────────────────────────────────────────────── */
+    .portal-card {
+        background: #fff;
+        border-radius: 12px;
+        border: 1px solid #e2e8f0;
+        padding: 20px 24px;
+        box-shadow: 0 1px 3px rgba(0,0,0,.06);
+    }
+    .portal-card--blue { background: linear-gradient(135deg, #3b82f6, #2563eb); color: #fff; border: none; }
+    .portal-card--green { background: linear-gradient(135deg, #10b981, #059669); color: #fff; border: none; }
+    .portal-card--amber { background: linear-gradient(135deg, #f59e0b, #d97706); color: #fff; border: none; }
+    .portal-card--slate { background: linear-gradient(135deg, #64748b, #475569); color: #fff; border: none; }
+
+    .portal-kpi { text-align: center; }
+    .portal-kpi__value { font-size: 2rem; font-weight: 700; line-height: 1; }
+    .portal-kpi__label { font-size: 12px; opacity: .8; margin-top: 4px; }
+
+    .portal-page-title { font-size: 22px; font-weight: 700; color: #1e293b; margin-bottom: 4px; }
+    .portal-page-sub { font-size: 14px; color: #64748b; margin-bottom: 20px; }
+
+    .portal-grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px; }
+    .portal-grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin-bottom: 24px; }
+
+    /* ── Badge ────────────────────────────────────────────────── */
+    .portal-badge { display: inline-flex; align-items: center; padding: 2px 10px; border-radius: 99px; font-size: 11px; font-weight: 600; }
+    .portal-badge--green { background: #d1fae5; color: #065f46; }
+    .portal-badge--amber { background: #fef3c7; color: #92400e; }
+    .portal-badge--red { background: #fee2e2; color: #991b1b; }
+    .portal-badge--blue { background: #dbeafe; color: #1e40af; }
+    .portal-badge--gray { background: #f1f5f9; color: #475569; }
+
+    /* ── Table ────────────────────────────────────────────────── */
+    .portal-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    .portal-table th { background: #f8fafc; padding: 10px 14px; text-align: left; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; color: #64748b; border-bottom: 1px solid #e2e8f0; }
+    .portal-table td { padding: 12px 14px; border-bottom: 1px solid #f1f5f9; color: #374151; }
+    .portal-table tr:last-child td { border-bottom: none; }
+    .portal-table tr:hover td { background: #f8fafc; }
+
+    @@media (max-width: 768px) {
+        .portal-sidebar { display: none; }
+        .portal-grid-4 { grid-template-columns: repeat(2, 1fr); }
+        .portal-grid-2 { grid-template-columns: 1fr; }
+        .portal-content { padding: 16px; }
+    }
+</style>

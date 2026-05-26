@@ -1,0 +1,107 @@
+@page "/mi-portal/perfil"
+@layout PortalLayout
+@using Nanchesoft.Web.Layouts
+@using Nanchesoft.Web.Services.Portal
+@using Nanchesoft.Web.State
+@inject PortalApiService Svc
+@inject AuthState Auth
+
+<PageTitle>Mi perfil | Portal Empleado</PageTitle>
+
+<div class="portal-page-title">Mi perfil</div>
+<div class="portal-page-sub">Tus datos laborales y personales. Para cambios contacta a Recursos Humanos.</div>
+
+@if (_loading)
+{
+    <div style="padding:40px;text-align:center;color:#64748b">Cargando...</div>
+}
+else if (_employee == null)
+{
+    <div class="portal-card" style="text-align:center;padding:48px;color:#64748b">
+        No se encontró tu perfil de empleado.
+    </div>
+}
+else
+{
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+
+        <!-- Datos personales -->
+        <div class="portal-card">
+            <div style="font-size:15px;font-weight:600;color:#1e293b;margin-bottom:16px">Datos personales</div>
+            <dl style="display:grid;gap:12px">
+                <div>
+                    <dt style="font-size:11px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:.05em">Nombre completo</dt>
+                    <dd style="font-size:15px;font-weight:600;color:#1e293b;margin:0">@_employee.FullName</dd>
+                </div>
+                <div>
+                    <dt style="font-size:11px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:.05em">Correo electrónico</dt>
+                    <dd style="font-size:14px;color:#374151;margin:0">@_employee.Email</dd>
+                </div>
+                <div>
+                    <dt style="font-size:11px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:.05em">Teléfono</dt>
+                    <dd style="font-size:14px;color:#374151;margin:0">@(string.IsNullOrEmpty(_employee.Phone) ? "—" : _employee.Phone)</dd>
+                </div>
+            </dl>
+        </div>
+
+        <!-- Datos laborales -->
+        <div class="portal-card">
+            <div style="font-size:15px;font-weight:600;color:#1e293b;margin-bottom:16px">Datos laborales</div>
+            <dl style="display:grid;gap:12px">
+                <div>
+                    <dt style="font-size:11px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:.05em">No. empleado</dt>
+                    <dd style="margin:0"><code style="background:#f1f5f9;padding:2px 8px;border-radius:4px;font-size:13px">@_employee.EmployeeNumber</code></dd>
+                </div>
+                <div>
+                    <dt style="font-size:11px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:.05em">Puesto</dt>
+                    <dd style="font-size:14px;color:#374151;margin:0">@_employee.PositionName</dd>
+                </div>
+                <div>
+                    <dt style="font-size:11px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:.05em">Departamento</dt>
+                    <dd style="font-size:14px;color:#374151;margin:0">@_employee.DepartmentName</dd>
+                </div>
+                <div>
+                    <dt style="font-size:11px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:.05em">Fecha de ingreso</dt>
+                    <dd style="font-size:14px;color:#374151;margin:0">
+                        @(_employee.HireDate.HasValue ? _employee.HireDate.Value.ToString("dd/MM/yyyy") : "—")
+                    </dd>
+                </div>
+            </dl>
+        </div>
+
+        <!-- Cuenta de acceso -->
+        <div class="portal-card" style="grid-column:1/-1">
+            <div style="font-size:15px;font-weight:600;color:#1e293b;margin-bottom:16px">Cuenta de acceso</div>
+            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px">
+                <div>
+                    <div style="font-size:11px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:.05em">Usuario</div>
+                    <div style="font-size:14px;color:#374151;margin-top:4px">@Auth.Username</div>
+                </div>
+                <div>
+                    <div style="font-size:11px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:.05em">Correo de acceso</div>
+                    <div style="font-size:14px;color:#374151;margin-top:4px">@Auth.Email</div>
+                </div>
+                <div>
+                    <div style="font-size:11px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:.05em">Rol</div>
+                    <div style="font-size:14px;color:#374151;margin-top:4px">@Auth.RoleName</div>
+                </div>
+            </div>
+            <div style="margin-top:16px;padding:12px;background:#fef9c3;border-radius:8px;font-size:13px;color:#92400e">
+                Para cambiar tu contraseña o datos personales, ve a <a href="/profile" style="color:#1d4ed8">Mi cuenta</a>.
+            </div>
+        </div>
+
+    </div>
+}
+
+@code {
+    bool _loading = true;
+    PortalEmployeeDto? _employee;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try { _employee = await Svc.GetMeAsync(); }
+        catch { }
+        finally { _loading = false; }
+    }
+}

@@ -1,0 +1,102 @@
+@page "/mi-portal/incidencias"
+@layout PortalLayout
+@using Nanchesoft.Web.Layouts
+@using Nanchesoft.Web.Services.Portal
+@inject PortalApiService Svc
+
+<PageTitle>Mis incidencias | Portal Empleado</PageTitle>
+
+<div class="portal-page-title">Mis incidencias</div>
+<div class="portal-page-sub">Retardos, faltas, horas extra y ajustes registrados en nómina.</div>
+
+@if (_loading)
+{
+    <div style="padding:40px;text-align:center;color:#64748b">Cargando incidencias...</div>
+}
+else if (_incidents.Count == 0)
+{
+    <div class="portal-card" style="text-align:center;padding:48px;color:#64748b">
+        No se encontraron incidencias recientes.
+    </div>
+}
+else
+{
+    <!-- Resumen -->
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px">
+        <div class="portal-card" style="text-align:center;padding:14px">
+            <div style="font-size:20px;font-weight:700;color:#1e293b">@_incidents.Count</div>
+            <div style="font-size:11px;color:#64748b">Total incidencias</div>
+        </div>
+        <div class="portal-card" style="text-align:center;padding:14px">
+            <div style="font-size:20px;font-weight:700;color:#ef4444">@_incidents.Count(i => i.IncidentType.Contains("falta", StringComparison.OrdinalIgnoreCase))</div>
+            <div style="font-size:11px;color:#64748b">Faltas</div>
+        </div>
+        <div class="portal-card" style="text-align:center;padding:14px">
+            <div style="font-size:20px;font-weight:700;color:#f59e0b">@_incidents.Count(i => i.IncidentType.Contains("retardo", StringComparison.OrdinalIgnoreCase))</div>
+            <div style="font-size:11px;color:#64748b">Retardos</div>
+        </div>
+        <div class="portal-card" style="text-align:center;padding:14px">
+            <div style="font-size:20px;font-weight:700;color:#10b981">@_incidents.Count(i => i.IncidentType.Contains("extra", StringComparison.OrdinalIgnoreCase))</div>
+            <div style="font-size:11px;color:#64748b">Horas extra</div>
+        </div>
+    </div>
+
+    <div class="portal-card" style="padding:0;overflow:hidden">
+        <table class="portal-table">
+            <thead>
+                <tr>
+                    <th>Fecha</th>
+                    <th>Tipo</th>
+                    <th style="text-align:right">Cantidad</th>
+                    <th style="text-align:right">Importe</th>
+                    <th>Origen</th>
+                    <th>Estado</th>
+                    <th>Notas</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var i in _incidents)
+                {
+                    <tr>
+                        <td style="white-space:nowrap;color:#64748b;font-size:13px">@i.IncidentDate.ToString("dd/MM/yyyy")</td>
+                        <td style="font-weight:500;color:#1e293b">@i.IncidentType</td>
+                        <td style="text-align:right">@(i.Quantity > 0 ? i.Quantity.ToString("N2") : "—")</td>
+                        <td style="text-align:right;font-weight:600;color:@(i.Amount >= 0 ? "#10b981" : "#ef4444")">
+                            @(i.Amount != 0 ? i.Amount.ToString("C2") : "—")
+                        </td>
+                        <td>@OriginBadge(i.Origin)</td>
+                        <td>@StatusBadge(i.Status)</td>
+                        <td style="font-size:12px;color:#94a3b8">@(string.IsNullOrEmpty(i.Notes) ? "—" : i.Notes)</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+@code {
+    bool _loading = true;
+    List<PortalIncidentDto> _incidents = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        try { _incidents = await Svc.GetIncidentsAsync(); }
+        catch { }
+        finally { _loading = false; }
+    }
+
+    static RenderFragment OriginBadge(string origin) => origin switch
+    {
+        "clock"     => @<span class="portal-badge portal-badge--blue">Reloj</span>,
+        "policy"    => @<span class="portal-badge portal-badge--green">Política</span>,
+        "recurring" => @<span class="portal-badge portal-badge--amber">Recurrente</span>,
+        _           => @<span class="portal-badge portal-badge--gray">Manual</span>
+    };
+
+    static RenderFragment StatusBadge(string status) => status switch
+    {
+        "confirmed" => @<span class="portal-badge portal-badge--green">Confirmada</span>,
+        "cancelled" => @<span class="portal-badge portal-badge--red">Cancelada</span>,
+        _           => @<span class="portal-badge portal-badge--amber">Borrador</span>
+    };
+}

@@ -9,6 +9,9 @@ internal static class ApiTenantScope
     private const string BranchHeader = "X-Branch-Id";
     private const string PlatformOwnerHeader = "X-Is-Platform-Owner";
 
+    public static Guid? ResolveUserId(HttpContext httpContext)
+        => TryReadGuid(httpContext, "X-User-Id");
+
     public static bool IsPlatformOwner(HttpContext httpContext)
         => bool.TryParse(httpContext.Request.Headers[PlatformOwnerHeader].ToString(), out var value) && value;
 

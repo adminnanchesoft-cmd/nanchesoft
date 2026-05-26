@@ -1,0 +1,182 @@
+@page "/mi-portal/vacaciones"
+@layout PortalLayout
+@using Nanchesoft.Web.Layouts
+@using Nanchesoft.Web.Services.Portal
+@inject PortalApiService Svc
+
+<PageTitle>Vacaciones | Portal Empleado</PageTitle>
+
+<div class="portal-page-title">Mis vacaciones</div>
+<div class="portal-page-sub">Consulta tu saldo, historial y solicita días.</div>
+
+@if (_loading)
+{
+    <div style="padding:40px;text-align:center;color:#64748b">Cargando...</div>
+}
+else
+{
+    <!-- Balance -->
+    @if (_balance != null)
+    {
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:24px">
+            <div class="portal-card portal-card--blue portal-kpi">
+                <div class="portal-kpi__value">@_balance.DaysAvailable.ToString("N1")</div>
+                <div class="portal-kpi__label">Días disponibles</div>
+            </div>
+            <div class="portal-card portal-card--green portal-kpi">
+                <div class="portal-kpi__value">@_balance.AnnualDays</div>
+                <div class="portal-kpi__label">Días anuales LFT</div>
+            </div>
+            <div class="portal-card portal-card--amber portal-kpi">
+                <div class="portal-kpi__value">@_balance.DaysUsedThisYear.ToString("N1")</div>
+                <div class="portal-kpi__label">Usados este año</div>
+            </div>
+            <div class="portal-card portal-card--slate portal-kpi">
+                <div class="portal-kpi__value">@_balance.FullYears</div>
+                <div class="portal-kpi__label">Años de antigüedad</div>
+            </div>
+        </div>
+    }
+
+    <!-- Solicitar vacaciones -->
+    <div class="portal-card" style="margin-bottom:24px">
+        <div style="font-size:16px;font-weight:600;color:#1e293b;margin-bottom:16px">Nueva solicitud de vacaciones</div>
+
+        @if (!string.IsNullOrEmpty(_msg))
+        {
+            <div style="padding:10px 14px;border-radius:8px;margin-bottom:14px;background:@(_msgOk?"#d1fae5":"#fee2e2");color:@(_msgOk?"#065f46":"#991b1b");font-size:13px">
+                @_msg
+            </div>
+        }
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
+            <div>
+                <label style="font-size:13px;font-weight:500;color:#374151;display:block;margin-bottom:6px">Fecha inicio</label>
+                <input type="date" class="portal-input" @bind="_startDate" />
+            </div>
+            <div>
+                <label style="font-size:13px;font-weight:500;color:#374151;display:block;margin-bottom:6px">Fecha fin</label>
+                <input type="date" class="portal-input" @bind="_endDate" />
+            </div>
+        </div>
+        <div style="margin-bottom:16px">
+            <label style="font-size:13px;font-weight:500;color:#374151;display:block;margin-bottom:6px">Notas (opcional)</label>
+            <textarea class="portal-input" rows="2" @bind="_notes" placeholder="Motivo o comentarios..."></textarea>
+        </div>
+        @if (_startDate < _endDate)
+        {
+            <div style="margin-bottom:12px;font-size:13px;color:#64748b">
+                Días solicitados: <strong>@((int)(_endDate - _startDate).TotalDays)</strong>
+            </div>
+        }
+        <button @onclick="SubmitAsync" disabled="@(_saving || _startDate >= _endDate)"
+                style="background:#3b82f6;color:#fff;border:none;padding:10px 20px;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600">
+            @(_saving ? "Enviando..." : "Enviar solicitud")
+        </button>
+    </div>
+
+    <!-- Historial -->
+    <div class="portal-card" style="padding:0;overflow:hidden">
+        <div style="padding:16px 20px;border-bottom:1px solid #f1f5f9;font-size:15px;font-weight:600;color:#1e293b">
+            Historial de solicitudes
+        </div>
+        @if (_requests.Count == 0)
+        {
+            <div style="padding:32px;text-align:center;color:#94a3b8;font-size:14px">Sin solicitudes previas.</div>
+        }
+        else
+        {
+            <table class="portal-table">
+                <thead>
+                    <tr>
+                        <th>Folio</th>
+                        <th>Inicio</th>
+                        <th>Fin</th>
+                        <th style="text-align:center">Días</th>
+                        <th>Estado</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var r in _requests)
+                    {
+                        <tr>
+                            <td><code style="font-size:12px">@r.Folio</code></td>
+                            <td>@r.StartDate.ToString("dd/MM/yyyy")</td>
+                            <td>@r.EndDate.ToString("dd/MM/yyyy")</td>
+                            <td style="text-align:center;font-weight:600">@r.RequestedDays</td>
+                            <td>@StatusBadge(r.Status)</td>
+                            <td>
+                                @if (r.Status == "pending")
+                                {
+                                    <button @onclick="() => CancelAsync(r.VacationRequestId)"
+                                            style="background:none;border:1px solid #fca5a5;color:#ef4444;padding:3px 10px;border-radius:6px;cursor:pointer;font-size:12px">
+                                        Cancelar
+                                    </button>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </div>
+}
+
+@code {
+    bool _loading = true;
+    bool _saving;
+    PortalVacationBalanceDto? _balance;
+    List<PortalVacationRequestDto> _requests = [];
+    DateTime _startDate = DateTime.Today.AddDays(1);
+    DateTime _endDate = DateTime.Today.AddDays(6);
+    string? _notes;
+    string? _msg;
+    bool _msgOk;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _balance  = await Svc.GetVacationBalanceAsync();
+            _requests = await Svc.GetVacationRequestsAsync();
+        }
+        catch { }
+        finally { _loading = false; }
+    }
+
+    async Task SubmitAsync()
+    {
+        _msg = null; _saving = true; StateHasChanged();
+        var ok = await Svc.CreateVacationRequestAsync(_startDate, _endDate, _notes);
+        _msg = ok ? "Solicitud enviada correctamente. El área de RH la revisará pronto." : "Error al enviar la solicitud. Intenta de nuevo.";
+        _msgOk = ok;
+        if (ok)
+        {
+            _notes = null;
+            _requests = await Svc.GetVacationRequestsAsync();
+            _balance  = await Svc.GetVacationBalanceAsync();
+        }
+        _saving = false;
+    }
+
+    async Task CancelAsync(Guid id)
+    {
+        var ok = await Svc.CancelVacationRequestAsync(id);
+        if (ok) _requests = await Svc.GetVacationRequestsAsync();
+    }
+
+    static RenderFragment StatusBadge(string status) => status switch
+    {
+        "approved"  => @<span class="portal-badge portal-badge--green">Aprobada</span>,
+        "pending"   => @<span class="portal-badge portal-badge--amber">Pendiente</span>,
+        "rejected"  => @<span class="portal-badge portal-badge--red">Rechazada</span>,
+        "cancelled" => @<span class="portal-badge portal-badge--gray">Cancelada</span>,
+        _           => @<span class="portal-badge portal-badge--gray">@status</span>
+    };
+}
+
+<style>
+    .portal-input { width:100%;padding:8px 12px;border:1px solid #e2e8f0;border-radius:8px;font-size:14px;outline:none;box-sizing:border-box; }
+    .portal-input:focus { border-color:#3b82f6;box-shadow:0 0 0 3px rgba(59,130,246,.15); }
+</style>

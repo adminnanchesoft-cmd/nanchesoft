@@ -161,7 +161,18 @@
       "Bash(journalctl -u nanchesoft-web --since \"2 minutes ago\" --no-pager)",
       "Bash(journalctl -u nanchesoft-api --since \"2 minutes ago\" --no-pager)",
       "Bash(journalctl -u nanchesoft-web --since \"30 seconds ago\" --no-pager)",
-      "Bash(journalctl -u nanchesoft-web --since \"10 seconds ago\" --no-pager)"
+      "Bash(journalctl -u nanchesoft-web --since \"10 seconds ago\" --no-pager)",
+      "Bash(journalctl -u nanchesoft-api.service --no-pager -n 50)",
+      "Bash(journalctl -u nanchesoft-api.service --no-pager -n 30)",
+      "Bash(journalctl -u nanchesoft-api.service --no-pager -n 80)",
+      "Bash(journalctl -u nanchesoft-api.service --no-pager -n 100)",
+      "Bash(journalctl -u nanchesoft-api.service --since \"5 minutes ago\" --no-pager)",
+      "Bash(journalctl -u nanchesoft-api.service --since \"8 minutes ago\" --no-pager)",
+      "Bash(journalctl -u nanchesoft-api.service --since \"3 minutes ago\" --no-pager)",
+      "Bash(cp -r /tmp/api-publish/* /opt/nanchesoft/publish/api/)",
+      "Bash(cp -r /tmp/web-publish/* /opt/nanchesoft/publish/web/)",
+      "Bash(systemctl stop *)",
+      "Bash(systemctl start *)"
     ]
   }
 }

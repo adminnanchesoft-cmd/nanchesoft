@@ -1,0 +1,164 @@
+@page "/mi-portal/recibos"
+@layout PortalLayout
+@using Nanchesoft.Web.Layouts
+@using Nanchesoft.Web.Services.Portal
+@inject PortalApiService Svc
+@inject IJSRuntime JS
+
+<PageTitle>Mis recibos | Portal Empleado</PageTitle>
+
+<div class="portal-page-title">Mis recibos de nómina</div>
+<div class="portal-page-sub">Historial de tus recibos de pago. Haz clic en cualquier recibo para ver el detalle.</div>
+
+@if (_loading)
+{
+    <div style="padding:40px;text-align:center;color:#64748b">Cargando recibos...</div>
+}
+else if (_payslips.Count == 0)
+{
+    <div class="portal-card" style="text-align:center;padding:48px;color:#64748b">
+        No se encontraron recibos de nómina.
+    </div>
+}
+else
+{
+    <div class="portal-card" style="padding:0;overflow:hidden">
+        <table class="portal-table">
+            <thead>
+                <tr>
+                    <th>Periodo</th>
+                    <th>Fecha pago</th>
+                    <th style="text-align:right">Días pagados</th>
+                    <th style="text-align:right">Percepciones</th>
+                    <th style="text-align:right">Deducciones</th>
+                    <th style="text-align:right">Neto</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var p in _payslips)
+                {
+                    <tr style="cursor:pointer" @onclick="() => OpenDetail(p.PayrollRunLineId)">
+                        <td>
+                            <div style="font-weight:600;color:#1e293b">@p.PeriodName</div>
+                            @if (p.StartDate.HasValue && p.EndDate.HasValue)
+                            {
+                                <div style="font-size:12px;color:#94a3b8">@p.StartDate.Value.ToString("dd/MM") – @p.EndDate.Value.ToString("dd/MM/yy")</div>
+                            }
+                        </td>
+                        <td style="color:#64748b;font-size:13px">
+                            @(p.PaymentDate.HasValue ? p.PaymentDate.Value.ToString("dd/MM/yyyy") : "—")
+                        </td>
+                        <td style="text-align:right">@p.DaysPaid.ToString("N1")</td>
+                        <td style="text-align:right;color:#10b981;font-weight:600">@p.GrossAmount.ToString("C2")</td>
+                        <td style="text-align:right;color:#ef4444">@(p.DeductionsAmount > 0 ? p.DeductionsAmount.ToString("C2") : "—")</td>
+                        <td style="text-align:right;font-weight:700;font-size:15px">@p.NetAmount.ToString("C2")</td>
+                        <td style="text-align:right">
+                            <span style="color:#3b82f6;font-size:13px">Ver →</span>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+<!-- Modal detalle recibo -->
+@if (_detail != null)
+{
+    <div class="portal-modal-backdrop" @onclick="CloseDetail">
+        <div class="portal-modal" @onclick:stopPropagation>
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px">
+                <div>
+                    <div style="font-size:18px;font-weight:700;color:#1e293b">@_detail.PeriodName</div>
+                    <div style="font-size:13px;color:#64748b">@_detail.EmployeeName · @_detail.DepartmentName</div>
+                </div>
+                <button @onclick="CloseDetail" style="background:none;border:none;font-size:20px;cursor:pointer;color:#64748b">✕</button>
+            </div>
+
+            <!-- Totales -->
+            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px">
+                <div style="text-align:center;background:#f0fdf4;border-radius:8px;padding:12px">
+                    <div style="font-size:20px;font-weight:700;color:#10b981">@_detail.GrossAmount.ToString("C2")</div>
+                    <div style="font-size:11px;color:#64748b">Percepciones</div>
+                </div>
+                <div style="text-align:center;background:#fef2f2;border-radius:8px;padding:12px">
+                    <div style="font-size:20px;font-weight:700;color:#ef4444">@_detail.DeductionsAmount.ToString("C2")</div>
+                    <div style="font-size:11px;color:#64748b">Deducciones</div>
+                </div>
+                <div style="text-align:center;background:#f8fafc;border-radius:8px;padding:12px">
+                    <div style="font-size:20px;font-weight:700;color:#1e293b">@_detail.NetAmount.ToString("C2")</div>
+                    <div style="font-size:11px;color:#64748b">Neto a recibir</div>
+                </div>
+            </div>
+
+            <!-- Conceptos -->
+            @if (_detail.Details.Count > 0)
+            {
+                <div style="border-radius:8px;border:1px solid #e2e8f0;overflow:hidden">
+                    <table class="portal-table">
+                        <thead><tr><th>Concepto</th><th>Tipo</th><th style="text-align:right">Importe</th></tr></thead>
+                        <tbody>
+                            @foreach (var d in _detail.Details)
+                            {
+                                <tr>
+                                    <td>
+                                        <span style="font-size:11px;color:#94a3b8;margin-right:6px">@d.ConceptCode</span>
+                                        @d.ConceptName
+                                    </td>
+                                    <td>
+                                        @if (d.ConceptType == "perception")
+                                        { <span class="portal-badge portal-badge--green">Percepción</span> }
+                                        else if (d.ConceptType == "deduction")
+                                        { <span class="portal-badge portal-badge--red">Deducción</span> }
+                                        else
+                                        { <span class="portal-badge portal-badge--gray">@d.ConceptType</span> }
+                                    </td>
+                                    <td style="text-align:right;font-weight:600;color:@(d.ConceptType=="deduction"?"#ef4444":"#10b981")">
+                                        @d.Amount.ToString("C2")
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+
+            <div style="margin-top:16px;display:flex;gap:8px;justify-content:flex-end">
+                <button @onclick="PrintDetailAsync" style="background:#1e293b;color:#fff;border:none;padding:8px 16px;border-radius:8px;cursor:pointer;font-size:13px">
+                    🖨️ Imprimir
+                </button>
+                <button @onclick="CloseDetail" style="background:#f1f5f9;color:#475569;border:none;padding:8px 16px;border-radius:8px;cursor:pointer;font-size:13px">
+                    Cerrar
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+<style>
+    .portal-modal-backdrop { position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:1000;display:flex;align-items:center;justify-content:center;padding:16px; }
+    .portal-modal { background:#fff;border-radius:16px;padding:24px;max-width:640px;width:100%;max-height:85vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.2); }
+</style>
+
+@code {
+    bool _loading = true;
+    List<PortalPayslipSummaryDto> _payslips = [];
+    PortalPayslipDetailDto? _detail;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try { _payslips = await Svc.GetPayslipsAsync(); }
+        catch { }
+        finally { _loading = false; }
+    }
+
+    async Task OpenDetail(Guid id)
+    {
+        _detail = await Svc.GetPayslipDetailAsync(id);
+    }
+
+    void CloseDetail() => _detail = null;
+
+    async Task PrintDetailAsync() => await JS.InvokeVoidAsync("eval", "window.print()");
+}

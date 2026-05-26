@@ -1,0 +1,144 @@
+@page "/mi-portal"
+@layout PortalLayout
+@using Nanchesoft.Web.Layouts
+@using Nanchesoft.Web.Services.Portal
+@using Nanchesoft.Web.State
+@inject PortalApiService Svc
+@inject AuthState Auth
+
+<PageTitle>Mi Portal | Nanchesoft</PageTitle>
+
+@if (_loading)
+{
+    <div style="padding:60px;text-align:center;color:#64748b">Cargando tu portal...</div>
+}
+else if (_employee == null)
+{
+    <div class="portal-card" style="text-align:center;padding:48px">
+        <div style="font-size:48px;margin-bottom:16px">🔗</div>
+        <h3 style="color:#1e293b;margin-bottom:8px">Tu cuenta no está vinculada a un empleado</h3>
+        <p style="color:#64748b;margin-bottom:0">Contacta al área de Recursos Humanos para vincular tu cuenta y acceder a tu información laboral.</p>
+    </div>
+}
+else
+{
+    <!-- Header bienvenida -->
+    <div style="margin-bottom:24px">
+        <div class="portal-page-title">Hola, @Auth.FirstName 👋</div>
+        <div class="portal-page-sub">@_employee.PositionName · @_employee.DepartmentName</div>
+    </div>
+
+    <!-- KPIs -->
+    <div class="portal-grid-4" style="margin-bottom:24px">
+        <div class="portal-card portal-card--blue portal-kpi">
+            <div class="portal-kpi__value">@(_vacBalance?.DaysAvailable.ToString("N0") ?? "—")</div>
+            <div class="portal-kpi__label">Días de vacaciones disponibles</div>
+        </div>
+        <div class="portal-card portal-card--green portal-kpi">
+            <div class="portal-kpi__value">@(_vacBalance?.FullYears ?? 0)</div>
+            <div class="portal-kpi__label">Años de antigüedad</div>
+        </div>
+        <div class="portal-card portal-card--slate portal-kpi">
+            <div class="portal-kpi__value">@_payslips.Count</div>
+            <div class="portal-kpi__label">Recibos disponibles</div>
+        </div>
+        <div class="portal-card portal-card--amber portal-kpi">
+            <div class="portal-kpi__value">@(_incidents.Count(i => i.Status == "draft"))</div>
+            <div class="portal-kpi__label">Incidencias pendientes</div>
+        </div>
+    </div>
+
+    <!-- Último recibo -->
+    @if (_payslips.Count > 0)
+    {
+        var last = _payslips[0];
+        <div class="portal-card" style="margin-bottom:24px">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px">
+                <div>
+                    <div style="font-size:13px;color:#64748b;margin-bottom:2px">Último recibo</div>
+                    <div style="font-size:16px;font-weight:600;color:#1e293b">@last.PeriodName</div>
+                </div>
+                <a href="/mi-portal/recibos" style="font-size:13px;color:#3b82f6;text-decoration:none">Ver todos →</a>
+            </div>
+            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px">
+                <div style="text-align:center;padding:12px;background:#f8fafc;border-radius:8px">
+                    <div style="font-size:18px;font-weight:700;color:#10b981">@last.GrossAmount.ToString("C0")</div>
+                    <div style="font-size:11px;color:#64748b">Percepciones</div>
+                </div>
+                <div style="text-align:center;padding:12px;background:#f8fafc;border-radius:8px">
+                    <div style="font-size:18px;font-weight:700;color:#ef4444">@last.DeductionsAmount.ToString("C0")</div>
+                    <div style="font-size:11px;color:#64748b">Deducciones</div>
+                </div>
+                <div style="text-align:center;padding:12px;background:#f8fafc;border-radius:8px">
+                    <div style="font-size:18px;font-weight:700;color:#1e293b">@last.NetAmount.ToString("C0")</div>
+                    <div style="font-size:11px;color:#64748b">Neto</div>
+                </div>
+            </div>
+            @if (last.PaymentDate.HasValue)
+            {
+                <div style="margin-top:10px;font-size:12px;color:#94a3b8">
+                    Fecha de pago: @last.PaymentDate.Value.ToString("dd/MM/yyyy")
+                </div>
+            }
+        </div>
+    }
+
+    <!-- Accesos rápidos -->
+    <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:16px">
+        <a href="/mi-portal/vacaciones" class="portal-card" style="text-decoration:none;display:flex;gap:16px;align-items:center">
+            <div style="font-size:32px">🏖️</div>
+            <div>
+                <div style="font-weight:600;color:#1e293b">Solicitar vacaciones</div>
+                <div style="font-size:13px;color:#64748b">@(_vacBalance?.DaysAvailable.ToString("N1") ?? "?") días disponibles</div>
+            </div>
+        </a>
+        <a href="/mi-portal/incidencias" class="portal-card" style="text-decoration:none;display:flex;gap:16px;align-items:center">
+            <div style="font-size:32px">📋</div>
+            <div>
+                <div style="font-weight:600;color:#1e293b">Mis incidencias</div>
+                <div style="font-size:13px;color:#64748b">Retardos, faltas, horas extra</div>
+            </div>
+        </a>
+        <a href="/mi-portal/recibos" class="portal-card" style="text-decoration:none;display:flex;gap:16px;align-items:center">
+            <div style="font-size:32px">💳</div>
+            <div>
+                <div style="font-weight:600;color:#1e293b">Mis recibos de nómina</div>
+                <div style="font-size:13px;color:#64748b">Historial de pagos</div>
+            </div>
+        </a>
+        <a href="/mi-portal/perfil" class="portal-card" style="text-decoration:none;display:flex;gap:16px;align-items:center">
+            <div style="font-size:32px">👤</div>
+            <div>
+                <div style="font-weight:600;color:#1e293b">Mi perfil</div>
+                <div style="font-size:13px;color:#64748b">Datos personales y laborales</div>
+            </div>
+        </a>
+    </div>
+}
+
+@code {
+    bool _loading = true;
+    PortalEmployeeDto? _employee;
+    PortalVacationBalanceDto? _vacBalance;
+    List<PortalPayslipSummaryDto> _payslips = [];
+    List<PortalIncidentDto> _incidents = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var (emp, bal, slips, incs) = (
+                Svc.GetMeAsync(),
+                Svc.GetVacationBalanceAsync(),
+                Svc.GetPayslipsAsync(),
+                Svc.GetIncidentsAsync()
+            );
+            _employee   = await emp;
+            _vacBalance = await bal;
+            _payslips   = await slips;
+            _incidents  = await incs;
+        }
+        catch { }
+        finally { _loading = false; }
+    }
+}

@@ -20,6 +20,8 @@ public sealed class User : BaseEntity
     public bool IsLocked { get; set; }
     public DateTime? LastLoginAt { get; set; }
 
+    public Guid? EmployeeId { get; set; }
+
     public ICollection<UserRole> UserRoles { get; set; } = new List<UserRole>();
 
     public string GetDisplayName() => $"{FirstName} {LastName}".Trim();

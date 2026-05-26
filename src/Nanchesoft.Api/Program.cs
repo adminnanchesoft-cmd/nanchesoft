@@ -257,6 +257,7 @@ app.MapSubscriptionControlEndpoints();
 app.MapUniversalImportEndpoints();
 app.MapAiAssistantEndpoints();
 app.MapAiModuleEndpoints();
+app.MapPortalEndpoints();
 
 app.Run();
 

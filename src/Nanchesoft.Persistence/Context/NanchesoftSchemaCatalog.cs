@@ -51,6 +51,7 @@ public static class NanchesoftSchemaCatalog
         modelBuilder.Entity<Branch>().ToTable("branches", CoreSchema);
         modelBuilder.Entity<Warehouse>().ToTable("warehouses", InventorySchema);
         modelBuilder.Entity<User>().ToTable("users", AuthSchema);
+        modelBuilder.Entity<User>().Property(u => u.EmployeeId).HasColumnName("employee_id");
         modelBuilder.Entity<Role>().ToTable("roles", AuthSchema);
         modelBuilder.Entity<Permission>().ToTable("permissions", AuthSchema);
         modelBuilder.Entity<UserRole>().ToTable("user_roles", AuthSchema);
