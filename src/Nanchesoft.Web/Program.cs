@@ -25,6 +25,7 @@ using Nanchesoft.Web.Services.Security;
 using Nanchesoft.Web.Services.ThirdPartiesProducts;
 using Nanchesoft.Web.Services.Treasury;
 using Nanchesoft.Web.Services.Production;
+using Nanchesoft.Web.Services.SilvaSoft;
 using Nanchesoft.Web.Services.Warehouses;
 using Nanchesoft.Web.State;
 
@@ -88,6 +89,7 @@ builder.Services.AddScoped<PayrollMvpApiService>();
 builder.Services.AddScoped<AccountsPayableApiService>();
 builder.Services.AddScoped<ServiceBillingApiService>();
 builder.Services.AddScoped<ProductionApiService>();
+builder.Services.AddScoped<SilvaSoftApiService>();
 builder.Services.AddScoped<Nanchesoft.Web.Services.Ai.AiAssistantApiService>();
 builder.Services.AddScoped<Nanchesoft.Web.Services.Portal.PortalApiService>();
 builder.Services.AddScoped<Nanchesoft.Web.State.ThemeState>();

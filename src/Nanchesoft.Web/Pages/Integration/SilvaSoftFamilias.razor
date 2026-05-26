@@ -1,0 +1,136 @@
+@page "/integration/silvasoft/familias"
+@rendermode InteractiveServer
+@using Nanchesoft.Web.Services.SilvaSoft
+@inject SilvaSoftApiService SilvaSoft
+
+<PageTitle>Familias SilvaSoft</PageTitle>
+
+<div class="ns-page-header">
+    <div class="ns-page-header__left">
+        <div class="ns-page-header__breadcrumb">Integración › SilvaSoft</div>
+        <h1 class="ns-page-header__title">Familias de producto</h1>
+        <p class="ns-page-header__subtitle">
+            Vista previa de las familias en SQL Server de SilvaSoft e importación al catálogo Nanchesoft.
+        </p>
+    </div>
+    <div class="ns-page-header__actions">
+        <button class="ns-btn ns-btn--outline" @onclick="LoadAsync" disabled="@_loading">
+            @if (_loading)
+            {
+                <span class="spinner-border spinner-border-sm me-1"></span>
+            }
+            Consultar SilvaSoft
+        </button>
+        @if (_rows.Count > 0)
+        {
+            <button class="ns-btn ns-btn--primary" @onclick="ImportAsync" disabled="@_importing">
+                @if (_importing)
+                {
+                    <span class="spinner-border spinner-border-sm me-1"></span>
+                }
+                Importar @_rows.Count familias
+            </button>
+        }
+    </div>
+</div>
+
+@if (!string.IsNullOrEmpty(_error))
+{
+    <div class="alert alert-danger mt-3">@_error</div>
+}
+
+@if (_result is not null)
+{
+    <div class="alert @(_result.Success ? "alert-success" : "alert-warning") mt-3">
+        <strong>Importación completada:</strong>
+        @_result.Imported importadas,
+        @_result.Skipped omitidas (ya existentes),
+        @_result.Total leídas de SilvaSoft.
+    </div>
+}
+
+@if (_rows.Count > 0)
+{
+    <div class="ns-section mt-3">
+        <div class="ns-table-wrap">
+            <table class="ns-table">
+                <thead>
+                    <tr>
+                        <th>Código</th>
+                        <th>Nombre</th>
+                        <th>Grupo estadístico</th>
+                        <th>Tipo</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var r in _rows)
+                    {
+                        <tr>
+                            <td><code>@r.Code</code></td>
+                            <td>@r.Name</td>
+                            <td>@r.StatisticsGroup</td>
+                            <td>
+                                @if (r.IsFinishedProductFamily)
+                                {
+                                    <span class="ns-badge ns-badge--blue">Terminado</span>
+                                }
+                                else
+                                {
+                                    <span class="ns-badge">Material</span>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+}
+else if (!_loading && _consulted)
+{
+    <div class="ns-empty-state mt-4">
+        <p>No se encontraron familias en SilvaSoft o la tabla <code>dbo.familias</code> está vacía.</p>
+    </div>
+}
+
+@code {
+    private List<SilvaSoftFamilyRow> _rows = [];
+    private SilvaSoftImportResult? _result;
+    private bool _loading;
+    private bool _importing;
+    private bool _consulted;
+    private string? _error;
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _error = null;
+        _result = null;
+        try
+        {
+            _rows = await SilvaSoft.GetFamiliesAsync();
+            _consulted = true;
+        }
+        catch (Exception ex)
+        {
+            _error = $"Error al consultar SilvaSoft: {ex.Message}";
+        }
+        finally { _loading = false; }
+    }
+
+    private async Task ImportAsync()
+    {
+        _importing = true;
+        _error = null;
+        try
+        {
+            _result = await SilvaSoft.ImportFamiliesAsync();
+            if (_result is null) _error = "La importación no devolvió resultado. Revise los logs.";
+        }
+        catch (Exception ex)
+        {
+            _error = $"Error al importar: {ex.Message}";
+        }
+        finally { _importing = false; }
+    }
+}
