@@ -7,3 +7,8 @@
 Silvasoft/
 .claude/settings.local.json
 .claude/settings.local.json
+
+# Publish output — production deploy goes to /opt/nanchesoft/publish/
+src/Nanchesoft.Api/publish-api/
+src/Nanchesoft.Web/publish-web/
+e2
