@@ -112,8 +112,15 @@ else
 @code {
     private SilvaSoftSyncLogPagina? _pagina;
     private int _paginaActual = 1;
+    private bool _cargado;
 
-    protected override async Task OnInitializedAsync() => await CargarAsync();
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender || _cargado) return;
+        _cargado = true;
+        await CargarAsync();
+        await InvokeAsync(StateHasChanged);
+    }
 
     private async Task CargarAsync()
     {

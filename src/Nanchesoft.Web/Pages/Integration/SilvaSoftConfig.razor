@@ -108,10 +108,19 @@
     private SilvaSoftConexionTestDto? _testResult;
     private bool _guardando;
     private bool _probando;
+    private bool _cargado;
     private string? _mensaje;
     private string _claseAlerta = "alert-info";
 
-    protected override async Task OnInitializedAsync()
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender || _cargado) return;
+        _cargado = true;
+        await CargarConfigAsync();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task CargarConfigAsync()
     {
         _cfg = await SilvaSoft.ObtenerConfigAsync();
         if (_cfg is not null)
@@ -134,7 +143,7 @@
             var (ok, msg) = await SilvaSoft.GuardarConfigAsync(_req);
             _claseAlerta = ok ? "alert-success" : "alert-danger";
             _mensaje = msg;
-            if (ok) _cfg = await SilvaSoft.ObtenerConfigAsync();
+            if (ok) await CargarConfigAsync();
         }
         finally { _guardando = false; }
     }
