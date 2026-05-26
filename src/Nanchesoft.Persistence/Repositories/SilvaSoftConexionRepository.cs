@@ -28,7 +28,9 @@ public sealed class SilvaSoftConexionRepository : ISilvaSoftConexionRepository
                 Usuario = x.Usuario,
                 Activo = x.IsActive,
                 FechaUltimaSincronizacion = x.FechaUltimaSincronizacion,
-                Notas = x.Notas
+                Notas = x.Notas,
+                UsarAgente = x.UsarAgente,
+                AgentUrl = x.AgentUrl
             })
             .FirstOrDefaultAsync(ct);
 
@@ -55,6 +57,20 @@ public sealed class SilvaSoftConexionRepository : ISilvaSoftConexionRepository
                $"Application Name=Nanchesoft-Integration;";
     }
 
+    public async Task<(string AgentUrl, string AgentToken)?> ObtenerConfigAgenteAsync(Guid empresaId, CancellationToken ct = default)
+    {
+        var cfg = await _db.SilvaSoftConexiones
+            .AsNoTracking()
+            .Where(x => x.CompanyId == empresaId && x.IsActive && x.UsarAgente)
+            .Select(x => new { x.AgentUrl, x.AgentToken })
+            .FirstOrDefaultAsync(ct);
+
+        if (cfg is null || string.IsNullOrWhiteSpace(cfg.AgentUrl) || string.IsNullOrWhiteSpace(cfg.AgentToken))
+            return null;
+
+        return (cfg.AgentUrl, cfg.AgentToken);
+    }
+
     public Task<bool> ExisteParaEmpresaAsync(Guid empresaId, CancellationToken ct = default)
         => _db.SilvaSoftConexiones.AnyAsync(x => x.CompanyId == empresaId, ct);
 
@@ -73,11 +89,14 @@ public sealed class SilvaSoftConexionRepository : ISilvaSoftConexionRepository
             existing.NombreServidor = request.NombreServidor.Trim();
             existing.BaseDatos = request.BaseDatos.Trim();
             existing.Usuario = request.Usuario.Trim();
-            // Solo actualiza contraseña si se provee una nueva
             if (!string.IsNullOrWhiteSpace(request.Password))
                 existing.PasswordEncriptado = request.Password.Trim();
             existing.Notas = request.Notas?.Trim();
             existing.IsActive = request.Activo;
+            existing.UsarAgente = request.UsarAgente;
+            existing.AgentUrl = request.AgentUrl?.Trim();
+            if (!string.IsNullOrWhiteSpace(request.AgentToken))
+                existing.AgentToken = request.AgentToken.Trim();
             existing.UpdatedAt = DateTime.UtcNow;
             existing.UpdatedBy = createdBy ?? "web-api";
         }
@@ -93,6 +112,9 @@ public sealed class SilvaSoftConexionRepository : ISilvaSoftConexionRepository
                 PasswordEncriptado = request.Password?.Trim() ?? string.Empty,
                 Notas = request.Notas?.Trim(),
                 IsActive = request.Activo,
+                UsarAgente = request.UsarAgente,
+                AgentUrl = request.AgentUrl?.Trim(),
+                AgentToken = request.AgentToken?.Trim(),
                 CreatedBy = createdBy ?? "web-api"
             });
         }

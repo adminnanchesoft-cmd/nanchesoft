@@ -10,7 +10,7 @@
         <div class="ns-page-header__breadcrumb">Integraciones › SilvaSoft</div>
         <h1 class="ns-page-header__title">Configuración de conexión</h1>
         <p class="ns-page-header__subtitle">
-            Configura el servidor SQL Server de SilvaSoft para esta empresa.
+            Configura el acceso a la base de datos SilvaSoft de esta empresa.
             Los datos se almacenan en la tabla <code>integraciones.silvasoft_conexiones</code>.
         </p>
     </div>
@@ -31,19 +31,93 @@
 }
 
 <div class="ns-section mt-3" style="max-width:660px">
-    <div class="ns-form-grid">
-        <div class="ns-field">
-            <label class="ns-field-label">
-                Servidor SQL Server
-                <span class="text-muted small ms-1">Formato: HOST\INSTANCIA, IP o FQDN</span>
+
+    @* ── Modo de conexión ────────────────────────────────────────────────────── *@
+    <div class="ns-field mb-4">
+        <label class="ns-field-label">Modo de conexión</label>
+        <div class="d-flex gap-3">
+            <label class="d-flex align-items-center gap-2" style="cursor:pointer">
+                <input type="radio" name="modoConexion" value="directo"
+                       checked="@(!_req.UsarAgente)"
+                       @onchange="@(() => _req.UsarAgente = false)" />
+                <span>
+                    <strong>Directo</strong>
+                    <span class="text-muted small d-block">Nanchesoft se conecta directamente al SQL Server (requiere IP pública o VPN)</span>
+                </span>
             </label>
-            <input class="ns-input" type="text"
-                   placeholder='Ej: SERVIDOR\RETRYVER  ó  192.168.1.100'
-                   @bind="_req.NombreServidor" />
-            <div class="ns-field-hint">
-                Soporta instancias nombradas (SERVIDOR\INSTANCIA) y puertos implícitos.
+            <label class="d-flex align-items-center gap-2" style="cursor:pointer">
+                <input type="radio" name="modoConexion" value="agente"
+                       checked="@(_req.UsarAgente)"
+                       @onchange="@(() => _req.UsarAgente = true)" />
+                <span>
+                    <strong>Agente local</strong>
+                    <span class="text-muted small d-block">Windows Service en la red local del cliente (recomendado, sin abrir puertos SQL)</span>
+                </span>
+            </label>
+        </div>
+    </div>
+
+    @if (_req.UsarAgente)
+    {
+        @* ── Configuración del agente ──────────────────────────────────────────── *@
+        <div class="ns-form-grid" style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;padding:16px;margin-bottom:16px">
+            <div class="text-muted small mb-3">
+                <strong>Agente Windows Service</strong> — Instala el agente en la PC/servidor donde corre SilvaSoft.
+                El agente expone un HTTP interno que Nanchesoft usa para leer los datos sin abrir el puerto SQL Server.
+            </div>
+            <div class="ns-field">
+                <label class="ns-field-label">URL del agente</label>
+                <input class="ns-input" type="text"
+                       placeholder="Ej: http://192.168.1.10:7432"
+                       @bind="_req.AgentUrl" />
+                <div class="ns-field-hint">
+                    Dirección donde corre el agente. Debe ser accesible desde internet (o túnel/ngrok/VPN).
+                </div>
+            </div>
+            <div class="ns-field">
+                <label class="ns-field-label">
+                    Token del agente
+                    <span class="text-muted small ms-1">(dejar vacío para no modificar)</span>
+                </label>
+                <input class="ns-input" type="password"
+                       placeholder="Token secreto configurado en el agente"
+                       @bind="_req.AgentToken" />
+                <div class="ns-field-hint">
+                    Debe coincidir con <code>AgentToken</code> en el <code>appsettings.json</code> del agente.
+                </div>
             </div>
         </div>
+    }
+
+    @* ── Credenciales SQL Server ─────────────────────────────────────────────── *@
+    <div class="ns-form-grid">
+        @if (!_req.UsarAgente)
+        {
+            <div class="ns-field">
+                <label class="ns-field-label">
+                    Servidor SQL Server
+                    <span class="text-muted small ms-1">Formato: HOST\INSTANCIA, IP o FQDN</span>
+                </label>
+                <input class="ns-input" type="text"
+                       placeholder='Ej: SERVIDOR\INSTANCIA  ó  192.168.1.100'
+                       @bind="_req.NombreServidor" />
+            </div>
+        }
+        else
+        {
+            <div class="ns-field">
+                <label class="ns-field-label">
+                    Servidor SQL Server
+                    <span class="text-muted small ms-1">(usado en el <code>appsettings.json</code> del agente)</span>
+                </label>
+                <input class="ns-input" type="text"
+                       placeholder='Ej: SERVIDOR\INSTANCIA  ó  localhost'
+                       @bind="_req.NombreServidor" />
+                <div class="ns-field-hint text-muted">
+                    El agente usa este nombre para conectarse al SQL Server local. No necesita ser accesible desde internet.
+                </div>
+            </div>
+        }
         <div class="ns-field">
             <label class="ns-field-label">Base de datos</label>
             <input class="ns-input" type="text"
@@ -64,9 +138,6 @@
             <input class="ns-input" type="password"
                    placeholder="Vacío = sin contraseña o sin cambios"
                    @bind="_req.Password" />
-            <div class="ns-field-hint text-warning small">
-                ⚠ Fase 1: almacenada en texto. Fase 2 implementará encriptación IDataProtectionProvider.
-            </div>
         </div>
         <div class="ns-field">
             <label class="ns-field-label">Notas <span class="text-muted small">(opcional)</span></label>
@@ -98,6 +169,14 @@
                 <span> Sin sincronizaciones previas</span>
             }
             · Servidor: <code>@_cfg.NombreServidor</code> · BD: <code>@_cfg.BaseDatos</code>
+            @if (_cfg.UsarAgente)
+            {
+                <span> · Modo: <span class="ns-badge ns-badge--blue">Agente</span> @_cfg.AgentUrl</span>
+            }
+            else
+            {
+                <span> · Modo: <span class="ns-badge">Directo</span></span>
+            }
         </div>
     }
 </div>
@@ -130,6 +209,8 @@
             _req.Usuario = _cfg.Usuario;
             _req.Notas = _cfg.Notas;
             _req.Activo = _cfg.Activo;
+            _req.UsarAgente = _cfg.UsarAgente;
+            _req.AgentUrl = _cfg.AgentUrl;
         }
     }
 

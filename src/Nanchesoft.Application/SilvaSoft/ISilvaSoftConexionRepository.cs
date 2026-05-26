@@ -17,6 +17,12 @@ public interface ISilvaSoftConexionRepository
     /// </summary>
     Task<string?> ObtenerCadenaConexionAsync(Guid empresaId, CancellationToken ct = default);
 
+    /// <summary>
+    /// Devuelve la configuración del agente Windows Service local.
+    /// Retorna null si no hay configuración o si UsarAgente es false.
+    /// </summary>
+    Task<(string AgentUrl, string AgentToken)?> ObtenerConfigAgenteAsync(Guid empresaId, CancellationToken ct = default);
+
     Task<bool> ExisteParaEmpresaAsync(Guid empresaId, CancellationToken ct = default);
 
     Task GuardarAsync(SilvaSoftConexionRequest request, Guid tenantId, Guid empresaId, string? createdBy = null, CancellationToken ct = default);

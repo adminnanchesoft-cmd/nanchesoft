@@ -19,6 +19,9 @@ public sealed class SilvaSoftConexionConfiguration : IEntityTypeConfiguration<Si
         builder.Property(x => x.IsActive).HasColumnName("activo");
         builder.Property(x => x.FechaUltimaSincronizacion).HasColumnName("fecha_ultima_sincronizacion");
         builder.Property(x => x.Notas).HasMaxLength(500);
+        builder.Property(x => x.UsarAgente).HasColumnName("usar_agente").HasDefaultValue(false);
+        builder.Property(x => x.AgentUrl).HasColumnName("agent_url").HasMaxLength(256);
+        builder.Property(x => x.AgentToken).HasColumnName("agent_token").HasMaxLength(256);
 
         // Una configuración por empresa
         builder.HasIndex(x => x.CompanyId).IsUnique();

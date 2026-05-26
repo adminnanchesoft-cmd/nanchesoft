@@ -8,7 +8,7 @@ namespace Nanchesoft.Application.SilvaSoft;
 
 // ─── Conexión ─────────────────────────────────────────────────────────────────
 
-/// <summary>Datos de conexión SilvaSoft, sin exponer contraseña.</summary>
+/// <summary>Datos de conexión SilvaSoft, sin exponer contraseña ni token del agente.</summary>
 public sealed class SilvaSoftConexionDto
 {
     public Guid Id { get; set; }
@@ -18,6 +18,9 @@ public sealed class SilvaSoftConexionDto
     public bool Activo { get; set; }
     public DateTime? FechaUltimaSincronizacion { get; set; }
     public string? Notas { get; set; }
+    public bool UsarAgente { get; set; }
+    /// <summary>URL del agente. Se expone (no es secreto). El token NO se expone.</summary>
+    public string? AgentUrl { get; set; }
 }
 
 /// <summary>Request para crear o actualizar la configuración de conexión.</summary>
@@ -30,6 +33,10 @@ public sealed class SilvaSoftConexionRequest
     public string? Password { get; set; }
     public string? Notas { get; set; }
     public bool Activo { get; set; } = true;
+    public bool UsarAgente { get; set; }
+    public string? AgentUrl { get; set; }
+    /// <summary>Dejar vacío o null para no modificar el token existente.</summary>
+    public string? AgentToken { get; set; }
 }
 
 // ─── Composición (tabla SQL Server de SilvaSoft) ──────────────────────────────

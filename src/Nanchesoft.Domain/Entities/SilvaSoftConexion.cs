@@ -50,4 +50,17 @@ public sealed class SilvaSoftConexion : BaseEntity
     public DateTime? FechaUltimaSincronizacion { get; set; }
 
     public string? Notas { get; set; }
+
+    // ── Modo agente (Windows Service local) ──────────────────────────────────
+    /// <summary>
+    /// Si es true, la conexión se realiza a través del agente Windows Service local
+    /// en lugar de conectar directamente al SQL Server desde la nube.
+    /// </summary>
+    public bool UsarAgente { get; set; }
+
+    /// <summary>URL del agente, ej: http://192.168.1.10:7432</summary>
+    public string? AgentUrl { get; set; }
+
+    /// <summary>Token secreto que el agente valida en el header X-Agent-Token.</summary>
+    public string? AgentToken { get; set; }
 }

@@ -1,4 +1,7 @@
 using System.Diagnostics;
+using System.Net.Http.Json;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Logging;
 using Nanchesoft.Application.SilvaSoft;
@@ -6,38 +9,24 @@ using Nanchesoft.Application.SilvaSoft;
 namespace Nanchesoft.Infrastructure.SilvaSoft;
 
 /// <summary>
-/// Implementación de ISilvaSoftService que se conecta directamente a SQL Server
-/// usando Microsoft.Data.SqlClient.
-///
-/// ARQUITECTURA:
-/// Esta clase NO conoce EF Core ni Postgres. Recibe la cadena de conexión SQL Server
-/// ya construida desde ISilvaSoftConexionRepository (capa de Persistence).
-/// Esto permite sustituirla por una RemoteSilvaSoftAgentService que delegue
-/// a un Windows Service local sin cambiar nada más del sistema.
-///
-/// LOGGING DETALLADO (req. 12):
-/// - Conexión exitosa / fallida
-/// - Tiempo de respuesta (ms)
-/// - Cantidad de registros leídos
-/// - Columnas detectadas dinámicamente
-/// - Mensajes de error completos con contexto
-///
-/// DETECCIÓN DINÁMICA DE COLUMNAS (req. 16):
-/// Antes de leer datos, consulta INFORMATION_SCHEMA.COLUMNS para obtener
-/// la estructura real de la tabla. Si la tabla no existe o tiene columnas
-/// distintas a las esperadas, NO lanza excepción — devuelve el resultado
-/// con Exitoso=false y un mensaje descriptivo.
+/// Implementación de ISilvaSoftService.
+/// Soporta dos modos de conexión según la configuración de la empresa:
+///   · Directo: SqlClient → SQL Server (requiere IP pública o VPN)
+///   · Agente:  HttpClient → Windows Service local → SQL Server (sin puertos expuestos)
 /// </summary>
 public sealed class SilvaSoftService : ISilvaSoftService
 {
     private readonly ISilvaSoftConexionRepository _conexiones;
+    private readonly IHttpClientFactory _httpFactory;
     private readonly ILogger<SilvaSoftService> _logger;
 
     public SilvaSoftService(
         ISilvaSoftConexionRepository conexiones,
+        IHttpClientFactory httpFactory,
         ILogger<SilvaSoftService> logger)
     {
         _conexiones = conexiones;
+        _httpFactory = httpFactory;
         _logger = logger;
     }
 
@@ -45,6 +34,130 @@ public sealed class SilvaSoftService : ISilvaSoftService
 
     public async Task<(bool Exitoso, string Mensaje, long TiempoMs)> ProbarConexionAsync(
         Guid empresaId, CancellationToken ct = default)
+    {
+        var agente = await _conexiones.ObtenerConfigAgenteAsync(empresaId, ct);
+        if (agente.HasValue)
+            return await ProbarViaAgenteAsync(agente.Value.AgentUrl, agente.Value.AgentToken, empresaId, ct);
+
+        return await ProbarDirectoAsync(empresaId, ct);
+    }
+
+    // ── ObtenerComposicionesAsync ─────────────────────────────────────────────
+
+    public async Task<SilvaSoftComposicionResultado> ObtenerComposicionesAsync(
+        Guid empresaId, int top = 100, CancellationToken ct = default)
+    {
+        var agente = await _conexiones.ObtenerConfigAgenteAsync(empresaId, ct);
+        if (agente.HasValue)
+            return await ObtenerComposicionesViaAgenteAsync(agente.Value.AgentUrl, agente.Value.AgentToken, empresaId, top, ct);
+
+        return await ObtenerComposicionesDirectoAsync(empresaId, top, ct);
+    }
+
+    // ── Modo agente ───────────────────────────────────────────────────────────
+
+    private async Task<(bool Exitoso, string Mensaje, long TiempoMs)> ProbarViaAgenteAsync(
+        string agentUrl, string agentToken, Guid empresaId, CancellationToken ct)
+    {
+        _logger.LogInformation("ProbarConexion [{EmpresaId}]: usando agente {Url}", empresaId, agentUrl);
+        var sw = Stopwatch.StartNew();
+        try
+        {
+            using var http = CrearHttpAgente(agentUrl, agentToken);
+            var res = await http.GetAsync("/api/test", ct);
+            sw.Stop();
+            if (res.IsSuccessStatusCode)
+            {
+                var body = await res.Content.ReadFromJsonAsync<AgentTestResponse>(cancellationToken: ct);
+                if (body is not null)
+                {
+                    _logger.LogInformation("ProbarConexion [{EmpresaId}] vía agente: {Msg}", empresaId, body.Mensaje);
+                    return (body.Exitoso, body.Mensaje, body.TiempoMs);
+                }
+            }
+            var raw = await res.Content.ReadAsStringAsync(ct);
+            return (false, $"Error del agente ({(int)res.StatusCode}): {raw}", sw.ElapsedMilliseconds);
+        }
+        catch (Exception ex)
+        {
+            sw.Stop();
+            _logger.LogError(ex, "ProbarConexion [{EmpresaId}] vía agente: error en {Ms}ms", empresaId, sw.ElapsedMilliseconds);
+            return (false, $"No se pudo contactar el agente: {ex.Message}", sw.ElapsedMilliseconds);
+        }
+    }
+
+    private async Task<SilvaSoftComposicionResultado> ObtenerComposicionesViaAgenteAsync(
+        string agentUrl, string agentToken, Guid empresaId, int top, CancellationToken ct)
+    {
+        const string tabla = "composicion";
+        _logger.LogInformation("ObtenerComposiciones [{EmpresaId}]: usando agente {Url}", empresaId, agentUrl);
+        var sw = Stopwatch.StartNew();
+        try
+        {
+            using var http = CrearHttpAgente(agentUrl, agentToken);
+            var res = await http.GetAsync($"/api/composicion?top={top}", ct);
+            sw.Stop();
+            if (res.IsSuccessStatusCode)
+            {
+                var body = await res.Content.ReadFromJsonAsync<AgentComposicionResponse>(
+                    new JsonSerializerOptions { PropertyNameCaseInsensitive = true },
+                    cancellationToken: ct);
+
+                if (body is not null)
+                {
+                    _logger.LogInformation(
+                        "ObtenerComposiciones [{EmpresaId}] vía agente: {N} registros en {Ms}ms",
+                        empresaId, body.Total, sw.ElapsedMilliseconds);
+
+                    return new SilvaSoftComposicionResultado
+                    {
+                        Exitoso = body.Exitoso,
+                        Error = body.Error,
+                        NombreTabla = body.NombreTabla ?? tabla,
+                        BaseDatos = body.BaseDatos ?? string.Empty,
+                        Total = body.Total,
+                        TiempoMs = sw.ElapsedMilliseconds,
+                        Columnas = body.Columnas?.Select(c => new SilvaSoftColumnaMeta
+                        {
+                            NombreColumna = c.NombreColumna,
+                            TipoDato = c.TipoDato,
+                            EsNullable = c.EsNullable,
+                            LongitudMax = c.LongitudMax,
+                            Ordinal = c.Ordinal
+                        }).ToList() ?? [],
+                        Registros = body.Registros?.Select(r => new SilvaSoftComposicionDto
+                        {
+                            Campos = r.ToDictionary(
+                                kv => kv.Key,
+                                kv => kv.Value.ValueKind == JsonValueKind.Null ? (object?)null : kv.Value.GetRawText() as object)
+                        }).ToList() ?? []
+                    };
+                }
+            }
+            var raw = await res.Content.ReadAsStringAsync(ct);
+            return Falla($"Error del agente ({(int)res.StatusCode}): {raw}", tabla, sw.ElapsedMilliseconds);
+        }
+        catch (Exception ex)
+        {
+            sw.Stop();
+            _logger.LogError(ex, "ObtenerComposiciones [{EmpresaId}] vía agente: error en {Ms}ms", empresaId, sw.ElapsedMilliseconds);
+            return Falla($"No se pudo contactar el agente: {ex.Message}", tabla, sw.ElapsedMilliseconds);
+        }
+    }
+
+    private HttpClient CrearHttpAgente(string agentUrl, string agentToken)
+    {
+        var http = _httpFactory.CreateClient();
+        http.BaseAddress = new Uri(agentUrl.TrimEnd('/'));
+        http.Timeout = TimeSpan.FromSeconds(30);
+        http.DefaultRequestHeaders.Add("X-Agent-Token", agentToken);
+        return http;
+    }
+
+    // ── Modo directo (SQL Server) ─────────────────────────────────────────────
+
+    private async Task<(bool Exitoso, string Mensaje, long TiempoMs)> ProbarDirectoAsync(
+        Guid empresaId, CancellationToken ct)
     {
         var cs = await _conexiones.ObtenerCadenaConexionAsync(empresaId, ct);
         if (string.IsNullOrEmpty(cs))
@@ -62,8 +175,7 @@ public sealed class SilvaSoftService : ISilvaSoftService
 
             _logger.LogInformation(
                 "ProbarConexion [{EmpresaId}]: conexión exitosa en {Ms}ms. Server={Server}, DB={DB}",
-                empresaId, sw.ElapsedMilliseconds,
-                conn.DataSource, conn.Database);
+                empresaId, sw.ElapsedMilliseconds, conn.DataSource, conn.Database);
 
             return (true,
                 $"Conexión exitosa. Servidor: {conn.DataSource} | Base de datos: {conn.Database} | Tiempo: {sw.ElapsedMilliseconds}ms",
@@ -72,25 +184,19 @@ public sealed class SilvaSoftService : ISilvaSoftService
         catch (SqlException ex)
         {
             sw.Stop();
-            _logger.LogError(ex,
-                "ProbarConexion [{EmpresaId}]: error SQL {Number} en {Ms}ms",
-                empresaId, ex.Number, sw.ElapsedMilliseconds);
+            _logger.LogError(ex, "ProbarConexion [{EmpresaId}]: error SQL {Number} en {Ms}ms", empresaId, ex.Number, sw.ElapsedMilliseconds);
             return (false, $"Error SQL Server ({ex.Number}): {ex.Message}", sw.ElapsedMilliseconds);
         }
         catch (Exception ex)
         {
             sw.Stop();
-            _logger.LogError(ex,
-                "ProbarConexion [{EmpresaId}]: error inesperado en {Ms}ms",
-                empresaId, sw.ElapsedMilliseconds);
+            _logger.LogError(ex, "ProbarConexion [{EmpresaId}]: error inesperado en {Ms}ms", empresaId, sw.ElapsedMilliseconds);
             return (false, $"Error de conexión: {ex.Message}", sw.ElapsedMilliseconds);
         }
     }
 
-    // ── ObtenerComposicionesAsync ──────────────────────────────────────────────
-
-    public async Task<SilvaSoftComposicionResultado> ObtenerComposicionesAsync(
-        Guid empresaId, int top = 100, CancellationToken ct = default)
+    private async Task<SilvaSoftComposicionResultado> ObtenerComposicionesDirectoAsync(
+        Guid empresaId, int top, CancellationToken ct)
     {
         const string nombreTabla = "composicion";
 
@@ -111,7 +217,6 @@ public sealed class SilvaSoftService : ISilvaSoftService
                 "ObtenerComposiciones [{EmpresaId}]: conectado a {Server}/{DB}",
                 empresaId, conn.DataSource, conn.Database);
 
-            // ── Paso 1: detectar esquema de la tabla dinámicamente ────────────
             var columnas = await DetectarColumnasAsync(conn, nombreTabla, ct);
             if (columnas.Count == 0)
             {
@@ -122,8 +227,7 @@ public sealed class SilvaSoftService : ISilvaSoftService
                 return new SilvaSoftComposicionResultado
                 {
                     Exitoso = false,
-                    Error = $"La tabla '{nombreTabla}' no existe en la base de datos '{conn.Database}' de SilvaSoft. " +
-                            "Verifique el nombre de la tabla o la configuración de la base de datos.",
+                    Error = $"La tabla '{nombreTabla}' no existe en la base de datos '{conn.Database}' de SilvaSoft.",
                     NombreTabla = nombreTabla,
                     BaseDatos = conn.Database,
                     TiempoMs = sw.ElapsedMilliseconds
@@ -134,7 +238,6 @@ public sealed class SilvaSoftService : ISilvaSoftService
                 "ObtenerComposiciones [{EmpresaId}]: {NCol} columnas detectadas en '{Tabla}'",
                 empresaId, columnas.Count, nombreTabla);
 
-            // ── Paso 2: leer datos ────────────────────────────────────────────
             var registros = await LeerRegistrosAsync(conn, nombreTabla, columnas, top, ct);
             sw.Stop();
 
@@ -156,47 +259,29 @@ public sealed class SilvaSoftService : ISilvaSoftService
         catch (SqlException ex)
         {
             sw.Stop();
-            _logger.LogError(ex,
-                "ObtenerComposiciones [{EmpresaId}]: error SQL {Number} en {Ms}ms",
-                empresaId, ex.Number, sw.ElapsedMilliseconds);
+            _logger.LogError(ex, "ObtenerComposiciones [{EmpresaId}]: error SQL {Number} en {Ms}ms", empresaId, ex.Number, sw.ElapsedMilliseconds);
             return Falla($"Error SQL Server ({ex.Number}): {ex.Message}", nombreTabla, sw.ElapsedMilliseconds);
         }
         catch (Exception ex)
         {
             sw.Stop();
-            _logger.LogError(ex,
-                "ObtenerComposiciones [{EmpresaId}]: error inesperado en {Ms}ms",
-                empresaId, sw.ElapsedMilliseconds);
+            _logger.LogError(ex, "ObtenerComposiciones [{EmpresaId}]: error inesperado en {Ms}ms", empresaId, sw.ElapsedMilliseconds);
             return Falla($"Error inesperado: {ex.Message}", nombreTabla, sw.ElapsedMilliseconds);
         }
     }
 
-    // ── Helpers privados ──────────────────────────────────────────────────────
+    // ── Helpers ───────────────────────────────────────────────────────────────
 
-    /// <summary>
-    /// Consulta INFORMATION_SCHEMA.COLUMNS para obtener la estructura real de la tabla.
-    /// Si la tabla no existe, devuelve lista vacía (no lanza excepción).
-    /// </summary>
     private static async Task<List<SilvaSoftColumnaMeta>> DetectarColumnasAsync(
         SqlConnection conn, string nombreTabla, CancellationToken ct)
     {
         var result = new List<SilvaSoftColumnaMeta>();
-
         const string sql = """
-            SELECT
-                COLUMN_NAME,
-                DATA_TYPE,
-                IS_NULLABLE,
-                CHARACTER_MAXIMUM_LENGTH,
-                ORDINAL_POSITION
-            FROM INFORMATION_SCHEMA.COLUMNS
-            WHERE TABLE_NAME = @tabla
-            ORDER BY ORDINAL_POSITION
+            SELECT COLUMN_NAME, DATA_TYPE, IS_NULLABLE, CHARACTER_MAXIMUM_LENGTH, ORDINAL_POSITION
+            FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = @tabla ORDER BY ORDINAL_POSITION
             """;
-
         await using var cmd = new SqlCommand(sql, conn);
         cmd.Parameters.AddWithValue("@tabla", nombreTabla);
-
         await using var reader = await cmd.ExecuteReaderAsync(ct);
         while (await reader.ReadAsync(ct))
         {
@@ -209,51 +294,57 @@ public sealed class SilvaSoftService : ISilvaSoftService
                 Ordinal = reader.GetInt32(4)
             });
         }
-
         return result;
     }
 
-    /// <summary>
-    /// Lee TOP {top} registros de la tabla usando las columnas detectadas.
-    /// Mapea cada fila a un Dictionary para soportar esquemas dinámicos.
-    /// </summary>
     private static async Task<List<SilvaSoftComposicionDto>> LeerRegistrosAsync(
-        SqlConnection conn,
-        string nombreTabla,
-        List<SilvaSoftColumnaMeta> columnas,
-        int top,
-        CancellationToken ct)
+        SqlConnection conn, string nombreTabla, List<SilvaSoftColumnaMeta> columnas, int top, CancellationToken ct)
     {
-        // Construye la lista de columnas para el SELECT de forma segura
-        // (no usa los nombres directamente en la query string — usa la lista validada de INFORMATION_SCHEMA)
         var columnList = string.Join(", ", columnas.Select(c => $"[{c.NombreColumna}]"));
         var sql = $"SELECT TOP {top} {columnList} FROM [{nombreTabla}]";
-
         var result = new List<SilvaSoftComposicionDto>();
         await using var cmd = new SqlCommand(sql, conn);
         await using var reader = await cmd.ExecuteReaderAsync(ct);
-
         while (await reader.ReadAsync(ct))
         {
             var dto = new SilvaSoftComposicionDto();
             for (int i = 0; i < reader.FieldCount; i++)
-            {
-                var colName = reader.GetName(i);
-                dto.Campos[colName] = reader.IsDBNull(i) ? null : reader.GetValue(i);
-            }
+                dto.Campos[reader.GetName(i)] = reader.IsDBNull(i) ? null : reader.GetValue(i);
             result.Add(dto);
         }
-
         return result;
     }
 
-    private static SilvaSoftComposicionResultado Falla(
-        string error, string tabla, long ms = 0)
-        => new()
-        {
-            Exitoso = false,
-            Error = error,
-            NombreTabla = tabla,
-            TiempoMs = ms
-        };
+    private static SilvaSoftComposicionResultado Falla(string error, string tabla, long ms = 0)
+        => new() { Exitoso = false, Error = error, NombreTabla = tabla, TiempoMs = ms };
+}
+
+// ── Response types for agent HTTP calls (internal only) ───────────────────────
+
+file sealed class AgentTestResponse
+{
+    [JsonPropertyName("exitoso")] public bool Exitoso { get; set; }
+    [JsonPropertyName("mensaje")] public string Mensaje { get; set; } = string.Empty;
+    [JsonPropertyName("tiempoMs")] public long TiempoMs { get; set; }
+}
+
+file sealed class AgentComposicionResponse
+{
+    [JsonPropertyName("exitoso")] public bool Exitoso { get; set; }
+    [JsonPropertyName("error")] public string? Error { get; set; }
+    [JsonPropertyName("tiempoMs")] public long TiempoMs { get; set; }
+    [JsonPropertyName("nombreTabla")] public string? NombreTabla { get; set; }
+    [JsonPropertyName("baseDatos")] public string? BaseDatos { get; set; }
+    [JsonPropertyName("total")] public int Total { get; set; }
+    [JsonPropertyName("columnas")] public List<AgentColumnaMeta>? Columnas { get; set; }
+    [JsonPropertyName("registros")] public List<Dictionary<string, JsonElement>>? Registros { get; set; }
+}
+
+file sealed class AgentColumnaMeta
+{
+    [JsonPropertyName("nombreColumna")] public string NombreColumna { get; set; } = string.Empty;
+    [JsonPropertyName("tipoDato")] public string TipoDato { get; set; } = string.Empty;
+    [JsonPropertyName("esNullable")] public bool EsNullable { get; set; }
+    [JsonPropertyName("longitudMax")] public int? LongitudMax { get; set; }
+    [JsonPropertyName("ordinal")] public int Ordinal { get; set; }
 }

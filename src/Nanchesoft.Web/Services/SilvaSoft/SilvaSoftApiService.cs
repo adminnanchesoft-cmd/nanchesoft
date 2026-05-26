@@ -134,6 +134,8 @@ public sealed class SilvaSoftConexionDto
     [JsonPropertyName("fechaUltimaSincronizacion")]
     public DateTime? FechaUltimaSincronizacion { get; set; }
     public string? Notas { get; set; }
+    public bool UsarAgente { get; set; }
+    public string? AgentUrl { get; set; }
 }
 
 public sealed class SilvaSoftConexionRequest
@@ -144,6 +146,10 @@ public sealed class SilvaSoftConexionRequest
     public string? Password { get; set; }
     public string? Notas { get; set; }
     public bool Activo { get; set; } = true;
+    public bool UsarAgente { get; set; }
+    public string? AgentUrl { get; set; }
+    /// <summary>Dejar vacío para no modificar el token existente.</summary>
+    public string? AgentToken { get; set; }
 }
 
 public sealed class SilvaSoftConexionTestDto
