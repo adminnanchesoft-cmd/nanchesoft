@@ -126,6 +126,8 @@ public sealed class NanchesoftDbContext : DbContext
     public DbSet<EmployeeLoanDeduction> EmployeeLoanDeductions => Set<EmployeeLoanDeduction>();
 
     // HR enterprise
+    public DbSet<AttendancePolicy> AttendancePolicies => Set<AttendancePolicy>();
+    public DbSet<AttendancePolicyRule> AttendancePolicyRules => Set<AttendancePolicyRule>();
     public DbSet<WorkShift> WorkShifts => Set<WorkShift>();
     public DbSet<WorkSchedule> WorkSchedules => Set<WorkSchedule>();
     public DbSet<TimeClockDevice> TimeClockDevices => Set<TimeClockDevice>();

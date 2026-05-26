@@ -1,0 +1,437 @@
+@page "/human-resources/attendance-policies"
+@using Nanchesoft.Web.Services.HumanResources
+@inject HumanResourcesApiService Api
+@inject IJSRuntime JS
+
+<PageTitle>Políticas de asistencia | Nanchesoft</PageTitle>
+
+<div class="d-flex align-items-center justify-content-between mb-3">
+    <h4 class="mb-0">Políticas de asistencia</h4>
+    <button class="btn btn-primary btn-sm" @onclick="OpenNewPolicy">+ Nueva política</button>
+</div>
+
+@if (!string.IsNullOrWhiteSpace(_msg))
+{
+    <div class="alert @(_msgOk ? "alert-success" : "alert-danger") alert-dismissible py-2">
+        @_msg
+        <button type="button" class="btn-close btn-sm" @onclick="() => _msg = null"></button>
+    </div>
+}
+
+<div class="row g-3">
+    <div class="col-lg-5">
+        <div class="card shadow-sm h-100">
+            <div class="card-header d-flex align-items-center justify-content-between py-2">
+                <span class="fw-semibold">Políticas</span>
+            </div>
+            <div class="card-body p-0">
+                <table class="table table-hover table-sm mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Código</th>
+                            <th>Nombre</th>
+                            <th class="text-center">Tolerancia</th>
+                            <th class="text-center">Default</th>
+                            <th class="text-center">Activo</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var p in _policies)
+                        {
+                            <tr class="@(_selectedPolicy?.AttendancePolicyId == p.AttendancePolicyId ? "table-active" : "")"
+                                style="cursor:pointer" @onclick="() => SelectPolicy(p)">
+                                <td><code>@p.Code</code></td>
+                                <td>@p.Name</td>
+                                <td class="text-center">@p.ToleranceMinutes min</td>
+                                <td class="text-center">
+                                    @if (p.IsDefault) { <span class="badge bg-info">Sí</span> }
+                                </td>
+                                <td class="text-center">
+                                    @if (p.IsActive) { <span class="badge bg-success">Sí</span> }
+                                    else { <span class="badge bg-secondary">No</span> }
+                                </td>
+                                <td class="text-end">
+                                    <button class="btn btn-outline-secondary btn-sm" @onclick:stopPropagation="true"
+                                            @onclick="() => OpenEditPolicy(p)">Editar</button>
+                                </td>
+                            </tr>
+                        }
+                        @if (!_policies.Any())
+                        {
+                            <tr><td colspan="6" class="text-center text-muted py-3">Sin políticas configuradas.</td></tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-7">
+        @if (_selectedPolicy is not null)
+        {
+            <div class="card shadow-sm h-100">
+                <div class="card-header d-flex align-items-center justify-content-between py-2">
+                    <span class="fw-semibold">Reglas — @_selectedPolicy.Name</span>
+                    <button class="btn btn-outline-primary btn-sm" @onclick="OpenNewRule">+ Regla</button>
+                </div>
+                <div class="card-body p-0">
+                    <table class="table table-hover table-sm mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>#</th>
+                                <th>Código</th>
+                                <th>Nombre</th>
+                                <th>Tipo</th>
+                                <th>Acción</th>
+                                <th class="text-center">Activo</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var r in _rules)
+                            {
+                                <tr>
+                                    <td class="text-muted">@r.SortOrder</td>
+                                    <td><code>@r.Code</code></td>
+                                    <td>@r.Name</td>
+                                    <td><span class="badge bg-light text-dark">@r.RuleType</span></td>
+                                    <td>@r.ActionType</td>
+                                    <td class="text-center">
+                                        @if (r.IsActive) { <span class="badge bg-success">Sí</span> }
+                                        else { <span class="badge bg-secondary">No</span> }
+                                    </td>
+                                    <td class="text-end">
+                                        <button class="btn btn-outline-secondary btn-sm" @onclick="() => OpenEditRule(r)">Editar</button>
+                                    </td>
+                                </tr>
+                            }
+                            @if (!_rules.Any())
+                            {
+                                <tr><td colspan="7" class="text-center text-muted py-3">Sin reglas. Agrega una para esta política.</td></tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        }
+        else
+        {
+            <div class="text-center text-muted py-5">Selecciona una política para ver sus reglas.</div>
+        }
+    </div>
+</div>
+
+@if (_showPolicyEditor)
+{
+    <div class="modal d-block" tabindex="-1" style="background:rgba(0,0,0,.4)">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">@(_editingPolicy?.AttendancePolicyId == Guid.Empty ? "Nueva política" : "Editar política")</h5>
+                    <button class="btn-close" @onclick="() => _showPolicyEditor = false"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row g-3">
+                        <div class="col-md-3">
+                            <label class="form-label">Código *</label>
+                            <input class="form-control" @bind="_editingPolicy!.Code" />
+                        </div>
+                        <div class="col-md-9">
+                            <label class="form-label">Nombre *</label>
+                            <input class="form-control" @bind="_editingPolicy!.Name" />
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">Descripción</label>
+                            <input class="form-control" @bind="_editingPolicy!.Description" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Turno base</label>
+                            <select class="form-select" @bind="_editingPolicy!.WorkShiftId">
+                                <option value="">— Sin turno —</option>
+                                @foreach (var s in _shifts)
+                                {
+                                    <option value="@s.WorkShiftId">@s.Code — @s.Name</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Tolerancia (min)</label>
+                            <input class="form-control" type="number" @bind="_editingPolicy!.ToleranceMinutes" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Mín. horas extra (min)</label>
+                            <input class="form-control" type="number" @bind="_editingPolicy!.MinOvertimeMinutes" />
+                        </div>
+                        <div class="col-md-3">
+                            <div class="form-check mt-4">
+                                <input class="form-check-input" type="checkbox" @bind="_editingPolicy!.RequiresPunchIn" />
+                                <label class="form-check-label">Req. entrada</label>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="form-check mt-4">
+                                <input class="form-check-input" type="checkbox" @bind="_editingPolicy!.RequiresPunchOut" />
+                                <label class="form-check-label">Req. salida</label>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="form-check mt-4">
+                                <input class="form-check-input" type="checkbox" @bind="_editingPolicy!.IsDefault" />
+                                <label class="form-check-label">Política default</label>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="form-check mt-4">
+                                <input class="form-check-input" type="checkbox" @bind="_editingPolicy!.IsActive" />
+                                <label class="form-check-label">Activo</label>
+                            </div>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">Notas</label>
+                            <input class="form-control" @bind="_editingPolicy!.Notes" />
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" @onclick="() => _showPolicyEditor = false">Cancelar</button>
+                    <button class="btn btn-primary" @onclick="SavePolicyAsync" disabled="@_saving">
+                        @(_saving ? "Guardando…" : "Guardar")
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@if (_showRuleEditor)
+{
+    <div class="modal d-block" tabindex="-1" style="background:rgba(0,0,0,.4)">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">@(_editingRule?.AttendancePolicyRuleId == Guid.Empty ? "Nueva regla" : "Editar regla")</h5>
+                    <button class="btn-close" @onclick="() => _showRuleEditor = false"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label class="form-label">Código *</label>
+                            <input class="form-control" @bind="_editingRule!.Code" />
+                        </div>
+                        <div class="col-md-8">
+                            <label class="form-label">Nombre *</label>
+                            <input class="form-control" @bind="_editingRule!.Name" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Tipo de regla</label>
+                            <select class="form-select" @bind="_editingRule!.RuleType">
+                                <option value="Absence">Ausencia</option>
+                                <option value="Lateness">Retardo</option>
+                                <option value="EarlyLeave">Salida anticipada</option>
+                                <option value="Overtime">Tiempo extra</option>
+                                <option value="MissingPunch">Marcación faltante</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Condición</label>
+                            <select class="form-select" @bind="_editingRule!.ConditionType">
+                                <option value="GreaterThan">Mayor que</option>
+                                <option value="GreaterThanOrEqual">Mayor o igual</option>
+                                <option value="Equal">Igual</option>
+                                <option value="Always">Siempre</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Umbral (minutos)</label>
+                            <input class="form-control" type="number" @bind="_editingRule!.ThresholdMinutes" placeholder="Opcional" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Umbral (días)</label>
+                            <input class="form-control" type="number" step="0.5" @bind="_editingRule!.ThresholdDays" placeholder="Opcional" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Acción</label>
+                            <select class="form-select" @bind="_editingRule!.ActionType">
+                                <option value="CreateIncident">Crear incidencia</option>
+                                <option value="Deduct">Descontar</option>
+                                <option value="Flag">Marcar</option>
+                                <option value="NotifyOnly">Solo notificar</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Valor acción</label>
+                            <input class="form-control" type="number" step="0.01" @bind="_editingRule!.ActionValue" />
+                        </div>
+                        <div class="col-md-8">
+                            <label class="form-label">Código tipo incidencia</label>
+                            <input class="form-control" @bind="_editingRule!.IncidentTypeCode" placeholder="p.ej. AUS, RET, SE" />
+                            <div class="form-text">Código del tipo de incidencia a generar.</div>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Orden</label>
+                            <input class="form-control" type="number" @bind="_editingRule!.SortOrder" />
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">Notas</label>
+                            <input class="form-control" @bind="_editingRule!.Notes" />
+                        </div>
+                        <div class="col-12">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" @bind="_editingRule!.IsActive" />
+                                <label class="form-check-label">Activo</label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" @onclick="() => _showRuleEditor = false">Cancelar</button>
+                    <button class="btn btn-primary" @onclick="SaveRuleAsync" disabled="@_saving">
+                        @(_saving ? "Guardando…" : "Guardar")
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<AttendancePolicyItem> _policies = new();
+    private List<AttendancePolicyRuleItem> _rules = new();
+    private List<WorkShiftLookup> _shifts = new();
+    private AttendancePolicyItem? _selectedPolicy;
+
+    private AttendancePolicyItem? _editingPolicy;
+    private AttendancePolicyRuleItem? _editingRule;
+    private bool _showPolicyEditor, _showRuleEditor, _saving;
+    private string? _msg;
+    private bool _msgOk;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _shifts = await Api.GetWorkShiftLookupsAsync();
+        await LoadPoliciesAsync();
+    }
+
+    private async Task LoadPoliciesAsync()
+    {
+        _policies = await Api.GetAttendancePoliciesAsync();
+        if (_selectedPolicy is not null)
+        {
+            _selectedPolicy = _policies.FirstOrDefault(x => x.AttendancePolicyId == _selectedPolicy.AttendancePolicyId);
+            if (_selectedPolicy is not null)
+                await LoadRulesAsync(_selectedPolicy.AttendancePolicyId);
+        }
+    }
+
+    private async Task SelectPolicy(AttendancePolicyItem p)
+    {
+        _selectedPolicy = p;
+        await LoadRulesAsync(p.AttendancePolicyId);
+    }
+
+    private async Task LoadRulesAsync(Guid policyId)
+    {
+        _rules = await Api.GetAttendancePolicyRulesAsync(policyId);
+    }
+
+    private void OpenNewPolicy()
+    {
+        _editingPolicy = new AttendancePolicyItem
+        {
+            AttendancePolicyId = Guid.Empty,
+            RequiresPunchIn = true,
+            RequiresPunchOut = true,
+            MinOvertimeMinutes = 15,
+            IsActive = true
+        };
+        _showPolicyEditor = true;
+    }
+
+    private void OpenEditPolicy(AttendancePolicyItem p)
+    {
+        _editingPolicy = new AttendancePolicyItem
+        {
+            AttendancePolicyId = p.AttendancePolicyId,
+            Code = p.Code, Name = p.Name, Description = p.Description,
+            WorkShiftId = p.WorkShiftId,
+            ToleranceMinutes = p.ToleranceMinutes,
+            MinOvertimeMinutes = p.MinOvertimeMinutes,
+            RequiresPunchIn = p.RequiresPunchIn,
+            RequiresPunchOut = p.RequiresPunchOut,
+            IsDefault = p.IsDefault,
+            Notes = p.Notes,
+            IsActive = p.IsActive
+        };
+        _showPolicyEditor = true;
+    }
+
+    private void OpenNewRule()
+    {
+        _editingRule = new AttendancePolicyRuleItem
+        {
+            AttendancePolicyRuleId = Guid.Empty,
+            AttendancePolicyId = _selectedPolicy!.AttendancePolicyId,
+            ConditionType = "GreaterThan",
+            ActionType = "CreateIncident",
+            IsActive = true
+        };
+        _showRuleEditor = true;
+    }
+
+    private void OpenEditRule(AttendancePolicyRuleItem r)
+    {
+        _editingRule = new AttendancePolicyRuleItem
+        {
+            AttendancePolicyRuleId = r.AttendancePolicyRuleId,
+            AttendancePolicyId = r.AttendancePolicyId,
+            Code = r.Code, Name = r.Name,
+            RuleType = r.RuleType, ConditionType = r.ConditionType,
+            ThresholdMinutes = r.ThresholdMinutes, ThresholdDays = r.ThresholdDays,
+            ActionType = r.ActionType, ActionValue = r.ActionValue,
+            IncidentTypeCode = r.IncidentTypeCode,
+            SortOrder = r.SortOrder, Notes = r.Notes, IsActive = r.IsActive
+        };
+        _showRuleEditor = true;
+    }
+
+    private async Task SavePolicyAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_editingPolicy?.Code) || string.IsNullOrWhiteSpace(_editingPolicy.Name))
+        {
+            _msg = "Código y nombre son obligatorios."; _msgOk = false; return;
+        }
+        _saving = true;
+        try
+        {
+            var isNew = _editingPolicy!.AttendancePolicyId == Guid.Empty;
+            var (ok, err) = isNew
+                ? await Api.CreateAttendancePolicyAsync(_editingPolicy)
+                : await Api.UpdateAttendancePolicyAsync(_editingPolicy.AttendancePolicyId, _editingPolicy);
+            _msg = ok ? (isNew ? "Política creada." : "Política actualizada.") : err;
+            _msgOk = ok;
+            if (ok) { _showPolicyEditor = false; await LoadPoliciesAsync(); }
+        }
+        finally { _saving = false; }
+    }
+
+    private async Task SaveRuleAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_editingRule?.Code) || string.IsNullOrWhiteSpace(_editingRule.Name))
+        {
+            _msg = "Código y nombre son obligatorios."; _msgOk = false; return;
+        }
+        _saving = true;
+        try
+        {
+            var isNew = _editingRule!.AttendancePolicyRuleId == Guid.Empty;
+            var (ok, err) = isNew
+                ? await Api.CreateAttendancePolicyRuleAsync(_editingRule)
+                : await Api.UpdateAttendancePolicyRuleAsync(_editingRule.AttendancePolicyRuleId, _editingRule);
+            _msg = ok ? (isNew ? "Regla creada." : "Regla actualizada.") : err;
+            _msgOk = ok;
+            if (ok) { _showRuleEditor = false; if (_selectedPolicy is not null) await LoadRulesAsync(_selectedPolicy.AttendancePolicyId); }
+        }
+        finally { _saving = false; }
+    }
+}

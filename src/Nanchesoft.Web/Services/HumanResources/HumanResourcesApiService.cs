@@ -1864,6 +1864,98 @@ public sealed class HumanResourcesApiService
         _ => (category ?? string.Empty).Trim().ToUpperInvariant() == "INFORMATIVA" ? "info" : "circle-dot"
     };
 
+    // ── Attendance Policies ─────────────────────────────────────────────────────
+
+    public async Task<List<WorkShiftLookup>> GetWorkShiftLookupsAsync()
+    {
+        var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
+        var rows = await client.GetFromJsonAsync<List<WorkShiftSimpleDto>>("/api/hr/shifts") ?? [];
+        return rows.Where(x => x.IsActive).OrderBy(x => x.Code)
+            .Select(x => new WorkShiftLookup { WorkShiftId = x.WorkShiftId, Code = x.Code, Name = x.Name }).ToList();
+    }
+
+    public async Task<List<AttendancePolicyItem>> GetAttendancePoliciesAsync()
+    {
+        var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
+        return await client.GetFromJsonAsync<List<AttendancePolicyItem>>("/api/hr/attendance-policies") ?? [];
+    }
+
+    public async Task<(bool Ok, string? Error)> CreateAttendancePolicyAsync(AttendancePolicyItem item)
+    {
+        var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
+        var response = await client.PostAsJsonAsync("/api/hr/attendance-policies", new
+        {
+            item.Code, item.Name, item.Description,
+            item.WorkShiftId, item.ToleranceMinutes, item.MinOvertimeMinutes,
+            item.RequiresPunchIn, item.RequiresPunchOut,
+            item.IsDefault, item.Notes, item.IsActive
+        });
+        if (!response.IsSuccessStatusCode)
+            return (false, await response.Content.ReadAsStringAsync());
+        return (true, null);
+    }
+
+    public async Task<(bool Ok, string? Error)> UpdateAttendancePolicyAsync(Guid id, AttendancePolicyItem item)
+    {
+        var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
+        var response = await client.PutAsJsonAsync($"/api/hr/attendance-policies/{id:D}", new
+        {
+            item.Code, item.Name, item.Description,
+            item.WorkShiftId, item.ToleranceMinutes, item.MinOvertimeMinutes,
+            item.RequiresPunchIn, item.RequiresPunchOut,
+            item.IsDefault, item.Notes, item.IsActive
+        });
+        if (!response.IsSuccessStatusCode)
+            return (false, await response.Content.ReadAsStringAsync());
+        return (true, null);
+    }
+
+    public async Task<List<AttendancePolicyRuleItem>> GetAttendancePolicyRulesAsync(Guid policyId)
+    {
+        var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
+        return await client.GetFromJsonAsync<List<AttendancePolicyRuleItem>>($"/api/hr/attendance-policy-rules/by-policy/{policyId:D}") ?? [];
+    }
+
+    public async Task<(bool Ok, string? Error)> CreateAttendancePolicyRuleAsync(AttendancePolicyRuleItem item)
+    {
+        var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
+        var response = await client.PostAsJsonAsync("/api/hr/attendance-policy-rules", new
+        {
+            item.AttendancePolicyId, item.Code, item.Name,
+            item.RuleType, item.ConditionType,
+            item.ThresholdMinutes, item.ThresholdDays,
+            item.ActionType, item.ActionValue, item.IncidentTypeCode,
+            item.SortOrder, item.Notes, item.IsActive
+        });
+        if (!response.IsSuccessStatusCode)
+            return (false, await response.Content.ReadAsStringAsync());
+        return (true, null);
+    }
+
+    public async Task<(bool Ok, string? Error)> UpdateAttendancePolicyRuleAsync(Guid id, AttendancePolicyRuleItem item)
+    {
+        var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
+        var response = await client.PutAsJsonAsync($"/api/hr/attendance-policy-rules/{id:D}", new
+        {
+            item.AttendancePolicyId, item.Code, item.Name,
+            item.RuleType, item.ConditionType,
+            item.ThresholdMinutes, item.ThresholdDays,
+            item.ActionType, item.ActionValue, item.IncidentTypeCode,
+            item.SortOrder, item.Notes, item.IsActive
+        });
+        if (!response.IsSuccessStatusCode)
+            return (false, await response.Content.ReadAsStringAsync());
+        return (true, null);
+    }
+
+    private sealed class WorkShiftSimpleDto
+    {
+        public Guid WorkShiftId { get; set; }
+        public string Code { get; set; } = string.Empty;
+        public string Name { get; set; } = string.Empty;
+        public bool IsActive { get; set; }
+    }
+
     private static async Task EnsureSuccessAsync(HttpResponseMessage response)
     {
         if (response.IsSuccessStatusCode)
@@ -2350,4 +2442,46 @@ public sealed class HrEmployerRegistrationRequest
     public string? State { get; set; }
     public string? Notes { get; set; }
     public bool IsActive { get; set; } = true;
+}
+
+public sealed class WorkShiftLookup
+{
+    public Guid WorkShiftId { get; set; }
+    public string Code { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
+}
+
+public sealed class AttendancePolicyItem
+{
+    public Guid AttendancePolicyId { get; set; }
+    public string Code { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
+    public string Description { get; set; } = string.Empty;
+    public Guid? WorkShiftId { get; set; }
+    public string WorkShiftName { get; set; } = string.Empty;
+    public int ToleranceMinutes { get; set; }
+    public int MinOvertimeMinutes { get; set; } = 15;
+    public bool RequiresPunchIn { get; set; } = true;
+    public bool RequiresPunchOut { get; set; } = true;
+    public bool IsDefault { get; set; }
+    public string Notes { get; set; } = string.Empty;
+    public bool IsActive { get; set; }
+}
+
+public sealed class AttendancePolicyRuleItem
+{
+    public Guid AttendancePolicyRuleId { get; set; }
+    public Guid AttendancePolicyId { get; set; }
+    public string Code { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
+    public string RuleType { get; set; } = string.Empty;
+    public string ConditionType { get; set; } = "GreaterThan";
+    public int? ThresholdMinutes { get; set; }
+    public decimal? ThresholdDays { get; set; }
+    public string ActionType { get; set; } = "CreateIncident";
+    public decimal ActionValue { get; set; }
+    public string? IncidentTypeCode { get; set; }
+    public int SortOrder { get; set; }
+    public string Notes { get; set; } = string.Empty;
+    public bool IsActive { get; set; }
 }

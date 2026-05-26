@@ -98,6 +98,19 @@ public static class HumanResourcesEndpoints
         recurringIncidents.MapPost("/preview", PreviewRecurringIncidentsAsync);
         recurringIncidents.MapPost("/generate", GenerateRecurringIncidentsAsync);
 
+        var attendancePolicies = app.MapGroup("/api/hr/attendance-policies").WithTags("AttendancePolicies");
+        attendancePolicies.MapGet("/", GetAttendancePoliciesAsync);
+        attendancePolicies.MapPost("/", CreateAttendancePolicyAsync);
+        attendancePolicies.MapPut("/{id:guid}", UpdateAttendancePolicyAsync);
+        attendancePolicies.MapDelete("/{id:guid}", DeleteAttendancePolicyAsync);
+
+        var attendancePolicyRules = app.MapGroup("/api/hr/attendance-policy-rules").WithTags("AttendancePolicyRules");
+        attendancePolicyRules.MapGet("/", GetAttendancePolicyRulesAsync);
+        attendancePolicyRules.MapGet("/by-policy/{policyId:guid}", GetRulesByPolicyAsync);
+        attendancePolicyRules.MapPost("/", CreateAttendancePolicyRuleAsync);
+        attendancePolicyRules.MapPut("/{id:guid}", UpdateAttendancePolicyRuleAsync);
+        attendancePolicyRules.MapDelete("/{id:guid}", DeleteAttendancePolicyRuleAsync);
+
         var contracts = app.MapGroup("/api/contracts/employee-contracts").WithTags("EmployeeContracts");
         contracts.MapGet("/", GetEmployeeContractsAsync);
         contracts.MapPost("/", CreateEmployeeContractAsync);
@@ -2247,6 +2260,242 @@ var branchId = ApiTenantScope.ResolveBranchId(httpContext);
         await db.SaveChangesAsync();
         return Results.Ok(new { success = true });
     }
+
+    // ── Attendance Policies ─────────────────────────────────────────────────────
+
+    private static async Task<IResult> GetAttendancePoliciesAsync(HttpContext httpContext, NanchesoftDbContext db)
+    {
+        var tenantId = ApiTenantScope.ResolveTenantId(httpContext);
+        var companyId = ApiTenantScope.ResolveCompanyId(httpContext);
+
+        var rows = await db.AttendancePolicies.AsNoTracking()
+            .Where(x => tenantId.HasValue && x.TenantId == tenantId.Value
+                     && (!companyId.HasValue || x.CompanyId == companyId.Value))
+            .Where(x => !x.IsDeleted)
+            .Include(x => x.Company)
+            .Include(x => x.WorkShift)
+            .OrderBy(x => x.Code)
+            .Select(x => new
+            {
+                AttendancePolicyId = x.Id,
+                x.TenantId, x.CompanyId,
+                CompanyName = x.Company != null ? x.Company.Name : string.Empty,
+                x.WorkShiftId,
+                WorkShiftName = x.WorkShift != null ? x.WorkShift.Name : string.Empty,
+                x.Code, x.Name, x.Description,
+                x.ToleranceMinutes, x.MinOvertimeMinutes,
+                x.RequiresPunchIn, x.RequiresPunchOut,
+                x.IsDefault, x.Notes, x.IsActive
+            })
+            .ToListAsync();
+
+        return Results.Ok(rows);
+    }
+
+    private static async Task<IResult> CreateAttendancePolicyAsync(HttpContext httpContext, AttendancePolicyRequest request, NanchesoftDbContext db)
+    {
+        var context = await ResolveDefaultContextAsync(httpContext, db);
+        var tenantId = request.TenantId ?? context.TenantId;
+        var companyId = request.CompanyId ?? context.CompanyId;
+
+        if (!tenantId.HasValue || !companyId.HasValue)
+            return Results.BadRequest(new { message = "No existe contexto de tenant/empresa." });
+        if (string.IsNullOrWhiteSpace(request.Code) || string.IsNullOrWhiteSpace(request.Name))
+            return Results.BadRequest(new { message = "Código y nombre son obligatorios." });
+
+        var entity = new AttendancePolicy
+        {
+            TenantId = tenantId.Value,
+            CompanyId = companyId.Value,
+            WorkShiftId = request.WorkShiftId,
+            Code = request.Code.Trim().ToUpperInvariant(),
+            Name = request.Name.Trim(),
+            Description = request.Description?.Trim() ?? string.Empty,
+            ToleranceMinutes = request.ToleranceMinutes,
+            MinOvertimeMinutes = request.MinOvertimeMinutes <= 0 ? 15 : request.MinOvertimeMinutes,
+            RequiresPunchIn = request.RequiresPunchIn,
+            RequiresPunchOut = request.RequiresPunchOut,
+            IsDefault = request.IsDefault,
+            Notes = request.Notes?.Trim() ?? string.Empty,
+            IsActive = request.IsActive,
+            CreatedBy = "web-api"
+        };
+
+        db.AttendancePolicies.Add(entity);
+        await db.SaveChangesAsync();
+        return Results.Ok(new { success = true, id = entity.Id });
+    }
+
+    private static async Task<IResult> UpdateAttendancePolicyAsync(Guid id, AttendancePolicyRequest request, NanchesoftDbContext db)
+    {
+        var entity = await db.AttendancePolicies.FirstOrDefaultAsync(x => x.Id == id && !x.IsDeleted);
+        if (entity is null)
+            return Results.NotFound(new { message = "No se encontró la política de asistencia." });
+        if (string.IsNullOrWhiteSpace(request.Code) || string.IsNullOrWhiteSpace(request.Name))
+            return Results.BadRequest(new { message = "Código y nombre son obligatorios." });
+
+        entity.WorkShiftId = request.WorkShiftId;
+        entity.Code = request.Code.Trim().ToUpperInvariant();
+        entity.Name = request.Name.Trim();
+        entity.Description = request.Description?.Trim() ?? string.Empty;
+        entity.ToleranceMinutes = request.ToleranceMinutes;
+        entity.MinOvertimeMinutes = request.MinOvertimeMinutes <= 0 ? 15 : request.MinOvertimeMinutes;
+        entity.RequiresPunchIn = request.RequiresPunchIn;
+        entity.RequiresPunchOut = request.RequiresPunchOut;
+        entity.IsDefault = request.IsDefault;
+        entity.Notes = request.Notes?.Trim() ?? string.Empty;
+        entity.IsActive = request.IsActive;
+        entity.UpdatedBy = "web-api";
+        entity.UpdatedAt = DateTime.UtcNow;
+
+        await db.SaveChangesAsync();
+        return Results.Ok(new { success = true });
+    }
+
+    private static async Task<IResult> DeleteAttendancePolicyAsync(Guid id, NanchesoftDbContext db)
+    {
+        var entity = await db.AttendancePolicies.FirstOrDefaultAsync(x => x.Id == id && !x.IsDeleted);
+        if (entity is null)
+            return Results.NotFound(new { message = "No se encontró la política de asistencia." });
+
+        entity.IsDeleted = true;
+        entity.UpdatedBy = "web-api";
+        entity.UpdatedAt = DateTime.UtcNow;
+        await db.SaveChangesAsync();
+        return Results.Ok(new { success = true });
+    }
+
+    // ── Attendance Policy Rules ─────────────────────────────────────────────────
+
+    private static async Task<IResult> GetAttendancePolicyRulesAsync(HttpContext httpContext, NanchesoftDbContext db)
+    {
+        var tenantId = ApiTenantScope.ResolveTenantId(httpContext);
+        var companyId = ApiTenantScope.ResolveCompanyId(httpContext);
+
+        var rows = await db.AttendancePolicyRules.AsNoTracking()
+            .Where(x => tenantId.HasValue && x.TenantId == tenantId.Value
+                     && (!companyId.HasValue || x.CompanyId == companyId.Value))
+            .Where(x => !x.IsDeleted)
+            .Include(x => x.Policy)
+            .OrderBy(x => x.Policy != null ? x.Policy.Code : string.Empty)
+            .ThenBy(x => x.SortOrder).ThenBy(x => x.Code)
+            .Select(x => new
+            {
+                AttendancePolicyRuleId = x.Id,
+                x.TenantId, x.CompanyId,
+                x.AttendancePolicyId,
+                PolicyName = x.Policy != null ? x.Policy.Name : string.Empty,
+                x.Code, x.Name, x.RuleType, x.ConditionType,
+                x.ThresholdMinutes, x.ThresholdDays,
+                x.ActionType, x.ActionValue, x.IncidentTypeCode,
+                x.SortOrder, x.Notes, x.IsActive
+            })
+            .ToListAsync();
+
+        return Results.Ok(rows);
+    }
+
+    private static async Task<IResult> GetRulesByPolicyAsync(Guid policyId, NanchesoftDbContext db)
+    {
+        var rows = await db.AttendancePolicyRules.AsNoTracking()
+            .Where(x => x.AttendancePolicyId == policyId && !x.IsDeleted && x.IsActive)
+            .OrderBy(x => x.SortOrder).ThenBy(x => x.Code)
+            .Select(x => new
+            {
+                AttendancePolicyRuleId = x.Id,
+                x.AttendancePolicyId,
+                x.Code, x.Name, x.RuleType, x.ConditionType,
+                x.ThresholdMinutes, x.ThresholdDays,
+                x.ActionType, x.ActionValue, x.IncidentTypeCode,
+                x.SortOrder, x.Notes, x.IsActive
+            })
+            .ToListAsync();
+
+        return Results.Ok(rows);
+    }
+
+    private static async Task<IResult> CreateAttendancePolicyRuleAsync(HttpContext httpContext, AttendancePolicyRuleRequest request, NanchesoftDbContext db)
+    {
+        var context = await ResolveDefaultContextAsync(httpContext, db);
+        var tenantId = request.TenantId ?? context.TenantId;
+        var companyId = request.CompanyId ?? context.CompanyId;
+
+        if (!tenantId.HasValue || !companyId.HasValue)
+            return Results.BadRequest(new { message = "No existe contexto de tenant/empresa." });
+        if (request.AttendancePolicyId == Guid.Empty)
+            return Results.BadRequest(new { message = "attendance_policy_id es obligatorio." });
+        if (string.IsNullOrWhiteSpace(request.Code) || string.IsNullOrWhiteSpace(request.Name))
+            return Results.BadRequest(new { message = "Código y nombre son obligatorios." });
+
+        var policyExists = await db.AttendancePolicies.AnyAsync(x => x.Id == request.AttendancePolicyId && !x.IsDeleted);
+        if (!policyExists)
+            return Results.BadRequest(new { message = "La política de asistencia no existe." });
+
+        var entity = new AttendancePolicyRule
+        {
+            TenantId = tenantId.Value,
+            CompanyId = companyId.Value,
+            AttendancePolicyId = request.AttendancePolicyId,
+            Code = request.Code.Trim().ToUpperInvariant(),
+            Name = request.Name.Trim(),
+            RuleType = request.RuleType?.Trim() ?? string.Empty,
+            ConditionType = request.ConditionType?.Trim() ?? "GreaterThan",
+            ThresholdMinutes = request.ThresholdMinutes,
+            ThresholdDays = request.ThresholdDays,
+            ActionType = request.ActionType?.Trim() ?? "CreateIncident",
+            ActionValue = request.ActionValue,
+            IncidentTypeCode = request.IncidentTypeCode?.Trim().ToUpperInvariant(),
+            SortOrder = request.SortOrder,
+            Notes = request.Notes?.Trim() ?? string.Empty,
+            IsActive = request.IsActive,
+            CreatedBy = "web-api"
+        };
+
+        db.AttendancePolicyRules.Add(entity);
+        await db.SaveChangesAsync();
+        return Results.Ok(new { success = true, id = entity.Id });
+    }
+
+    private static async Task<IResult> UpdateAttendancePolicyRuleAsync(Guid id, AttendancePolicyRuleRequest request, NanchesoftDbContext db)
+    {
+        var entity = await db.AttendancePolicyRules.FirstOrDefaultAsync(x => x.Id == id && !x.IsDeleted);
+        if (entity is null)
+            return Results.NotFound(new { message = "No se encontró la regla." });
+        if (string.IsNullOrWhiteSpace(request.Code) || string.IsNullOrWhiteSpace(request.Name))
+            return Results.BadRequest(new { message = "Código y nombre son obligatorios." });
+
+        entity.AttendancePolicyId = request.AttendancePolicyId != Guid.Empty ? request.AttendancePolicyId : entity.AttendancePolicyId;
+        entity.Code = request.Code.Trim().ToUpperInvariant();
+        entity.Name = request.Name.Trim();
+        entity.RuleType = request.RuleType?.Trim() ?? string.Empty;
+        entity.ConditionType = request.ConditionType?.Trim() ?? "GreaterThan";
+        entity.ThresholdMinutes = request.ThresholdMinutes;
+        entity.ThresholdDays = request.ThresholdDays;
+        entity.ActionType = request.ActionType?.Trim() ?? "CreateIncident";
+        entity.ActionValue = request.ActionValue;
+        entity.IncidentTypeCode = request.IncidentTypeCode?.Trim().ToUpperInvariant();
+        entity.SortOrder = request.SortOrder;
+        entity.Notes = request.Notes?.Trim() ?? string.Empty;
+        entity.IsActive = request.IsActive;
+        entity.UpdatedBy = "web-api";
+        entity.UpdatedAt = DateTime.UtcNow;
+
+        await db.SaveChangesAsync();
+        return Results.Ok(new { success = true });
+    }
+
+    private static async Task<IResult> DeleteAttendancePolicyRuleAsync(Guid id, NanchesoftDbContext db)
+    {
+        var entity = await db.AttendancePolicyRules.FirstOrDefaultAsync(x => x.Id == id && !x.IsDeleted);
+        if (entity is null)
+            return Results.NotFound(new { message = "No se encontró la regla." });
+
+        entity.IsDeleted = true;
+        entity.UpdatedBy = "web-api";
+        entity.UpdatedAt = DateTime.UtcNow;
+        await db.SaveChangesAsync();
+        return Results.Ok(new { success = true });
+    }
 }
 
 public class DepartmentRequest
@@ -2635,4 +2884,40 @@ public sealed class GeneratePeriodsRequest
     public int FiscalYear { get; set; }
     public DateTime StartDate { get; set; }
     public bool Overwrite { get; set; }
+}
+
+public sealed class AttendancePolicyRequest
+{
+    public Guid? TenantId { get; set; }
+    public Guid? CompanyId { get; set; }
+    public Guid? WorkShiftId { get; set; }
+    public string? Code { get; set; }
+    public string? Name { get; set; }
+    public string? Description { get; set; }
+    public int ToleranceMinutes { get; set; }
+    public int MinOvertimeMinutes { get; set; } = 15;
+    public bool RequiresPunchIn { get; set; } = true;
+    public bool RequiresPunchOut { get; set; } = true;
+    public bool IsDefault { get; set; }
+    public string? Notes { get; set; }
+    public bool IsActive { get; set; } = true;
+}
+
+public sealed class AttendancePolicyRuleRequest
+{
+    public Guid? TenantId { get; set; }
+    public Guid? CompanyId { get; set; }
+    public Guid AttendancePolicyId { get; set; }
+    public string? Code { get; set; }
+    public string? Name { get; set; }
+    public string? RuleType { get; set; }
+    public string? ConditionType { get; set; }
+    public int? ThresholdMinutes { get; set; }
+    public decimal? ThresholdDays { get; set; }
+    public string? ActionType { get; set; }
+    public decimal ActionValue { get; set; }
+    public string? IncidentTypeCode { get; set; }
+    public int SortOrder { get; set; }
+    public string? Notes { get; set; }
+    public bool IsActive { get; set; } = true;
 }
