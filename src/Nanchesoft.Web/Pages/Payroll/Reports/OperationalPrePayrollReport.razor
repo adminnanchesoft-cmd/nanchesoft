@@ -6,16 +6,21 @@
 
 <PageTitle>Reporte prenómina operativa | Nanchesoft</PageTitle>
 
-<div class="d-flex align-items-center justify-content-between mb-3">
+<div class="d-flex align-items-center justify-content-between mb-3 d-print-none">
     <h4 class="mb-0">Prenómina operativa — vista de reporte</h4>
     <div class="d-flex gap-2">
         <button class="btn btn-outline-secondary btn-sm" @onclick="ExportCsvAsync" disabled="@(_summary == null)">Exportar CSV</button>
         <button class="btn btn-outline-dark btn-sm" @onclick="PrintAsync" disabled="@(_summary == null)">Imprimir</button>
     </div>
 </div>
+@if (_summary != null)
+{
+    <h4 class="mb-1 d-none d-print-block">Prenómina operativa — @_summary.PeriodName</h4>
+    <p class="text-muted small mb-3 d-none d-print-block">Generado: @DateTime.Now.ToString("dd/MM/yyyy HH:mm")</p>
+}
 
 <!-- Selector de periodo -->
-<div class="card shadow-sm mb-3">
+<div class="card shadow-sm mb-3 d-print-none">
     <div class="card-body py-2">
         <div class="row g-2 align-items-center">
             <div class="col-md-4">

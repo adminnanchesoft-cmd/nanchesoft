@@ -4182,3 +4182,60 @@ button, input {
 .ns-import-result-card--dup .ns-import-result-card__num { color:#d97706; }
 .ns-import-result-card--err .ns-import-result-card__num { color:#dc2626; }
 .ns-import-result-card__label { font-size:11px; text-transform:uppercase; letter-spacing:.4px; color:#64748b; font-weight:600; margin-top:4px; }
+
+/* ── Print styles (reportes de nómina) ────────────────────────── */
+@media print {
+    /* Ocultar navegación y sidebar */
+    .ns-shell-enterprise-sidebar,
+    .ns-shell2__left,
+    .ns-topbar,
+    .ns-azure-topbar,
+    [class*="TopBar"],
+    .ns-breadcrumb,
+    .ns-module-hero,
+    .modal-backdrop { display: none !important; }
+
+    /* Contenido ocupa toda la página */
+    .ns-shell2__main,
+    .ns-shell-enterprise-main {
+        margin-left: 0 !important;
+        padding-left: 0 !important;
+        width: 100% !important;
+    }
+
+    .ns-shell2__pageframe,
+    .ns-shell-enterprise-content {
+        padding: 0 !important;
+        margin: 0 !important;
+    }
+
+    /* Encabezado de página */
+    body { font-size: 11px !important; }
+    h4 { font-size: 14px !important; margin-bottom: 8px !important; }
+
+    /* Tablas: no partir filas entre páginas */
+    table { page-break-inside: auto; font-size: 10px !important; }
+    tr { page-break-inside: avoid; page-break-after: auto; }
+    thead { display: table-header-group; }
+    tfoot { display: table-footer-group; }
+
+    /* Cards de totales: forzar en línea */
+    .row.g-3 { display: flex; flex-wrap: wrap; }
+    .row.g-3 > [class*="col-"] { flex: 0 0 auto; width: auto; min-width: 120px; }
+
+    /* Ocultar botones de acción y filtros */
+    .btn, .alert-dismissible .btn-close { display: none !important; }
+    .d-print-none { display: none !important; }
+
+    /* Bordes visibles en impresión */
+    .table { border: 1px solid #dee2e6; }
+    .table th, .table td { border: 1px solid #dee2e6 !important; padding: 3px 6px !important; }
+    .card { border: 1px solid #dee2e6 !important; box-shadow: none !important; page-break-inside: avoid; }
+    .badge { border: 1px solid #ccc; background: #eee !important; color: #333 !important; }
+
+    /* Mantener colores semánticos básicos en texto */
+    .text-success { color: #15803D !important; }
+    .text-danger  { color: #dc2626 !important; }
+    .text-warning { color: #d97706 !important; }
+    .text-info    { color: #0369a1 !important; }
+}

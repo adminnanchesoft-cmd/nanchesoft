@@ -6,16 +6,17 @@
 
 <PageTitle>Reporte de retardos y faltas | Nanchesoft</PageTitle>
 
-<div class="d-flex align-items-center justify-content-between mb-3">
+<div class="d-flex align-items-center justify-content-between mb-3 d-print-none">
     <h4 class="mb-0">Retardos y faltas (detalle diario)</h4>
     <div class="d-flex gap-2">
         <button class="btn btn-outline-secondary btn-sm" @onclick="ExportCsvAsync" disabled="@(!_rows.Any())">Exportar CSV</button>
         <button class="btn btn-outline-dark btn-sm" @onclick="PrintAsync" disabled="@(!_rows.Any())">Imprimir</button>
     </div>
 </div>
+<h4 class="mb-3 d-none d-print-block">Retardos y faltas — detalle diario</h4>
 
 <!-- Filtros -->
-<div class="card shadow-sm mb-3">
+<div class="card shadow-sm mb-3 d-print-none">
     <div class="card-body py-2">
         <div class="row g-2 align-items-end">
             <div class="col-md-3">

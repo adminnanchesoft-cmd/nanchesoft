@@ -5,13 +5,14 @@
 
 <PageTitle>Historial importación reloj | Nanchesoft</PageTitle>
 
-<div class="d-flex align-items-center justify-content-between mb-3">
+<div class="d-flex align-items-center justify-content-between mb-3 d-print-none">
     <h4 class="mb-0">Historial de importaciones del reloj</h4>
     <div class="d-flex gap-2">
         <button class="btn btn-outline-secondary btn-sm" @onclick="LoadAsync" disabled="@_loading">Actualizar</button>
         <button class="btn btn-outline-dark btn-sm" @onclick="PrintAsync" disabled="@(!_rows.Any())">Imprimir</button>
     </div>
 </div>
+<h4 class="mb-3 d-none d-print-block">Historial de importaciones del reloj</h4>
 
 @if (_error != null)
 {
