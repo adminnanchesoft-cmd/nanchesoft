@@ -1,0 +1,413 @@
+@page "/payroll/finiquito"
+@using Nanchesoft.Web.Services.HumanResources
+@inject HumanResourcesApiService Api
+@inject IJSRuntime JS
+
+<PageTitle>Cálculo de finiquito | Nanchesoft</PageTitle>
+
+<div class="d-flex align-items-center justify-content-between mb-3">
+    <h4 class="mb-0">Cálculo de finiquito / liquidación</h4>
+    <button class="btn btn-outline-secondary btn-sm" @onclick="ShowHistory">
+        Historial de finiquitos
+    </button>
+</div>
+
+@if (!string.IsNullOrWhiteSpace(_msg))
+{
+    <div class="alert @(_msgOk ? "alert-success" : "alert-danger") alert-dismissible py-2 mb-3">
+        @_msg
+        <button type="button" class="btn-close btn-sm" @onclick="() => _msg = null"></button>
+    </div>
+}
+
+<div class="row g-3">
+    <!-- Panel izquierdo: parámetros -->
+    <div class="col-lg-4">
+        <div class="card shadow-sm">
+            <div class="card-header py-2 fw-semibold">Datos para el cálculo</div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <label class="form-label form-label-sm">Colaborador *</label>
+                    <select class="form-select form-select-sm" @onchange="OnEmployeeChanged">
+                        <option value="">— Seleccionar —</option>
+                        @foreach (var e in _employees)
+                        {
+                            <option value="@e.EmployeeId">@e.EmployeeNumber · @e.FullName</option>
+                        }
+                    </select>
+                </div>
+
+                @if (_selectedEmployee != null)
+                {
+                    <div class="alert alert-light py-2 small mb-3">
+                        <div><strong>Ingreso:</strong> @_selectedEmployee.HireDate.ToString("dd/MM/yyyy")</div>
+                        <div><strong>Salario diario:</strong> @_selectedEmployee.DailySalary.ToString("C2")</div>
+                        <div><strong>SDI:</strong> @_selectedEmployee.IntegratedDailySalary.ToString("C2")</div>
+                    </div>
+                }
+
+                <div class="mb-3">
+                    <label class="form-label form-label-sm">Tipo de separación *</label>
+                    <select class="form-select form-select-sm" @bind="_form.TerminationType">
+                        <option value="voluntary">Renuncia voluntaria</option>
+                        <option value="justified">Despido justificado</option>
+                        <option value="unjustified">Despido injustificado</option>
+                        <option value="restructuring">Reestructura / liquidación</option>
+                    </select>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label form-label-sm">Fecha de baja *</label>
+                    <input type="date" class="form-control form-control-sm" @bind="_form.TerminationDate" />
+                </div>
+
+                <div class="row g-2 mb-3">
+                    <div class="col-6">
+                        <label class="form-label form-label-sm">Días vacaciones tomados</label>
+                        <input type="number" class="form-control form-control-sm" @bind="_form.VacationDaysTaken"
+                               step="0.5" min="0" />
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label form-label-sm">Prima vacacional %</label>
+                        <input type="number" class="form-control form-control-sm" @bind="_form.VacationPremiumPercent"
+                               step="1" min="25" />
+                    </div>
+                </div>
+
+                <div class="row g-2 mb-3">
+                    <div class="col-6">
+                        <label class="form-label form-label-sm">Salario diario (override)</label>
+                        <input type="number" class="form-control form-control-sm" @bind="_form.DailySalaryOverride"
+                               step="0.01" min="0" placeholder="Automático" />
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label form-label-sm">SDI (override)</label>
+                        <input type="number" class="form-control form-control-sm" @bind="_form.IntegratedDailySalaryOverride"
+                               step="0.01" min="0" placeholder="Automático" />
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label form-label-sm">Notas</label>
+                    <input type="text" class="form-control form-control-sm" @bind="_form.Notes" maxlength="500" />
+                </div>
+
+                <button class="btn btn-primary w-100" @onclick="CalculateAsync"
+                        disabled="@(_calculating || _form.EmployeeId == Guid.Empty)">
+                    @if (_calculating)
+                    {
+                        <span class="spinner-border spinner-border-sm me-1"></span><span>Calculando...</span>
+                    }
+                    else
+                    {
+                        <span>Calcular finiquito</span>
+                    }
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Panel derecho: resultado -->
+    <div class="col-lg-8">
+        @if (_result == null)
+        {
+            <div class="card shadow-sm h-100">
+                <div class="card-body d-flex align-items-center justify-content-center text-muted">
+                    Selecciona un colaborador y calcula para ver el desglose.
+                </div>
+            </div>
+        }
+        else
+        {
+            <div class="card shadow-sm mb-3">
+                <div class="card-header py-2 d-flex align-items-center justify-content-between">
+                    <span class="fw-semibold">
+                        Finiquito: @_result.EmployeeName
+                        <span class="badge @TypeBadge(_result.TerminationType) ms-2">@TypeLabel(_result.TerminationType)</span>
+                        <span class="badge @StatusBadge(_result.Status) ms-1">@_result.Status</span>
+                    </span>
+                    <div class="d-flex gap-2">
+                        @if (_result.Status == "draft")
+                        {
+                            <button class="btn btn-success btn-sm" @onclick="ApproveAsync" disabled="@_saving">
+                                Aprobar finiquito
+                            </button>
+                        }
+                        <button class="btn btn-outline-danger btn-sm" @onclick="DeleteAsync" disabled="@_saving">
+                            Eliminar
+                        </button>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <!-- Resumen antigüedad -->
+                    <div class="row g-2 mb-3 text-center">
+                        <div class="col-6 col-md-3">
+                            <div class="border rounded py-2">
+                                <div class="fs-5 fw-bold">@_result.YearsOfService.ToString("N2")</div>
+                                <div class="small text-muted">Años servicio</div>
+                            </div>
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <div class="border rounded py-2">
+                                <div class="fs-5 fw-bold">@_result.AnnualVacationDays</div>
+                                <div class="small text-muted">Días vacac. LFT</div>
+                            </div>
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <div class="border rounded py-2">
+                                <div class="fs-5 fw-bold">@_result.DailySalary.ToString("C2")</div>
+                                <div class="small text-muted">Salario diario</div>
+                            </div>
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <div class="border rounded py-2">
+                                <div class="fs-5 fw-bold">@_result.IntegratedDailySalary.ToString("C2")</div>
+                                <div class="small text-muted">SDI</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Tabla desglose -->
+                    <table class="table table-sm table-bordered mb-3">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Concepto</th>
+                                <th class="text-end">Días / Base</th>
+                                <th class="text-end">Monto</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>Vacaciones pendientes proporcionales</td>
+                                <td class="text-end">@_result.ProportionalVacationDays.ToString("N2") días <span class="text-muted small">(tomados: @_result.VacationDaysTaken)</span></td>
+                                <td class="text-end">@_result.VacationAmount.ToString("C2")</td>
+                            </tr>
+                            <tr>
+                                <td>Prima vacacional (@_result.VacationPremiumPercent.ToString("N0")%)</td>
+                                <td class="text-end text-muted">sobre vacaciones</td>
+                                <td class="text-end">@_result.VacationPremiumAmount.ToString("C2")</td>
+                            </tr>
+                            <tr>
+                                <td>Aguinaldo proporcional</td>
+                                <td class="text-end">@_result.ProportionalChristmasBonusDays.ToString("N2") días</td>
+                                <td class="text-end">@_result.ChristmasBonusAmount.ToString("C2")</td>
+                            </tr>
+                            <tr class="@(_result.SeniorityPremiumAmount > 0 ? "" : "text-muted")">
+                                <td>Prima de antigüedad (12 días × @Math.Floor(_result.YearsOfService).ToString("N0") años)</td>
+                                <td class="text-end">@_result.SeniorityPremiumDays.ToString("N0") días × @_result.SeniorityPremiumDailyCap.ToString("C2") tope</td>
+                                <td class="text-end">@_result.SeniorityPremiumAmount.ToString("C2")</td>
+                            </tr>
+                            @if (_result.IndemnizationAmount > 0)
+                            {
+                                <tr class="table-warning">
+                                    <td>Indemnización constitucional (90 días SDI)</td>
+                                    <td class="text-end">90 días × @_result.IntegratedDailySalary.ToString("C2")</td>
+                                    <td class="text-end fw-semibold">@_result.IndemnizationAmount.ToString("C2")</td>
+                                </tr>
+                                <tr class="table-warning">
+                                    <td>20 días por año (@Math.Floor(_result.YearsOfService).ToString("N0") años)</td>
+                                    <td class="text-end">@_result.SeniorityBonusDays.ToString("N0") días × @_result.IntegratedDailySalary.ToString("C2")</td>
+                                    <td class="text-end fw-semibold">@_result.SeniorityBonusAmount.ToString("C2")</td>
+                                </tr>
+                            }
+                        </tbody>
+                        <tfoot class="table-secondary fw-bold">
+                            <tr>
+                                <td colspan="2">TOTAL BRUTO</td>
+                                <td class="text-end fs-5 text-success">@_result.TotalGross.ToString("C2")</td>
+                            </tr>
+                        </tfoot>
+                    </table>
+
+                    @if (!string.IsNullOrWhiteSpace(_result.Notes))
+                    {
+                        <div class="text-muted small"><strong>Notas:</strong> @_result.Notes</div>
+                    }
+                    <div class="text-muted small mt-1">
+                        Calculado el @_result.CreatedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm") · ID: <code>@_result.TerminationId.ToString("D")[..8]…</code>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+</div>
+
+<!-- Modal historial -->
+@if (_showHistory)
+{
+    <div class="modal-backdrop fade show"></div>
+    <div class="modal d-block" tabindex="-1">
+        <div class="modal-dialog modal-xl modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header py-2">
+                    <h6 class="modal-title">Historial de finiquitos</h6>
+                    <button type="button" class="btn-close btn-sm" @onclick="() => _showHistory = false"></button>
+                </div>
+                <div class="modal-body p-0">
+                    <table class="table table-sm table-hover mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Colaborador</th>
+                                <th>Tipo</th>
+                                <th>Fecha baja</th>
+                                <th class="text-end">Años</th>
+                                <th class="text-end">Total bruto</th>
+                                <th class="text-center">Estatus</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var t in _history)
+                            {
+                                <tr>
+                                    <td>@t.EmployeeNumber · @t.EmployeeName</td>
+                                    <td><span class="badge @TypeBadge(t.TerminationType)">@TypeLabel(t.TerminationType)</span></td>
+                                    <td>@t.TerminationDate.ToString("dd/MM/yyyy")</td>
+                                    <td class="text-end">@t.YearsOfService.ToString("N2")</td>
+                                    <td class="text-end fw-semibold">@t.TotalGross.ToString("C2")</td>
+                                    <td class="text-center"><span class="badge @StatusBadge(t.Status)">@t.Status</span></td>
+                                    <td>
+                                        <button class="btn btn-xs btn-outline-primary" @onclick="() => LoadFromHistory(t)">
+                                            Ver
+                                        </button>
+                                    </td>
+                                </tr>
+                            }
+                            @if (!_history.Any())
+                            {
+                                <tr><td colspan="7" class="text-center text-muted py-3">Sin finiquitos registrados.</td></tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+                <div class="modal-footer py-2">
+                    <button class="btn btn-secondary btn-sm" @onclick="() => _showHistory = false">Cerrar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    bool _calculating;
+    bool _saving;
+    bool _showHistory;
+    string? _msg;
+    bool _msgOk;
+
+    List<EmployeeSimpleLookup> _employees = [];
+    List<TerminationDto> _history = [];
+    EmployeeSimpleLookup? _selectedEmployee;
+    TerminationDto? _result;
+
+    FiniquitoForm _form = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        _employees = await Api.GetEmployeeSimpleListAsync();
+        _form.TerminationDate = DateTime.Today;
+    }
+
+    async Task OnEmployeeChanged(ChangeEventArgs e)
+    {
+        if (!Guid.TryParse(e.Value?.ToString(), out var id)) { _selectedEmployee = null; return; }
+        _selectedEmployee = _employees.FirstOrDefault(x => x.EmployeeId == id);
+        _form.EmployeeId = id;
+        _result = null;
+    }
+
+    async Task CalculateAsync()
+    {
+        if (_form.EmployeeId == Guid.Empty) return;
+        _calculating = true;
+        _msg = null;
+        StateHasChanged();
+        var req = new TerminationRequest
+        {
+            EmployeeId = _form.EmployeeId,
+            TerminationType = _form.TerminationType,
+            TerminationDate = _form.TerminationDate,
+            VacationDaysTaken = _form.VacationDaysTaken > 0 ? _form.VacationDaysTaken : null,
+            VacationPremiumPercent = _form.VacationPremiumPercent,
+            DailySalaryOverride = _form.DailySalaryOverride > 0 ? _form.DailySalaryOverride : null,
+            IntegratedDailySalaryOverride = _form.IntegratedDailySalaryOverride > 0 ? _form.IntegratedDailySalaryOverride : null,
+            Notes = _form.Notes
+        };
+        _result = await Api.CalculateTerminationAsync(req);
+        _calculating = false;
+        if (_result == null)
+            ShowMsg("Error al calcular el finiquito.", false);
+    }
+
+    async Task ApproveAsync()
+    {
+        if (_result == null) return;
+        _saving = true;
+        var (ok, error) = await Api.ApproveTerminationAsync(_result.TerminationId);
+        _saving = false;
+        ShowMsg(ok ? "Finiquito aprobado." : (error ?? "Error al aprobar."), ok);
+        if (ok && _result != null) _result.Status = "approved";
+    }
+
+    async Task DeleteAsync()
+    {
+        if (_result == null) return;
+        var ok = await JS.InvokeAsync<bool>("confirm", "¿Eliminar este cálculo de finiquito?");
+        if (!ok) return;
+        _saving = true;
+        var (success, error) = await Api.DeleteTerminationAsync(_result.TerminationId);
+        _saving = false;
+        ShowMsg(success ? "Finiquito eliminado." : (error ?? "Error al eliminar."), success);
+        if (success) _result = null;
+    }
+
+    async Task ShowHistory()
+    {
+        _history = await Api.GetTerminationsAsync();
+        _showHistory = true;
+    }
+
+    void LoadFromHistory(TerminationDto t)
+    {
+        _result = t;
+        _showHistory = false;
+    }
+
+    void ShowMsg(string text, bool ok) { _msg = text; _msgOk = ok; }
+
+    static string TypeBadge(string type) => type switch
+    {
+        "unjustified" => "bg-danger",
+        "restructuring" => "bg-warning text-dark",
+        "justified" => "bg-secondary",
+        _ => "bg-info text-dark"
+    };
+
+    static string TypeLabel(string type) => type switch
+    {
+        "voluntary" => "Renuncia",
+        "justified" => "Despido justif.",
+        "unjustified" => "Despido injustif.",
+        "restructuring" => "Reestructura",
+        _ => type
+    };
+
+    static string StatusBadge(string status) => status switch
+    {
+        "approved" => "bg-success",
+        "paid" => "bg-primary",
+        _ => "bg-secondary"
+    };
+
+    sealed class FiniquitoForm
+    {
+        public Guid EmployeeId { get; set; }
+        public string TerminationType { get; set; } = "voluntary";
+        public DateTime TerminationDate { get; set; } = DateTime.Today;
+        public decimal VacationDaysTaken { get; set; }
+        public decimal VacationPremiumPercent { get; set; } = 25;
+        public decimal DailySalaryOverride { get; set; }
+        public decimal IntegratedDailySalaryOverride { get; set; }
+        public string Notes { get; set; } = string.Empty;
+    }
+}

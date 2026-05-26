@@ -1968,7 +1968,10 @@ public sealed class HumanResourcesApiService
             EmployeeNumber = e.EmployeeNumber,
             FullName = string.IsNullOrWhiteSpace(e.FullName)
                 ? string.Join(" ", new[] { e.FirstName, e.MiddleName, e.LastName, e.SecondLastName }.Where(s => !string.IsNullOrWhiteSpace(s)))
-                : e.FullName
+                : e.FullName,
+            HireDate = e.HireDate ?? DateTime.MinValue,
+            DailySalary = e.DailySalary,
+            IntegratedDailySalary = e.IntegratedDailySalary
         }).OrderBy(e => e.FullName).ToList();
     }
 
@@ -1990,6 +1993,36 @@ public sealed class HumanResourcesApiService
         var c = CreateScopedClient();
         var rows = await c.GetFromJsonAsync<List<PayrollPeriodDto>>("/api/payroll/periods") ?? [];
         return rows.Where(x => x.IsActive).OrderByDescending(x => x.StartDate).ToList();
+    }
+
+    public async Task<List<TerminationDto>> GetTerminationsAsync()
+    {
+        var c = CreateScopedClient();
+        return await c.GetFromJsonAsync<List<TerminationDto>>("/api/hr/terminations") ?? [];
+    }
+
+    public async Task<TerminationDto?> CalculateTerminationAsync(TerminationRequest req)
+    {
+        var c = CreateScopedClient();
+        var response = await c.PostAsJsonAsync("/api/hr/terminations/calculate", req);
+        if (!response.IsSuccessStatusCode) return null;
+        return await response.Content.ReadFromJsonAsync<TerminationDto>();
+    }
+
+    public async Task<(bool Ok, string? Error)> ApproveTerminationAsync(Guid id)
+    {
+        var c = CreateScopedClient();
+        var response = await c.PostAsync($"/api/hr/terminations/{id:D}/approve", null);
+        if (response.IsSuccessStatusCode) return (true, null);
+        return (false, await TryReadErrorAsync(response));
+    }
+
+    public async Task<(bool Ok, string? Error)> DeleteTerminationAsync(Guid id)
+    {
+        var c = CreateScopedClient();
+        var response = await c.DeleteAsync($"/api/hr/terminations/{id:D}");
+        if (response.IsSuccessStatusCode) return (true, null);
+        return (false, await TryReadErrorAsync(response));
     }
 
     public async Task<(bool Ok, string? Error)> CreatePeriodAsync(PayrollPeriodRequest req)
@@ -2665,4 +2698,7 @@ public sealed class EmployeeSimpleLookup
     public Guid EmployeeId { get; set; }
     public string EmployeeNumber { get; set; } = string.Empty;
     public string FullName { get; set; } = string.Empty;
+    public DateTime HireDate { get; set; }
+    public decimal DailySalary { get; set; }
+    public decimal IntegratedDailySalary { get; set; }
 }

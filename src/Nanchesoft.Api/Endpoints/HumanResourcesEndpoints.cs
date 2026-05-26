@@ -112,6 +112,13 @@ public static class HumanResourcesEndpoints
         attendancePolicyRules.MapPut("/{id:guid}", UpdateAttendancePolicyRuleAsync);
         attendancePolicyRules.MapDelete("/{id:guid}", DeleteAttendancePolicyRuleAsync);
 
+        var terminations = app.MapGroup("/api/hr/terminations").WithTags("EmployeeTerminations");
+        terminations.MapGet("/", GetTerminationsAsync);
+        terminations.MapGet("/{id:guid}", GetTerminationByIdAsync);
+        terminations.MapPost("/calculate", CalculateTerminationAsync);
+        terminations.MapPost("/{id:guid}/approve", ApproveTerminationAsync);
+        terminations.MapDelete("/{id:guid}", DeleteTerminationAsync);
+
         var contracts = app.MapGroup("/api/contracts/employee-contracts").WithTags("EmployeeContracts");
         contracts.MapGet("/", GetEmployeeContractsAsync);
         contracts.MapPost("/", CreateEmployeeContractAsync);
@@ -2607,6 +2614,228 @@ var branchId = ApiTenantScope.ResolveBranchId(httpContext);
         await db.SaveChangesAsync();
         return Results.Ok(new { success = true });
     }
+
+    // ── Employee Terminations ──────────────────────────────────────────────────
+
+    private static async Task<IResult> GetTerminationsAsync(HttpContext httpContext, NanchesoftDbContext db)
+    {
+        var tenantId = ApiTenantScope.ResolveTenantId(httpContext);
+        var companyId = ApiTenantScope.ResolveCompanyId(httpContext);
+        var rows = await db.EmployeeTerminations.AsNoTracking()
+            .Where(x => !x.IsDeleted
+                && tenantId.HasValue && x.TenantId == tenantId.Value
+                && (!companyId.HasValue || x.CompanyId == companyId.Value))
+            .Include(x => x.Employee)
+            .OrderByDescending(x => x.TerminationDate)
+            .Select(x => new TerminationDto
+            {
+                TerminationId = x.Id,
+                TenantId = x.TenantId, CompanyId = x.CompanyId,
+                EmployeeId = x.EmployeeId,
+                EmployeeName = x.Employee != null ? x.Employee.GetFullName() : string.Empty,
+                EmployeeNumber = x.Employee != null ? x.Employee.EmployeeNumber : string.Empty,
+                TerminationType = x.TerminationType,
+                TerminationDate = x.TerminationDate,
+                DailySalary = x.DailySalary, IntegratedDailySalary = x.IntegratedDailySalary,
+                YearsOfService = x.YearsOfService, DaysOfService = x.DaysOfService,
+                AnnualVacationDays = x.AnnualVacationDays,
+                VacationDaysTaken = x.VacationDaysTaken,
+                ProportionalVacationDays = x.ProportionalVacationDays,
+                VacationPremiumPercent = x.VacationPremiumPercent,
+                ProportionalChristmasBonusDays = x.ProportionalChristmasBonusDays,
+                SeniorityPremiumDays = x.SeniorityPremiumDays,
+                SeniorityPremiumDailyCap = x.SeniorityPremiumDailyCap,
+                IndemnizationDays = x.IndemnizationDays, SeniorityBonusDays = x.SeniorityBonusDays,
+                VacationAmount = x.VacationAmount, VacationPremiumAmount = x.VacationPremiumAmount,
+                ChristmasBonusAmount = x.ChristmasBonusAmount,
+                SeniorityPremiumAmount = x.SeniorityPremiumAmount,
+                IndemnizationAmount = x.IndemnizationAmount, SeniorityBonusAmount = x.SeniorityBonusAmount,
+                TotalGross = x.TotalGross, Notes = x.Notes, Status = x.Status,
+                CreatedAt = x.CreatedAt
+            }).ToListAsync();
+        return Results.Ok(rows);
+    }
+
+    private static async Task<IResult> GetTerminationByIdAsync(Guid id, NanchesoftDbContext db)
+    {
+        var x = await db.EmployeeTerminations.AsNoTracking()
+            .Include(t => t.Employee)
+            .FirstOrDefaultAsync(t => t.Id == id && !t.IsDeleted);
+        if (x is null) return Results.NotFound(new { message = "No se encontró el finiquito." });
+        return Results.Ok(new TerminationDto
+        {
+            TerminationId = x.Id, TenantId = x.TenantId, CompanyId = x.CompanyId,
+            EmployeeId = x.EmployeeId,
+            EmployeeName = x.Employee != null ? x.Employee.GetFullName() : string.Empty,
+            EmployeeNumber = x.Employee != null ? x.Employee.EmployeeNumber : string.Empty,
+            TerminationType = x.TerminationType, TerminationDate = x.TerminationDate,
+            DailySalary = x.DailySalary, IntegratedDailySalary = x.IntegratedDailySalary,
+            YearsOfService = x.YearsOfService, DaysOfService = x.DaysOfService,
+            AnnualVacationDays = x.AnnualVacationDays, VacationDaysTaken = x.VacationDaysTaken,
+            ProportionalVacationDays = x.ProportionalVacationDays, VacationPremiumPercent = x.VacationPremiumPercent,
+            ProportionalChristmasBonusDays = x.ProportionalChristmasBonusDays,
+            SeniorityPremiumDays = x.SeniorityPremiumDays, SeniorityPremiumDailyCap = x.SeniorityPremiumDailyCap,
+            IndemnizationDays = x.IndemnizationDays, SeniorityBonusDays = x.SeniorityBonusDays,
+            VacationAmount = x.VacationAmount, VacationPremiumAmount = x.VacationPremiumAmount,
+            ChristmasBonusAmount = x.ChristmasBonusAmount, SeniorityPremiumAmount = x.SeniorityPremiumAmount,
+            IndemnizationAmount = x.IndemnizationAmount, SeniorityBonusAmount = x.SeniorityBonusAmount,
+            TotalGross = x.TotalGross, Notes = x.Notes, Status = x.Status, CreatedAt = x.CreatedAt
+        });
+    }
+
+    private static async Task<IResult> CalculateTerminationAsync(HttpContext httpContext, TerminationRequest request, NanchesoftDbContext db)
+    {
+        var context = await ResolveDefaultContextAsync(httpContext, db);
+        var tenantId = request.TenantId ?? context.TenantId;
+        var companyId = request.CompanyId ?? context.CompanyId;
+        if (!tenantId.HasValue || !companyId.HasValue)
+            return Results.BadRequest(new { message = "No existe contexto de tenant/empresa." });
+
+        var emp = await db.Employees.AsNoTracking().FirstOrDefaultAsync(x => x.Id == request.EmployeeId && x.IsActive);
+        if (emp is null) return Results.NotFound(new { message = "No se encontró el empleado." });
+
+        var terminationDate = request.TerminationDate?.Date ?? DateTime.UtcNow.Date;
+        var dailySalary = request.DailySalaryOverride ?? emp.DailySalary;
+        var integratedDailySalary = request.IntegratedDailySalaryOverride ?? emp.IntegratedDailySalary;
+        if (integratedDailySalary <= 0) integratedDailySalary = dailySalary;
+
+        // Antigüedad
+        var hireDate = emp.HireDate.Date;
+        var totalDays = (decimal)(terminationDate - hireDate).TotalDays;
+        var yearsOfService = totalDays / 365.25m;
+        var fullYears = (int)Math.Floor(yearsOfService);
+
+        // Días de vacaciones por tabla LFT 2023
+        var annualVacationDays = GetVacationDaysByYears(fullYears);
+
+        // Vacaciones proporcionales del período en curso
+        var yearStart = hireDate.AddYears(fullYears);
+        if (yearStart > terminationDate) yearStart = yearStart.AddYears(-1);
+        var daysInCurrentPeriod = (decimal)(terminationDate - yearStart).TotalDays;
+        var proportionalVacationDays = Math.Round(annualVacationDays * daysInCurrentPeriod / 365m, 4);
+        var vacationDaysPending = Math.Max(0, proportionalVacationDays - (request.VacationDaysTaken ?? 0));
+        var vacationAmount = Math.Round(vacationDaysPending * dailySalary, 2);
+        var vacationPremiumPercent = request.VacationPremiumPercent > 0 ? request.VacationPremiumPercent : 25m;
+        var vacationPremiumAmount = Math.Round(vacationAmount * vacationPremiumPercent / 100m, 2);
+
+        // Aguinaldo proporcional (15 días/año base)
+        var jan1 = new DateTime(terminationDate.Year, 1, 1);
+        var daysInYear = (decimal)(terminationDate - jan1).TotalDays + 1;
+        var proportionalChristmasDays = Math.Round(15m * daysInYear / 365m, 4);
+        var christmasBonusAmount = Math.Round(proportionalChristmasDays * dailySalary, 2);
+
+        // Prima de antigüedad (12 días × años; aplica siempre en despido o renuncia ≥15 años)
+        decimal seniorityPremiumDays = 0, seniorityPremiumAmount = 0, seniorityPremiumDailyCap = 0;
+        bool triggersSeniority = request.TerminationType != "voluntary" || yearsOfService >= 15;
+        if (triggersSeniority && fullYears >= 1)
+        {
+            seniorityPremiumDays = fullYears * 12m;
+            // tope: 2 × salario mínimo vigente (aprox. $278.80 MXN en 2024 zona libre)
+            seniorityPremiumDailyCap = Math.Min(integratedDailySalary, 278.80m * 2);
+            seniorityPremiumAmount = Math.Round(seniorityPremiumDays * seniorityPremiumDailyCap, 2);
+        }
+
+        // Indemnización constitucional (solo despido injustificado / reestructura)
+        decimal indemnizationDays = 0, seniorityBonusDays = 0;
+        decimal indemnizationAmount = 0, seniorityBonusAmount = 0;
+        if (request.TerminationType == "unjustified" || request.TerminationType == "restructuring")
+        {
+            indemnizationDays = 90;
+            indemnizationAmount = Math.Round(90m * integratedDailySalary, 2);
+            seniorityBonusDays = fullYears * 20m;
+            seniorityBonusAmount = Math.Round(seniorityBonusDays * integratedDailySalary, 2);
+        }
+
+        var totalGross = vacationAmount + vacationPremiumAmount + christmasBonusAmount
+            + seniorityPremiumAmount + indemnizationAmount + seniorityBonusAmount;
+
+        var entity = new EmployeeTermination
+        {
+            TenantId = tenantId.Value, CompanyId = companyId.Value,
+            EmployeeId = emp.Id,
+            TerminationType = request.TerminationType ?? "voluntary",
+            TerminationDate = terminationDate,
+            DailySalary = dailySalary, IntegratedDailySalary = integratedDailySalary,
+            YearsOfService = Math.Round(yearsOfService, 4), DaysOfService = Math.Round(totalDays, 0),
+            AnnualVacationDays = annualVacationDays,
+            VacationDaysTaken = request.VacationDaysTaken ?? 0,
+            ProportionalVacationDays = Math.Round(proportionalVacationDays, 2),
+            VacationPremiumPercent = vacationPremiumPercent,
+            ProportionalChristmasBonusDays = Math.Round(proportionalChristmasDays, 2),
+            SeniorityPremiumDays = seniorityPremiumDays, SeniorityPremiumDailyCap = seniorityPremiumDailyCap,
+            IndemnizationDays = indemnizationDays, SeniorityBonusDays = seniorityBonusDays,
+            VacationAmount = vacationAmount, VacationPremiumAmount = vacationPremiumAmount,
+            ChristmasBonusAmount = christmasBonusAmount,
+            SeniorityPremiumAmount = seniorityPremiumAmount,
+            IndemnizationAmount = indemnizationAmount, SeniorityBonusAmount = seniorityBonusAmount,
+            TotalGross = Math.Round(totalGross, 2),
+            Notes = request.Notes ?? string.Empty,
+            Status = "draft", CreatedBy = "web-api"
+        };
+
+        db.EmployeeTerminations.Add(entity);
+        await db.SaveChangesAsync();
+
+        return Results.Ok(new TerminationDto
+        {
+            TerminationId = entity.Id, TenantId = entity.TenantId, CompanyId = entity.CompanyId,
+            EmployeeId = emp.Id,
+            EmployeeName = emp.GetFullName(), EmployeeNumber = emp.EmployeeNumber,
+            TerminationType = entity.TerminationType, TerminationDate = entity.TerminationDate,
+            DailySalary = entity.DailySalary, IntegratedDailySalary = entity.IntegratedDailySalary,
+            YearsOfService = entity.YearsOfService, DaysOfService = entity.DaysOfService,
+            AnnualVacationDays = entity.AnnualVacationDays, VacationDaysTaken = entity.VacationDaysTaken,
+            ProportionalVacationDays = entity.ProportionalVacationDays, VacationPremiumPercent = entity.VacationPremiumPercent,
+            ProportionalChristmasBonusDays = entity.ProportionalChristmasBonusDays,
+            SeniorityPremiumDays = entity.SeniorityPremiumDays, SeniorityPremiumDailyCap = entity.SeniorityPremiumDailyCap,
+            IndemnizationDays = entity.IndemnizationDays, SeniorityBonusDays = entity.SeniorityBonusDays,
+            VacationAmount = entity.VacationAmount, VacationPremiumAmount = entity.VacationPremiumAmount,
+            ChristmasBonusAmount = entity.ChristmasBonusAmount, SeniorityPremiumAmount = entity.SeniorityPremiumAmount,
+            IndemnizationAmount = entity.IndemnizationAmount, SeniorityBonusAmount = entity.SeniorityBonusAmount,
+            TotalGross = entity.TotalGross, Notes = entity.Notes, Status = entity.Status, CreatedAt = entity.CreatedAt
+        });
+    }
+
+    private static async Task<IResult> ApproveTerminationAsync(Guid id, NanchesoftDbContext db)
+    {
+        var entity = await db.EmployeeTerminations.FirstOrDefaultAsync(x => x.Id == id && !x.IsDeleted);
+        if (entity is null) return Results.NotFound(new { message = "No se encontró el finiquito." });
+        if (entity.Status != "draft") return Results.BadRequest(new { message = "Solo se pueden aprobar finiquitos en borrador." });
+        entity.Status = "approved";
+        entity.UpdatedAt = DateTime.UtcNow;
+        entity.UpdatedBy = "web-api";
+        await db.SaveChangesAsync();
+        return Results.Ok(new { success = true });
+    }
+
+    private static async Task<IResult> DeleteTerminationAsync(Guid id, NanchesoftDbContext db)
+    {
+        var entity = await db.EmployeeTerminations.FirstOrDefaultAsync(x => x.Id == id && !x.IsDeleted);
+        if (entity is null) return Results.NotFound(new { message = "No se encontró el finiquito." });
+        entity.IsDeleted = true;
+        entity.UpdatedAt = DateTime.UtcNow;
+        entity.UpdatedBy = "web-api";
+        await db.SaveChangesAsync();
+        return Results.Ok(new { success = true });
+    }
+
+    // Tabla de días de vacaciones LFT 2023 (reforma laboral)
+    private static decimal GetVacationDaysByYears(int fullYears) => fullYears switch
+    {
+        <= 0 => 12,
+        1    => 12,
+        2    => 14,
+        3    => 16,
+        4    => 18,
+        5    => 20,
+        <= 10 => 22,
+        <= 15 => 24,
+        <= 20 => 26,
+        <= 25 => 28,
+        <= 30 => 30,
+        <= 35 => 32,
+        _    => 34
+    };
 }
 
 public class DepartmentRequest
@@ -3049,4 +3278,54 @@ public sealed class AttendancePolicyRuleRequest
     public int SortOrder { get; set; }
     public string? Notes { get; set; }
     public bool IsActive { get; set; } = true;
+}
+
+public sealed class TerminationRequest
+{
+    public Guid? TenantId { get; set; }
+    public Guid? CompanyId { get; set; }
+    public Guid EmployeeId { get; set; }
+    // "voluntary" | "justified" | "unjustified" | "restructuring"
+    public string TerminationType { get; set; } = "voluntary";
+    public DateTime? TerminationDate { get; set; }
+    public decimal? DailySalaryOverride { get; set; }
+    public decimal? IntegratedDailySalaryOverride { get; set; }
+    public decimal? VacationDaysTaken { get; set; }
+    public decimal VacationPremiumPercent { get; set; } = 25;
+    public string? Notes { get; set; }
+}
+
+public sealed class TerminationDto
+{
+    public Guid TerminationId { get; set; }
+    public Guid TenantId { get; set; }
+    public Guid CompanyId { get; set; }
+    public Guid EmployeeId { get; set; }
+    public string EmployeeName { get; set; } = string.Empty;
+    public string EmployeeNumber { get; set; } = string.Empty;
+    public string TerminationType { get; set; } = string.Empty;
+    public DateTime TerminationDate { get; set; }
+    public decimal DailySalary { get; set; }
+    public decimal IntegratedDailySalary { get; set; }
+    public decimal YearsOfService { get; set; }
+    public decimal DaysOfService { get; set; }
+    public decimal AnnualVacationDays { get; set; }
+    public decimal VacationDaysTaken { get; set; }
+    public decimal ProportionalVacationDays { get; set; }
+    public decimal VacationPremiumPercent { get; set; }
+    public decimal ProportionalChristmasBonusDays { get; set; }
+    public decimal SeniorityPremiumDays { get; set; }
+    public decimal SeniorityPremiumDailyCap { get; set; }
+    public decimal IndemnizationDays { get; set; }
+    public decimal SeniorityBonusDays { get; set; }
+    public decimal VacationAmount { get; set; }
+    public decimal VacationPremiumAmount { get; set; }
+    public decimal ChristmasBonusAmount { get; set; }
+    public decimal SeniorityPremiumAmount { get; set; }
+    public decimal IndemnizationAmount { get; set; }
+    public decimal SeniorityBonusAmount { get; set; }
+    public decimal TotalGross { get; set; }
+    public string Notes { get; set; } = string.Empty;
+    public string Status { get; set; } = string.Empty;
+    public DateTime CreatedAt { get; set; }
 }

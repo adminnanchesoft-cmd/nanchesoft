@@ -226,3 +226,52 @@ public sealed class PayrollRunLineDetailRequest
     public string Notes { get; set; } = string.Empty;
     public bool IsActive { get; set; } = true;
 }
+
+public sealed class TerminationRequest
+{
+    public Guid? TenantId { get; set; }
+    public Guid? CompanyId { get; set; }
+    public Guid EmployeeId { get; set; }
+    public string TerminationType { get; set; } = "voluntary";
+    public DateTime? TerminationDate { get; set; }
+    public decimal? DailySalaryOverride { get; set; }
+    public decimal? IntegratedDailySalaryOverride { get; set; }
+    public decimal? VacationDaysTaken { get; set; }
+    public decimal VacationPremiumPercent { get; set; } = 25;
+    public string Notes { get; set; } = string.Empty;
+}
+
+public sealed class TerminationDto
+{
+    public Guid TerminationId { get; set; }
+    public Guid TenantId { get; set; }
+    public Guid CompanyId { get; set; }
+    public Guid EmployeeId { get; set; }
+    public string EmployeeName { get; set; } = string.Empty;
+    public string EmployeeNumber { get; set; } = string.Empty;
+    public string TerminationType { get; set; } = string.Empty;
+    public DateTime TerminationDate { get; set; }
+    public decimal DailySalary { get; set; }
+    public decimal IntegratedDailySalary { get; set; }
+    public decimal YearsOfService { get; set; }
+    public decimal DaysOfService { get; set; }
+    public decimal AnnualVacationDays { get; set; }
+    public decimal VacationDaysTaken { get; set; }
+    public decimal ProportionalVacationDays { get; set; }
+    public decimal VacationPremiumPercent { get; set; }
+    public decimal ProportionalChristmasBonusDays { get; set; }
+    public decimal SeniorityPremiumDays { get; set; }
+    public decimal SeniorityPremiumDailyCap { get; set; }
+    public decimal IndemnizationDays { get; set; }
+    public decimal SeniorityBonusDays { get; set; }
+    public decimal VacationAmount { get; set; }
+    public decimal VacationPremiumAmount { get; set; }
+    public decimal ChristmasBonusAmount { get; set; }
+    public decimal SeniorityPremiumAmount { get; set; }
+    public decimal IndemnizationAmount { get; set; }
+    public decimal SeniorityBonusAmount { get; set; }
+    public decimal TotalGross { get; set; }
+    public string Notes { get; set; } = string.Empty;
+    public string Status { get; set; } = string.Empty;
+    public DateTime CreatedAt { get; set; }
+}
