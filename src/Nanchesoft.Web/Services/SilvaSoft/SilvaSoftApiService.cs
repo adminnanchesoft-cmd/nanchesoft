@@ -1,149 +1,193 @@
 using System.Net.Http.Json;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace Nanchesoft.Web.Services.SilvaSoft;
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  SilvaSoftApiService — cliente HTTP hacia los endpoints /api/silvasoft/*
+//  Actúa como fachada para todos los componentes Blazor que necesiten datos
+//  de la integración SilvaSoft.
+// ─────────────────────────────────────────────────────────────────────────────
 
 public sealed class SilvaSoftApiService
 {
     private readonly IHttpClientFactory _http;
+    private HttpClient Client => _http.CreateClient("Nanchesoft.Api");
 
     public SilvaSoftApiService(IHttpClientFactory http) => _http = http;
 
-    private HttpClient Client => _http.CreateClient("Nanchesoft.Api");
+    // ── Configuración ─────────────────────────────────────────────────────────
 
-    // ── Config ──────────────────────────────────────────────────────
-    public async Task<SilvaSoftConfigDto?> GetConfigAsync()
+    public async Task<SilvaSoftConexionDto?> ObtenerConfigAsync()
     {
-        try { return await Client.GetFromJsonAsync<SilvaSoftConfigDto>("/api/silvasoft/config"); }
+        try { return await Client.GetFromJsonAsync<SilvaSoftConexionDto>("/api/silvasoft/config"); }
         catch { return null; }
     }
 
-    public async Task<(bool ok, string message)> SaveConfigAsync(SilvaSoftConfigRequest req)
+    public async Task<(bool Ok, string Mensaje)> GuardarConfigAsync(SilvaSoftConexionRequest req)
     {
         var res = await Client.PostAsJsonAsync("/api/silvasoft/config", req);
-        if (res.IsSuccessStatusCode) return (true, "Guardado.");
+        if (res.IsSuccessStatusCode) return (true, "Configuración guardada correctamente.");
         var body = await res.Content.ReadAsStringAsync();
-        return (false, body);
+        try
+        {
+            var err = JsonSerializer.Deserialize<JsonElement>(body);
+            return (false, err.TryGetProperty("message", out var m) ? m.GetString() ?? body : body);
+        }
+        catch { return (false, body); }
     }
 
-    public async Task<(bool ok, string message)> TestConnectionAsync()
+    // ── Conexión ──────────────────────────────────────────────────────────────
+
+    public async Task<SilvaSoftConexionTestDto?> ProbarConexionAsync()
     {
-        var res = await Client.GetAsync("/api/silvasoft/test-connection");
-        var json = await res.Content.ReadFromJsonAsync<JsonElement>();
-        var ok = json.TryGetProperty("success", out var s) && s.GetBoolean();
-        var msg = json.TryGetProperty("message", out var m) ? m.GetString() ?? string.Empty : string.Empty;
-        return (ok, msg);
+        try
+        {
+            return await Client.GetFromJsonAsync<SilvaSoftConexionTestDto>("/api/silvasoft/probar-conexion");
+        }
+        catch { return null; }
     }
 
-    // ── Families ────────────────────────────────────────────────────
-    public async Task<List<SilvaSoftFamilyRow>> GetFamiliesAsync()
+    // ── Composición ───────────────────────────────────────────────────────────
+
+    public async Task<SilvaSoftComposicionResultado?> ObtenerComposicionAsync(int top = 100)
     {
-        try { return await Client.GetFromJsonAsync<List<SilvaSoftFamilyRow>>("/api/silvasoft/families") ?? []; }
-        catch { return []; }
+        try
+        {
+            return await Client.GetFromJsonAsync<SilvaSoftComposicionResultado>(
+                $"/api/silvasoft/composicion?top={top}");
+        }
+        catch { return null; }
     }
 
-    public async Task<SilvaSoftImportResult?> ImportFamiliesAsync()
+    public async Task<SilvaSoftVistaImportacionDto?> ObtenerVistaImportacionAsync()
     {
-        var res = await Client.PostAsJsonAsync("/api/silvasoft/families/import", new { });
-        if (!res.IsSuccessStatusCode) return null;
-        return await res.Content.ReadFromJsonAsync<SilvaSoftImportResult>();
+        try
+        {
+            return await Client.GetFromJsonAsync<SilvaSoftVistaImportacionDto>(
+                "/api/silvasoft/composicion/vista-importacion");
+        }
+        catch { return null; }
     }
 
-    // ── Composition ─────────────────────────────────────────────────
-    public async Task<List<SilvaSoftCompositionRow>> GetCompositionAsync(string? styleFilter = null, int page = 1)
-    {
-        var url = $"/api/silvasoft/composition?page={page}&pageSize=200";
-        if (!string.IsNullOrWhiteSpace(styleFilter))
-            url += $"&style={Uri.EscapeDataString(styleFilter)}";
-        try { return await Client.GetFromJsonAsync<List<SilvaSoftCompositionRow>>(url) ?? []; }
-        catch { return []; }
-    }
+    // ── Logs ──────────────────────────────────────────────────────────────────
 
-    public async Task<SilvaSoftImportResult?> ImportCompositionAsync(string? styleFilter = null)
+    public async Task<SilvaSoftSyncLogPagina?> ObtenerLogsAsync(int pagina = 1, int tamano = 50)
     {
-        var req = new { StyleFilter = styleFilter };
-        var res = await Client.PostAsJsonAsync("/api/silvasoft/composition/import", req);
-        if (!res.IsSuccessStatusCode) return null;
-        return await res.Content.ReadFromJsonAsync<SilvaSoftImportResult>();
-    }
-
-    // ── Logs ────────────────────────────────────────────────────────
-    public async Task<SilvaSoftLogPage?> GetLogsAsync(int page = 1, int pageSize = 50)
-    {
-        try { return await Client.GetFromJsonAsync<SilvaSoftLogPage>($"/api/silvasoft/logs?page={page}&pageSize={pageSize}"); }
+        try
+        {
+            return await Client.GetFromJsonAsync<SilvaSoftSyncLogPagina>(
+                $"/api/silvasoft/logs?pagina={pagina}&tamano={tamano}");
+        }
         catch { return null; }
     }
 }
 
-// ── DTOs ─────────────────────────────────────────────────────────
+// ─── DTOs del lado Web (espejo de Application.SilvaSoft) ─────────────────────
 
-public sealed class SilvaSoftConfigDto
+public sealed class SilvaSoftConexionDto
 {
     public Guid Id { get; set; }
-    public string ServerHost { get; set; } = string.Empty;
-    public string DatabaseName { get; set; } = string.Empty;
-    public string DbUser { get; set; } = string.Empty;
-    public int Port { get; set; } = 1433;
-    public bool TrustServerCertificate { get; set; } = true;
-    public string? Notes { get; set; }
-    public DateTime? LastSyncAt { get; set; }
-    public bool IsActive { get; set; }
+    public string NombreServidor { get; set; } = string.Empty;
+    public string BaseDatos { get; set; } = string.Empty;
+    public string Usuario { get; set; } = string.Empty;
+    public bool Activo { get; set; }
+    [JsonPropertyName("fechaUltimaSincronizacion")]
+    public DateTime? FechaUltimaSincronizacion { get; set; }
+    public string? Notas { get; set; }
 }
 
-public sealed class SilvaSoftConfigRequest
+public sealed class SilvaSoftConexionRequest
 {
-    public string ServerHost { get; set; } = string.Empty;
-    public string DatabaseName { get; set; } = string.Empty;
-    public string? DbUser { get; set; }
-    public string? DbPassword { get; set; }
-    public int Port { get; set; } = 1433;
-    public bool TrustServerCertificate { get; set; } = true;
-    public string? Notes { get; set; }
-    public bool IsActive { get; set; } = true;
+    public string NombreServidor { get; set; } = string.Empty;
+    public string BaseDatos { get; set; } = string.Empty;
+    public string Usuario { get; set; } = string.Empty;
+    public string? Password { get; set; }
+    public string? Notas { get; set; }
+    public bool Activo { get; set; } = true;
 }
 
-public sealed class SilvaSoftFamilyRow
+public sealed class SilvaSoftConexionTestDto
 {
-    public string Code { get; set; } = string.Empty;
-    public string Name { get; set; } = string.Empty;
-    public string StatisticsGroup { get; set; } = string.Empty;
-    public bool IsFinishedProductFamily { get; set; }
+    public bool Exitoso { get; set; }
+    public string Mensaje { get; set; } = string.Empty;
+    public long TiempoMs { get; set; }
 }
 
-public sealed class SilvaSoftCompositionRow
+public sealed class SilvaSoftColumnaMeta
 {
-    public string StyleCode { get; set; } = string.Empty;
-    public string MaterialCode { get; set; } = string.Empty;
-    public decimal Quantity { get; set; }
-    public string? Notes { get; set; }
+    public string NombreColumna { get; set; } = string.Empty;
+    public string TipoDato { get; set; } = string.Empty;
+    public bool EsNullable { get; set; }
+    public int? LongitudMax { get; set; }
+    public int Ordinal { get; set; }
+    public string TipoDevExtreme { get; set; } = "string";
 }
 
-public sealed class SilvaSoftImportResult
+public sealed class SilvaSoftComposicionDto
 {
-    public bool Success { get; set; }
-    public int Imported { get; set; }
-    public int Skipped { get; set; }
+    public Dictionary<string, JsonElement> Campos { get; set; } = [];
+}
+
+public sealed class SilvaSoftComposicionResultado
+{
+    public bool Exitoso { get; set; }
+    public string? Error { get; set; }
+    public long TiempoMs { get; set; }
+    public List<SilvaSoftColumnaMeta> Columnas { get; set; } = [];
+    public List<SilvaSoftComposicionDto> Registros { get; set; } = [];
     public int Total { get; set; }
+    public string NombreTabla { get; set; } = string.Empty;
+    public string BaseDatos { get; set; } = string.Empty;
 }
 
-public sealed class SilvaSoftLogPage
+public sealed class SilvaSoftVistaImportacionDto
 {
-    public int Total { get; set; }
-    public int Page { get; set; }
-    public int PageSize { get; set; }
-    public List<SilvaSoftSyncLogDto> Rows { get; set; } = [];
+    public int TotalEnSilvaSoft { get; set; }
+    public int YaExistentesEnNanchesoft { get; set; }
+    public int NuevosParaImportar { get; set; }
+    public int RegistrosInvalidos { get; set; }
+    public List<SilvaSoftMapeoColumna> Mapeo { get; set; } = [];
+    public List<SilvaSoftRegistroVistaPrevia> VistaPrevia { get; set; } = [];
+}
+
+public sealed class SilvaSoftMapeoColumna
+{
+    public string ColumnaOrigen { get; set; } = string.Empty;
+    public string CampoDestino { get; set; } = string.Empty;
+    public string TipoDato { get; set; } = string.Empty;
+    public bool Mapeado { get; set; }
+    public string? Nota { get; set; }
+}
+
+public sealed class SilvaSoftRegistroVistaPrevia
+{
+    public string Codigo { get; set; } = string.Empty;
+    public string Nombre { get; set; } = string.Empty;
+    public string Estado { get; set; } = string.Empty;
+    public string? Razon { get; set; }
 }
 
 public sealed class SilvaSoftSyncLogDto
 {
     public Guid Id { get; set; }
-    public string Operation { get; set; } = string.Empty;
-    public string Status { get; set; } = string.Empty;
-    public int RecordsRead { get; set; }
-    public int RecordsImported { get; set; }
-    public int RecordsSkipped { get; set; }
-    public string? ErrorMessage { get; set; }
-    public DateTime StartedAt { get; set; }
-    public DateTime? FinishedAt { get; set; }
-    public string? TriggeredBy { get; set; }
+    public string Operacion { get; set; } = string.Empty;
+    public string Estado { get; set; } = string.Empty;
+    public int RegistrosLeidos { get; set; }
+    public int RegistrosImportados { get; set; }
+    public int RegistrosOmitidos { get; set; }
+    public string? MensajeError { get; set; }
+    public DateTime Iniciado { get; set; }
+    public DateTime? Terminado { get; set; }
+    public long? DuracionMs { get; set; }
+    public string? DisparadoPor { get; set; }
+}
+
+public sealed class SilvaSoftSyncLogPagina
+{
+    public int Total { get; set; }
+    public int Pagina { get; set; }
+    public int TamanoPagina { get; set; }
+    public List<SilvaSoftSyncLogDto> Registros { get; set; } = [];
 }

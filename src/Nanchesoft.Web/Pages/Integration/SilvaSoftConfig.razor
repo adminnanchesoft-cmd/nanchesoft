@@ -1,129 +1,153 @@
-@page "/integration/silvasoft/config"
+@page "/integraciones/silvasoft/config"
 @rendermode InteractiveServer
 @using Nanchesoft.Web.Services.SilvaSoft
 @inject SilvaSoftApiService SilvaSoft
 
-<PageTitle>Configuración SilvaSoft</PageTitle>
+<PageTitle>SilvaSoft — Configuración de conexión</PageTitle>
 
 <div class="ns-page-header">
     <div class="ns-page-header__left">
-        <div class="ns-page-header__breadcrumb">Integración › SilvaSoft</div>
-        <h1 class="ns-page-header__title">Conexión a SilvaSoft</h1>
-        <p class="ns-page-header__subtitle">Configura el servidor SQL Server de SilvaSoft para esta empresa.</p>
+        <div class="ns-page-header__breadcrumb">Integraciones › SilvaSoft</div>
+        <h1 class="ns-page-header__title">Configuración de conexión</h1>
+        <p class="ns-page-header__subtitle">
+            Configura el servidor SQL Server de SilvaSoft para esta empresa.
+            Los datos se almacenan en la tabla <code>integraciones.silvasoft_conexiones</code>.
+        </p>
     </div>
 </div>
 
-@if (!string.IsNullOrEmpty(_message))
+@if (!string.IsNullOrEmpty(_mensaje))
 {
-    <div class="alert @_msgClass mt-3">@_message</div>
+    <div class="alert @_claseAlerta mt-3">@_mensaje</div>
 }
 
-<div class="ns-section mt-3" style="max-width:640px">
+@if (_testResult is not null)
+{
+    <div class="alert @(_testResult.Exitoso ? "alert-success" : "alert-warning") mt-3">
+        <strong>@(_testResult.Exitoso ? "✓ Conexión exitosa" : "✗ Error de conexión"):</strong>
+        @_testResult.Mensaje
+        <span class="text-muted ms-2 small">(@_testResult.TiempoMs ms)</span>
+    </div>
+}
+
+<div class="ns-section mt-3" style="max-width:660px">
     <div class="ns-form-grid">
         <div class="ns-field">
-            <label class="ns-field-label">Servidor (host / IP)</label>
-            <input class="ns-input" type="text" placeholder="192.168.1.100 ó servidor.dominio.com"
-                   @bind="_req.ServerHost" />
-        </div>
-        <div class="ns-field">
-            <label class="ns-field-label">Puerto</label>
-            <input class="ns-input" type="number" min="1" max="65535"
-                   @bind="_req.Port" />
+            <label class="ns-field-label">
+                Servidor SQL Server
+                <span class="text-muted small ms-1">Formato: HOST\INSTANCIA, IP o FQDN</span>
+            </label>
+            <input class="ns-input" type="text"
+                   placeholder='Ej: SERVIDOR\RETRYVER  ó  192.168.1.100'
+                   @bind="_req.NombreServidor" />
+            <div class="ns-field-hint">
+                Soporta instancias nombradas (SERVIDOR\INSTANCIA) y puertos implícitos.
+            </div>
         </div>
         <div class="ns-field">
             <label class="ns-field-label">Base de datos</label>
-            <input class="ns-input" type="text" placeholder="SilvaSoftDB"
-                   @bind="_req.DatabaseName" />
+            <input class="ns-input" type="text"
+                   placeholder="Nombre de la BD SilvaSoft"
+                   @bind="_req.BaseDatos" />
         </div>
         <div class="ns-field">
             <label class="ns-field-label">Usuario SQL</label>
-            <input class="ns-input" type="text" placeholder="sa"
-                   @bind="_req.DbUser" />
+            <input class="ns-input" type="text"
+                   placeholder="Ej: Leonel"
+                   @bind="_req.Usuario" />
         </div>
         <div class="ns-field">
-            <label class="ns-field-label">Contraseña</label>
-            <input class="ns-input" type="password" placeholder="Dejar vacío para no cambiar"
-                   @bind="_req.DbPassword" />
-        </div>
-        <div class="ns-field">
-            <label class="ns-field-label">Notas</label>
-            <input class="ns-input" type="text" placeholder="Opcional"
-                   @bind="_req.Notes" />
-        </div>
-        <div class="ns-field">
-            <label class="d-flex align-items-center gap-2">
-                <input type="checkbox" @bind="_req.TrustServerCertificate" />
-                Confiar en certificado del servidor (TrustServerCertificate)
+            <label class="ns-field-label">
+                Contraseña
+                <span class="text-muted small ms-1">(dejar vacío para no modificar)</span>
             </label>
+            <input class="ns-input" type="password"
+                   placeholder="Vacío = sin contraseña o sin cambios"
+                   @bind="_req.Password" />
+            <div class="ns-field-hint text-warning small">
+                ⚠ Fase 1: almacenada en texto. Fase 2 implementará encriptación IDataProtectionProvider.
+            </div>
+        </div>
+        <div class="ns-field">
+            <label class="ns-field-label">Notas <span class="text-muted small">(opcional)</span></label>
+            <input class="ns-input" type="text" placeholder="Descripción libre" @bind="_req.Notas" />
         </div>
     </div>
 
     <div class="d-flex gap-2 mt-4">
-        <button class="ns-btn ns-btn--primary" @onclick="SaveAsync" disabled="@_saving">
-            @if (_saving) { <span class="spinner-border spinner-border-sm me-1"></span> }
+        <button class="ns-btn ns-btn--primary" @onclick="GuardarAsync" disabled="@_guardando">
+            @if (_guardando) { <span class="spinner-border spinner-border-sm me-1"></span> }
             Guardar
         </button>
-        <button class="ns-btn ns-btn--outline" @onclick="TestAsync" disabled="@_testing">
-            @if (_testing) { <span class="spinner-border spinner-border-sm me-1"></span> }
+        <button class="ns-btn ns-btn--outline" @onclick="ProbarAsync" disabled="@_probando">
+            @if (_probando) { <span class="spinner-border spinner-border-sm me-1"></span> }
             Probar conexión
         </button>
     </div>
 
-    @if (_existingCfg is not null && _existingCfg.LastSyncAt.HasValue)
+    @if (_cfg is not null)
     {
-        <div class="text-muted small mt-3">
-            Última sincronización: @_existingCfg.LastSyncAt.Value.ToLocalTime().ToString("dd/MM/yyyy HH:mm")
+        <div class="text-muted small mt-4" style="padding:10px;background:#f8fafc;border-radius:8px">
+            <strong>Estado actual:</strong>
+            @if (_cfg.FechaUltimaSincronizacion.HasValue)
+            {
+                <span> Última sincronización: @_cfg.FechaUltimaSincronizacion.Value.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</span>
+            }
+            else
+            {
+                <span> Sin sincronizaciones previas</span>
+            }
+            · Servidor: <code>@_cfg.NombreServidor</code> · BD: <code>@_cfg.BaseDatos</code>
         </div>
     }
 </div>
 
 @code {
-    private SilvaSoftConfigRequest _req = new();
-    private SilvaSoftConfigDto? _existingCfg;
-    private bool _saving;
-    private bool _testing;
-    private string? _message;
-    private string _msgClass = "alert-info";
+    private SilvaSoftConexionRequest _req = new();
+    private SilvaSoftConexionDto? _cfg;
+    private SilvaSoftConexionTestDto? _testResult;
+    private bool _guardando;
+    private bool _probando;
+    private string? _mensaje;
+    private string _claseAlerta = "alert-info";
 
     protected override async Task OnInitializedAsync()
     {
-        _existingCfg = await SilvaSoft.GetConfigAsync();
-        if (_existingCfg is not null)
+        _cfg = await SilvaSoft.ObtenerConfigAsync();
+        if (_cfg is not null)
         {
-            _req.ServerHost = _existingCfg.ServerHost;
-            _req.DatabaseName = _existingCfg.DatabaseName;
-            _req.DbUser = _existingCfg.DbUser;
-            _req.Port = _existingCfg.Port;
-            _req.TrustServerCertificate = _existingCfg.TrustServerCertificate;
-            _req.Notes = _existingCfg.Notes;
-            _req.IsActive = _existingCfg.IsActive;
+            _req.NombreServidor = _cfg.NombreServidor;
+            _req.BaseDatos = _cfg.BaseDatos;
+            _req.Usuario = _cfg.Usuario;
+            _req.Notas = _cfg.Notas;
+            _req.Activo = _cfg.Activo;
         }
     }
 
-    private async Task SaveAsync()
+    private async Task GuardarAsync()
     {
-        _saving = true;
-        _message = null;
+        _guardando = true;
+        _mensaje = null;
+        _testResult = null;
         try
         {
-            var (ok, msg) = await SilvaSoft.SaveConfigAsync(_req);
-            _msgClass = ok ? "alert-success" : "alert-danger";
-            _message = ok ? "Configuración guardada correctamente." : $"Error: {msg}";
-            if (ok) _existingCfg = await SilvaSoft.GetConfigAsync();
+            var (ok, msg) = await SilvaSoft.GuardarConfigAsync(_req);
+            _claseAlerta = ok ? "alert-success" : "alert-danger";
+            _mensaje = msg;
+            if (ok) _cfg = await SilvaSoft.ObtenerConfigAsync();
         }
-        finally { _saving = false; }
+        finally { _guardando = false; }
     }
 
-    private async Task TestAsync()
+    private async Task ProbarAsync()
     {
-        _testing = true;
-        _message = null;
+        _probando = true;
+        _mensaje = null;
+        _testResult = null;
         try
         {
-            var (ok, msg) = await SilvaSoft.TestConnectionAsync();
-            _msgClass = ok ? "alert-success" : "alert-warning";
-            _message = msg;
+            _testResult = await SilvaSoft.ProbarConexionAsync();
         }
-        finally { _testing = false; }
+        finally { _probando = false; }
     }
 }

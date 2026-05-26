@@ -1,0 +1,380 @@
+@page "/integraciones/silvasoft/familias-materiales"
+@rendermode InteractiveServer
+@implements IAsyncDisposable
+@using Microsoft.JSInterop
+@using System.Text.Json
+@using Nanchesoft.Web.Services.SilvaSoft
+@using Nanchesoft.Web.Services.Catalogs
+@inject SilvaSoftApiService SilvaSoft
+@inject IJSRuntime JS
+
+<PageTitle>SilvaSoft — Familias de materiales</PageTitle>
+
+<div class="ns-catalog-page">
+
+    @* ── Encabezado ─────────────────────────────────────────────── *@
+    <div class="ns-catalog-header">
+        <div>
+            <div class="ns-catalog-eyebrow">Nanchesoft ERP · Integración SilvaSoft</div>
+            <h1 class="ns-catalog-title">Familias de materiales</h1>
+            <p class="ns-catalog-subtitle">
+                Vista previa de la tabla <code>composicion</code> de SilvaSoft SQL Server.
+                Mapea las columnas y valida duplicados antes de importar.
+            </p>
+        </div>
+        <div class="ns-catalog-badge">SilvaSoft · DevExtreme 25.1.6</div>
+    </div>
+
+    @* ── Indicadores de estado ──────────────────────────────────── *@
+    @if (_resultado is not null && _resultado.Exitoso)
+    {
+        <div class="ns-kpi-grid" style="margin-bottom:16px">
+            <div class="ns-kpi-card">
+                <div class="ns-kpi-label">Registros leídos</div>
+                <div class="ns-kpi-value">@_resultado.Total</div>
+            </div>
+            <div class="ns-kpi-card">
+                <div class="ns-kpi-label">Columnas detectadas</div>
+                <div class="ns-kpi-value">@_resultado.Columnas.Count</div>
+            </div>
+            <div class="ns-kpi-card ns-kpi-card-success">
+                <div class="ns-kpi-label">Tabla SQL Server</div>
+                <div class="ns-kpi-value" style="font-size:1rem">@_resultado.NombreTabla</div>
+            </div>
+            <div class="ns-kpi-card">
+                <div class="ns-kpi-label">Base de datos</div>
+                <div class="ns-kpi-value" style="font-size:1rem">@_resultado.BaseDatos</div>
+            </div>
+            <div class="ns-kpi-card">
+                <div class="ns-kpi-label">Tiempo respuesta</div>
+                <div class="ns-kpi-value">@_resultado.TiempoMs ms</div>
+            </div>
+        </div>
+    }
+
+    @* ── Barra de acciones ──────────────────────────────────────── *@
+    <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;align-items:center">
+        <button class="ns-btn ns-btn--primary" @onclick="ConsultarSilvaSoftAsync" disabled="@_cargando">
+            @if (_cargando) { <span class="spinner-border spinner-border-sm me-1"></span> }
+            @(_resultado is null ? "Consultar SilvaSoft" : "Actualizar datos")
+        </button>
+
+        @if (_resultado is not null && _resultado.Exitoso)
+        {
+            <button class="ns-btn ns-btn--outline" @onclick="MostrarVistaImportacionAsync" disabled="@_cargandoVista">
+                @if (_cargandoVista) { <span class="spinner-border spinner-border-sm me-1"></span> }
+                Importar a familias de materiales
+            </button>
+        }
+
+        @if (_resultado is not null)
+        {
+            <span class="text-muted small">
+                Servidor: <strong>@_resultado.BaseDatos</strong> ·
+                Tiempo: <strong>@_resultado.TiempoMs ms</strong>
+            </span>
+        }
+    </div>
+
+    @* ── Mensaje de error ───────────────────────────────────────── *@
+    @if (_resultado is not null && !_resultado.Exitoso)
+    {
+        <div style="padding:16px;border-radius:12px;background:#fff1f2;color:#991b1b;border:1px solid #fecdd3;margin-bottom:16px">
+            <strong>Error al conectar con SilvaSoft:</strong><br />
+            @_resultado.Error
+            <div style="margin-top:8px;font-size:0.85rem">
+                Verifique la <a href="/integraciones/silvasoft/config">configuración de conexión</a>.
+            </div>
+        </div>
+    }
+
+    @* ── DataGrid DevExtreme ────────────────────────────────────── *@
+    @if (_resultado is not null && _resultado.Exitoso)
+    {
+        <div id="@_gridId"></div>
+    }
+    else if (!_cargando && _resultado is null)
+    {
+        <div class="ns-empty-state" style="padding:48px 24px;text-align:center;color:#64748b">
+            <svg viewBox="0 0 64 64" width="56" height="56" fill="none" style="margin-bottom:16px;opacity:.4">
+                <rect x="8" y="16" width="48" height="36" rx="4" stroke="#94a3b8" stroke-width="2.5"/>
+                <path d="M8 24h48" stroke="#94a3b8" stroke-width="2.5"/>
+                <path d="M20 32h24M20 40h16" stroke="#94a3b8" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+            <div style="font-size:1.1rem;font-weight:600;margin-bottom:6px">Sin datos cargados</div>
+            <div style="font-size:.9rem">
+                Haz clic en <strong>Consultar SilvaSoft</strong> para leer la tabla
+                <code>composicion</code> desde el servidor SQL Server.
+            </div>
+        </div>
+    }
+
+</div>
+
+@* ── Panel de vista previa de importación ──────────────────────── *@
+@if (_mostrandoVista && _vista is not null)
+{
+    <div class="ns-modal-overlay" @onclick="CerrarVista" style="position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1000;display:flex;align-items:center;justify-content:center">
+        <div class="ns-modal" @onclick:stopPropagation style="background:#fff;border-radius:16px;max-width:820px;width:95%;max-height:90vh;overflow:auto;padding:32px;box-shadow:0 20px 60px rgba(0,0,0,.25)">
+
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px">
+                <div>
+                    <h2 style="margin:0 0 4px 0;font-size:1.25rem">Vista previa de importación</h2>
+                    <p style="margin:0;color:#64748b;font-size:.9rem">
+                        Análisis de los @_vista.TotalEnSilvaSoft registros de SilvaSoft
+                        contra las familias de materiales existentes en Nanchesoft.
+                    </p>
+                </div>
+                <button class="ns-btn ns-btn--outline ns-btn--sm" @onclick="CerrarVista">✕ Cerrar</button>
+            </div>
+
+            @* KPIs de la vista *@
+            <div class="ns-kpi-grid" style="margin-bottom:24px">
+                <div class="ns-kpi-card ns-kpi-card-success">
+                    <div class="ns-kpi-label">Nuevos para importar</div>
+                    <div class="ns-kpi-value" style="color:#059669">@_vista.NuevosParaImportar</div>
+                </div>
+                <div class="ns-kpi-card">
+                    <div class="ns-kpi-label">Ya existen (duplicados)</div>
+                    <div class="ns-kpi-value" style="color:#d97706">@_vista.YaExistentesEnNanchesoft</div>
+                </div>
+                <div class="ns-kpi-card">
+                    <div class="ns-kpi-label">Sin código (inválidos)</div>
+                    <div class="ns-kpi-value" style="color:#dc2626">@_vista.RegistrosInvalidos</div>
+                </div>
+                <div class="ns-kpi-card">
+                    <div class="ns-kpi-label">Total en SilvaSoft</div>
+                    <div class="ns-kpi-value">@_vista.TotalEnSilvaSoft</div>
+                </div>
+            </div>
+
+            @* Mapeo de columnas *@
+            <h3 style="font-size:1rem;margin-bottom:10px">Mapeo de columnas</h3>
+            <div class="ns-table-wrap" style="margin-bottom:24px;max-height:200px;overflow:auto">
+                <table class="ns-table" style="font-size:.85rem">
+                    <thead>
+                        <tr>
+                            <th>Columna SilvaSoft</th>
+                            <th>Tipo SQL</th>
+                            <th>Campo Nanchesoft</th>
+                            <th>Estado</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var m in _vista.Mapeo)
+                        {
+                            <tr>
+                                <td><code>@m.ColumnaOrigen</code></td>
+                                <td class="text-muted">@m.TipoDato</td>
+                                <td>
+                                    @if (m.Mapeado)
+                                    {
+                                        <span style="color:#059669;font-weight:600">@m.CampoDestino</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">—</span>
+                                    }
+                                </td>
+                                <td>
+                                    @if (m.Mapeado)
+                                    {
+                                        <span class="ns-badge ns-badge--green">mapeado</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="ns-badge">sin mapeo</span>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            @* Vista previa de registros (primeros 50) *@
+            <h3 style="font-size:1rem;margin-bottom:10px">Vista previa (primeros 50 registros)</h3>
+            <div class="ns-table-wrap" style="max-height:260px;overflow:auto">
+                <table class="ns-table" style="font-size:.85rem">
+                    <thead>
+                        <tr>
+                            <th>Código</th>
+                            <th>Nombre</th>
+                            <th>Estado</th>
+                            <th>Razón</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var r in _vista.VistaPrevia)
+                        {
+                            <tr>
+                                <td><code>@r.Codigo</code></td>
+                                <td>@r.Nombre</td>
+                                <td>
+                                    @switch (r.Estado)
+                                    {
+                                        case "nuevo":
+                                            <span class="ns-badge ns-badge--green">nuevo</span>
+                                            break;
+                                        case "duplicado":
+                                            <span class="ns-badge" style="background:#fef3c7;color:#92400e">duplicado</span>
+                                            break;
+                                        default:
+                                            <span class="ns-badge" style="background:#fee2e2;color:#991b1b">inválido</span>
+                                            break;
+                                    }
+                                </td>
+                                <td class="text-muted small">@r.Razon</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            <div style="margin-top:24px;padding:12px 16px;background:#f0fdf4;border-radius:10px;border:1px solid #bbf7d0;color:#166534;font-size:.88rem">
+                <strong>Nota:</strong> Esta pantalla es sólo de vista previa (req. fase 1).
+                La importación real a <em>Familias de materiales</em> se habilitará en fase 2
+                una vez validado el mapeo con el cliente.
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private readonly string _gridId = $"ss-fm-grid-{Guid.NewGuid():N}";
+    private SilvaSoftComposicionResultado? _resultado;
+    private SilvaSoftVistaImportacionDto? _vista;
+    private bool _cargando;
+    private bool _cargandoVista;
+    private bool _mostrandoVista;
+    private bool _gridRenderizado;
+    private DotNetObjectReference<SilvaSoftFamiliasMateriales>? _ref;
+
+    protected override void OnInitialized()
+    {
+        _ref = DotNetObjectReference.Create(this);
+    }
+
+    // ── Consultar datos de SilvaSoft ──────────────────────────────
+
+    private async Task ConsultarSilvaSoftAsync()
+    {
+        _cargando = true;
+        _gridRenderizado = false;
+        StateHasChanged();
+
+        try
+        {
+            _resultado = await SilvaSoft.ObtenerComposicionAsync(top: 100);
+        }
+        finally
+        {
+            _cargando = false;
+        }
+
+        if (_resultado?.Exitoso == true)
+        {
+            await InvokeAsync(StateHasChanged);
+            await Task.Yield();
+            await RenderizarGridAsync();
+        }
+        else
+        {
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    // ── Renderizar DevExtreme DataGrid ────────────────────────────
+
+    private async Task RenderizarGridAsync()
+    {
+        if (_resultado is null || !_resultado.Exitoso) return;
+
+        try
+        {
+            // Construir definición compatible con nsCrudGrid.renderCrudGrid
+            var columns = _resultado.Columnas.Select(c => new
+            {
+                dataField = c.NombreColumna,
+                caption = c.NombreColumna,
+                dataType = c.TipoDevExtreme,
+                allowEditing = false,
+                allowFiltering = true,
+                allowSorting = true,
+                visible = true,
+                showInGrid = true,
+                width = c.TipoDevExtreme == "number" ? 120 : 160
+            }).ToList();
+
+            // Convertir registros a lista de diccionarios (formato esperado por nsCrudGrid)
+            var rows = _resultado.Registros.Select((reg, idx) =>
+            {
+                var dict = new Dictionary<string, object?> { ["_rowIdx"] = idx };
+                foreach (var kv in reg.Campos)
+                {
+                    dict[kv.Key] = kv.Value.ValueKind == System.Text.Json.JsonValueKind.Null
+                        ? null
+                        : kv.Value.ValueKind == System.Text.Json.JsonValueKind.Number
+                            ? kv.Value.GetDouble()
+                            : (object?)kv.Value.GetString();
+                }
+                return dict;
+            }).ToList();
+
+            var definition = new
+            {
+                catalogKey = "silvasoft-composicion",
+                title = $"SilvaSoft · {_resultado.NombreTabla} ({_resultado.BaseDatos})",
+                subtitle = $"{_resultado.Total} registros · {_resultado.TiempoMs}ms",
+                keyExpr = "_rowIdx",
+                allowCreate = false,
+                allowUpdate = false,
+                allowDelete = false,
+                allowImport = false,
+                totalCount = _resultado.Total,
+                columns,
+                rows
+            };
+
+            await JS.InvokeVoidAsync("nsCrudGrid.renderCrudGrid", _gridId, definition, _ref);
+            _gridRenderizado = true;
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"[SilvaSoft] Error al renderizar grid: {ex.Message}");
+        }
+    }
+
+    // ── Vista previa de importación ───────────────────────────────
+
+    private async Task MostrarVistaImportacionAsync()
+    {
+        _cargandoVista = true;
+        try
+        {
+            _vista = await SilvaSoft.ObtenerVistaImportacionAsync();
+            if (_vista is not null) _mostrandoVista = true;
+        }
+        finally { _cargandoVista = false; }
+    }
+
+    private void CerrarVista() => _mostrandoVista = false;
+
+    // ── Callbacks desde JS (futuro uso: selección de filas, etc.) ─
+
+    [JSInvokable]
+    public void OnGridEvent(string eventName, string payload)
+    {
+        // Reservado para interacciones futuras desde el DataGrid
+        // (ej: seleccionar registros para importar)
+        Console.WriteLine($"[SilvaSoft Grid] {eventName}: {payload}");
+    }
+
+    // ── Lifecycle ─────────────────────────────────────────────────
+
+    public async ValueTask DisposeAsync()
+    {
+        try { await JS.InvokeVoidAsync("nsCrudGrid.disposeCrudGrid", _gridId); } catch { }
+        _ref?.Dispose();
+    }
+}

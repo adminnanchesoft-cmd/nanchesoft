@@ -1,33 +1,36 @@
-@page "/integration/silvasoft/logs"
+@page "/integraciones/silvasoft/logs"
 @rendermode InteractiveServer
 @using Nanchesoft.Web.Services.SilvaSoft
 @inject SilvaSoftApiService SilvaSoft
 
-<PageTitle>Logs SilvaSoft</PageTitle>
+<PageTitle>SilvaSoft — Logs de sincronización</PageTitle>
 
 <div class="ns-page-header">
     <div class="ns-page-header__left">
-        <div class="ns-page-header__breadcrumb">Integración › SilvaSoft</div>
+        <div class="ns-page-header__breadcrumb">Integraciones › SilvaSoft</div>
         <h1 class="ns-page-header__title">Logs de sincronización</h1>
-        <p class="ns-page-header__subtitle">Historial de todas las operaciones de importación desde SilvaSoft.</p>
+        <p class="ns-page-header__subtitle">
+            Historial de todas las operaciones de integración SilvaSoft:
+            conexiones, consultas y (futuras) importaciones.
+        </p>
     </div>
     <div class="ns-page-header__actions">
-        <button class="ns-btn ns-btn--outline" @onclick="LoadAsync">Actualizar</button>
+        <button class="ns-btn ns-btn--outline" @onclick="CargarAsync">Actualizar</button>
     </div>
 </div>
 
-@if (_data is null)
+@if (_pagina is null)
 {
-    <div class="text-muted mt-4"><span class="spinner-border spinner-border-sm me-2"></span>Cargando…</div>
+    <div class="text-muted mt-4"><span class="spinner-border spinner-border-sm me-2"></span>Cargando logs…</div>
 }
-else if (_data.Rows.Count == 0)
+else if (_pagina.Registros.Count == 0)
 {
     <div class="ns-empty-state mt-4"><p>Sin registros de sincronización todavía.</p></div>
 }
 else
 {
     <div class="ns-section mt-3">
-        <div class="text-muted small mb-2">@_data.Total registros totales</div>
+        <div class="text-muted small mb-2">@_pagina.Total registros · Página @_pagina.Pagina</div>
         <div class="ns-table-wrap">
             <table class="ns-table">
                 <thead>
@@ -43,40 +46,42 @@ else
                     </tr>
                 </thead>
                 <tbody>
-                    @foreach (var r in _data.Rows)
+                    @foreach (var r in _pagina.Registros)
                     {
                         <tr>
-                            <td><code>@r.Operation</code></td>
+                            <td><code>@r.Operacion</code></td>
                             <td>
-                                @if (r.Status == "ok")
+                                @switch (r.Estado)
                                 {
-                                    <span class="ns-badge ns-badge--green">ok</span>
-                                }
-                                else if (r.Status == "error")
-                                {
-                                    <span class="ns-badge ns-badge--red">error</span>
-                                }
-                                else
-                                {
-                                    <span class="ns-badge">@r.Status</span>
+                                    case "ok":
+                                        <span class="ns-badge ns-badge--green">ok</span>
+                                        break;
+                                    case "error":
+                                        <span class="ns-badge" style="background:#fee2e2;color:#991b1b">error</span>
+                                        break;
+                                    default:
+                                        <span class="ns-badge">@r.Estado</span>
+                                        break;
                                 }
                             </td>
-                            <td class="text-end">@r.RecordsRead</td>
-                            <td class="text-end">@r.RecordsImported</td>
-                            <td class="text-end">@r.RecordsSkipped</td>
-                            <td class="text-muted small">@r.StartedAt.ToLocalTime().ToString("dd/MM/yy HH:mm")</td>
+                            <td class="text-end">@r.RegistrosLeidos</td>
+                            <td class="text-end">@r.RegistrosImportados</td>
+                            <td class="text-end">@r.RegistrosOmitidos</td>
                             <td class="text-muted small">
-                                @if (r.FinishedAt.HasValue)
+                                @r.Iniciado.ToLocalTime().ToString("dd/MM/yy HH:mm")
+                            </td>
+                            <td class="text-muted small">
+                                @if (r.DuracionMs.HasValue)
                                 {
-                                    var dur = r.FinishedAt.Value - r.StartedAt;
-                                    @(dur.TotalSeconds < 60
-                                        ? $"{dur.TotalSeconds:N1}s"
-                                        : $"{dur.TotalMinutes:N1}m")
+                                    @(r.DuracionMs.Value < 1000
+                                        ? $"{r.DuracionMs.Value}ms"
+                                        : $"{r.DuracionMs.Value / 1000.0:N1}s")
                                 }
                             </td>
-                            <td class="text-danger small" style="max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
-                                title="@r.ErrorMessage">
-                                @r.ErrorMessage
+                            <td class="text-danger small"
+                                style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
+                                title="@r.MensajeError">
+                                @r.MensajeError
                             </td>
                         </tr>
                     }
@@ -84,13 +89,19 @@ else
             </table>
         </div>
 
-        @if (_data.Total > _data.PageSize)
+        @if (_pagina.Total > _pagina.TamanoPagina)
         {
             <div class="d-flex gap-2 mt-3 align-items-center">
-                <button class="ns-btn ns-btn--outline ns-btn--sm" @onclick="PrevPage" disabled="@(_page == 1)">‹ Anterior</button>
-                <span class="text-muted small">Pág. @_page de @((int)Math.Ceiling((double)_data.Total / _data.PageSize))</span>
-                <button class="ns-btn ns-btn--outline ns-btn--sm" @onclick="NextPage"
-                        disabled="@(_page * _data.PageSize >= _data.Total)">
+                <button class="ns-btn ns-btn--outline ns-btn--sm"
+                        @onclick="PaginaAnterior" disabled="@(_pagina.Pagina <= 1)">
+                    ‹ Anterior
+                </button>
+                <span class="text-muted small">
+                    Página @_pagina.Pagina de @((int)Math.Ceiling((double)_pagina.Total / _pagina.TamanoPagina))
+                </span>
+                <button class="ns-btn ns-btn--outline ns-btn--sm"
+                        @onclick="PaginaSiguiente"
+                        disabled="@(_pagina.Pagina * _pagina.TamanoPagina >= _pagina.Total)">
                     Siguiente ›
                 </button>
             </div>
@@ -99,16 +110,24 @@ else
 }
 
 @code {
-    private SilvaSoftLogPage? _data;
-    private int _page = 1;
+    private SilvaSoftSyncLogPagina? _pagina;
+    private int _paginaActual = 1;
 
-    protected override async Task OnInitializedAsync() => await LoadAsync();
+    protected override async Task OnInitializedAsync() => await CargarAsync();
 
-    private async Task LoadAsync()
+    private async Task CargarAsync()
     {
-        _data = await SilvaSoft.GetLogsAsync(_page);
+        _pagina = await SilvaSoft.ObtenerLogsAsync(_paginaActual);
     }
 
-    private async Task PrevPage() { if (_page > 1) { _page--; await LoadAsync(); } }
-    private async Task NextPage() { _page++; await LoadAsync(); }
+    private async Task PaginaAnterior()
+    {
+        if (_paginaActual > 1) { _paginaActual--; await CargarAsync(); }
+    }
+
+    private async Task PaginaSiguiente()
+    {
+        _paginaActual++;
+        await CargarAsync();
+    }
 }
