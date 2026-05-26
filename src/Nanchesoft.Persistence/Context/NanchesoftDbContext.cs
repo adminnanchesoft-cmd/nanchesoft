@@ -249,6 +249,10 @@ public sealed class NanchesoftDbContext : DbContext
     public DbSet<AiConversation> AiConversations => Set<AiConversation>();
     public DbSet<AiMessage> AiMessages => Set<AiMessage>();
 
+    // SilvaSoft integration
+    public DbSet<SilvaSoftConfig> SilvaSoftConfigs => Set<SilvaSoftConfig>();
+    public DbSet<SilvaSoftSyncLog> SilvaSoftSyncLogs => Set<SilvaSoftSyncLog>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(NanchesoftDbContext).Assembly);
