@@ -667,7 +667,9 @@ public static class PayrollMvpEndpoints
         return Results.Ok(new { success = true, created, skipped, errors });
     }
 
-    private static AttendancePunch BuildPunch(Company company, Guid? branchId, Guid employeeId, DateTime punchDt, string punchType)
+    private static AttendancePunch BuildPunch(
+        Company company, Guid? branchId, Guid employeeId, DateTime punchDt, string punchType,
+        Guid? clockImportId = null, string? rawKey = null)
         => new()
         {
             TenantId = company.TenantId,
@@ -679,6 +681,8 @@ public static class PayrollMvpEndpoints
             PunchType = punchType,
             Source = "file-import",
             Status = "captured",
+            ClockImportId = clockImportId,
+            RawEmployeeKey = rawKey,
             IsActive = true,
             CreatedBy = "file-import"
         };
@@ -690,13 +694,15 @@ public static class PayrollMvpEndpoints
         DateTime punchDt,
         string punchType,
         HashSet<string> punchKeySet,
-        NanchesoftDbContext db)
+        NanchesoftDbContext db,
+        Guid? clockImportId = null,
+        string? rawKey = null)
     {
         var key = BuildPunchKey(employeeId, punchDt, punchType);
         if (!punchKeySet.Add(key))
             return false;
 
-        db.AttendancePunches.Add(BuildPunch(company, branchId, employeeId, punchDt, punchType));
+        db.AttendancePunches.Add(BuildPunch(company, branchId, employeeId, punchDt, punchType, clockImportId, rawKey));
         return true;
     }
 
@@ -843,6 +849,21 @@ public static class PayrollMvpEndpoints
         if (headers.Count == 0)
             return Results.BadRequest(new { message = "El archivo no tiene encabezados válidos." });
 
+        // Crear registro ClockImport primero para linkar los punches
+        var clockImport = new ClockImport
+        {
+            TenantId = company.TenantId, CompanyId = company.Id,
+            FileName = file.FileName ?? string.Empty,
+            FileSizeBytes = file.Length,
+            FileFormat = Path.GetExtension(file.FileName ?? string.Empty).TrimStart('.').ToUpperInvariant(),
+            ImportedAt = DateTime.UtcNow, ImportedBy = "web-api",
+            RowsRead = dataRows.Count,
+            Status = "Processing",
+            IsActive = true
+        };
+        db.ClockImports.Add(clockImport);
+        await db.SaveChangesAsync();
+
         var headerMap = BuildPunchHeaderMap(headers);
         bool isSimpleFormat = headerMap.ContainsKey("fechahora");
 
@@ -859,6 +880,25 @@ public static class PayrollMvpEndpoints
                 if (string.IsNullOrWhiteSpace(empNum) || !employees.TryGetValue(empNum, out var employee))
                 {
                     skipped++;
+                    // Punch con error de cruce registrado para diagnóstico
+                    if (!string.IsNullOrWhiteSpace(empNum))
+                    {
+                        db.AttendancePunches.Add(new AttendancePunch
+                        {
+                            TenantId = company.TenantId, CompanyId = company.Id,
+                            EmployeeId = Guid.Empty,
+                            WorkDate = DateTime.UtcNow.Date,
+                            PunchDateTime = DateTime.UtcNow,
+                            PunchType = "unknown",
+                            Source = "file-import",
+                            Status = "error",
+                            ClockImportId = clockImport.Id,
+                            RawEmployeeKey = empNum,
+                            ReadError = "Empleado no encontrado",
+                            IsActive = false,
+                            CreatedBy = "file-import"
+                        });
+                    }
                     continue;
                 }
 
@@ -872,7 +912,7 @@ public static class PayrollMvpEndpoints
                         continue;
                     }
                     var punchType = tipo is "exit" or "salida" or "s" ? "exit" : "entry";
-                    if (TryQueuePunch(company, branchId, employee.Id, punchDt, punchType, punchKeySet, db))
+                    if (TryQueuePunch(company, branchId, employee.Id, punchDt, punchType, punchKeySet, db, clockImport.Id, empNum))
                         created++;
                     else
                         skipped++;
@@ -892,14 +932,14 @@ public static class PayrollMvpEndpoints
 
                     if (entrada.HasValue)
                     {
-                        if (TryQueuePunch(company, branchId, employee.Id, fecha.Date.Add(entrada.Value), "entry", punchKeySet, db))
+                        if (TryQueuePunch(company, branchId, employee.Id, fecha.Date.Add(entrada.Value), "entry", punchKeySet, db, clockImport.Id, empNum))
                             created++;
                         else
                             skipped++;
                     }
                     if (salida.HasValue && (!entrada.HasValue || salida.Value != entrada.Value))
                     {
-                        if (TryQueuePunch(company, branchId, employee.Id, fecha.Date.Add(salida.Value), "exit", punchKeySet, db))
+                        if (TryQueuePunch(company, branchId, employee.Id, fecha.Date.Add(salida.Value), "exit", punchKeySet, db, clockImport.Id, empNum))
                             created++;
                         else
                             skipped++;
@@ -912,21 +952,15 @@ public static class PayrollMvpEndpoints
             }
         }
 
+        // Actualizar el registro ClockImport con los resultados finales
+        clockImport.RowsCreated = created;
+        clockImport.RowsSkipped = skipped;
+        clockImport.RowsError = errors.Count;
+        clockImport.Status = errors.Count > 0 ? "Error" : "Done";
+        clockImport.ErrorSummary = string.Join("; ", errors.Take(5));
+
         await db.SaveChangesAsync();
-        db.ClockImports.Add(new ClockImport
-        {
-            TenantId = company.TenantId, CompanyId = company.Id,
-            FileName = file.FileName ?? string.Empty,
-            FileSizeBytes = file.Length,
-            FileFormat = Path.GetExtension(file.FileName ?? string.Empty).TrimStart('.').ToUpperInvariant(),
-            ImportedAt = DateTime.UtcNow, ImportedBy = "web-api",
-            RowsRead = dataRows.Count, RowsCreated = created, RowsSkipped = skipped, RowsError = errors.Count,
-            Status = errors.Count > 0 ? "Error" : "Done",
-            ErrorSummary = string.Join("; ", errors.Take(5)),
-            IsActive = true
-        });
-        await db.SaveChangesAsync();
-        return Results.Ok(new { success = true, created, skipped, errors });
+        return Results.Ok(new { success = true, created, skipped, errors, clockImportId = clockImport.Id });
     }
 
     private static async Task<IResult> GetClockImportHistoryAsync(HttpContext httpContext, NanchesoftDbContext db)
@@ -1521,7 +1555,7 @@ public static class PayrollMvpEndpoints
             return Results.BadRequest(new { message = "No hay resúmenes de asistencia. Genera primero el resumen diario." });
 
         var autoIncidents = await db.EmployeeIncidents
-            .Where(x => x.PayrollPeriodId == periodId && x.Notes == "auto-generado")
+            .Where(x => x.PayrollPeriodId == periodId && x.Origin == "clock" && !x.ManuallyEdited)
             .ToListAsync();
         foreach (var incident in autoIncidents)
         {
@@ -1530,6 +1564,14 @@ public static class PayrollMvpEndpoints
             incident.DeletedAt = DateTime.UtcNow;
             incident.DeletedBy = "mvp-engine";
         }
+
+        // Importación más reciente cuyos punches cubren este periodo (para trazabilidad)
+        var latestImportId = await db.AttendancePunches
+            .Where(x => x.CompanyId == period.CompanyId && x.ClockImportId != null
+                     && x.WorkDate >= period.StartDate && x.WorkDate <= period.EndDate)
+            .OrderByDescending(x => x.CreatedAt)
+            .Select(x => x.ClockImportId)
+            .FirstOrDefaultAsync();
 
         int created = 0;
         var delayThreshold = Math.Clamp(delayIncidentThresholdMinutes ?? 15, 0, 240);
@@ -1560,13 +1602,14 @@ public static class PayrollMvpEndpoints
                     BranchId = employee.BranchId,
                     EmployeeId = empId,
                     PayrollPeriodId = periodId,
-                    NomPayrollIncidentTypeId = ResolveIncidentTypeId(incidentTypes, "FALTA_INJUSTIFICADA"),
+                    NomPayrollIncidentTypeId = ResolveIncidentTypeId(incidentTypes, "FINJ"),
                     IncidentDate = period.StartDate,
-                    IncidentType = "FALTA_INJUSTIFICADA",
+                    IncidentType = "FINJ",
                     Quantity = absenceSum,
                     Amount = employee.DailySalary * absenceSum,
                     Status = "draft",
-                    Notes = "auto-generado",
+                    Origin = "clock",
+                    ClockImportId = latestImportId,
                     IsActive = true,
                     CreatedBy = "mvp-engine"
                 });
@@ -1583,13 +1626,14 @@ public static class PayrollMvpEndpoints
                     BranchId = employee.BranchId,
                     EmployeeId = empId,
                     PayrollPeriodId = periodId,
-                    NomPayrollIncidentTypeId = ResolveIncidentTypeId(incidentTypes, "RETARDO"),
+                    NomPayrollIncidentTypeId = ResolveIncidentTypeId(incidentTypes, "RET"),
                     IncidentDate = period.StartDate,
-                    IncidentType = "RETARDO",
+                    IncidentType = "RET",
                     Quantity = Math.Round(delayHours, 2),
                     Amount = Math.Round(employee.DailySalary / 8m * delayHours, 2),
                     Status = "draft",
-                    Notes = "auto-generado",
+                    Origin = "clock",
+                    ClockImportId = latestImportId,
                     IsActive = true,
                     CreatedBy = "mvp-engine"
                 });
@@ -1605,13 +1649,14 @@ public static class PayrollMvpEndpoints
                     BranchId = employee.BranchId,
                     EmployeeId = empId,
                     PayrollPeriodId = periodId,
-                    NomPayrollIncidentTypeId = ResolveIncidentTypeId(incidentTypes, "HORAS_EXTRA"),
+                    NomPayrollIncidentTypeId = ResolveIncidentTypeId(incidentTypes, "HE2"),
                     IncidentDate = period.StartDate,
-                    IncidentType = "HORAS_EXTRA",
+                    IncidentType = "HE2",
                     Quantity = Math.Round(overtimeSum, 2),
                     Amount = Math.Round(employee.DailySalary / 8m * overtimeRate * overtimeSum, 2),
                     Status = "draft",
-                    Notes = "auto-generado",
+                    Origin = "clock",
+                    ClockImportId = latestImportId,
                     IsActive = true,
                     CreatedBy = "mvp-engine"
                 });

@@ -25,4 +25,10 @@ public sealed class AttendancePunch : BaseEntity
     public string ExternalReference { get; set; } = string.Empty;
     public string Status { get; set; } = "captured";
     public string Notes { get; set; } = string.Empty;
+
+    // Trazabilidad de importación
+    public Guid? ClockImportId { get; set; }
+    public ClockImport? ClockImport { get; set; }
+    public string? RawEmployeeKey { get; set; }
+    public string? ReadError { get; set; }
 }

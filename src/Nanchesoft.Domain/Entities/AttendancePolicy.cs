@@ -13,6 +13,13 @@ public sealed class AttendancePolicy : BaseEntity
     public Guid? WorkShiftId { get; set; }
     public WorkShift? WorkShift { get; set; }
 
+    public Guid? DepartmentId { get; set; }
+    public Department? Department { get; set; }
+
+    // "company" | "department" | "shift"
+    public string Scope { get; set; } = "company";
+    public int Priority { get; set; } = 100;
+
     public string Code { get; set; } = string.Empty;
     public string Name { get; set; } = string.Empty;
     public string Description { get; set; } = string.Empty;
