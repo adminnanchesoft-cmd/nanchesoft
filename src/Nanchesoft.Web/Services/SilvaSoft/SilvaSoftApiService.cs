@@ -40,13 +40,21 @@ public sealed class SilvaSoftApiService
 
     // ── Conexión ──────────────────────────────────────────────────────────────
 
-    public async Task<SilvaSoftConexionTestDto?> ProbarConexionAsync()
+    public async Task<SilvaSoftConexionTestDto> ProbarConexionAsync()
     {
         try
         {
-            return await Client.GetFromJsonAsync<SilvaSoftConexionTestDto>("/api/silvasoft/probar-conexion");
+            var res = await Client.GetAsync("/api/silvasoft/probar-conexion");
+            if (res.IsSuccessStatusCode)
+                return await res.Content.ReadFromJsonAsync<SilvaSoftConexionTestDto>()
+                       ?? new SilvaSoftConexionTestDto { Exitoso = false, Mensaje = "Respuesta vacía de la API." };
+            var body = await res.Content.ReadAsStringAsync();
+            return new SilvaSoftConexionTestDto { Exitoso = false, Mensaje = $"Error {(int)res.StatusCode}: {body}" };
         }
-        catch { return null; }
+        catch (Exception ex)
+        {
+            return new SilvaSoftConexionTestDto { Exitoso = false, Mensaje = $"Sin respuesta de la API: {ex.Message}" };
+        }
     }
 
     // ── Composición ───────────────────────────────────────────────────────────
