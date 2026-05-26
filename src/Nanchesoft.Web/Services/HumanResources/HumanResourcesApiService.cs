@@ -2562,6 +2562,9 @@ public sealed class AttendancePolicyItem
     public string Description { get; set; } = string.Empty;
     public Guid? WorkShiftId { get; set; }
     public string WorkShiftName { get; set; } = string.Empty;
+    public Guid? DepartmentId { get; set; }
+    public string Scope { get; set; } = "company";
+    public int Priority { get; set; } = 100;
     public int ToleranceMinutes { get; set; }
     public int MinOvertimeMinutes { get; set; } = 15;
     public bool RequiresPunchIn { get; set; } = true;

@@ -1,0 +1,462 @@
+@page "/payroll/employee-incidents"
+@using Nanchesoft.Web.Services.HumanResources
+@inject HumanResourcesApiService Api
+@inject IJSRuntime JS
+
+<PageTitle>Incidencias por empleado | Nanchesoft</PageTitle>
+
+<div class="d-flex align-items-center justify-content-between mb-3">
+    <h4 class="mb-0">Incidencias por empleado</h4>
+    <button class="btn btn-primary btn-sm" @onclick="OpenNew"
+            disabled="@(!CanAdd)">+ Nueva incidencia</button>
+</div>
+
+@if (!string.IsNullOrWhiteSpace(_msg))
+{
+    <div class="alert @(_msgOk ? "alert-success" : "alert-danger") alert-dismissible py-2">
+        @_msg
+        <button type="button" class="btn-close btn-sm" @onclick="() => _msg = null"></button>
+    </div>
+}
+
+<!-- Selector de empleado y periodo -->
+<div class="card shadow-sm mb-3">
+    <div class="card-body py-2">
+        <div class="row g-2 align-items-end">
+            <div class="col-md-5">
+                <label class="form-label form-label-sm mb-1">Colaborador *</label>
+                <select class="form-select form-select-sm" @onchange="OnEmployeeChanged">
+                    <option value="">— Seleccionar colaborador —</option>
+                    @foreach (var e in _employees)
+                    {
+                        <option value="@e.EmployeeId" selected="@(_selectedEmployeeId == e.EmployeeId)">
+                            @e.EmployeeNumber · @e.FullName
+                        </option>
+                    }
+                </select>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label form-label-sm mb-1">Periodo nómina</label>
+                <select class="form-select form-select-sm" @onchange="OnPeriodChanged">
+                    <option value="">— Todos los periodos —</option>
+                    @foreach (var p in _periods)
+                    {
+                        <option value="@p.PayrollPeriodId" selected="@(_selectedPeriodId == p.PayrollPeriodId)">
+                            @p.Code · @p.Name
+                        </option>
+                    }
+                </select>
+            </div>
+            <div class="col-auto">
+                <button class="btn btn-outline-secondary btn-sm" @onclick="LoadIncidents"
+                        disabled="@(!_selectedEmployeeId.HasValue)">Buscar</button>
+            </div>
+        </div>
+        @if (_selectedPeriod?.IsClosed == true)
+        {
+            <div class="alert alert-warning py-1 mt-2 mb-0 small">
+                Este periodo está <strong>cerrado</strong>. No se pueden agregar ni modificar incidencias.
+            </div>
+        }
+    </div>
+</div>
+
+<!-- Resumen rápido -->
+@if (_selectedEmployeeId.HasValue && _incidents.Count > 0)
+{
+    <div class="row g-2 mb-3">
+        <div class="col-6 col-md-3">
+            <div class="card border-danger border-opacity-50 text-center py-2 shadow-sm">
+                <div class="fs-4 fw-bold text-danger">@_incidents.Where(x => x.IncidentCategory == "absence" || x.NomPayrollIncidentTypeCode is "FINJ" or "FJUS" or "AUS").Sum(x => x.Quantity).ToString("N1")</div>
+                <div class="small text-muted">Faltas</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="card border-warning border-opacity-50 text-center py-2 shadow-sm">
+                <div class="fs-4 fw-bold text-warning">@_incidents.Where(x => x.NomPayrollIncidentTypeCode == "RET").Sum(x => x.Quantity).ToString("N1")</div>
+                <div class="small text-muted">Retardos (min)</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="card border-success border-opacity-50 text-center py-2 shadow-sm">
+                <div class="fs-4 fw-bold text-success">@_incidents.Where(x => x.NomPayrollIncidentTypeCode.StartsWith("HE")).Sum(x => x.Quantity).ToString("N1")</div>
+                <div class="small text-muted">Horas extra</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="card border-secondary border-opacity-25 text-center py-2 shadow-sm">
+                <div class="fs-4 fw-bold">@_incidents.Count</div>
+                <div class="small text-muted">Total incidencias</div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Tabla de incidencias -->
+<div class="card shadow-sm">
+    <div class="card-body p-0">
+        @if (!_selectedEmployeeId.HasValue)
+        {
+            <div class="text-center py-5 text-muted">Selecciona un colaborador para ver sus incidencias.</div>
+        }
+        else if (_loading)
+        {
+            <div class="text-center py-4 text-muted">Cargando...</div>
+        }
+        else if (_incidents.Count == 0)
+        {
+            <div class="text-center py-4 text-muted">Sin incidencias para los filtros seleccionados.</div>
+        }
+        else
+        {
+            <table class="table table-hover table-sm mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Fecha</th>
+                        <th>Periodo</th>
+                        <th>Tipo incidencia</th>
+                        <th class="text-end">Cantidad</th>
+                        <th class="text-end">Monto</th>
+                        <th>Origen</th>
+                        <th>Notas</th>
+                        <th class="text-center">Estatus</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var inc in _incidents.OrderByDescending(x => x.IncidentDate))
+                    {
+                        <tr class="@(inc.ManuallyEdited ? "table-warning table-warning-subtle" : "")">
+                            <td class="text-nowrap">@(inc.IncidentDate?.ToString("dd/MM/yyyy") ?? "-")</td>
+                            <td class="small text-muted">@inc.PayrollPeriodName</td>
+                            <td>
+                                <span class="badge" style="background:@(string.IsNullOrWhiteSpace(inc.Color) ? "#6c757d" : inc.Color)">
+                                    @inc.NomPayrollIncidentTypeName
+                                </span>
+                            </td>
+                            <td class="text-end">@inc.Quantity.ToString("N2")</td>
+                            <td class="text-end">@(inc.Amount > 0 ? inc.Amount.ToString("C2") : "-")</td>
+                            <td>
+                                <span class="badge @OriginBadge(inc.Origin)">@inc.Origin</span>
+                                @if (inc.ManuallyEdited)
+                                {
+                                    <span class="badge bg-warning text-dark ms-1">editado</span>
+                                }
+                            </td>
+                            <td class="small">@inc.Notes</td>
+                            <td class="text-center">
+                                <span class="badge @StatusBadge(inc.Status)">@inc.Status</span>
+                            </td>
+                            <td class="text-nowrap">
+                                <button class="btn btn-xs btn-outline-primary me-1"
+                                        @onclick="() => OpenEdit(inc)"
+                                        disabled="@(_selectedPeriod?.IsClosed == true)">
+                                    Editar
+                                </button>
+                                <button class="btn btn-xs btn-outline-danger"
+                                        @onclick="() => ConfirmDelete(inc)"
+                                        disabled="@(_selectedPeriod?.IsClosed == true)">
+                                    Eliminar
+                                </button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </div>
+</div>
+
+<!-- Modal: nueva/editar incidencia -->
+@if (_showModal)
+{
+    <div class="modal-backdrop fade show"></div>
+    <div class="modal d-block" tabindex="-1">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header py-2">
+                    <h6 class="modal-title">@(_editId.HasValue ? "Editar incidencia" : "Nueva incidencia")</h6>
+                    <button type="button" class="btn-close btn-sm" @onclick="CloseModal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label form-label-sm">Colaborador *</label>
+                            <select class="form-select form-select-sm" @bind="_form.EmployeeId">
+                                <option value="">— Seleccionar —</option>
+                                @foreach (var e in _employees)
+                                {
+                                    <option value="@e.EmployeeId">@e.EmployeeNumber · @e.FullName</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label form-label-sm">Periodo nómina</label>
+                            <select class="form-select form-select-sm" @bind="_form.PayrollPeriodId">
+                                <option value="">— Sin periodo —</option>
+                                @foreach (var p in _periods)
+                                {
+                                    <option value="@p.PayrollPeriodId">@p.Code · @p.Name</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label form-label-sm">Tipo de incidencia *</label>
+                            <select class="form-select form-select-sm" @bind="_form.NomPayrollIncidentTypeId"
+                                    @oninput="OnIncidentTypeChanged">
+                                <option value="">— Seleccionar —</option>
+                                @foreach (var t in _incidentTypes)
+                                {
+                                    <option value="@t.NomPayrollIncidentTypeId">[@t.Code] @t.Name</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label form-label-sm">Fecha *</label>
+                            <input type="date" class="form-control form-control-sm" @bind="_form.IncidentDate" />
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label form-label-sm">Cantidad</label>
+                            <input type="number" class="form-control form-control-sm" @bind="_form.Quantity"
+                                   step="0.5" min="0" disabled="@(!(_selectedType?.RequiresQuantity ?? true))" />
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label form-label-sm">Monto</label>
+                            <input type="number" class="form-control form-control-sm" @bind="_form.Amount"
+                                   step="0.01" min="0" disabled="@(!(_selectedType?.RequiresAmount ?? false))" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label form-label-sm">Estatus</label>
+                            <select class="form-select form-select-sm" @bind="_form.Status">
+                                <option value="draft">Borrador</option>
+                                <option value="approved">Aprobado</option>
+                                <option value="rejected">Rechazado</option>
+                            </select>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label form-label-sm">Notas</label>
+                            <input type="text" class="form-control form-control-sm" @bind="_form.Notes" maxlength="500" />
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer py-2">
+                    @if (!string.IsNullOrWhiteSpace(_modalError))
+                    {
+                        <span class="text-danger small me-auto">@_modalError</span>
+                    }
+                    <button class="btn btn-secondary btn-sm" @onclick="CloseModal" disabled="@_saving">Cancelar</button>
+                    <button class="btn btn-primary btn-sm" @onclick="SaveAsync" disabled="@_saving">
+                        @(_saving ? "Guardando..." : "Guardar")
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    bool _loading;
+    bool _saving;
+    bool _showModal;
+    string? _msg;
+    bool _msgOk;
+    string? _modalError;
+    Guid? _editId;
+
+    List<PayrollPeriodDto> _periods = [];
+    List<EmployeeSimpleLookup> _employees = [];
+    List<NomPayrollIncidentTypeDto> _incidentTypes = [];
+    List<EmployeeIncidentDto> _incidents = [];
+
+    Guid? _selectedEmployeeId;
+    Guid? _selectedPeriodId;
+    PayrollPeriodDto? _selectedPeriod;
+    NomPayrollIncidentTypeDto? _selectedType;
+
+    bool CanAdd => _selectedEmployeeId.HasValue && _selectedPeriod?.IsClosed != true;
+
+    IncidentFormModel _form = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        var t1 = Api.GetPeriodsForSelectionAsync();
+        var t2 = Api.GetEmployeeSimpleListAsync();
+        var t3 = Api.GetIncidentTypeLookupsAsync();
+        await Task.WhenAll(t1, t2, t3);
+        _periods = t1.Result;
+        _employees = t2.Result;
+        _incidentTypes = t3.Result;
+    }
+
+    async Task OnEmployeeChanged(ChangeEventArgs e)
+    {
+        _selectedEmployeeId = Guid.TryParse(e.Value?.ToString(), out var id) ? id : null;
+        if (_selectedEmployeeId.HasValue) await LoadIncidents();
+        else _incidents = [];
+    }
+
+    async Task OnPeriodChanged(ChangeEventArgs e)
+    {
+        if (Guid.TryParse(e.Value?.ToString(), out var id))
+        {
+            _selectedPeriodId = id;
+            _selectedPeriod = _periods.FirstOrDefault(p => p.PayrollPeriodId == id);
+        }
+        else
+        {
+            _selectedPeriodId = null;
+            _selectedPeriod = null;
+        }
+        if (_selectedEmployeeId.HasValue) await LoadIncidents();
+    }
+
+    async Task LoadIncidents()
+    {
+        if (!_selectedEmployeeId.HasValue) return;
+        _loading = true;
+        StateHasChanged();
+        _incidents = await Api.GetManualIncidentsAsync(_selectedPeriodId, _selectedEmployeeId);
+        _loading = false;
+    }
+
+    void OnIncidentTypeChanged(ChangeEventArgs e)
+    {
+        if (Guid.TryParse(e.Value?.ToString(), out var id))
+            _selectedType = _incidentTypes.FirstOrDefault(t => t.NomPayrollIncidentTypeId == id);
+        else
+            _selectedType = null;
+    }
+
+    void OpenNew()
+    {
+        _editId = null;
+        _form = new IncidentFormModel
+        {
+            EmployeeId = _selectedEmployeeId,
+            PayrollPeriodId = _selectedPeriodId,
+            IncidentDate = DateTime.Today,
+            Status = "draft",
+            Quantity = 1
+        };
+        _selectedType = null;
+        _modalError = null;
+        _showModal = true;
+    }
+
+    void OpenEdit(EmployeeIncidentDto inc)
+    {
+        _editId = inc.EmployeeIncidentId;
+        _selectedType = _incidentTypes.FirstOrDefault(t => t.NomPayrollIncidentTypeId == inc.NomPayrollIncidentTypeId);
+        _form = new IncidentFormModel
+        {
+            EmployeeId = inc.EmployeeId,
+            PayrollPeriodId = inc.PayrollPeriodId,
+            NomPayrollIncidentTypeId = inc.NomPayrollIncidentTypeId,
+            IncidentDate = inc.IncidentDate?.Date ?? DateTime.Today,
+            Quantity = inc.Quantity,
+            Amount = inc.Amount,
+            Notes = inc.Notes,
+            Status = inc.Status
+        };
+        _modalError = null;
+        _showModal = true;
+    }
+
+    void CloseModal()
+    {
+        _showModal = false;
+        _modalError = null;
+    }
+
+    async Task SaveAsync()
+    {
+        if (!_form.EmployeeId.HasValue || _form.EmployeeId == Guid.Empty)
+        { _modalError = "Seleccione un colaborador."; return; }
+        if (!_form.NomPayrollIncidentTypeId.HasValue || _form.NomPayrollIncidentTypeId == Guid.Empty)
+        { _modalError = "Seleccione el tipo de incidencia."; return; }
+        if (!_form.IncidentDate.HasValue)
+        { _modalError = "La fecha es obligatoria."; return; }
+
+        _saving = true;
+        _modalError = null;
+
+        var req = new ManualIncidentRequest
+        {
+            EmployeeId = _form.EmployeeId,
+            PayrollPeriodId = _form.PayrollPeriodId,
+            NomPayrollIncidentTypeId = _form.NomPayrollIncidentTypeId,
+            IncidentDate = _form.IncidentDate,
+            Quantity = _form.Quantity,
+            Amount = _form.Amount,
+            Notes = _form.Notes ?? string.Empty,
+            Status = _form.Status ?? "draft",
+            Origin = "manual",
+            ManuallyEdited = true,
+            IsActive = true
+        };
+
+        (bool Ok, string? Error) result;
+        if (_editId.HasValue)
+            result = await Api.UpdateManualIncidentAsync(_editId.Value, req);
+        else
+            result = await Api.CreateManualIncidentAsync(req);
+
+        _saving = false;
+        if (result.Ok)
+        {
+            _showModal = false;
+            ShowMsg("Incidencia guardada correctamente.", true);
+            await LoadIncidents();
+        }
+        else
+        {
+            _modalError = result.Error ?? "Error al guardar.";
+        }
+    }
+
+    async Task ConfirmDelete(EmployeeIncidentDto inc)
+    {
+        var ok = await JS.InvokeAsync<bool>("confirm",
+            $"¿Eliminar la incidencia del {inc.IncidentDate?.ToString("dd/MM/yyyy")} ({inc.NomPayrollIncidentTypeName})?");
+        if (!ok) return;
+        var (success, error) = await Api.DeleteManualIncidentAsync(inc.EmployeeIncidentId);
+        if (success)
+        {
+            ShowMsg("Incidencia eliminada.", true);
+            await LoadIncidents();
+        }
+        else
+        {
+            ShowMsg(error ?? "Error al eliminar.", false);
+        }
+    }
+
+    void ShowMsg(string text, bool ok) { _msg = text; _msgOk = ok; }
+
+    static string StatusBadge(string status) => status switch
+    {
+        "approved" => "bg-success",
+        "rejected" => "bg-danger",
+        _ => "bg-secondary"
+    };
+
+    static string OriginBadge(string origin) => origin switch
+    {
+        "clock" => "bg-info text-dark",
+        "policy" => "bg-primary",
+        "recurring" => "bg-warning text-dark",
+        _ => "bg-secondary"
+    };
+
+    sealed class IncidentFormModel
+    {
+        public Guid? EmployeeId { get; set; }
+        public Guid? PayrollPeriodId { get; set; }
+        public Guid? NomPayrollIncidentTypeId { get; set; }
+        public DateTime? IncidentDate { get; set; }
+        public decimal Quantity { get; set; } = 1;
+        public decimal Amount { get; set; }
+        public string? Notes { get; set; }
+        public string? Status { get; set; } = "draft";
+    }
+}

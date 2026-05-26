@@ -2348,6 +2348,7 @@ var branchId = ApiTenantScope.ResolveBranchId(httpContext);
                 x.WorkShiftId,
                 WorkShiftName = x.WorkShift != null ? x.WorkShift.Name : string.Empty,
                 x.Code, x.Name, x.Description,
+                x.Scope, x.DepartmentId, x.Priority,
                 x.ToleranceMinutes, x.MinOvertimeMinutes,
                 x.RequiresPunchIn, x.RequiresPunchOut,
                 x.IsDefault, x.Notes, x.IsActive
@@ -2373,6 +2374,9 @@ var branchId = ApiTenantScope.ResolveBranchId(httpContext);
             TenantId = tenantId.Value,
             CompanyId = companyId.Value,
             WorkShiftId = request.WorkShiftId,
+            DepartmentId = request.DepartmentId,
+            Scope = string.IsNullOrWhiteSpace(request.Scope) ? "company" : request.Scope,
+            Priority = request.Priority <= 0 ? 100 : request.Priority,
             Code = request.Code.Trim().ToUpperInvariant(),
             Name = request.Name.Trim(),
             Description = request.Description?.Trim() ?? string.Empty,
@@ -2400,6 +2404,9 @@ var branchId = ApiTenantScope.ResolveBranchId(httpContext);
             return Results.BadRequest(new { message = "Código y nombre son obligatorios." });
 
         entity.WorkShiftId = request.WorkShiftId;
+        entity.DepartmentId = request.DepartmentId;
+        entity.Scope = string.IsNullOrWhiteSpace(request.Scope) ? "company" : request.Scope;
+        entity.Priority = request.Priority <= 0 ? 100 : request.Priority;
         entity.Code = request.Code.Trim().ToUpperInvariant();
         entity.Name = request.Name.Trim();
         entity.Description = request.Description?.Trim() ?? string.Empty;
@@ -2971,6 +2978,9 @@ public sealed class AttendancePolicyRequest
     public Guid? TenantId { get; set; }
     public Guid? CompanyId { get; set; }
     public Guid? WorkShiftId { get; set; }
+    public Guid? DepartmentId { get; set; }
+    public string? Scope { get; set; } = "company";
+    public int Priority { get; set; } = 100;
     public string? Code { get; set; }
     public string? Name { get; set; }
     public string? Description { get; set; }

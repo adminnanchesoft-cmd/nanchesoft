@@ -156,6 +156,32 @@
                             </select>
                         </div>
                         <div class="col-md-4">
+                            <label class="form-label">Alcance</label>
+                            <select class="form-select" @bind="_editingPolicy!.Scope">
+                                <option value="company">Empresa (global)</option>
+                                <option value="department">Departamento</option>
+                                <option value="shift">Turno</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Prioridad</label>
+                            <input class="form-control" type="number" @bind="_editingPolicy!.Priority" />
+                            <div class="form-text">Menor número = mayor prioridad</div>
+                        </div>
+                        @if (_editingPolicy!.Scope == "department")
+                        {
+                            <div class="col-md-6">
+                                <label class="form-label">Departamento</label>
+                                <select class="form-select" @bind="_editingPolicy!.DepartmentId">
+                                    <option value="">— Seleccionar —</option>
+                                    @foreach (var d in _departments)
+                                    {
+                                        <option value="@d.DepartmentId">@d.Name</option>
+                                    }
+                                </select>
+                            </div>
+                        }
+                        <div class="col-md-4">
                             <label class="form-label">Tolerancia (min)</label>
                             <input class="form-control" type="number" @bind="_editingPolicy!.ToleranceMinutes" />
                         </div>
@@ -299,6 +325,7 @@
     private List<AttendancePolicyItem> _policies = new();
     private List<AttendancePolicyRuleItem> _rules = new();
     private List<WorkShiftLookup> _shifts = new();
+    private List<DepartmentDto> _departments = new();
     private AttendancePolicyItem? _selectedPolicy;
 
     private AttendancePolicyItem? _editingPolicy;
@@ -309,7 +336,11 @@
 
     protected override async Task OnInitializedAsync()
     {
-        _shifts = await Api.GetWorkShiftLookupsAsync();
+        var shiftTask = Api.GetWorkShiftLookupsAsync();
+        var deptTask = Api.GetDepartmentSimpleListAsync();
+        await Task.WhenAll(shiftTask, deptTask);
+        _shifts = shiftTask.Result;
+        _departments = deptTask.Result;
         await LoadPoliciesAsync();
     }
 
@@ -340,6 +371,8 @@
         _editingPolicy = new AttendancePolicyItem
         {
             AttendancePolicyId = Guid.Empty,
+            Scope = "company",
+            Priority = 100,
             RequiresPunchIn = true,
             RequiresPunchOut = true,
             MinOvertimeMinutes = 15,
@@ -355,6 +388,9 @@
             AttendancePolicyId = p.AttendancePolicyId,
             Code = p.Code, Name = p.Name, Description = p.Description,
             WorkShiftId = p.WorkShiftId,
+            DepartmentId = p.DepartmentId,
+            Scope = p.Scope,
+            Priority = p.Priority,
             ToleranceMinutes = p.ToleranceMinutes,
             MinOvertimeMinutes = p.MinOvertimeMinutes,
             RequiresPunchIn = p.RequiresPunchIn,
