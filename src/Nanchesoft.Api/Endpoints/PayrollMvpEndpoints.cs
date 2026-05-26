@@ -20,6 +20,13 @@ public static class PayrollMvpEndpoints
         clock.MapPost("/import", ImportPunchesFromExcelAsync).DisableAntiforgery();
         clock.MapPost("/import/preview", PreviewPunchesFromFileAsync).DisableAntiforgery();
         clock.MapPost("/import/csv", ImportPunchesFromCsvAsync).DisableAntiforgery();
+        clock.MapGet("/import-history", GetClockImportHistoryAsync);
+
+        var clockMappings = app.MapGroup("/api/hr/clock-import-mappings").WithTags("ClockImportMappings");
+        clockMappings.MapGet("/", GetClockImportMappingsAsync);
+        clockMappings.MapPost("/", CreateClockImportMappingAsync);
+        clockMappings.MapPut("/{id:guid}", UpdateClockImportMappingAsync);
+        clockMappings.MapDelete("/{id:guid}", DeleteClockImportMappingAsync);
 
         var periods = app.MapGroup("/api/payroll/periods").WithTags("PayrollPeriods");
         periods.MapGet("/{periodId:guid}/generation-preview", GetPayrollGenerationPreviewAsync);
@@ -641,6 +648,19 @@ public static class PayrollMvpEndpoints
         }
 
         await db.SaveChangesAsync();
+        db.ClockImports.Add(new ClockImport
+        {
+            TenantId = company.TenantId, CompanyId = company.Id,
+            FileName = file.FileName ?? string.Empty,
+            FileSizeBytes = file.Length,
+            FileFormat = Path.GetExtension(file.FileName ?? string.Empty).TrimStart('.').ToUpperInvariant(),
+            ImportedAt = DateTime.UtcNow, ImportedBy = "web-api",
+            RowsRead = lastRow - 1, RowsCreated = created, RowsSkipped = skipped, RowsError = errors.Count,
+            Status = errors.Count > 0 ? "Error" : "Done",
+            ErrorSummary = string.Join("; ", errors.Take(5)),
+            IsActive = true
+        });
+        await db.SaveChangesAsync();
         return Results.Ok(new { success = true, created, skipped, errors });
     }
 
@@ -890,7 +910,146 @@ public static class PayrollMvpEndpoints
         }
 
         await db.SaveChangesAsync();
+        db.ClockImports.Add(new ClockImport
+        {
+            TenantId = company.TenantId, CompanyId = company.Id,
+            FileName = file.FileName ?? string.Empty,
+            FileSizeBytes = file.Length,
+            FileFormat = Path.GetExtension(file.FileName ?? string.Empty).TrimStart('.').ToUpperInvariant(),
+            ImportedAt = DateTime.UtcNow, ImportedBy = "web-api",
+            RowsRead = dataRows.Count, RowsCreated = created, RowsSkipped = skipped, RowsError = errors.Count,
+            Status = errors.Count > 0 ? "Error" : "Done",
+            ErrorSummary = string.Join("; ", errors.Take(5)),
+            IsActive = true
+        });
+        await db.SaveChangesAsync();
         return Results.Ok(new { success = true, created, skipped, errors });
+    }
+
+    private static async Task<IResult> GetClockImportHistoryAsync(HttpContext httpContext, NanchesoftDbContext db)
+    {
+        var tenantId = ApiTenantScope.ResolveTenantId(httpContext);
+        var companyId = ApiTenantScope.ResolveCompanyId(httpContext);
+
+        var rows = await db.ClockImports.AsNoTracking()
+            .Where(x => tenantId.HasValue && x.TenantId == tenantId.Value
+                     && (!companyId.HasValue || x.CompanyId == companyId.Value))
+            .OrderByDescending(x => x.ImportedAt)
+            .Take(200)
+            .Select(x => new
+            {
+                ClockImportId = x.Id, x.CompanyId,
+                x.FileName, x.FileSizeBytes, x.FileFormat,
+                x.ImportedAt, x.ImportedBy,
+                x.RowsRead, x.RowsCreated, x.RowsSkipped, x.RowsError,
+                x.Status, x.ErrorSummary, x.Notes
+            })
+            .ToListAsync();
+
+        return Results.Ok(rows);
+    }
+
+    private static async Task<IResult> GetClockImportMappingsAsync(HttpContext httpContext, NanchesoftDbContext db)
+    {
+        var tenantId = ApiTenantScope.ResolveTenantId(httpContext);
+        var companyId = ApiTenantScope.ResolveCompanyId(httpContext);
+
+        var rows = await db.ClockImportMappings.AsNoTracking()
+            .Where(x => tenantId.HasValue && x.TenantId == tenantId.Value
+                     && (!companyId.HasValue || x.CompanyId == companyId.Value))
+            .Where(x => x.IsActive)
+            .OrderBy(x => x.Code)
+            .Select(x => new
+            {
+                ClockImportMappingId = x.Id, x.TenantId, x.CompanyId,
+                x.Code, x.Name, x.DeviceCode,
+                x.EmployeeNumberColumn, x.DateTimeColumn,
+                x.DateColumn, x.TimeInColumn, x.TimeOutColumn,
+                x.PunchTypeColumn, x.DefaultPunchType,
+                x.DateFormat, x.TimeFormat, x.Delimiter,
+                x.IsDefault, x.Notes, x.IsActive
+            })
+            .ToListAsync();
+
+        return Results.Ok(rows);
+    }
+
+    private static async Task<IResult> CreateClockImportMappingAsync(HttpContext httpContext, ClockImportMappingRequest request, NanchesoftDbContext db)
+    {
+        var company = await db.Companies.OrderBy(x => x.CreatedAt).FirstOrDefaultAsync();
+        if (company is null)
+            return Results.BadRequest(new { message = "No existe empresa configurada." });
+
+        if (string.IsNullOrWhiteSpace(request.Code) || string.IsNullOrWhiteSpace(request.Name))
+            return Results.BadRequest(new { message = "Código y nombre son obligatorios." });
+
+        var entity = new ClockImportMapping
+        {
+            TenantId = company.TenantId, CompanyId = company.Id,
+            Code = request.Code.Trim().ToUpperInvariant(),
+            Name = request.Name.Trim(),
+            DeviceCode = request.DeviceCode?.Trim() ?? string.Empty,
+            EmployeeNumberColumn = request.EmployeeNumberColumn?.Trim() ?? "NoEmpleado",
+            DateTimeColumn = request.DateTimeColumn?.Trim() ?? string.Empty,
+            DateColumn = request.DateColumn?.Trim() ?? string.Empty,
+            TimeInColumn = request.TimeInColumn?.Trim() ?? string.Empty,
+            TimeOutColumn = request.TimeOutColumn?.Trim() ?? string.Empty,
+            PunchTypeColumn = request.PunchTypeColumn?.Trim() ?? string.Empty,
+            DefaultPunchType = request.DefaultPunchType?.Trim() ?? "entry",
+            DateFormat = request.DateFormat?.Trim() ?? "yyyy-MM-dd",
+            TimeFormat = request.TimeFormat?.Trim() ?? "HH:mm:ss",
+            Delimiter = request.Delimiter?.Trim() ?? ",",
+            IsDefault = request.IsDefault,
+            Notes = request.Notes?.Trim() ?? string.Empty,
+            IsActive = request.IsActive,
+            CreatedBy = "web-api"
+        };
+
+        db.ClockImportMappings.Add(entity);
+        await db.SaveChangesAsync();
+        return Results.Ok(new { success = true, id = entity.Id });
+    }
+
+    private static async Task<IResult> UpdateClockImportMappingAsync(Guid id, ClockImportMappingRequest request, NanchesoftDbContext db)
+    {
+        var entity = await db.ClockImportMappings.FirstOrDefaultAsync(x => x.Id == id);
+        if (entity is null)
+            return Results.NotFound(new { message = "No se encontró el mapeo." });
+        if (string.IsNullOrWhiteSpace(request.Code) || string.IsNullOrWhiteSpace(request.Name))
+            return Results.BadRequest(new { message = "Código y nombre son obligatorios." });
+
+        entity.Code = request.Code.Trim().ToUpperInvariant();
+        entity.Name = request.Name.Trim();
+        entity.DeviceCode = request.DeviceCode?.Trim() ?? string.Empty;
+        entity.EmployeeNumberColumn = request.EmployeeNumberColumn?.Trim() ?? "NoEmpleado";
+        entity.DateTimeColumn = request.DateTimeColumn?.Trim() ?? string.Empty;
+        entity.DateColumn = request.DateColumn?.Trim() ?? string.Empty;
+        entity.TimeInColumn = request.TimeInColumn?.Trim() ?? string.Empty;
+        entity.TimeOutColumn = request.TimeOutColumn?.Trim() ?? string.Empty;
+        entity.PunchTypeColumn = request.PunchTypeColumn?.Trim() ?? string.Empty;
+        entity.DefaultPunchType = request.DefaultPunchType?.Trim() ?? "entry";
+        entity.DateFormat = request.DateFormat?.Trim() ?? "yyyy-MM-dd";
+        entity.TimeFormat = request.TimeFormat?.Trim() ?? "HH:mm:ss";
+        entity.Delimiter = request.Delimiter?.Trim() ?? ",";
+        entity.IsDefault = request.IsDefault;
+        entity.Notes = request.Notes?.Trim() ?? string.Empty;
+        entity.IsActive = request.IsActive;
+        entity.UpdatedBy = "web-api";
+        entity.UpdatedAt = DateTime.UtcNow;
+
+        await db.SaveChangesAsync();
+        return Results.Ok(new { success = true });
+    }
+
+    private static async Task<IResult> DeleteClockImportMappingAsync(Guid id, NanchesoftDbContext db)
+    {
+        var entity = await db.ClockImportMappings.FirstOrDefaultAsync(x => x.Id == id);
+        if (entity is null)
+            return Results.NotFound(new { message = "No se encontró el mapeo." });
+
+        db.ClockImportMappings.Remove(entity);
+        await db.SaveChangesAsync();
+        return Results.Ok(new { success = true });
     }
 
     private static async Task<(List<string> headers, List<List<string>> rows)> ReadPunchFileAsync(IFormFile file)
@@ -2818,4 +2977,24 @@ public static class PayrollMvpEndpoints
             row.CreatePosition = false;
         }
     }
+}
+
+public sealed class ClockImportMappingRequest
+{
+    public string? Code { get; set; }
+    public string? Name { get; set; }
+    public string? DeviceCode { get; set; }
+    public string? EmployeeNumberColumn { get; set; }
+    public string? DateTimeColumn { get; set; }
+    public string? DateColumn { get; set; }
+    public string? TimeInColumn { get; set; }
+    public string? TimeOutColumn { get; set; }
+    public string? PunchTypeColumn { get; set; }
+    public string? DefaultPunchType { get; set; }
+    public string? DateFormat { get; set; }
+    public string? TimeFormat { get; set; }
+    public string? Delimiter { get; set; }
+    public bool IsDefault { get; set; }
+    public string? Notes { get; set; }
+    public bool IsActive { get; set; } = true;
 }

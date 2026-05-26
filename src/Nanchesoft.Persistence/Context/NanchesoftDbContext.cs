@@ -121,6 +121,8 @@ public sealed class NanchesoftDbContext : DbContext
     public DbSet<PayrollRunLineDetail> PayrollRunLineDetails => Set<PayrollRunLineDetail>();
 
     public DbSet<AttendancePunch> AttendancePunches => Set<AttendancePunch>();
+    public DbSet<ClockImport> ClockImports => Set<ClockImport>();
+    public DbSet<ClockImportMapping> ClockImportMappings => Set<ClockImportMapping>();
     public DbSet<PayrollRecurringMovement> PayrollRecurringMovements => Set<PayrollRecurringMovement>();
     public DbSet<EmployeeLoan> EmployeeLoans => Set<EmployeeLoan>();
     public DbSet<EmployeeLoanDeduction> EmployeeLoanDeductions => Set<EmployeeLoanDeduction>();
