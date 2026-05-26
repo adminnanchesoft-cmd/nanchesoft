@@ -561,7 +561,7 @@ public sealed class PurchaseApiService
             LookupColumn("CompanyId", "Empresa", lookups.Companies, true, 220),
             LookupColumn("BranchId", "Sucursal", lookups.Branches, true, 220),
             LookupColumn("SupplierId", "Proveedor", lookups.Suppliers, true, 220),
-            LookupColumn("CurrencyId", "Moneda", lookups.Currencies, false, 160),
+            LookupColumn("CurrencyId", "Moneda", lookups.Currencies, false, 160, "currencies"),
             LookupColumn("PurchaseRequisitionId", "Requisición", lookups.Requisitions, false, 150),
             TextColumn("Folio", "Folio", true, true, 130),
             DateColumn("OrderDate", "Fecha", true, 120),
@@ -586,7 +586,7 @@ public sealed class PurchaseApiService
             TextColumn("PurchaseReceiptId", "ID", false, false, 220),
             LookupColumn("CompanyId", "Empresa", lookups.Companies, true, 220),
             LookupColumn("BranchId", "Sucursal", lookups.Branches, true, 220),
-            LookupColumn("WarehouseId", "Almacén", lookups.Warehouses, true, 220),
+            LookupColumn("WarehouseId", "Almacén", lookups.Warehouses, true, 220, "warehouses"),
             LookupColumn("SupplierId", "Proveedor", lookups.Suppliers, false, 220),
             LookupColumn("PurchaseOrderId", "Orden", lookups.Orders, false, 150),
             TextColumn("Folio", "Folio", true, true, 130),
@@ -609,7 +609,7 @@ public sealed class PurchaseApiService
             LookupColumn("SupplierId", "Proveedor", lookups.Suppliers, true, 220),
             LookupColumn("PurchaseOrderId", "Orden", lookups.Orders, false, 150),
             LookupColumn("PurchaseReceiptId", "Recepción", lookups.Receipts, false, 150),
-            LookupColumn("CurrencyId", "Moneda", lookups.Currencies, false, 150),
+            LookupColumn("CurrencyId", "Moneda", lookups.Currencies, false, 150, "currencies"),
             TextColumn("Folio", "Folio", true, true, 130),
             TextColumn("SupplierInvoiceFolio", "Folio proveedor", false, true, 150),
             DateColumn("InvoiceDate", "Fecha", true, 120),
@@ -633,7 +633,7 @@ public sealed class PurchaseApiService
             TextColumn("PurchaseReturnId", "ID", false, false, 220),
             LookupColumn("CompanyId", "Empresa", lookups.Companies, true, 220),
             LookupColumn("BranchId", "Sucursal", lookups.Branches, true, 220),
-            LookupColumn("WarehouseId", "Almacén", lookups.Warehouses, true, 220),
+            LookupColumn("WarehouseId", "Almacén", lookups.Warehouses, true, 220, "warehouses"),
             LookupColumn("SupplierId", "Proveedor", lookups.Suppliers, true, 220),
             LookupColumn("PurchaseReceiptId", "Recepción", lookups.Receipts, false, 150),
             LookupColumn("PurchaseInvoiceId", "Factura", lookups.Invoices, false, 150),
@@ -661,7 +661,7 @@ public sealed class PurchaseApiService
     private static CatalogColumnDefinition NumberColumn(string field, string caption, bool required = false, int width = 120) => new() { DataField = field, Caption = caption, DataType = "number", Required = required, Width = width };
     private static CatalogColumnDefinition DateColumn(string field, string caption, bool required = false, int width = 130) => new() { DataField = field, Caption = caption, DataType = "date", Required = required, Width = width };
     private static CatalogColumnDefinition BoolColumn(string field, string caption, int width = 90) => new() { DataField = field, Caption = caption, DataType = "boolean", Width = width };
-    private static CatalogColumnDefinition LookupColumn(string field, string caption, List<CatalogLookupItem> lookupItems, bool required = false, int width = 180) => new() { DataField = field, Caption = caption, DataType = "string", Required = required, Width = width, UseLookup = true, LookupItems = lookupItems };
+    private static CatalogColumnDefinition LookupColumn(string field, string caption, List<CatalogLookupItem> lookupItems, bool required = false, int width = 180, string? quickCreateKey = null) => new() { DataField = field, Caption = caption, DataType = "string", Required = required, Width = width, UseLookup = true, LookupItems = lookupItems, QuickCreateKey = quickCreateKey };
     private static List<CatalogLookupItem> StatusLookups() => [new() { Id = "draft", Name = "Draft" }, new() { Id = "pending_approval", Name = "Pending approval" }, new() { Id = "approved", Name = "Approved" }, new() { Id = "posted", Name = "Posted" }, new() { Id = "closed", Name = "Closed" }, new() { Id = "cancelled", Name = "Cancelled" }];
 
     private static async Task EnsureSuccessAsync(HttpResponseMessage response)

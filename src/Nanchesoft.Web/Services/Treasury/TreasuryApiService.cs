@@ -666,7 +666,7 @@ public sealed class TreasuryApiService
             LookupColumn("BranchId", "Sucursal", lookups.Branches, true, 220),
             TextColumn("Code", "Código", true, width: 120),
             TextColumn("Name", "Caja", true, width: 220),
-            LookupColumn("CurrencyId", "Moneda", lookups.Currencies, true, 140),
+            LookupColumn("CurrencyId", "Moneda", lookups.Currencies, true, 140, "currencies"),
             TextColumn("Status", "Estatus", true, width: 120),
             NumberColumn("CurrentBalance", "Saldo actual", width: 140),
             BoolColumn("IsActive", "Activo")
@@ -685,7 +685,7 @@ public sealed class TreasuryApiService
             TextColumn("AccountHolder", "Titular", width: 180),
             TextColumn("AccountNumber", "Cuenta", width: 160),
             TextColumn("Clabe", "CLABE", width: 180),
-            LookupColumn("CurrencyId", "Moneda", lookups.Currencies, true, 140),
+            LookupColumn("CurrencyId", "Moneda", lookups.Currencies, true, 140, "currencies"),
             TextColumn("Status", "Estatus", true, width: 120),
             NumberColumn("CurrentBalance", "Saldo actual", width: 140),
             BoolColumn("IsActive", "Activo")
@@ -729,7 +729,7 @@ public sealed class TreasuryApiService
             TextColumn(typeField, typeField == "TargetType" ? "Destino" : "Origen", true, width: 120),
             LookupColumn("CashAccountId", "Caja", lookups.CashAccounts, false, 180),
             LookupColumn("BankAccountId", "Banco", lookups.BankAccounts, false, 180),
-            LookupColumn("CurrencyId", "Moneda", lookups.Currencies, true, 140),
+            LookupColumn("CurrencyId", "Moneda", lookups.Currencies, true, 140, "currencies"),
             TextColumn("Status", "Estatus", true, width: 120),
             TextColumn("Reference", "Referencia", false, width: 180),
             NumberColumn("Total", "Total", width: 140),
@@ -791,7 +791,7 @@ public sealed class TreasuryApiService
     private static CatalogColumnDefinition NumberColumn(string field, string caption, bool required = false, int width = 120) => new() { DataField = field, Caption = caption, DataType = "number", Required = required, Width = width };
     private static CatalogColumnDefinition DateColumn(string field, string caption, bool required = false, int width = 130) => new() { DataField = field, Caption = caption, DataType = "date", Required = required, Width = width };
     private static CatalogColumnDefinition BoolColumn(string field, string caption, int width = 90) => new() { DataField = field, Caption = caption, DataType = "boolean", Width = width };
-    private static CatalogColumnDefinition LookupColumn(string field, string caption, List<CatalogLookupItem> lookupItems, bool required = false, int width = 180) => new() { DataField = field, Caption = caption, DataType = "string", Required = required, Width = width, UseLookup = true, LookupItems = lookupItems };
+    private static CatalogColumnDefinition LookupColumn(string field, string caption, List<CatalogLookupItem> lookupItems, bool required = false, int width = 180, string? quickCreateKey = null) => new() { DataField = field, Caption = caption, DataType = "string", Required = required, Width = width, UseLookup = true, LookupItems = lookupItems, QuickCreateKey = quickCreateKey };
 }
 
 public sealed class TreasuryAccountEditorDefinition

@@ -590,6 +590,9 @@
             "customers" or "suppliers" or "contacts" or "addresses" or "bank-accounts" or "categories"
             or "brands" or "models" or "items" or "price-lists" or "barcodes"
                 => ThirdPartiesProductsApiService.InsertAsync(catalogKey, payload),
+            "warehouses" => WarehouseApiService.InsertAsync(payload),
+            "cash-accounts" or "bank-accounts-own" or "treasury-incomes" or "treasury-expenses" or "treasury-receipts" or "treasury-payments" or "treasury-reconciliations"
+                => TreasuryApiService.InsertAsync(catalogKey, payload),
             "colors" or "leather-types" or "soles" or "manufacturing-types" or "toe-caps" or "sole-colors"
             or "dies" or "quality-control-dies" or "folio-patterns" or "unit-conversions" or "size-runs"
             or "families" or "lasts" or "lines" or "styles" or "embroidery-patterns" or "item-engineering-profiles"
@@ -1152,17 +1155,67 @@
 
     private static string BuildPrintableHtml(CatalogViewDefinition definition, List<CatalogColumnDefinition> columns)
     {
+        var title = WebUtility.HtmlEncode(definition.Title);
+        var subtitle = WebUtility.HtmlEncode(definition.Subtitle);
+        var now = DateTime.Now;
         var sb = new StringBuilder();
-        sb.Append("<html><head><meta charset='utf-8'><title>");
-        sb.Append(WebUtility.HtmlEncode(definition.Title));
-        sb.Append("</title><style>");
-        sb.Append("body{font-family:Segoe UI,Arial,sans-serif;margin:24px;color:#0f172a;} h1{margin:0 0 8px 0;} p{margin:0 0 18px 0;color:#475569;} table{width:100%;border-collapse:collapse;font-size:12px;} th,td{border:1px solid #cbd5e1;padding:8px;vertical-align:top;} th{background:#e2e8f0;text-align:left;} .meta{margin-bottom:16px;color:#475569;font-size:12px;} @media print{body{margin:12px;} button{display:none;}} </style></head><body onload='window.print()'>");
-        sb.Append($"<h1>{WebUtility.HtmlEncode(definition.Title)}</h1>");
-        sb.Append($"<p>{WebUtility.HtmlEncode(definition.Subtitle)}</p>");
-        sb.Append($"<div class='meta'>Catálogo: {WebUtility.HtmlEncode(definition.CatalogKey)} · Total: {definition.TotalCount} · Fecha: {DateTime.Now:dd/MM/yyyy HH:mm}</div>");
+        sb.Append("<!DOCTYPE html><html lang='es'><head><meta charset='utf-8'>");
+        sb.Append($"<title>{title}</title>");
+        sb.Append(@"<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Segoe UI',Arial,sans-serif;color:#0f172a;background:#fff;font-size:11px}
+.page{max-width:1100px;margin:0 auto;padding:28px 32px}
+.header{display:flex;align-items:center;justify-content:space-between;padding-bottom:16px;border-bottom:3px solid #1d4ed8;margin-bottom:20px}
+.header-left .brand{font-size:18px;font-weight:800;color:#1d4ed8;letter-spacing:-.3px}
+.header-left .brand span{color:#0f172a}
+.header-left .report-title{font-size:14px;font-weight:700;color:#0f172a;margin-top:4px}
+.header-left .report-sub{font-size:11px;color:#64748b;margin-top:2px}
+.header-right{text-align:right;font-size:10px;color:#64748b;line-height:1.6}
+.kpis{display:flex;gap:12px;margin-bottom:20px}
+.kpi{flex:1;padding:12px 16px;border-radius:10px;border:1px solid #e2e8f0;background:#f8fafc}
+.kpi-label{font-size:9px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px}
+.kpi-value{font-size:22px;font-weight:800;color:#0f172a}
+.kpi-total .kpi-value{color:#1d4ed8}
+.kpi-active .kpi-value{color:#16a34a}
+.kpi-inactive .kpi-value{color:#94a3b8}
+table{width:100%;border-collapse:collapse;font-size:10px;margin-bottom:24px}
+thead tr{background:#1d4ed8}
+th{padding:9px 10px;text-align:left;color:#fff;font-weight:700;font-size:9.5px;letter-spacing:.3px;text-transform:uppercase;white-space:nowrap}
+tbody tr:nth-child(even){background:#f8fafc}
+tbody tr:nth-child(odd){background:#fff}
+tbody tr:hover{background:#eff6ff}
+td{padding:7px 10px;border-bottom:1px solid #e2e8f0;vertical-align:top;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.footer{padding-top:12px;border-top:1px solid #e2e8f0;font-size:9px;color:#94a3b8;display:flex;justify-content:space-between}
+.no-print{display:block;text-align:center;margin-bottom:20px}
+.no-print button{padding:10px 28px;background:#1d4ed8;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;margin-right:10px}
+.no-print button.secondary{background:#f1f5f9;color:#0f172a;border:1px solid #cbd5e1}
+@media print{
+  .no-print{display:none!important}
+  body{font-size:10px}
+  .page{padding:12px 16px}
+  th{font-size:8.5px}
+  td{font-size:9px;padding:5px 7px}
+  .header{padding-bottom:10px;margin-bottom:12px}
+}
+</style></head><body>");
+        sb.Append(@"<div class='no-print'>
+<button onclick='window.print()'>🖨 Imprimir / Guardar PDF</button>
+<button class='secondary' onclick='window.close()'>Cerrar</button>
+</div>");
+        sb.Append("<div class='page'>");
+        sb.Append("<div class='header'>");
+        sb.Append($"<div class='header-left'><div class='brand'>Nanche<span>soft</span> ERP</div><div class='report-title'>{title}</div><div class='report-sub'>{subtitle}</div></div>");
+        sb.Append($"<div class='header-right'><div>Fecha: <strong>{now:dd/MM/yyyy}</strong></div><div>Hora: {now:HH:mm}</div><div>Catálogo: {WebUtility.HtmlEncode(definition.CatalogKey)}</div></div>");
+        sb.Append("</div>");
+        sb.Append("<div class='kpis'>");
+        sb.Append($"<div class='kpi kpi-total'><div class='kpi-label'>Total registros</div><div class='kpi-value'>{definition.TotalCount}</div></div>");
+        sb.Append($"<div class='kpi kpi-active'><div class='kpi-label'>Activos</div><div class='kpi-value'>{definition.ActiveCount}</div></div>");
+        sb.Append($"<div class='kpi kpi-inactive'><div class='kpi-label'>Inactivos</div><div class='kpi-value'>{definition.InactiveCount}</div></div>");
+        sb.Append($"<div class='kpi'><div class='kpi-label'>Columnas</div><div class='kpi-value'>{columns.Count}</div></div>");
+        sb.Append("</div>");
         sb.Append("<table><thead><tr>");
-        foreach (var c in columns)
-            sb.Append($"<th>{WebUtility.HtmlEncode(c.Caption)}</th>");
+        for (int i = 0; i < columns.Count; i++)
+            sb.Append($"<th>{WebUtility.HtmlEncode(columns[i].Caption)}</th>");
         sb.Append("</tr></thead><tbody>");
         foreach (var row in definition.Rows)
         {
@@ -1171,7 +1224,9 @@
                 sb.Append($"<td>{WebUtility.HtmlEncode(GetDisplayValue(c, row))}</td>");
             sb.Append("</tr>");
         }
-        sb.Append("</tbody></table></body></html>");
+        sb.Append("</tbody></table>");
+        sb.Append($"<div class='footer'><span>Nanchesoft ERP · {WebUtility.HtmlEncode(definition.CatalogKey)}</span><span>Generado: {now:dd/MM/yyyy HH:mm} · {definition.TotalCount} registro(s)</span></div>");
+        sb.Append("</div></body></html>");
         return sb.ToString();
     }
 

@@ -384,6 +384,13 @@ window.nsCrudGrid = (() => {
             groupPanel: { visible: true, emptyPanelText: "Arrastra una columna aquí para agrupar" },
             grouping: { autoExpandAll: true },
             selection: { mode: "single" },
+            columnChooser: {
+                enabled: true,
+                mode: "select",
+                title: "Columnas visibles",
+                height: 400
+            },
+            export: { enabled: false },
 
             paging: { pageSize: 12 },
             pager: {
@@ -471,6 +478,18 @@ window.nsCrudGrid = (() => {
                         }
                     }] : []),
                     "searchPanel",
+                    {
+                        location: "after",
+                        widget: "dxButton",
+                        options: {
+                            icon: "xlsxfile",
+                            hint: "Exportar a Excel",
+                            type: "default",
+                            stylingMode: "outlined",
+                            onClick: () => exportToExcel(containerId, title, catalogKey)
+                        }
+                    },
+                    "columnChooserButton",
                     {
                         location: "after",
                         widget: "dxButton",
@@ -1039,6 +1058,65 @@ window.nsCrudGrid = (() => {
             displayTime: 2600,
             width: 420
         });
+    }
+
+    function exportToExcel(containerId, title, catalogKey) {
+        const inst = instances[containerId];
+        if (!inst?.grid) return;
+        if (!window.ExcelJS) { notify("ExcelJS no está disponible.", "error"); return; }
+        const workbook = new window.ExcelJS.Workbook();
+        workbook.creator = "Nanchesoft";
+        workbook.created = new Date();
+        const worksheet = workbook.addWorksheet(title.slice(0, 31));
+
+        const logoRow = worksheet.addRow(["Nanchesoft ERP — " + title]);
+        logoRow.font = { bold: true, size: 13, color: { argb: "FF1D4ED8" } };
+        worksheet.addRow(["Exportado: " + new Date().toLocaleString("es-MX")]);
+        worksheet.addRow([]);
+
+        DevExpress.excelExporter.exportDataGrid({
+            component: inst.grid,
+            worksheet,
+            topLeftCell: { row: 4, column: 1 },
+            autoFilterEnabled: true,
+            customizeCell({ gridCell, excelCell }) {
+                if (gridCell.rowType === "header") {
+                    excelCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF1D4ED8" } };
+                    excelCell.font = { bold: true, color: { argb: "FFFFFFFF" }, size: 10 };
+                    excelCell.alignment = { vertical: "middle", horizontal: "center", wrapText: true };
+                    excelCell.border = {
+                        top: { style: "thin", color: { argb: "FF1E40AF" } },
+                        left: { style: "thin", color: { argb: "FF1E40AF" } },
+                        bottom: { style: "thin", color: { argb: "FF1E40AF" } },
+                        right: { style: "thin", color: { argb: "FF1E40AF" } }
+                    };
+                } else if (gridCell.rowType === "data") {
+                    const bg = gridCell.rowIndex % 2 === 0 ? "FFF8FAFC" : "FFFFFFFF";
+                    excelCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: bg } };
+                    excelCell.font = { size: 9 };
+                    excelCell.border = {
+                        bottom: { style: "hair", color: { argb: "FFE2E8F0" } },
+                        right: { style: "hair", color: { argb: "FFE2E8F0" } }
+                    };
+                } else if (gridCell.rowType === "group") {
+                    excelCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFDBEAFE" } };
+                    excelCell.font = { bold: true, size: 9, color: { argb: "FF1E40AF" } };
+                }
+            }
+        }).then(() => {
+            workbook.xlsx.writeBuffer().then(buffer => {
+                const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = `${catalogKey}_${new Date().toISOString().slice(0, 10)}.xlsx`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                notify("Excel exportado.", "success");
+            });
+        }).catch(err => notify("Error al exportar: " + err.message, "error"));
     }
 
     return {
