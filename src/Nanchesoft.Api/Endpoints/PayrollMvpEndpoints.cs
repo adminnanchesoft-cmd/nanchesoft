@@ -32,6 +32,7 @@ public static class PayrollMvpEndpoints
         periods.MapGet("/{periodId:guid}/generation-preview", GetPayrollGenerationPreviewAsync);
         periods.MapPost("/{periodId:guid}/generate-summaries", GenerateAttendanceDailySummariesAsync);
         periods.MapPost("/{periodId:guid}/generate-incidents", GenerateIncidentsFromSummariesAsync);
+        periods.MapPost("/{periodId:guid}/generate-incidents-policy", GenerateIncidentsFromPolicyAsync);
 
         var runs = app.MapGroup("/api/payroll/runs").WithTags("PayrollRuns");
         runs.MapPost("/{runId:guid}/calculate", CalculatePayrollRunAsync);
@@ -1618,6 +1619,147 @@ public static class PayrollMvpEndpoints
 
         await db.SaveChangesAsync();
         return Results.Ok(new { success = true, created, employees = grouped.Count });
+    }
+
+    // ──────────────────────────────────────────────────────────────
+    // 4b. GENERAR INCIDENCIAS DESDE POLÍTICA DE ASISTENCIA (Fase 6)
+    // Convierte AttendanceDailySummary → EmployeeIncident usando
+    // las reglas de AttendancePolicy configuradas por el usuario.
+    // ──────────────────────────────────────────────────────────────
+    private static async Task<IResult> GenerateIncidentsFromPolicyAsync(Guid periodId, Guid? policyId, NanchesoftDbContext db)
+    {
+        var period = await db.PayrollPeriods.FirstOrDefaultAsync(x => x.Id == periodId);
+        if (period is null)
+            return Results.NotFound(new { message = "No se encontró el periodo." });
+
+        // Resolve policy: explicit policyId → default for company → error
+        AttendancePolicy? policy;
+        if (policyId.HasValue && policyId.Value != Guid.Empty)
+        {
+            policy = await db.AttendancePolicies
+                .Include(x => x.Rules)
+                .FirstOrDefaultAsync(x => x.Id == policyId.Value && !x.IsDeleted && x.IsActive);
+        }
+        else
+        {
+            policy = await db.AttendancePolicies
+                .Include(x => x.Rules)
+                .FirstOrDefaultAsync(x => x.CompanyId == period.CompanyId && x.IsDefault && !x.IsDeleted && x.IsActive);
+        }
+
+        if (policy is null)
+            return Results.BadRequest(new { message = "No se encontró política de asistencia activa. Configura una política default o proporciona policyId." });
+
+        var rules = policy.Rules.Where(x => x.IsActive).OrderBy(x => x.SortOrder).ToList();
+        if (rules.Count == 0)
+            return Results.BadRequest(new { message = "La política no tiene reglas activas." });
+
+        var summaries = await db.AttendanceDailySummaries
+            .Where(x => x.PayrollPeriodId == periodId && x.IsActive)
+            .ToListAsync();
+
+        if (summaries.Count == 0)
+            return Results.BadRequest(new { message = "No hay resúmenes de asistencia. Genera primero el resumen diario." });
+
+        // Remove previously policy-generated incidents for this period
+        var prevIncidents = await db.EmployeeIncidents
+            .Where(x => x.PayrollPeriodId == periodId && x.Notes == "policy-auto")
+            .ToListAsync();
+        foreach (var inc in prevIncidents)
+        {
+            inc.IsActive = false;
+            inc.IsDeleted = true;
+            inc.DeletedAt = DateTime.UtcNow;
+            inc.DeletedBy = "policy-engine";
+        }
+
+        var incidentTypes = await db.NomPayrollIncidentTypes
+            .Where(x => x.CompanyId == period.CompanyId && x.IsActive && !x.IsDeleted)
+            .ToDictionaryAsync(x => x.Code);
+
+        int created = 0;
+        var grouped = summaries.GroupBy(x => x.EmployeeId).ToList();
+
+        foreach (var empGroup in grouped)
+        {
+            var empId = empGroup.Key;
+            var employee = await db.Employees.FindAsync(empId);
+            if (employee is null) continue;
+
+            // Aggregate summaries for this employee
+            var totalAbsenceDays = empGroup.Sum(x => x.AbsenceUnits);
+            var totalDelayMinutes = empGroup.Sum(x => x.DelayMinutes);
+            var totalEarlyLeaveMinutes = empGroup.Sum(x => x.EarlyLeaveMinutes);
+            var totalOvertimeHours = empGroup.Sum(x => x.OvertimeHours);
+            var missingPunchDays = empGroup.Count(x => x.FirstPunchDateTime is null && x.WorkDate.DayOfWeek != DayOfWeek.Saturday && x.WorkDate.DayOfWeek != DayOfWeek.Sunday);
+
+            foreach (var rule in rules)
+            {
+                if (rule.ActionType != "CreateIncident") continue;
+                if (string.IsNullOrWhiteSpace(rule.IncidentTypeCode)) continue;
+                if (!incidentTypes.TryGetValue(rule.IncidentTypeCode, out var incType)) continue;
+
+                decimal metricValue = rule.RuleType switch
+                {
+                    "Absence" => (decimal)totalAbsenceDays,
+                    "Lateness" => totalDelayMinutes,
+                    "EarlyLeave" => totalEarlyLeaveMinutes,
+                    "Overtime" => (decimal)(totalOvertimeHours * 60),
+                    "MissingPunch" => missingPunchDays,
+                    _ => 0m
+                };
+
+                decimal threshold = rule.ThresholdMinutes.HasValue
+                    ? rule.ThresholdMinutes.Value
+                    : (rule.ThresholdDays.HasValue ? rule.ThresholdDays.Value * (rule.RuleType == "Absence" ? 1m : 480m) : 0m);
+
+                bool conditionMet = rule.ConditionType switch
+                {
+                    "GreaterThan" => metricValue > threshold,
+                    "GreaterThanOrEqual" => metricValue >= threshold,
+                    "Equal" => metricValue == threshold,
+                    "Always" => metricValue > 0m,
+                    _ => metricValue > threshold
+                };
+
+                if (!conditionMet) continue;
+
+                // Compute quantity: for time-based rules use hours, for day-based use days
+                decimal quantity = rule.RuleType switch
+                {
+                    "Lateness" or "EarlyLeave" => Math.Round(metricValue / 60m, 2),
+                    "Overtime" => Math.Round(totalOvertimeHours, 2),
+                    "MissingPunch" => missingPunchDays,
+                    _ => totalAbsenceDays
+                };
+
+                decimal amount = rule.ActionValue > 0m
+                    ? rule.ActionValue * quantity
+                    : employee.DailySalary * quantity;
+
+                db.EmployeeIncidents.Add(new EmployeeIncident
+                {
+                    TenantId = period.TenantId,
+                    CompanyId = period.CompanyId,
+                    BranchId = employee.BranchId,
+                    EmployeeId = empId,
+                    PayrollPeriodId = periodId,
+                    NomPayrollIncidentTypeId = incType.Id,
+                    IncidentDate = period.StartDate,
+                    IncidentType = rule.IncidentTypeCode,
+                    Quantity = quantity,
+                    Amount = Math.Round(amount, 2),
+                    Status = "draft",
+                    Notes = "policy-auto",
+                    IsActive = true,
+                    CreatedBy = "policy-engine"
+                });
+                created++;
+            }
+        }
+
+        await db.SaveChangesAsync();
+        return Results.Ok(new { success = true, created, employees = grouped.Count, policy = policy.Name });
     }
 
     // ──────────────────────────────────────────────────────────────
