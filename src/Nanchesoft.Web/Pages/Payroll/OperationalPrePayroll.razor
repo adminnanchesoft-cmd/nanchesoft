@@ -1,0 +1,263 @@
+@page "/payroll/operational-prepayroll"
+@using Nanchesoft.Web.Services.HumanResources
+@inject PayrollOperationsApiService Svc
+@inject HumanResourcesApiService HrSvc
+
+<PageTitle>Prenómina operativa | Nanchesoft</PageTitle>
+
+<div class="d-flex align-items-center justify-content-between mb-3">
+    <h4 class="mb-0">Prenómina operativa</h4>
+    <div class="d-flex gap-2">
+        <button class="btn btn-outline-secondary btn-sm" @onclick="LoadAsync" disabled="@(_loading || _selectedPeriodId == null)">
+            Actualizar
+        </button>
+        <button class="btn btn-primary btn-sm" @onclick="GenerateAsync"
+                disabled="@(_generating || _selectedPeriodId == null || _summary?.IsClosed == true)">
+            @if (_generating)
+            {
+                <span class="spinner-border spinner-border-sm me-1"></span><span>Generando...</span>
+            }
+            else
+            {
+                <span>Generar prenómina desde incidencias</span>
+            }
+        </button>
+    </div>
+</div>
+
+@if (!string.IsNullOrWhiteSpace(_msg))
+{
+    <div class="alert @(_msgOk ? "alert-success" : "alert-danger") alert-dismissible py-2 mb-3">
+        @_msg
+        <button type="button" class="btn-close btn-sm" @onclick="() => _msg = null"></button>
+    </div>
+}
+
+<!-- Selector de periodo -->
+<div class="card shadow-sm mb-3">
+    <div class="card-body py-2">
+        <div class="row g-2 align-items-center">
+            <div class="col-md-4">
+                <label class="form-label form-label-sm mb-1">Periodo nómina</label>
+                <select class="form-select form-select-sm" @onchange="OnPeriodChanged">
+                    <option value="">— Seleccionar periodo —</option>
+                    @foreach (var p in _periods)
+                    {
+                        <option value="@p.PayrollPeriodId">@($"{p.Code} · {p.Name} ({p.StartDate:dd/MM} – {p.EndDate:dd/MM/yy})")</option>
+                    }
+                </select>
+            </div>
+            @if (_summary != null)
+            {
+                <div class="col-auto pt-4">
+                    @if (_summary.IsClosed)
+                    {
+                        <span class="badge bg-danger">Periodo cerrado</span>
+                    }
+                    else
+                    {
+                        <span class="badge bg-success">Periodo abierto</span>
+                    }
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+@if (_loading)
+{
+    <div class="text-center py-5 text-muted">Cargando...</div>
+}
+else if (_summary == null)
+{
+    <div class="text-center py-5 text-muted">Selecciona un periodo para ver la prenómina operativa.</div>
+}
+else
+{
+    <!-- Tarjetas resumen -->
+    <div class="row g-3 mb-3">
+        <div class="col-6 col-md-3">
+            <div class="card shadow-sm text-center">
+                <div class="card-body py-2">
+                    <div class="fs-4 fw-bold text-primary">@_summary.Rows.Count</div>
+                    <div class="text-muted small">Colaboradores</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="card shadow-sm text-center">
+                <div class="card-body py-2">
+                    <div class="fs-4 fw-bold text-info">@_summary.Rows.Sum(r => r.IncidentCount)</div>
+                    <div class="text-muted small">Incidencias</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="card shadow-sm text-center">
+                <div class="card-body py-2">
+                    <div class="fs-4 fw-bold text-success">@_summary.Rows.Sum(r => r.IncidentPerceptionsTotal + r.AdjustmentPerceptionsTotal).ToString("C0")</div>
+                    <div class="text-muted small">Total percepciones</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="card shadow-sm text-center">
+                <div class="card-body py-2">
+                    <div class="fs-4 fw-bold text-danger">@_summary.Rows.Sum(r => r.IncidentDeductionsTotal + r.AdjustmentDeductionsTotal).ToString("C0")</div>
+                    <div class="text-muted small">Total deducciones</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabla principal -->
+    <div class="card shadow-sm">
+        <div class="card-body p-0">
+            <div style="overflow-x:auto">
+                <table class="table table-sm table-hover mb-0" style="min-width:1100px">
+                    <thead class="table-light">
+                        <tr>
+                            <th>No.</th>
+                            <th>Colaborador</th>
+                            <th class="text-end">Sueldo periodo</th>
+                            <th class="text-end" title="Días con registro de asistencia">Días asist.</th>
+                            <th class="text-end" title="Horas trabajadas">Hrs trab.</th>
+                            <th class="text-end" title="Minutos de retardo">Retardos</th>
+                            <th class="text-end" title="Horas extra">HE</th>
+                            <th class="text-end" title="Días de ausencia">Ausencias</th>
+                            <th class="text-center" title="Número de incidencias">Incid.</th>
+                            <th class="text-end text-success">Percep. incid.</th>
+                            <th class="text-end text-danger">Deduc. incid.</th>
+                            <th class="text-center" title="Ajustes prenómina">Ajustes</th>
+                            <th class="text-end text-success">Percep. aj.</th>
+                            <th class="text-end text-danger">Deduc. aj.</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var row in _summary.Rows)
+                        {
+                            <tr>
+                                <td><code class="small">@row.EmployeeNumber</code></td>
+                                <td>@row.EmployeeName</td>
+                                <td class="text-end">@row.PeriodSalary.ToString("C2")</td>
+                                <td class="text-end">@row.AttendanceDays</td>
+                                <td class="text-end">@row.WorkedHours.ToString("N1")</td>
+                                <td class="text-end @(row.DelayMinutes > 0 ? "text-warning" : "")">
+                                    @(row.DelayMinutes > 0 ? $"{row.DelayMinutes} min" : "—")
+                                </td>
+                                <td class="text-end @(row.OvertimeHours > 0 ? "text-info" : "")">
+                                    @(row.OvertimeHours > 0 ? $"{row.OvertimeHours:N1}h" : "—")
+                                </td>
+                                <td class="text-end @(row.AbsenceUnits > 0 ? "text-danger" : "")">
+                                    @(row.AbsenceUnits > 0 ? row.AbsenceUnits.ToString("N1") : "—")
+                                </td>
+                                <td class="text-center">
+                                    @if (row.IncidentCount > 0)
+                                    {
+                                        <span class="badge bg-secondary">@row.IncidentCount</span>
+                                    }
+                                    else { <span class="text-muted">—</span> }
+                                </td>
+                                <td class="text-end text-success">
+                                    @(row.IncidentPerceptionsTotal > 0 ? row.IncidentPerceptionsTotal.ToString("C2") : "—")
+                                </td>
+                                <td class="text-end text-danger">
+                                    @(row.IncidentDeductionsTotal > 0 ? row.IncidentDeductionsTotal.ToString("C2") : "—")
+                                </td>
+                                <td class="text-center">
+                                    @if (row.AdjustmentCount > 0)
+                                    {
+                                        <span class="badge bg-primary">@row.AdjustmentCount</span>
+                                    }
+                                    else { <span class="text-muted">—</span> }
+                                </td>
+                                <td class="text-end text-success">
+                                    @(row.AdjustmentPerceptionsTotal > 0 ? row.AdjustmentPerceptionsTotal.ToString("C2") : "—")
+                                </td>
+                                <td class="text-end text-danger">
+                                    @(row.AdjustmentDeductionsTotal > 0 ? row.AdjustmentDeductionsTotal.ToString("C2") : "—")
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                    <tfoot class="table-secondary fw-semibold">
+                        <tr>
+                            <td colspan="2">Totales</td>
+                            <td class="text-end">@_summary.Rows.Sum(r => r.PeriodSalary).ToString("C0")</td>
+                            <td></td>
+                            <td class="text-end">@_summary.Rows.Sum(r => r.WorkedHours).ToString("N0")h</td>
+                            <td class="text-end">@_summary.Rows.Sum(r => r.DelayMinutes) min</td>
+                            <td class="text-end">@_summary.Rows.Sum(r => r.OvertimeHours).ToString("N1")h</td>
+                            <td class="text-end">@_summary.Rows.Sum(r => r.AbsenceUnits).ToString("N1")</td>
+                            <td class="text-center">@_summary.Rows.Sum(r => r.IncidentCount)</td>
+                            <td class="text-end text-success">@_summary.Rows.Sum(r => r.IncidentPerceptionsTotal).ToString("C0")</td>
+                            <td class="text-end text-danger">@_summary.Rows.Sum(r => r.IncidentDeductionsTotal).ToString("C0")</td>
+                            <td class="text-center">@_summary.Rows.Sum(r => r.AdjustmentCount)</td>
+                            <td class="text-end text-success">@_summary.Rows.Sum(r => r.AdjustmentPerceptionsTotal).ToString("C0")</td>
+                            <td class="text-end text-danger">@_summary.Rows.Sum(r => r.AdjustmentDeductionsTotal).ToString("C0")</td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="text-muted small mt-2">
+        Percepciones/deducciones de incidencias se calculan según la categoría del tipo. Para generar ajustes de prenómina, asigna un concepto de nómina a los tipos de incidencia en
+        <a href="/human-resources/incident-types">Tipos de incidencia</a>.
+    </div>
+}
+
+@code {
+    bool _loading;
+    bool _generating;
+    string? _msg;
+    bool _msgOk;
+    Guid? _selectedPeriodId;
+    OperationalPrePayrollSummary? _summary;
+    List<PayrollPeriodDto> _periods = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        _periods = await HrSvc.GetPeriodsForSelectionAsync();
+    }
+
+    async Task OnPeriodChanged(ChangeEventArgs e)
+    {
+        _selectedPeriodId = Guid.TryParse(e.Value?.ToString(), out var id) ? id : null;
+        _summary = null;
+        _msg = null;
+        if (_selectedPeriodId.HasValue)
+            await LoadAsync();
+    }
+
+    async Task LoadAsync()
+    {
+        if (!_selectedPeriodId.HasValue) return;
+        _loading = true;
+        StateHasChanged();
+        try { _summary = await Svc.GetOperationalPrePayrollAsync(_selectedPeriodId.Value); }
+        finally { _loading = false; }
+    }
+
+    async Task GenerateAsync()
+    {
+        if (!_selectedPeriodId.HasValue) return;
+        _generating = true;
+        _msg = null;
+        StateHasChanged();
+        var (ok, created, deleted, error) = await Svc.GenerateOperationalPrePayrollAsync(_selectedPeriodId.Value);
+        _generating = false;
+        if (ok)
+        {
+            _msg = $"Generado: {created} ajuste(s) creados, {deleted} eliminados previamente.";
+            _msgOk = true;
+            await LoadAsync();
+        }
+        else
+        {
+            _msg = error ?? "Error al generar.";
+            _msgOk = false;
+        }
+    }
+}

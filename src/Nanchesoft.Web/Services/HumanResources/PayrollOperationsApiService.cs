@@ -536,6 +536,35 @@ public sealed class PayrollOperationsApiService
         }
     }
 
+    // ── Fase 8: Prenómina Operativa ────────────────────────────────────────
+
+    public async Task<OperationalPrePayrollSummary?> GetOperationalPrePayrollAsync(Guid periodId)
+    {
+        var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
+        return await client.GetFromJsonAsync<OperationalPrePayrollSummary>($"/api/payroll/periods/{periodId:D}/operational-prepayroll");
+    }
+
+    public async Task<(bool Ok, int Created, int Deleted, string? Error)> GenerateOperationalPrePayrollAsync(Guid periodId)
+    {
+        var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
+        var response = await client.PostAsync($"/api/payroll/periods/{periodId:D}/generate-operational-prepayroll", null);
+        if (response.IsSuccessStatusCode)
+        {
+            var result = await response.Content.ReadFromJsonAsync<OperationalGenerateResult>();
+            return (true, result?.Created ?? 0, result?.Deleted ?? 0, null);
+        }
+        try
+        {
+            var content = await response.Content.ReadAsStringAsync();
+            using var doc = System.Text.Json.JsonDocument.Parse(content);
+            var msg = doc.RootElement.TryGetProperty("message", out var m) ? m.GetString() : content;
+            return (false, 0, 0, msg);
+        }
+        catch { return (false, 0, 0, "Error desconocido."); }
+    }
+
+    private sealed class OperationalGenerateResult { public int Created { get; set; } public int Deleted { get; set; } }
+
     private async Task<CatalogViewDefinition> GetTimeClockAsync()
     {
         var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
@@ -2485,4 +2514,32 @@ public sealed class PrePayrollMatrixImportResult
     public int Deleted { get; set; }
     public int SaveSkipped { get; set; }
     public List<string> Errors { get; set; } = [];
+}
+
+public sealed class OperationalPrePayrollEmployeeRow
+{
+    public Guid EmployeeId { get; set; }
+    public string EmployeeNumber { get; set; } = string.Empty;
+    public string EmployeeName { get; set; } = string.Empty;
+    public decimal PeriodSalary { get; set; }
+    public decimal DailySalary { get; set; }
+    public decimal WorkedHours { get; set; }
+    public int DelayMinutes { get; set; }
+    public decimal OvertimeHours { get; set; }
+    public decimal AbsenceUnits { get; set; }
+    public int AttendanceDays { get; set; }
+    public int IncidentCount { get; set; }
+    public decimal IncidentPerceptionsTotal { get; set; }
+    public decimal IncidentDeductionsTotal { get; set; }
+    public int AdjustmentCount { get; set; }
+    public decimal AdjustmentPerceptionsTotal { get; set; }
+    public decimal AdjustmentDeductionsTotal { get; set; }
+}
+
+public sealed class OperationalPrePayrollSummary
+{
+    public Guid PayrollPeriodId { get; set; }
+    public string PeriodName { get; set; } = string.Empty;
+    public bool IsClosed { get; set; }
+    public List<OperationalPrePayrollEmployeeRow> Rows { get; set; } = [];
 }

@@ -18,6 +18,7 @@ public static class NomPayrollIncidentTypeMapper
         IncidentCategory = entity.IncidentCategory,
         AffectType = entity.AffectType,
         PayrollConceptType = entity.PayrollConceptType,
+        PayrollConceptId = entity.PayrollConceptId,
         SatCode = entity.SatCode,
         Color = entity.Color,
         Icon = entity.Icon,

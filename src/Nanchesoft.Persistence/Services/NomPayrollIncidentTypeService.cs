@@ -56,6 +56,7 @@ public sealed class NomPayrollIncidentTypeService : INomPayrollIncidentTypeServi
             IncidentCategory = category,
             AffectType = NomPayrollIncidentTypeValidator.NormalizeEnum(request.AffectType),
             PayrollConceptType = NomPayrollIncidentTypeValidator.NormalizeEnum(request.PayrollConceptType),
+            PayrollConceptId = request.PayrollConceptId,
             SatCode = NomPayrollIncidentTypeValidator.NormalizeCode(request.SatCode),
             Color = NomPayrollIncidentTypeValidator.NormalizeColor(request.Color, category),
             Icon = NomPayrollIncidentTypeValidator.NormalizeText(request.Icon),
@@ -104,6 +105,7 @@ public sealed class NomPayrollIncidentTypeService : INomPayrollIncidentTypeServi
         entity.IncidentCategory = category;
         entity.AffectType = NomPayrollIncidentTypeValidator.NormalizeEnum(request.AffectType);
         entity.PayrollConceptType = NomPayrollIncidentTypeValidator.NormalizeEnum(request.PayrollConceptType);
+        entity.PayrollConceptId = request.PayrollConceptId ?? entity.PayrollConceptId;
         entity.SatCode = NomPayrollIncidentTypeValidator.NormalizeCode(request.SatCode);
         entity.Color = NomPayrollIncidentTypeValidator.NormalizeColor(request.Color, category);
         entity.Icon = NomPayrollIncidentTypeValidator.NormalizeText(request.Icon);

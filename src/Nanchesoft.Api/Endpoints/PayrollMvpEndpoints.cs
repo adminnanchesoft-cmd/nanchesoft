@@ -33,6 +33,8 @@ public static class PayrollMvpEndpoints
         periods.MapPost("/{periodId:guid}/generate-summaries", GenerateAttendanceDailySummariesAsync);
         periods.MapPost("/{periodId:guid}/generate-incidents", GenerateIncidentsFromSummariesAsync);
         periods.MapPost("/{periodId:guid}/generate-incidents-policy", GenerateIncidentsFromPolicyAsync);
+        periods.MapGet("/{periodId:guid}/operational-prepayroll", GetOperationalPrePayrollAsync);
+        periods.MapPost("/{periodId:guid}/generate-operational-prepayroll", GenerateOperationalPrePayrollAsync);
 
         var runs = app.MapGroup("/api/payroll/runs").WithTags("PayrollRuns");
         runs.MapPost("/{runId:guid}/calculate", CalculatePayrollRunAsync);
@@ -1762,6 +1764,172 @@ public static class PayrollMvpEndpoints
         return Results.Ok(new { success = true, created, employees = grouped.Count, policy = policy.Name });
     }
 
+    // ── Fase 8: Prenómina operativa ─────────────────────────────────────────
+
+    private static async Task<IResult> GetOperationalPrePayrollAsync(Guid periodId, NanchesoftDbContext db)
+    {
+        var period = await db.PayrollPeriods.AsNoTracking().FirstOrDefaultAsync(x => x.Id == periodId);
+        if (period is null)
+            return Results.NotFound(new { message = "No se encontró el periodo." });
+
+        // Active employees for this company
+        var employees = await db.Employees.AsNoTracking()
+            .Where(x => x.CompanyId == period.CompanyId && x.IsActive)
+            .Select(x => new { x.Id, x.EmployeeNumber, x.PeriodSalary, x.DailySalary,
+                               FullName = (x.FirstName + " " + x.LastName).Trim() })
+            .ToListAsync();
+        var empIds = employees.Select(e => e.Id).ToList();
+
+        // Attendance summaries aggregated per employee
+        var attendanceRaw = await db.AttendanceDailySummaries.AsNoTracking()
+            .Where(x => x.PayrollPeriodId == periodId && x.IsActive && empIds.Contains(x.EmployeeId))
+            .GroupBy(x => x.EmployeeId)
+            .Select(g => new
+            {
+                EmployeeId = g.Key,
+                WorkedHours = g.Sum(x => x.WorkedHours),
+                DelayMinutes = g.Sum(x => x.DelayMinutes),
+                OvertimeHours = g.Sum(x => x.OvertimeHours),
+                AbsenceUnits = g.Sum(x => x.AbsenceUnits),
+                Days = g.Count()
+            })
+            .ToDictionaryAsync(x => x.EmployeeId);
+
+        // Incidents aggregated per employee
+        var incidentTypes = await db.NomPayrollIncidentTypes.AsNoTracking()
+            .Where(x => x.CompanyId == period.CompanyId && x.IsActive && !x.IsDeleted)
+            .ToDictionaryAsync(x => x.Id);
+
+        var incidents = await db.EmployeeIncidents.AsNoTracking()
+            .Where(x => x.PayrollPeriodId == periodId && !x.IsDeleted && x.IsActive && empIds.Contains(x.EmployeeId))
+            .Select(x => new { x.EmployeeId, x.PayrollIncidentTypeId, x.Quantity, x.Amount })
+            .ToListAsync();
+
+        var incByEmp = incidents
+            .GroupBy(x => x.EmployeeId)
+            .ToDictionary(g => g.Key, g => g.ToList());
+
+        // PrePayrollAdjustments
+        var adjustments = await db.PrePayrollAdjustments.AsNoTracking()
+            .Where(x => x.PayrollPeriodId == periodId && x.IsActive && x.Status != "cancelled" && empIds.Contains(x.EmployeeId))
+            .Select(x => new { x.EmployeeId, x.Amount, x.AdjustmentType })
+            .ToListAsync();
+        var adjByEmp = adjustments.GroupBy(x => x.EmployeeId).ToDictionary(g => g.Key, g => g.ToList());
+
+        var rows = employees.Select(emp =>
+        {
+            var att = attendanceRaw.GetValueOrDefault(emp.Id);
+            var incs = incByEmp.GetValueOrDefault(emp.Id) ?? [];
+            var adjs = adjByEmp.GetValueOrDefault(emp.Id) ?? [];
+
+            decimal incPerceptions = 0m, incDeductions = 0m;
+            foreach (var inc in incs)
+            {
+                if (!incidentTypes.TryGetValue(inc.PayrollIncidentTypeId, out var itype)) continue;
+                var cat = itype.IncidentCategory;
+                var aff = itype.AffectType;
+                if (cat is "AUSENCIA" or "DEDUCCION" || aff is "RESTA") incDeductions += inc.Amount > 0 ? inc.Amount : 0;
+                else incPerceptions += inc.Amount > 0 ? inc.Amount : 0;
+            }
+            decimal adjPerceptions = adjs.Where(a => a.AdjustmentType != "deduction").Sum(a => a.Amount);
+            decimal adjDeductions  = adjs.Where(a => a.AdjustmentType == "deduction").Sum(a => a.Amount);
+
+            return new OperationalPrePayrollEmployeeRow
+            {
+                EmployeeId = emp.Id,
+                EmployeeNumber = emp.EmployeeNumber ?? string.Empty,
+                EmployeeName = emp.FullName,
+                PeriodSalary = emp.PeriodSalary,
+                DailySalary = emp.DailySalary,
+                WorkedHours = att?.WorkedHours ?? 0,
+                DelayMinutes = att?.DelayMinutes ?? 0,
+                OvertimeHours = att?.OvertimeHours ?? 0,
+                AbsenceUnits = att?.AbsenceUnits ?? 0,
+                AttendanceDays = att?.Days ?? 0,
+                IncidentCount = incs.Count,
+                IncidentPerceptionsTotal = Math.Round(incPerceptions, 2),
+                IncidentDeductionsTotal = Math.Round(incDeductions, 2),
+                AdjustmentCount = adjs.Count,
+                AdjustmentPerceptionsTotal = Math.Round(adjPerceptions, 2),
+                AdjustmentDeductionsTotal = Math.Round(adjDeductions, 2)
+            };
+        }).OrderBy(r => r.EmployeeNumber).ToList();
+
+        return Results.Ok(new OperationalPrePayrollSummary
+        {
+            PayrollPeriodId = period.Id,
+            PeriodName = period.Name,
+            IsClosed = period.IsClosed,
+            Rows = rows
+        });
+    }
+
+    private static async Task<IResult> GenerateOperationalPrePayrollAsync(Guid periodId, NanchesoftDbContext db)
+    {
+        var period = await db.PayrollPeriods.AsNoTracking().FirstOrDefaultAsync(x => x.Id == periodId);
+        if (period is null)
+            return Results.NotFound(new { message = "No se encontró el periodo." });
+        if (period.IsClosed)
+            return Results.BadRequest(new { message = "El periodo está cerrado." });
+
+        // Load incidents with concept mapping
+        var incidents = await db.EmployeeIncidents
+            .Where(x => x.PayrollPeriodId == periodId && !x.IsDeleted && x.IsActive)
+            .ToListAsync();
+
+        var typeIds = incidents.Select(x => x.PayrollIncidentTypeId).Distinct().ToList();
+        var incidentTypes = await db.NomPayrollIncidentTypes
+            .Where(x => typeIds.Contains(x.Id) && x.PayrollConceptId.HasValue)
+            .ToDictionaryAsync(x => x.Id);
+
+        if (incidentTypes.Count == 0)
+            return Results.Ok(new { success = true, created = 0, message = "Ningún tipo de incidencia tiene concepto de nómina asignado. Configura PayrollConceptId en los tipos de incidencia." });
+
+        // Delete previous operational-auto adjustments for this period
+        var prev = await db.PrePayrollAdjustments
+            .Where(x => x.PayrollPeriodId == periodId && x.CaptureSource == "operational-auto")
+            .ToListAsync();
+        db.PrePayrollAdjustments.RemoveRange(prev);
+
+        int created = 0;
+        foreach (var inc in incidents)
+        {
+            if (!incidentTypes.TryGetValue(inc.PayrollIncidentTypeId, out var itype)) continue;
+            var concept = await db.PayrollConcepts.FirstOrDefaultAsync(c => c.Id == itype.PayrollConceptId!.Value);
+            if (concept is null) continue;
+
+            var isDeduction = concept.ConceptType == "deduction" || itype.IncidentCategory is "DEDUCCION" or "AUSENCIA";
+            var amount = inc.Amount > 0 ? inc.Amount : 0m;
+            if (amount <= 0) continue;
+
+            db.PrePayrollAdjustments.Add(new PrePayrollAdjustment
+            {
+                TenantId = period.TenantId,
+                CompanyId = period.CompanyId,
+                EmployeeId = inc.EmployeeId,
+                PayrollPeriodId = periodId,
+                PayrollConceptId = concept.Id,
+                AdjustmentCode = $"OP-{itype.Code}",
+                AdjustmentName = itype.Name,
+                AdjustmentType = isDeduction ? "deduction" : "perception",
+                CaptureSource = "operational-auto",
+                ReferenceDate = inc.IncidentDate,
+                Quantity = inc.Quantity <= 0 ? 1m : inc.Quantity,
+                Amount = Math.Round(amount, 2),
+                TaxableAmount = isDeduction ? 0m : Math.Round(amount, 2),
+                ExemptAmount = 0m,
+                Status = "captured",
+                Notes = $"Generado de incidencia {inc.Id:D}",
+                IsActive = true,
+                CreatedBy = "operational-prepayroll"
+            });
+            created++;
+        }
+
+        await db.SaveChangesAsync();
+        return Results.Ok(new { success = true, created, deleted = prev.Count });
+    }
+
     // ──────────────────────────────────────────────────────────────
     // 5. CALCULAR CORRIDA DE NÓMINA
     // Fórmula: gross = daily_salary * days_paid + horas_extra + bonos
@@ -3139,4 +3307,37 @@ public sealed class ClockImportMappingRequest
     public bool IsDefault { get; set; }
     public string? Notes { get; set; }
     public bool IsActive { get; set; } = true;
+}
+
+// ── Fase 8: Prenómina Operativa ─────────────────────────────────────────────
+
+public sealed class OperationalPrePayrollEmployeeRow
+{
+    public Guid EmployeeId { get; set; }
+    public string EmployeeNumber { get; set; } = string.Empty;
+    public string EmployeeName { get; set; } = string.Empty;
+    public decimal PeriodSalary { get; set; }
+    public decimal DailySalary { get; set; }
+    // Attendance
+    public decimal WorkedHours { get; set; }
+    public int DelayMinutes { get; set; }
+    public decimal OvertimeHours { get; set; }
+    public decimal AbsenceUnits { get; set; }
+    public int AttendanceDays { get; set; }
+    // Incidents
+    public int IncidentCount { get; set; }
+    public decimal IncidentPerceptionsTotal { get; set; }
+    public decimal IncidentDeductionsTotal { get; set; }
+    // PrePayroll adjustments
+    public int AdjustmentCount { get; set; }
+    public decimal AdjustmentPerceptionsTotal { get; set; }
+    public decimal AdjustmentDeductionsTotal { get; set; }
+}
+
+public sealed class OperationalPrePayrollSummary
+{
+    public Guid PayrollPeriodId { get; set; }
+    public string PeriodName { get; set; } = string.Empty;
+    public bool IsClosed { get; set; }
+    public List<OperationalPrePayrollEmployeeRow> Rows { get; set; } = [];
 }

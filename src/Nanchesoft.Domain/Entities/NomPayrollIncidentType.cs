@@ -19,6 +19,8 @@ public sealed class NomPayrollIncidentType : BaseEntity
     public string IncidentCategory { get; set; } = string.Empty;
     public string AffectType { get; set; } = string.Empty;
     public string PayrollConceptType { get; set; } = string.Empty;
+    public Guid? PayrollConceptId { get; set; }
+    public PayrollConcept? PayrollConcept { get; set; }
     public string SatCode { get; set; } = string.Empty;
     public string Color { get; set; } = string.Empty;
     public string Icon { get; set; } = string.Empty;

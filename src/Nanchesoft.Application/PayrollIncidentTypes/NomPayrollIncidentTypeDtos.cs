@@ -11,6 +11,7 @@ public class NomPayrollIncidentTypeRequest
     public string? IncidentCategory { get; set; }
     public string? AffectType { get; set; }
     public string? PayrollConceptType { get; set; }
+    public Guid? PayrollConceptId { get; set; }
     public string? SatCode { get; set; }
     public string? Color { get; set; }
     public string? Icon { get; set; }
