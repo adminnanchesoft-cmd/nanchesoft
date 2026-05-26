@@ -593,7 +593,7 @@ public sealed class PayrollOperationsApiService
     public async Task<List<ClockImportHistoryItem>> GetClockImportHistoryAsync()
     {
         var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
-        return await client.GetFromJsonAsync<List<ClockImportHistoryItem>>("/api/payroll/clock/import-history") ?? [];
+        return await client.GetFromJsonAsync<List<ClockImportHistoryItem>>("/api/hr/time-clock/import-history") ?? [];
     }
 
     // ── Clock CSV import ──────────────────────────────────────────
@@ -603,7 +603,7 @@ public sealed class PayrollOperationsApiService
         var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
         using var content = new MultipartFormDataContent();
         content.Add(new StreamContent(stream), "file", fileName);
-        var response = await client.PostAsync("/api/payroll/clock/import/preview", content);
+        var response = await client.PostAsync("/api/hr/time-clock/import/preview", content);
         if (!response.IsSuccessStatusCode) return [];
         return await response.Content.ReadFromJsonAsync<List<PunchPreviewRow>>() ?? [];
     }
@@ -613,7 +613,7 @@ public sealed class PayrollOperationsApiService
         var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
         using var content = new MultipartFormDataContent();
         content.Add(new StreamContent(stream), "file", fileName);
-        var response = await client.PostAsync("/api/payroll/clock/import/csv", content);
+        var response = await client.PostAsync("/api/hr/time-clock/import/csv", content);
         if (!response.IsSuccessStatusCode)
         {
             var err = await response.Content.ReadAsStringAsync();

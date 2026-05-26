@@ -163,6 +163,10 @@ public static class NanchesoftSchemaCatalog
         modelBuilder.Entity<PayrollRunLine>().ToTable("payroll_run_lines", PayrollSchema);
         modelBuilder.Entity<PayrollRunLineDetail>().ToTable("payroll_run_line_details", PayrollSchema);
         modelBuilder.Entity<AttendancePunch>().ToTable("hr_attendance_punches", HrSchema);
+        modelBuilder.Entity<ClockImport>().ToTable("hr_clock_imports", HrSchema);
+        modelBuilder.Entity<ClockImportMapping>().ToTable("hr_clock_import_mappings", HrSchema);
+        modelBuilder.Entity<AttendancePolicy>().ToTable("hr_attendance_policies", HrSchema);
+        modelBuilder.Entity<AttendancePolicyRule>().ToTable("hr_attendance_policy_rules", HrSchema);
         modelBuilder.Entity<PayrollRecurringMovement>().ToTable("payroll_recurring_movements", PayrollSchema);
         modelBuilder.Entity<EmployeeLoan>().ToTable("employee_loans", PayrollSchema);
         modelBuilder.Entity<EmployeeLoanDeduction>().ToTable("employee_loan_deductions", PayrollSchema);
