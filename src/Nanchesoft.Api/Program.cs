@@ -2,6 +2,8 @@ using Nanchesoft.Api.Ai;
 using Nanchesoft.Api.Endpoints;
 using Microsoft.EntityFrameworkCore;
 using Nanchesoft.Application.PayrollIncidentTypes;
+using Nanchesoft.Application.SilvaSoft;
+using Nanchesoft.Infrastructure.SilvaSoft;
 using Nanchesoft.Persistence.Context;
 using Nanchesoft.Persistence.Repositories;
 using Nanchesoft.Persistence.Seed;
@@ -37,6 +39,10 @@ builder.Services.AddDbContext<NanchesoftDbContext>(options =>
     options.UseNpgsql(defaultConnection));
 builder.Services.AddScoped<INomPayrollIncidentTypeRepository, NomPayrollIncidentTypeRepository>();
 builder.Services.AddScoped<INomPayrollIncidentTypeService, NomPayrollIncidentTypeService>();
+
+// SilvaSoft integration — clean architecture DI wiring
+builder.Services.AddScoped<ISilvaSoftConexionRepository, SilvaSoftConexionRepository>();
+builder.Services.AddScoped<ISilvaSoftService, SilvaSoftService>();
 
 var app = builder.Build();
 
