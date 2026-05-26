@@ -596,11 +596,94 @@ public sealed class PayrollOperationsApiService
         return await client.GetFromJsonAsync<List<ClockImportHistoryItem>>("/api/payroll/clock/import-history") ?? [];
     }
 
+    // ── Clock CSV import ──────────────────────────────────────────
+
+    public async Task<List<PunchPreviewRow>> PreviewClockCsvAsync(Stream stream, string fileName)
+    {
+        var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
+        using var content = new MultipartFormDataContent();
+        content.Add(new StreamContent(stream), "file", fileName);
+        var response = await client.PostAsync("/api/payroll/clock/import/preview", content);
+        if (!response.IsSuccessStatusCode) return [];
+        return await response.Content.ReadFromJsonAsync<List<PunchPreviewRow>>() ?? [];
+    }
+
+    public async Task<(int Created, int Skipped, List<string> Errors)> ImportClockCsvAsync(Stream stream, string fileName)
+    {
+        var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
+        using var content = new MultipartFormDataContent();
+        content.Add(new StreamContent(stream), "file", fileName);
+        var response = await client.PostAsync("/api/payroll/clock/import/csv", content);
+        if (!response.IsSuccessStatusCode)
+        {
+            var err = await response.Content.ReadAsStringAsync();
+            return (0, 0, [string.IsNullOrWhiteSpace(err) ? $"Error HTTP {(int)response.StatusCode}" : err]);
+        }
+        var result = await response.Content.ReadFromJsonAsync<ClockImportResult>();
+        return (result?.Created ?? 0, result?.Skipped ?? 0, result?.Errors ?? []);
+    }
+
+    // ── Attendance processing engine ─────────────────────────────
+
+    public async Task<(bool Ok, int Created, int Employees, int Days, string? Error)> GenerateAttendanceSummariesAsync(
+        Guid periodId, int? toleranceMinutes = null, int? earlyLeaveMinutes = null,
+        decimal? halfAbsenceHours = null, decimal? fullAbsenceHours = null)
+    {
+        var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
+        var qs = BuildQsStr(
+            ("defaultToleranceMinutes",    toleranceMinutes?.ToString()),
+            ("earlyLeaveToleranceMinutes", earlyLeaveMinutes?.ToString()),
+            ("halfAbsenceUnderHours",      halfAbsenceHours?.ToString()),
+            ("fullAbsenceUnderHours",      fullAbsenceHours?.ToString()));
+        var response = await client.PostAsync($"/api/payroll/periods/{periodId:D}/generate-summaries{qs}", null);
+        if (!response.IsSuccessStatusCode)
+            return (false, 0, 0, 0, await response.Content.ReadAsStringAsync());
+        var r = await response.Content.ReadFromJsonAsync<GenerateSummaryResult>();
+        return (true, r?.Created ?? 0, r?.Employees ?? 0, r?.Days ?? 0, null);
+    }
+
+    public async Task<(bool Ok, int Created, int Employees, string? Error)> GenerateIncidentsFromSummariesAsync(
+        Guid periodId, int? delayThreshold = null, decimal? overtimeMultiplier = null)
+    {
+        var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
+        var qs = BuildQsStr(
+            ("delayIncidentThresholdMinutes", delayThreshold?.ToString()),
+            ("overtimeMultiplier",            overtimeMultiplier?.ToString()));
+        var response = await client.PostAsync($"/api/payroll/periods/{periodId:D}/generate-incidents{qs}", null);
+        if (!response.IsSuccessStatusCode)
+            return (false, 0, 0, await response.Content.ReadAsStringAsync());
+        var r = await response.Content.ReadFromJsonAsync<GenerateIncidentsResult>();
+        return (true, r?.Created ?? 0, r?.Employees ?? 0, null);
+    }
+
+    public async Task<(bool Ok, int Created, string? PolicyName, string? Error)> GenerateIncidentsByPolicyAsync(
+        Guid periodId, Guid? policyId = null)
+    {
+        var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
+        var qs = BuildQs(("policyId", policyId));
+        var response = await client.PostAsync($"/api/payroll/periods/{periodId:D}/generate-incidents-policy{qs}", null);
+        if (!response.IsSuccessStatusCode)
+            return (false, 0, null, await response.Content.ReadAsStringAsync());
+        var r = await response.Content.ReadFromJsonAsync<GeneratePolicyResult>();
+        return (true, r?.Created ?? 0, r?.Policy, null);
+    }
+
     private static string BuildQs(params (string Key, Guid? Value)[] pairs)
     {
         var parts = pairs.Where(p => p.Value.HasValue).Select(p => $"{p.Key}={p.Value:D}").ToList();
         return parts.Count > 0 ? "?" + string.Join("&", parts) : "";
     }
+
+    private static string BuildQsStr(params (string Key, string? Value)[] pairs)
+    {
+        var parts = pairs.Where(p => p.Value != null).Select(p => $"{p.Key}={Uri.EscapeDataString(p.Value!)}").ToList();
+        return parts.Count > 0 ? "?" + string.Join("&", parts) : "";
+    }
+
+    private sealed class ClockImportResult    { public int Created { get; set; } public int Skipped { get; set; } public List<string> Errors { get; set; } = []; }
+    private sealed class GenerateSummaryResult { public int Created { get; set; } public int Employees { get; set; } public int Days { get; set; } }
+    private sealed class GenerateIncidentsResult { public int Created { get; set; } public int Employees { get; set; } }
+    private sealed class GeneratePolicyResult  { public int Created { get; set; } public string Policy { get; set; } = string.Empty; }
 
     private async Task<CatalogViewDefinition> GetTimeClockAsync()
     {
@@ -2634,4 +2717,17 @@ public sealed class ClockImportHistoryItem
     public int RowsError { get; set; }
     public string Status { get; set; } = string.Empty;
     public string ErrorSummary { get; set; } = string.Empty;
+}
+
+public sealed class PunchPreviewRow
+{
+    public int RowNumber { get; set; }
+    public string EmployeeNumber { get; set; } = string.Empty;
+    public string EmployeeName { get; set; } = string.Empty;
+    public DateTime? PunchDate { get; set; }
+    public TimeSpan? EntryTime { get; set; }
+    public TimeSpan? ExitTime { get; set; }
+    public string PunchType { get; set; } = string.Empty;
+    public string Status { get; set; } = string.Empty;
+    public string Message { get; set; } = string.Empty;
 }

@@ -1,0 +1,273 @@
+@page "/human-resources/attendance-processing"
+@using Nanchesoft.Web.Services.HumanResources
+@inject PayrollOperationsApiService Svc
+@inject HumanResourcesApiService HrSvc
+
+<PageTitle>Procesar asistencia | Nanchesoft</PageTitle>
+
+<div class="d-flex align-items-center justify-content-between mb-3">
+    <h4 class="mb-0">Procesamiento de asistencia</h4>
+</div>
+
+<div class="text-muted small mb-3">
+    Convierte las marcaciones del reloj en resúmenes de asistencia y luego en incidencias de nómina.
+    Ejecuta cada paso en orden dentro de un periodo.
+</div>
+
+<!-- Selector de periodo -->
+<div class="card shadow-sm mb-4">
+    <div class="card-body py-2">
+        <div class="row g-2 align-items-center">
+            <div class="col-md-4">
+                <label class="form-label form-label-sm mb-1">Periodo de nómina</label>
+                <select class="form-select form-select-sm" @onchange="OnPeriodChanged">
+                    <option value="">— Seleccionar periodo —</option>
+                    @foreach (var p in _periods)
+                    {
+                        <option value="@p.PayrollPeriodId">@($"{p.Code} · {p.Name} ({p.StartDate:dd/MM} – {p.EndDate:dd/MM/yy})")</option>
+                    }
+                </select>
+            </div>
+        </div>
+    </div>
+</div>
+
+@if (_selectedPeriodId.HasValue)
+{
+    <!-- Paso 1: Generar resúmenes de asistencia -->
+    <div class="card shadow-sm mb-3">
+        <div class="card-header py-2 fw-semibold">
+            <span class="badge bg-primary me-2">1</span>
+            Generar resúmenes de asistencia
+            <span class="text-muted small fw-normal ms-2">AttendancePunch → AttendanceDailySummary</span>
+        </div>
+        <div class="card-body">
+            <p class="text-muted small mb-3">
+                Agrupa las marcaciones del reloj por empleado y día. Calcula horas trabajadas, retardos,
+                horas extra y faltas usando el horario asignado.
+            </p>
+            <div class="row g-2 mb-3">
+                <div class="col-md-3">
+                    <label class="form-label form-label-sm mb-1">Tolerancia entrada (min)</label>
+                    <input type="number" class="form-control form-control-sm" @bind="_toleranceMinutes" min="0" max="60" placeholder="15" />
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label form-label-sm mb-1">Tolerancia salida temprana (min)</label>
+                    <input type="number" class="form-control form-control-sm" @bind="_earlyLeaveMinutes" min="0" max="60" placeholder="10" />
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label form-label-sm mb-1">Horas mín. para media falta</label>
+                    <input type="number" class="form-control form-control-sm" @bind="_halfAbsenceHours" min="0" max="8" step="0.5" placeholder="4" />
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label form-label-sm mb-1">Horas mín. para falta completa</label>
+                    <input type="number" class="form-control form-control-sm" @bind="_fullAbsenceHours" min="0" max="8" step="0.5" placeholder="2" />
+                </div>
+            </div>
+            <div class="d-flex align-items-center gap-3">
+                <button class="btn btn-primary btn-sm" @onclick="Step1Async" disabled="@_step1Running">
+                    @if (_step1Running)
+                    {
+                        <span class="spinner-border spinner-border-sm me-1"></span><span>Procesando...</span>
+                    }
+                    else
+                    {
+                        <span>Generar resúmenes</span>
+                    }
+                </button>
+                @if (_step1Result != null)
+                {
+                    if (_step1Result.Value.Ok)
+                    {
+                        <span class="badge bg-success">
+                            ✓ @_step1Result.Value.Created resúmenes — @_step1Result.Value.Employees empleados — @_step1Result.Value.Days días
+                        </span>
+                    }
+                    else
+                    {
+                        <span class="badge bg-danger">Error: @_step1Result.Value.Error</span>
+                    }
+                }
+            </div>
+        </div>
+    </div>
+
+    <!-- Paso 2: Generar incidencias desde resúmenes -->
+    <div class="card shadow-sm mb-3">
+        <div class="card-header py-2 fw-semibold">
+            <span class="badge bg-primary me-2">2</span>
+            Generar incidencias desde resúmenes
+            <span class="text-muted small fw-normal ms-2">AttendanceDailySummary → EmployeeIncident</span>
+        </div>
+        <div class="card-body">
+            <p class="text-muted small mb-3">
+                Convierte los resúmenes diarios en incidencias de nómina (retardos, faltas, horas extra).
+                Las incidencias anteriores auto-generadas se reemplazarán.
+            </p>
+            <div class="row g-2 mb-3">
+                <div class="col-md-3">
+                    <label class="form-label form-label-sm mb-1">Umbral retardo (min)</label>
+                    <input type="number" class="form-control form-control-sm" @bind="_delayThreshold" min="0" max="120" placeholder="15" />
+                    <div class="form-text">Minutos mínimos para crear incidencia de retardo</div>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label form-label-sm mb-1">Multiplicador HE</label>
+                    <input type="number" class="form-control form-control-sm" @bind="_overtimeMultiplier" min="1" max="5" step="0.5" placeholder="1.5" />
+                    <div class="form-text">Factor para horas extra (1.5 = doble tiempo)</div>
+                </div>
+            </div>
+            <div class="d-flex align-items-center gap-3">
+                <button class="btn btn-primary btn-sm" @onclick="Step2Async" disabled="@_step2Running">
+                    @if (_step2Running)
+                    {
+                        <span class="spinner-border spinner-border-sm me-1"></span><span>Procesando...</span>
+                    }
+                    else
+                    {
+                        <span>Generar incidencias</span>
+                    }
+                </button>
+                @if (_step2Result != null)
+                {
+                    if (_step2Result.Value.Ok)
+                    {
+                        <span class="badge bg-success">
+                            ✓ @_step2Result.Value.Created incidencias — @_step2Result.Value.Employees empleados
+                        </span>
+                    }
+                    else
+                    {
+                        <span class="badge bg-danger">Error: @_step2Result.Value.Error</span>
+                    }
+                }
+            </div>
+        </div>
+    </div>
+
+    <!-- Paso 3: Generar por política (opcional) -->
+    <div class="card shadow-sm mb-3">
+        <div class="card-header py-2 fw-semibold">
+            <span class="badge bg-secondary me-2">3</span>
+            Generar incidencias por política de asistencia
+            <span class="text-muted small fw-normal ms-2">opcional — reemplaza el paso 2</span>
+        </div>
+        <div class="card-body">
+            <p class="text-muted small mb-3">
+                Aplica las reglas configuradas en una política de asistencia específica.
+                Usa este paso <em>en lugar del paso 2</em> si tienes políticas personalizadas de retardos y faltas.
+            </p>
+            <div class="row g-2 mb-3">
+                <div class="col-md-4">
+                    <label class="form-label form-label-sm mb-1">Política de asistencia</label>
+                    <select class="form-select form-select-sm" @bind="_policyId">
+                        <option value="">— Política por defecto —</option>
+                        @foreach (var pol in _policies)
+                        {
+                            <option value="@pol.AttendancePolicyId">@pol.Name</option>
+                        }
+                    </select>
+                </div>
+            </div>
+            <div class="d-flex align-items-center gap-3">
+                <button class="btn btn-outline-primary btn-sm" @onclick="Step3Async" disabled="@_step3Running">
+                    @if (_step3Running)
+                    {
+                        <span class="spinner-border spinner-border-sm me-1"></span><span>Procesando...</span>
+                    }
+                    else
+                    {
+                        <span>Aplicar política</span>
+                    }
+                </button>
+                @if (_step3Result != null)
+                {
+                    if (_step3Result.Value.Ok)
+                    {
+                        <span class="badge bg-success">
+                            ✓ @_step3Result.Value.Created incidencias — política: @(_step3Result.Value.PolicyName ?? "por defecto")
+                        </span>
+                    }
+                    else
+                    {
+                        <span class="badge bg-danger">Error: @_step3Result.Value.Error</span>
+                    }
+                }
+            </div>
+        </div>
+    </div>
+
+    <div class="text-muted small mt-2">
+        Después de generar las incidencias, ve a
+        <a href="/payroll/operational-prepayroll">Prenómina operativa</a>
+        para ver el consolidado o a
+        <a href="/payroll/manual-incidents">Captura manual</a>
+        para ajustes individuales.
+    </div>
+}
+
+@code {
+    Guid? _selectedPeriodId;
+    List<PayrollPeriodDto> _periods = [];
+    List<AttendancePolicyItem> _policies = [];
+
+    // Paso 1 params
+    int? _toleranceMinutes;
+    int? _earlyLeaveMinutes;
+    decimal? _halfAbsenceHours;
+    decimal? _fullAbsenceHours;
+    bool _step1Running;
+    (bool Ok, int Created, int Employees, int Days, string? Error)? _step1Result;
+
+    // Paso 2 params
+    int? _delayThreshold;
+    decimal? _overtimeMultiplier;
+    bool _step2Running;
+    (bool Ok, int Created, int Employees, string? Error)? _step2Result;
+
+    // Paso 3 params
+    string _policyId = string.Empty;
+    bool _step3Running;
+    (bool Ok, int Created, string? PolicyName, string? Error)? _step3Result;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var t1 = HrSvc.GetPeriodsForSelectionAsync();
+        var t2 = HrSvc.GetAttendancePoliciesAsync();
+        await Task.WhenAll(t1, t2);
+        _periods = t1.Result;
+        _policies = t2.Result;
+    }
+
+    void OnPeriodChanged(ChangeEventArgs e)
+    {
+        _selectedPeriodId = Guid.TryParse(e.Value?.ToString(), out var id) ? id : null;
+        _step1Result = null; _step2Result = null; _step3Result = null;
+    }
+
+    async Task Step1Async()
+    {
+        if (!_selectedPeriodId.HasValue) return;
+        _step1Running = true; StateHasChanged();
+        _step1Result = await Svc.GenerateAttendanceSummariesAsync(
+            _selectedPeriodId.Value, _toleranceMinutes, _earlyLeaveMinutes, _halfAbsenceHours, _fullAbsenceHours);
+        _step1Running = false;
+    }
+
+    async Task Step2Async()
+    {
+        if (!_selectedPeriodId.HasValue) return;
+        _step2Running = true; StateHasChanged();
+        _step2Result = await Svc.GenerateIncidentsFromSummariesAsync(
+            _selectedPeriodId.Value, _delayThreshold, _overtimeMultiplier);
+        _step2Running = false;
+    }
+
+    async Task Step3Async()
+    {
+        if (!_selectedPeriodId.HasValue) return;
+        _step3Running = true; StateHasChanged();
+        var policyId = Guid.TryParse(_policyId, out var pid) ? pid : (Guid?)null;
+        _step3Result = await Svc.GenerateIncidentsByPolicyAsync(_selectedPeriodId.Value, policyId);
+        _step3Running = false;
+    }
+}

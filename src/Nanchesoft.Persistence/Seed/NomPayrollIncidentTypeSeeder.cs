@@ -21,6 +21,22 @@ public static class NomPayrollIncidentTypeSeeder
             await EnsureAsync(dbContext, company.TenantId, company.Id, "RETARDO", "Retardo", "DEDUCCION", "RESTA", "RETARDO", "#DC2626", "clock-alert", 60, true, false, false, false, true, false, true);
             await EnsureAsync(dbContext, company.TenantId, company.Id, "INFORMATIVA_ASISTENCIA", "Informativa asistencia", "INFORMATIVA", "NO_AFECTA", "OTRO", "#2563EB", "info", 70, false, false, true, false, false, false, false);
             await EnsureAsync(dbContext, company.TenantId, company.Id, "OTRO", "Otro", "INFORMATIVA", "NO_AFECTA", "OTRO", "#2563EB", "circle-ellipsis", 999, false, false, true, false, false, false, false);
+
+            // Claves estándar CONTPAQi / operativas
+            await EnsureAsync(dbContext, company.TenantId, company.Id, "TRAB",  "Días trabajados",                  "INFORMATIVA", "NO_AFECTA", "OTRO",      "#16A34A", "check-circle",   100, false, false, true,  true,  false, false, true);
+            await EnsureAsync(dbContext, company.TenantId, company.Id, "FINJ",  "Falta injustificada",              "DEDUCCION",   "RESTA",     "FALTA",      "#DC2626", "calendar-x",     110, true,  false, false, false, true,  false, true);
+            await EnsureAsync(dbContext, company.TenantId, company.Id, "CAST",  "Días de castigo",                  "DEDUCCION",   "RESTA",     "FALTA",      "#B91C1C", "ban",            120, true,  false, false, false, true,  false, true);
+            await EnsureAsync(dbContext, company.TenantId, company.Id, "ENFG",  "Enfermedad general",               "INFORMATIVA", "NO_AFECTA", "OTRO",       "#7C3AED", "heart-pulse",    130, false, false, true,  true,  false, false, false);
+            await EnsureAsync(dbContext, company.TenantId, company.Id, "ATRB",  "Accidente de trabajo",             "INFORMATIVA", "NO_AFECTA", "OTRO",       "#7C3AED", "shield-alert",   140, false, false, true,  true,  false, false, false);
+            await EnsureAsync(dbContext, company.TenantId, company.Id, "ATRY",  "Accidente de trayecto",            "INFORMATIVA", "NO_AFECTA", "OTRO",       "#7C3AED", "car-crash",      150, false, false, true,  true,  false, false, false);
+            await EnsureAsync(dbContext, company.TenantId, company.Id, "INC",   "Incapacidad (pagada empresa)",     "DEDUCCION",   "RESTA",     "FALTA",      "#D97706", "file-heart",     160, true,  false, false, false, true,  false, false);
+            await EnsureAsync(dbContext, company.TenantId, company.Id, "MAT",   "Incapacidad maternidad",           "INFORMATIVA", "NO_AFECTA", "OTRO",       "#EC4899", "baby",           170, false, false, true,  true,  false, false, false);
+            await EnsureAsync(dbContext, company.TenantId, company.Id, "PCS",   "Permiso con goce de sueldo",       "INFORMATIVA", "NO_AFECTA", "OTRO",       "#0EA5E9", "calendar-check", 180, false, false, true,  true,  false, false, true);
+            await EnsureAsync(dbContext, company.TenantId, company.Id, "PSS",   "Permiso sin goce de sueldo",       "DEDUCCION",   "RESTA",     "FALTA",      "#64748B", "calendar-minus", 190, true,  false, false, false, true,  false, false);
+            await EnsureAsync(dbContext, company.TenantId, company.Id, "HE1",   "Hora extra sencilla",              "PERCEPCION",  "SUMA",      "HORAS_EXTRA", "#16A34A", "clock-plus",    200, false, true,  false, false, true,  true,  true);
+            await EnsureAsync(dbContext, company.TenantId, company.Id, "HE2",   "Hora extra doble",                 "PERCEPCION",  "SUMA",      "HORAS_EXTRA", "#15803D", "clock-plus",    210, false, true,  false, false, true,  true,  true);
+            await EnsureAsync(dbContext, company.TenantId, company.Id, "HE3",   "Hora extra triple",                "PERCEPCION",  "SUMA",      "HORAS_EXTRA", "#14532D", "clock-plus",    220, false, true,  false, false, true,  true,  true);
+            await EnsureAsync(dbContext, company.TenantId, company.Id, "RET",   "Retardo",                          "DEDUCCION",   "RESTA",     "RETARDO",    "#F59E0B", "clock-alert",   230, true,  false, false, false, true,  false, true);
         }
 
         await dbContext.SaveChangesAsync();
