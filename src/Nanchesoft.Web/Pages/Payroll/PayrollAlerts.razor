@@ -1,0 +1,303 @@
+@page "/payroll/prenomina-alertas/{PeriodId:guid}"
+@using Nanchesoft.Web.Services.HumanResources
+@inject PayrollOperationsApiService PayrollOperationsApiService
+
+<PageTitle>Alertas de Prenómina | Nanchesoft</PageTitle>
+
+<div class="pal-page">
+
+    <div class="pal-hero">
+        <div>
+            <div class="pal-hero__eyebrow">Prenómina</div>
+            <h1 class="pal-hero__title">Alertas del período</h1>
+            @if (_data is not null)
+            {
+                <p class="pal-hero__sub">@_data.PeriodName</p>
+            }
+        </div>
+        <a href="/payroll/prenomina" class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-arrow-left"></i> Volver a Prenómina
+        </a>
+    </div>
+
+    @if (_loading)
+    {
+        <div class="text-center py-5 text-secondary">
+            <div class="spinner-border mb-2"></div><br />Analizando período...
+        </div>
+    }
+    else if (_data is null)
+    {
+        <div class="alert alert-warning">No se pudieron cargar las alertas. Verifica que el período exista.</div>
+    }
+    else if (_data.Summary.Total == 0)
+    {
+        <div class="pal-empty">
+            <div class="pal-empty__icon">✅</div>
+            <div class="pal-empty__title">Sin alertas</div>
+            <div class="pal-empty__sub">Este período no tiene inconsistencias detectadas. Puedes proceder con el cálculo.</div>
+        </div>
+    }
+    else
+    {
+        <div class="pal-kpis">
+            <div class="pal-kpi pal-kpi--error">
+                <div class="pal-kpi__value">@_data.Summary.Errors</div>
+                <div class="pal-kpi__label">Errores</div>
+            </div>
+            <div class="pal-kpi pal-kpi--warning">
+                <div class="pal-kpi__value">@_data.Summary.Warnings</div>
+                <div class="pal-kpi__label">Advertencias</div>
+            </div>
+            <div class="pal-kpi pal-kpi--info">
+                <div class="pal-kpi__value">@_data.Summary.Info</div>
+                <div class="pal-kpi__label">Informativos</div>
+            </div>
+            <div class="pal-kpi pal-kpi--total">
+                <div class="pal-kpi__value">@_data.Summary.Total</div>
+                <div class="pal-kpi__label">Total</div>
+            </div>
+        </div>
+
+        <div class="pal-filter">
+            <button class="pal-filter__btn @(_filter == "" ? "active" : "")" @onclick='() => _filter = ""'>Todos (@_data.Summary.Total)</button>
+            <button class="pal-filter__btn pal-filter__btn--error @(_filter == "error" ? "active" : "")" @onclick='() => _filter = "error"'>Errores (@_data.Summary.Errors)</button>
+            <button class="pal-filter__btn pal-filter__btn--warning @(_filter == "warning" ? "active" : "")" @onclick='() => _filter = "warning"'>Advertencias (@_data.Summary.Warnings)</button>
+            <button class="pal-filter__btn pal-filter__btn--info @(_filter == "info" ? "active" : "")" @onclick='() => _filter = "info"'>Informativos (@_data.Summary.Info)</button>
+        </div>
+
+        var filtered = string.IsNullOrEmpty(_filter)
+            ? _data.Alerts
+            : _data.Alerts.Where(a => a.Severity == _filter).ToList();
+
+        @if (!filtered.Any())
+        {
+            <div class="alert alert-secondary">No hay alertas en esta categoría.</div>
+        }
+        else
+        {
+            <div class="pal-list">
+                @foreach (var alert in filtered)
+                {
+                    <div class="pal-item pal-item--@alert.Severity">
+                        <div class="pal-item__left">
+                            <span class="pal-item__badge pal-item__badge--@alert.Severity">
+                                @(alert.Severity == "error" ? "Error" : alert.Severity == "warning" ? "Advertencia" : "Info")
+                            </span>
+                            <span class="pal-item__type">@FormatType(alert.Type)</span>
+                        </div>
+                        <div class="pal-item__body">
+                            <div class="pal-item__emp">@alert.EmployeeName</div>
+                            <div class="pal-item__desc">@alert.Description</div>
+                            <div class="pal-item__action">
+                                <i class="bi bi-lightbulb text-warning"></i> @alert.SuggestedAction
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+    }
+</div>
+
+<style>
+    .pal-page {
+        max-width: 960px;
+        padding: 0 0 48px;
+    }
+
+    .pal-hero {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        background: linear-gradient(135deg, #fff7ed 0%, #ffedd5 100%);
+        border: 1px solid #fed7aa;
+        border-radius: 16px;
+        padding: 24px 28px;
+        margin-bottom: 24px;
+    }
+
+    .pal-hero__eyebrow {
+        font-size: 12px;
+        letter-spacing: .14em;
+        text-transform: uppercase;
+        color: #c2410c;
+        font-weight: 800;
+        margin-bottom: 6px;
+    }
+
+    .pal-hero__title {
+        margin: 0 0 6px;
+        font-size: 30px;
+        font-weight: 900;
+        color: #7c2d12;
+    }
+
+    .pal-hero__sub {
+        margin: 0;
+        color: #9a3412;
+        font-size: 14px;
+    }
+
+    .pal-empty {
+        text-align: center;
+        padding: 64px 24px;
+    }
+
+    .pal-empty__icon { font-size: 48px; margin-bottom: 12px; }
+    .pal-empty__title { font-size: 22px; font-weight: 800; color: #166534; margin-bottom: 8px; }
+    .pal-empty__sub { color: #6b7280; font-size: 15px; }
+
+    .pal-kpis {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 14px;
+        margin-bottom: 20px;
+    }
+
+    .pal-kpi {
+        border-radius: 14px;
+        padding: 18px;
+        text-align: center;
+        border: 1px solid transparent;
+    }
+
+    .pal-kpi__value { font-size: 32px; font-weight: 900; line-height: 1; }
+    .pal-kpi__label { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; margin-top: 4px; }
+
+    .pal-kpi--error   { background: #fef2f2; border-color: #fecaca; color: #991b1b; }
+    .pal-kpi--warning { background: #fffbeb; border-color: #fde68a; color: #92400e; }
+    .pal-kpi--info    { background: #eff6ff; border-color: #bfdbfe; color: #1e3a8a; }
+    .pal-kpi--total   { background: #f8fafc; border-color: #e2e8f0; color: #334155; }
+
+    .pal-filter {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin-bottom: 18px;
+    }
+
+    .pal-filter__btn {
+        border: 1px solid #e2e8f0;
+        background: white;
+        border-radius: 999px;
+        padding: 5px 16px;
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all .14s ease;
+        color: #64748b;
+    }
+
+    .pal-filter__btn:hover, .pal-filter__btn.active {
+        background: #0f172a;
+        color: white;
+        border-color: #0f172a;
+    }
+
+    .pal-filter__btn--error.active   { background: #dc2626; border-color: #dc2626; }
+    .pal-filter__btn--warning.active { background: #d97706; border-color: #d97706; }
+    .pal-filter__btn--info.active    { background: #2563eb; border-color: #2563eb; }
+
+    .pal-list {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    .pal-item {
+        display: flex;
+        align-items: flex-start;
+        gap: 16px;
+        border-radius: 12px;
+        padding: 16px 18px;
+        border: 1px solid transparent;
+    }
+
+    .pal-item--error   { background: #fef2f2; border-color: #fecaca; }
+    .pal-item--warning { background: #fffbeb; border-color: #fde68a; }
+    .pal-item--info    { background: #eff6ff; border-color: #bfdbfe; }
+
+    .pal-item__left {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 6px;
+        min-width: 90px;
+        padding-top: 2px;
+    }
+
+    .pal-item__badge {
+        border-radius: 6px;
+        font-size: 11px;
+        font-weight: 800;
+        padding: 2px 10px;
+        text-transform: uppercase;
+        letter-spacing: .06em;
+    }
+
+    .pal-item__badge--error   { background: #dc2626; color: white; }
+    .pal-item__badge--warning { background: #d97706; color: white; }
+    .pal-item__badge--info    { background: #2563eb; color: white; }
+
+    .pal-item__type {
+        font-size: 10px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: .05em;
+        color: #64748b;
+        text-align: center;
+    }
+
+    .pal-item__body { flex: 1; }
+
+    .pal-item__emp {
+        font-size: 15px;
+        font-weight: 700;
+        color: #0f172a;
+        margin-bottom: 3px;
+    }
+
+    .pal-item__desc {
+        font-size: 14px;
+        color: #334155;
+        margin-bottom: 6px;
+    }
+
+    .pal-item__action {
+        font-size: 13px;
+        color: #64748b;
+    }
+
+    @@media (max-width: 640px) {
+        .pal-kpis { grid-template-columns: repeat(2, 1fr); }
+        .pal-item { flex-direction: column; gap: 8px; }
+        .pal-item__left { flex-direction: row; min-width: auto; }
+    }
+</style>
+
+@code {
+    [Parameter] public Guid PeriodId { get; set; }
+
+    private PrenominaAlertsDto? _data;
+    private bool _loading = true;
+    private string _filter = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        try { _data = await PayrollOperationsApiService.GetPrenominaAlertsAsync(PeriodId); }
+        catch { _data = null; }
+        finally { _loading = false; }
+    }
+
+    private static string FormatType(string type) => type switch
+    {
+        "ausencia_no_justificada" => "Ausencia",
+        "overtime_atipico"        => "Tiempo extra",
+        "retardos_acumulados"     => "Retardos",
+        "checada_incompleta"      => "Checada",
+        "empleado_nuevo"          => "Nuevo ingreso",
+        "ajuste_elevado"          => "Ajuste elevado",
+        _ => type
+    };
+}

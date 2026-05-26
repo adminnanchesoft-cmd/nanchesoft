@@ -126,6 +126,31 @@
         </div>
     </div>
 
+    @if (_alertsLoading)
+    {
+        <div class="d-flex align-items-center gap-2 text-secondary small mb-3">
+            <div class="spinner-border spinner-border-sm"></div> Analizando alertas del período...
+        </div>
+    }
+    else if (_alerts is not null && _alerts.Summary.Total > 0)
+    {
+        var bannerClass = _alerts.Summary.Errors > 0 ? "alert-danger" : _alerts.Summary.Warnings > 0 ? "alert-warning" : "alert-info";
+        <div class="alert @bannerClass d-flex align-items-center justify-content-between mb-3 py-2 px-3" role="alert">
+            <div class="d-flex align-items-center gap-2">
+                <i class="bi bi-bell-fill fs-5"></i>
+                <span>
+                    <strong>Alertas de prenómina:</strong>
+                    @if (_alerts.Summary.Errors > 0) { <span class="badge bg-danger ms-1">@_alerts.Summary.Errors error(es)</span> }
+                    @if (_alerts.Summary.Warnings > 0) { <span class="badge bg-warning text-dark ms-1">@_alerts.Summary.Warnings advertencia(s)</span> }
+                    @if (_alerts.Summary.Info > 0) { <span class="badge bg-info text-dark ms-1">@_alerts.Summary.Info informativo(s)</span> }
+                </span>
+            </div>
+            <a href="/payroll/prenomina-alertas/@_selectedPeriodId" class="btn btn-sm btn-outline-secondary">
+                Ver detalle <i class="bi bi-arrow-right"></i>
+            </a>
+        </div>
+    }
+
     @if (_loading)
     {
         <div class="text-center py-5 text-secondary">Cargando prenómina...</div>
@@ -220,6 +245,8 @@
     private string _preferenceSource = string.Empty;
     private bool _hasBasePreference;
     private bool _hasPeriodOverride;
+    private PrenominaAlertsDto? _alerts;
+    private bool _alertsLoading;
 
     protected override async Task OnInitializedAsync()
     {
@@ -272,8 +299,20 @@
         _changes.Clear();
         _importFile = null;
         _importResult = null;
+        _alerts = null;
         await LoadPreferenceAsync();
         await LoadAsync();
+        if (_selectedPeriodId != Guid.Empty)
+            _ = LoadAlertsAsync();
+    }
+
+    private async Task LoadAlertsAsync()
+    {
+        _alertsLoading = true;
+        StateHasChanged();
+        try { _alerts = await PayrollOperationsApiService.GetPrenominaAlertsAsync(_selectedPeriodId); }
+        catch { _alerts = null; }
+        finally { _alertsLoading = false; StateHasChanged(); }
     }
 
     private async Task ToggleConceptAsync(Guid conceptId, ChangeEventArgs e)

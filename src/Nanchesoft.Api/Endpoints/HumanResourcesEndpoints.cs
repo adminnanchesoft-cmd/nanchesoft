@@ -171,8 +171,228 @@ public static class HumanResourcesEndpoints
         runLines.MapDelete("/{id:guid}", DeletePayrollRunLineAsync);
 
         app.MapGet("/api/payroll/executive-dashboard", GetPayrollExecutiveDashboardAsync).WithTags("PayrollDashboard");
+        app.MapGet("/api/payroll/prenomina-alerts/{periodId:guid}", GetPrenominaAlertsAsync).WithTags("PayrollDashboard");
 
         return app;
+    }
+
+    private static async Task<IResult> GetPrenominaAlertsAsync(Guid periodId, HttpContext httpContext, NanchesoftDbContext db)
+    {
+        var companyId = ApiTenantScope.ResolveCompanyId(httpContext);
+        if (!companyId.HasValue)
+            companyId = await db.Companies.OrderBy(x => x.CreatedAt).Select(x => (Guid?)x.Id).FirstOrDefaultAsync();
+
+        var period = await db.PayrollPeriods.AsNoTracking().FirstOrDefaultAsync(p => p.Id == periodId);
+        if (period is null) return Results.NotFound(new { message = "Período no encontrado." });
+
+        var alerts = new List<object>();
+
+        // ── 1. Ausencias sin incidencia registrada ────────────────────────────
+        var absences = await db.AttendanceDailySummaries.AsNoTracking()
+            .Where(a => a.PayrollPeriodId == periodId
+                     && (!companyId.HasValue || a.CompanyId == companyId.Value)
+                     && a.IsActive && a.AbsenceUnits > 0)
+            .GroupBy(a => a.EmployeeId)
+            .Select(g => new { EmpId = g.Key, TotalAbsence = g.Sum(a => a.AbsenceUnits) })
+            .ToListAsync();
+
+        var empIdsWithAbsence = absences.Select(a => a.EmpId).ToList();
+        var justifiedEmpIds = await db.EmployeeIncidents.AsNoTracking()
+            .Where(i => i.PayrollPeriodId == periodId && empIdsWithAbsence.Contains(i.EmployeeId)
+                     && !i.IsDeleted
+                     && (i.IncidentType.Contains("falta") || i.IncidentType.Contains("ausencia") || i.IncidentType.Contains("permiso")))
+            .Select(i => i.EmployeeId)
+            .Distinct()
+            .ToListAsync();
+
+        var unjustifiedEmpIds = empIdsWithAbsence.Except(justifiedEmpIds).ToList();
+        if (unjustifiedEmpIds.Any())
+        {
+            var empNames = await db.Employees.AsNoTracking()
+                .Where(e => unjustifiedEmpIds.Contains(e.Id))
+                .Select(e => new { e.Id, Name = e.FirstName + " " + e.LastName })
+                .ToDictionaryAsync(e => e.Id, e => e.Name);
+
+            foreach (var a in absences.Where(a => unjustifiedEmpIds.Contains(a.EmpId)))
+            {
+                alerts.Add(new {
+                    severity = "error",
+                    type = "ausencia_no_justificada",
+                    employeeId = a.EmpId,
+                    employeeName = empNames.TryGetValue(a.EmpId, out var n) ? n : "—",
+                    description = $"Ausencia sin incidencia: {a.TotalAbsence:N1} día(s) sin justificar",
+                    suggestedAction = "Registra una incidencia de falta, permiso o incapacidad"
+                });
+            }
+        }
+
+        // ── 2. Horas extra atípicas (> umbral 10 h o > mean+2σ) ───────────────
+        var overtimeData = await db.AttendanceDailySummaries.AsNoTracking()
+            .Where(a => a.PayrollPeriodId == periodId
+                     && (!companyId.HasValue || a.CompanyId == companyId.Value)
+                     && a.IsActive && a.OvertimeHours > 0)
+            .GroupBy(a => a.EmployeeId)
+            .Select(g => new { EmpId = g.Key, TotalOt = g.Sum(a => a.OvertimeHours) })
+            .ToListAsync();
+
+        if (overtimeData.Any())
+        {
+            double mean = (double)overtimeData.Average(o => o.TotalOt);
+            double variance = overtimeData.Average(o => Math.Pow((double)o.TotalOt - mean, 2));
+            double sigma = Math.Sqrt(variance);
+            double threshold = Math.Max(10.0, mean + 2 * sigma);
+
+            var atypical = overtimeData.Where(o => (double)o.TotalOt > threshold).ToList();
+            if (atypical.Any())
+            {
+                var atEmpIds = atypical.Select(o => o.EmpId).ToList();
+                var atNames = await db.Employees.AsNoTracking()
+                    .Where(e => atEmpIds.Contains(e.Id))
+                    .Select(e => new { e.Id, Name = e.FirstName + " " + e.LastName })
+                    .ToDictionaryAsync(e => e.Id, e => e.Name);
+
+                foreach (var o in atypical)
+                {
+                    alerts.Add(new {
+                        severity = (double)o.TotalOt > 20 ? "error" : "warning",
+                        type = "overtime_atipico",
+                        employeeId = o.EmpId,
+                        employeeName = atNames.TryGetValue(o.EmpId, out var n) ? n : "—",
+                        description = $"Horas extra atípicas: {o.TotalOt:N1} h (umbral: {threshold:N1} h)",
+                        suggestedAction = "Verifica autorización de tiempo extra y checadas"
+                    });
+                }
+            }
+        }
+
+        // ── 3. Retardos acumulados excesivos (> 60 min en el período) ─────────
+        var delayData = await db.AttendanceDailySummaries.AsNoTracking()
+            .Where(a => a.PayrollPeriodId == periodId
+                     && (!companyId.HasValue || a.CompanyId == companyId.Value)
+                     && a.IsActive && a.DelayMinutes > 0)
+            .GroupBy(a => a.EmployeeId)
+            .Select(g => new { EmpId = g.Key, TotalDelay = g.Sum(a => a.DelayMinutes) })
+            .Where(g => g.TotalDelay > 60)
+            .OrderByDescending(g => g.TotalDelay)
+            .Take(20)
+            .ToListAsync();
+
+        if (delayData.Any())
+        {
+            var delEmpIds = delayData.Select(d => d.EmpId).ToList();
+            var delNames = await db.Employees.AsNoTracking()
+                .Where(e => delEmpIds.Contains(e.Id))
+                .Select(e => new { e.Id, Name = e.FirstName + " " + e.LastName })
+                .ToDictionaryAsync(e => e.Id, e => e.Name);
+
+            foreach (var d in delayData)
+            {
+                alerts.Add(new {
+                    severity = d.TotalDelay > 120 ? "warning" : "info",
+                    type = "retardos_acumulados",
+                    employeeId = d.EmpId,
+                    employeeName = delNames.TryGetValue(d.EmpId, out var n) ? n : "—",
+                    description = $"Retardos acumulados: {d.TotalDelay} min ({d.TotalDelay / 60}h {d.TotalDelay % 60}min)",
+                    suggestedAction = "Aplica descuento por retardo según política de la empresa"
+                });
+            }
+        }
+
+        // ── 4. Checadas incompletas (entrada sin salida) ───────────────────────
+        var incompletePunches = await db.AttendanceDailySummaries.AsNoTracking()
+            .Where(a => a.PayrollPeriodId == periodId
+                     && (!companyId.HasValue || a.CompanyId == companyId.Value)
+                     && a.IsActive
+                     && a.FirstPunchDateTime != null
+                     && a.LastPunchDateTime == null)
+            .GroupBy(a => a.EmployeeId)
+            .Select(g => new { EmpId = g.Key, Count = g.Count() })
+            .ToListAsync();
+
+        if (incompletePunches.Any())
+        {
+            var ipEmpIds = incompletePunches.Select(i => i.EmpId).ToList();
+            var ipNames = await db.Employees.AsNoTracking()
+                .Where(e => ipEmpIds.Contains(e.Id))
+                .Select(e => new { e.Id, Name = e.FirstName + " " + e.LastName })
+                .ToDictionaryAsync(e => e.Id, e => e.Name);
+
+            foreach (var ip in incompletePunches)
+            {
+                alerts.Add(new {
+                    severity = "warning",
+                    type = "checada_incompleta",
+                    employeeId = ip.EmpId,
+                    employeeName = ipNames.TryGetValue(ip.EmpId, out var n) ? n : "—",
+                    description = $"Sin checada de salida en {ip.Count} día(s) del período",
+                    suggestedAction = "Solicita al empleado justificar la checada faltante"
+                });
+            }
+        }
+
+        // ── 5. Empleados nuevos en el período (contratados últimos 30 días) ────
+        var periodStart = period.StartDate;
+        var newHires = await db.Employees.AsNoTracking()
+            .Where(e => (!companyId.HasValue || e.CompanyId == companyId.Value)
+                     && e.IsActive
+                     && e.HireDate >= periodStart.AddDays(-30)
+                     && e.HireDate <= periodStart.AddDays(30))
+            .Select(e => new { e.Id, Name = e.FirstName + " " + e.LastName, e.HireDate })
+            .ToListAsync();
+
+        foreach (var nh in newHires)
+        {
+            alerts.Add(new {
+                severity = "info",
+                type = "empleado_nuevo",
+                employeeId = nh.Id,
+                employeeName = nh.Name,
+                description = $"Ingreso reciente: {nh.HireDate:dd/MM/yyyy}. Verifica días proporcionales",
+                suggestedAction = "Confirma que el cálculo de días proporcionales es correcto"
+            });
+        }
+
+        // ── 6. Ajustes de prenómina con importes elevados (> 10× salario diario) ─
+        var highAdjustments = await db.PrePayrollAdjustments.AsNoTracking()
+            .Where(a => a.PayrollPeriodId == periodId
+                     && (!companyId.HasValue || a.CompanyId == companyId.Value)
+                     && a.IsActive && Math.Abs(a.Amount) > 5000)
+            .Select(a => new { a.EmployeeId, a.Amount, a.AdjustmentType, AdjName = a.AdjustmentName })
+            .ToListAsync();
+
+        if (highAdjustments.Any())
+        {
+            var haEmpIds = highAdjustments.Select(a => a.EmployeeId).Distinct().ToList();
+            var haNames = await db.Employees.AsNoTracking()
+                .Where(e => haEmpIds.Contains(e.Id))
+                .Select(e => new { e.Id, Name = e.FirstName + " " + e.LastName })
+                .ToDictionaryAsync(e => e.Id, e => e.Name);
+
+            foreach (var a in highAdjustments)
+            {
+                alerts.Add(new {
+                    severity = Math.Abs(a.Amount) > 20000 ? "error" : "warning",
+                    type = "ajuste_elevado",
+                    employeeId = a.EmployeeId,
+                    employeeName = haNames.TryGetValue(a.EmployeeId, out var n) ? n : "—",
+                    description = $"Ajuste \"{a.AdjName}\" ({a.AdjustmentType}): {a.Amount:C2} — importe inusual",
+                    suggestedAction = "Verifica autorización del ajuste antes de procesar nómina"
+                });
+            }
+        }
+
+        // ── Summary ───────────────────────────────────────────────────────────
+        var alertList = alerts.Cast<dynamic>().ToList();
+        int errCount  = alerts.Count(a => ((dynamic)a).severity == "error");
+        int warnCount = alerts.Count(a => ((dynamic)a).severity == "warning");
+        int infoCount = alerts.Count(a => ((dynamic)a).severity == "info");
+
+        return Results.Ok(new {
+            periodId,
+            periodName = $"{period.StartDate:dd/MM/yyyy} – {period.EndDate:dd/MM/yyyy}",
+            alerts,
+            summary = new { errors = errCount, warnings = warnCount, info = infoCount, total = alerts.Count }
+        });
     }
 
     private static async Task<IResult> GetPayrollExecutiveDashboardAsync(HttpContext httpContext, NanchesoftDbContext db)

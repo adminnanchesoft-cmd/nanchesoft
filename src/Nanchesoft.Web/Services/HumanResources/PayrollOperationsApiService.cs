@@ -298,6 +298,13 @@ public sealed class PayrollOperationsApiService
         catch { return null; }
     }
 
+    public async Task<PrenominaAlertsDto?> GetPrenominaAlertsAsync(Guid periodId)
+    {
+        var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
+        try { return await client.GetFromJsonAsync<PrenominaAlertsDto>($"/api/payroll/prenomina-alerts/{periodId:D}"); }
+        catch { return null; }
+    }
+
     // ── Tipos de período ────────────────────────────────────────────────────────
 
     public async Task<List<PayrollPeriodTypeDto>> GetPeriodTypesAsync()
@@ -2804,4 +2811,30 @@ public sealed class PayrollRecentRunDto
     public decimal Gross { get; set; }
     public decimal Net { get; set; }
     public decimal Deductions { get; set; }
+}
+
+public sealed class PrenominaAlertsDto
+{
+    public Guid PeriodId { get; set; }
+    public string PeriodName { get; set; } = string.Empty;
+    public List<PrenominaAlertItemDto> Alerts { get; set; } = [];
+    public PrenominaAlertSummaryDto Summary { get; set; } = new();
+}
+
+public sealed class PrenominaAlertItemDto
+{
+    public string Severity { get; set; } = string.Empty;
+    public string Type { get; set; } = string.Empty;
+    public Guid EmployeeId { get; set; }
+    public string EmployeeName { get; set; } = string.Empty;
+    public string Description { get; set; } = string.Empty;
+    public string SuggestedAction { get; set; } = string.Empty;
+}
+
+public sealed class PrenominaAlertSummaryDto
+{
+    public int Errors { get; set; }
+    public int Warnings { get; set; }
+    public int Info { get; set; }
+    public int Total { get; set; }
 }
