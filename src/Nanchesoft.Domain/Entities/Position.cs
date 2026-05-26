@@ -18,4 +18,5 @@ public sealed class Position : BaseEntity
     public string Description { get; set; } = string.Empty;
     public string PayrollGroup { get; set; } = string.Empty;
     public decimal BaseSalary { get; set; }
+    public int? Number { get; set; }
 }

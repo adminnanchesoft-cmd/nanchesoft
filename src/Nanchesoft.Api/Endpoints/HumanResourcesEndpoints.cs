@@ -109,6 +109,7 @@ public static class HumanResourcesEndpoints
         periodTypes.MapPost("/", CreatePayrollPeriodTypeAsync);
         periodTypes.MapPut("/{id:guid}", UpdatePayrollPeriodTypeAsync);
         periodTypes.MapDelete("/{id:guid}", DeletePayrollPeriodTypeAsync);
+        periodTypes.MapPost("/{id:guid}/generate-periods", GeneratePeriodsAsync);
 
         var periods = app.MapGroup("/api/payroll/periods").WithTags("PayrollPeriods");
         periods.MapGet("/", GetPayrollPeriodsAsync);
@@ -1586,7 +1587,13 @@ var branchId = ApiTenantScope.ResolveBranchId(httpContext);
                 DaysPerPeriod = x.DaysPerPeriod,
                 PeriodsPerYear = x.PeriodsPerYear,
                 Notes = x.Notes,
-                IsActive = x.IsActive
+                IsActive = x.IsActive,
+                PaymentDays = x.PaymentDays,
+                WorkingDays = x.WorkingDays,
+                AdjustToCalendarMonth = x.AdjustToCalendarMonth,
+                QuinceaAdjustType = x.QuinceaAdjustType,
+                SeventhDayPosition = x.SeventhDayPosition,
+                PaymentDayPosition = x.PaymentDayPosition
             })
             .ToListAsync();
 
@@ -1621,6 +1628,12 @@ var branchId = ApiTenantScope.ResolveBranchId(httpContext);
             PeriodsPerYear = request.PeriodsPerYear,
             Notes = NormalizeText(request.Notes),
             IsActive = request.IsActive,
+            PaymentDays = request.PaymentDays,
+            WorkingDays = request.WorkingDays,
+            AdjustToCalendarMonth = request.AdjustToCalendarMonth,
+            QuinceaAdjustType = string.IsNullOrWhiteSpace(request.QuinceaAdjustType) ? "LaborDays" : request.QuinceaAdjustType,
+            SeventhDayPosition = request.SeventhDayPosition,
+            PaymentDayPosition = request.PaymentDayPosition,
             CreatedBy = "web-api"
         };
 
@@ -1645,6 +1658,12 @@ var branchId = ApiTenantScope.ResolveBranchId(httpContext);
         entity.PeriodsPerYear = request.PeriodsPerYear;
         entity.Notes = NormalizeText(request.Notes, entity.Notes);
         entity.IsActive = request.IsActive;
+        entity.PaymentDays = request.PaymentDays;
+        entity.WorkingDays = request.WorkingDays;
+        entity.AdjustToCalendarMonth = request.AdjustToCalendarMonth;
+        entity.QuinceaAdjustType = string.IsNullOrWhiteSpace(request.QuinceaAdjustType) ? "LaborDays" : request.QuinceaAdjustType;
+        entity.SeventhDayPosition = request.SeventhDayPosition;
+        entity.PaymentDayPosition = request.PaymentDayPosition;
         entity.UpdatedAt = DateTime.UtcNow;
         entity.UpdatedBy = "web-api";
 
@@ -1661,6 +1680,86 @@ var branchId = ApiTenantScope.ResolveBranchId(httpContext);
         db.PayrollPeriodTypes.Remove(entity);
         await db.SaveChangesAsync();
         return Results.Ok(new { success = true });
+    }
+
+    private static async Task<IResult> GeneratePeriodsAsync(Guid id, GeneratePeriodsRequest request, NanchesoftDbContext db)
+    {
+        var periodType = await db.PayrollPeriodTypes.FirstOrDefaultAsync(x => x.Id == id);
+        if (periodType is null)
+            return Results.NotFound(new { message = "No se encontró el tipo de período." });
+
+        if (periodType.DaysPerPeriod <= 0)
+            return Results.BadRequest(new { message = "El tipo de período debe tener DaysPerPeriod > 0." });
+
+        if (request.FiscalYear < 2000 || request.FiscalYear > 2100)
+            return Results.BadRequest(new { message = "Año fiscal inválido." });
+
+        var startDate = request.StartDate.Date;
+        var daysPerPeriod = periodType.DaysPerPeriod;
+        var periodsPerYear = periodType.PeriodsPerYear > 0 ? periodType.PeriodsPerYear : (365 / daysPerPeriod);
+
+        var existing = await db.PayrollPeriods
+            .Where(x => x.TenantId == periodType.TenantId
+                     && x.CompanyId == periodType.CompanyId
+                     && x.PayrollPeriodTypeId == id
+                     && x.FiscalYear == request.FiscalYear)
+            .AnyAsync();
+
+        if (existing && !request.Overwrite)
+            return Results.BadRequest(new { message = $"Ya existen periodos para el ejercicio {request.FiscalYear} con este tipo. Usa Overwrite=true para reemplazarlos." });
+
+        if (existing && request.Overwrite)
+        {
+            var toDelete = await db.PayrollPeriods
+                .Where(x => x.TenantId == periodType.TenantId
+                         && x.CompanyId == periodType.CompanyId
+                         && x.PayrollPeriodTypeId == id
+                         && x.FiscalYear == request.FiscalYear
+                         && x.Status == "draft")
+                .ToListAsync();
+            db.PayrollPeriods.RemoveRange(toDelete);
+        }
+
+        var generated = new List<PayrollPeriod>();
+        var current = startDate;
+
+        for (int n = 1; n <= periodsPerYear; n++)
+        {
+            var end = current.AddDays(daysPerPeriod - 1);
+            var payDate = end.AddDays(periodType.PaymentDayPosition > 0 ? periodType.PaymentDayPosition : 3);
+
+            var period = new PayrollPeriod
+            {
+                TenantId = periodType.TenantId,
+                CompanyId = periodType.CompanyId,
+                PayrollPeriodTypeId = id,
+                FiscalYear = request.FiscalYear,
+                PeriodNumber = n,
+                Code = $"{periodType.Code}-{request.FiscalYear}-{n:D2}",
+                Name = $"{periodType.Name} {n:D2}/{request.FiscalYear}",
+                PeriodType = periodType.Code,
+                StartDate = current,
+                EndDate = end,
+                PaymentDate = payDate,
+                IsStartOfMonth = current.Day == 1,
+                IsEndOfMonth = end.Day == DateTime.DaysInMonth(end.Year, end.Month),
+                IsStartOfYear = n == 1,
+                IsEndOfYear = n == periodsPerYear,
+                IsBimesterStart = n % 2 == 1,
+                IsBimesterEnd = n % 2 == 0,
+                Status = "draft",
+                IsImssInsured = true,
+                CreatedBy = "generate-periods"
+            };
+
+            generated.Add(period);
+            current = end.AddDays(1);
+        }
+
+        db.PayrollPeriods.AddRange(generated);
+        await db.SaveChangesAsync();
+
+        return Results.Ok(new { success = true, generated = generated.Count, fiscalYear = request.FiscalYear });
     }
 
     private static async Task<IResult> GetPayrollConceptsAsync(HttpContext httpContext, NanchesoftDbContext db)
@@ -2517,10 +2616,23 @@ public class PayrollPeriodTypeRequest
     public int PeriodsPerYear { get; set; }
     public string? Notes { get; set; }
     public bool IsActive { get; set; } = true;
+    public int PaymentDays { get; set; }
+    public int WorkingDays { get; set; }
+    public bool AdjustToCalendarMonth { get; set; }
+    public string QuinceaAdjustType { get; set; } = "LaborDays";
+    public int? SeventhDayPosition { get; set; }
+    public int PaymentDayPosition { get; set; }
 }
 
 public sealed class PayrollPeriodTypeDto : PayrollPeriodTypeRequest
 {
     public Guid PayrollPeriodTypeId { get; set; }
     public string CompanyName { get; set; } = string.Empty;
+}
+
+public sealed class GeneratePeriodsRequest
+{
+    public int FiscalYear { get; set; }
+    public DateTime StartDate { get; set; }
+    public bool Overwrite { get; set; }
 }

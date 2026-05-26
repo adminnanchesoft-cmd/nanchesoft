@@ -19,4 +19,16 @@ public sealed class PayrollPeriod : BaseEntity
     public string Status { get; set; } = "draft";
     public bool IsImssInsured { get; set; } = true;
     public bool IsClosed { get; set; }
+
+    // Campos operativos
+    public Guid? PayrollPeriodTypeId { get; set; }
+    public PayrollPeriodType? PayrollPeriodTypeNav { get; set; }
+    public int? FiscalYear { get; set; }
+    public int? PeriodNumber { get; set; }
+    public bool IsStartOfMonth { get; set; }
+    public bool IsEndOfMonth { get; set; }
+    public bool IsStartOfYear { get; set; }
+    public bool IsEndOfYear { get; set; }
+    public bool IsBimesterStart { get; set; }
+    public bool IsBimesterEnd { get; set; }
 }

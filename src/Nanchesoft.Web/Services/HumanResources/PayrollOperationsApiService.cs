@@ -289,6 +289,65 @@ public sealed class PayrollOperationsApiService
         }
     }
 
+    // ── Tipos de período ────────────────────────────────────────────────────────
+
+    public async Task<List<PayrollPeriodTypeDto>> GetPeriodTypesAsync()
+    {
+        var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
+        return await client.GetFromJsonAsync<List<PayrollPeriodTypeDto>>("/api/payroll/period-types") ?? [];
+    }
+
+    public async Task<(bool Ok, string? Error)> CreatePeriodTypeAsync(PayrollPeriodTypeDto dto)
+    {
+        var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
+        var response = await client.PostAsJsonAsync("/api/payroll/period-types", new
+        {
+            dto.Code, dto.Name,
+            dto.DaysPerPeriod, dto.PeriodsPerYear,
+            dto.PaymentDays, dto.WorkingDays,
+            dto.AdjustToCalendarMonth, dto.QuinceaAdjustType,
+            dto.SeventhDayPosition, dto.PaymentDayPosition,
+            dto.Notes, dto.IsActive
+        });
+        if (!response.IsSuccessStatusCode)
+            return (false, await response.Content.ReadAsStringAsync());
+        return (true, null);
+    }
+
+    public async Task<(bool Ok, string? Error)> UpdatePeriodTypeAsync(Guid id, PayrollPeriodTypeDto dto)
+    {
+        var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
+        var response = await client.PutAsJsonAsync($"/api/payroll/period-types/{id:D}", new
+        {
+            dto.Code, dto.Name,
+            dto.DaysPerPeriod, dto.PeriodsPerYear,
+            dto.PaymentDays, dto.WorkingDays,
+            dto.AdjustToCalendarMonth, dto.QuinceaAdjustType,
+            dto.SeventhDayPosition, dto.PaymentDayPosition,
+            dto.Notes, dto.IsActive
+        });
+        if (!response.IsSuccessStatusCode)
+            return (false, await response.Content.ReadAsStringAsync());
+        return (true, null);
+    }
+
+    public async Task<(bool Ok, int Count, string? Error)> GeneratePeriodsAsync(Guid id, int year, DateTime startDate, bool overwrite)
+    {
+        var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
+        var response = await client.PostAsJsonAsync($"/api/payroll/period-types/{id:D}/generate-periods", new
+        {
+            FiscalYear = year,
+            StartDate = startDate,
+            Overwrite = overwrite
+        });
+        if (!response.IsSuccessStatusCode)
+            return (false, 0, await response.Content.ReadAsStringAsync());
+        var result = await response.Content.ReadFromJsonAsync<GeneratePeriodsResultDto>();
+        return (true, result?.Count ?? 0, null);
+    }
+
+    private sealed class GeneratePeriodsResultDto { public int Count { get; set; } }
+
     // ── Movimientos globales ────────────────────────────────────────────────────
 
     public async Task<List<PayrollGlobalMovementListItem>> GetGlobalMovementsAsync()

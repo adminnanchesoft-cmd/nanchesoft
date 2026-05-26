@@ -1,5 +1,267 @@
 @page "/payroll/period-types"
+@using Nanchesoft.Web.Services.HumanResources
+@inject PayrollOperationsApiService Api
+@inject IJSRuntime JS
 
-<PageTitle>Tipos de nómina | Nanchesoft</PageTitle>
+<PageTitle>Tipos de período | Nanchesoft</PageTitle>
 
-<CatalogCrudPage CatalogKey="payroll-period-types" />
+<div class="d-flex align-items-center justify-content-between mb-3">
+    <h4 class="mb-0">Tipos de período de nómina</h4>
+    <button class="btn btn-primary btn-sm" @onclick="OpenNew">+ Nuevo tipo</button>
+</div>
+
+@if (!string.IsNullOrWhiteSpace(_msg))
+{
+    <div class="alert @(_msgOk ? "alert-success" : "alert-danger") alert-dismissible py-2">
+        @_msg
+        <button type="button" class="btn-close btn-sm" @onclick="() => _msg = null"></button>
+    </div>
+}
+
+<div class="card shadow-sm">
+    <div class="card-body p-0">
+        <table class="table table-hover table-sm mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>Código</th>
+                    <th>Nombre</th>
+                    <th class="text-center">Días/período</th>
+                    <th class="text-center">Períodos/año</th>
+                    <th class="text-center">Días pago</th>
+                    <th class="text-center">Activo</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var row in _rows)
+                {
+                    <tr>
+                        <td><code>@row.Code</code></td>
+                        <td>@row.Name</td>
+                        <td class="text-center">@row.DaysPerPeriod</td>
+                        <td class="text-center">@row.PeriodsPerYear</td>
+                        <td class="text-center">@row.PaymentDays</td>
+                        <td class="text-center">
+                            @if (row.IsActive) { <span class="badge bg-success">Sí</span> }
+                            else { <span class="badge bg-secondary">No</span> }
+                        </td>
+                        <td class="text-end">
+                            <button class="btn btn-outline-secondary btn-sm me-1" @onclick="() => OpenEdit(row)">Editar</button>
+                            <button class="btn btn-outline-primary btn-sm" @onclick="() => OpenGenerate(row)">Generar períodos</button>
+                        </td>
+                    </tr>
+                }
+                @if (!_rows.Any())
+                {
+                    <tr><td colspan="7" class="text-center text-muted py-3">Sin tipos de período configurados.</td></tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+@if (_showEditor)
+{
+    <div class="modal d-block" tabindex="-1" style="background:rgba(0,0,0,.4)">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">@(_editing?.PayrollPeriodTypeId == Guid.Empty ? "Nuevo tipo de período" : "Editar tipo de período")</h5>
+                    <button class="btn-close" @onclick="CloseEditor"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row g-3">
+                        <div class="col-md-3">
+                            <label class="form-label">Código *</label>
+                            <input class="form-control" @bind="_editing!.Code" />
+                        </div>
+                        <div class="col-md-9">
+                            <label class="form-label">Nombre *</label>
+                            <input class="form-control" @bind="_editing!.Name" />
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Días por período</label>
+                            <input class="form-control" type="number" @bind="_editing!.DaysPerPeriod" />
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Períodos por año</label>
+                            <input class="form-control" type="number" @bind="_editing!.PeriodsPerYear" />
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Días de pago</label>
+                            <input class="form-control" type="number" @bind="_editing!.PaymentDays" />
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Días laborables</label>
+                            <input class="form-control" type="number" @bind="_editing!.WorkingDays" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Posición día de pago</label>
+                            <input class="form-control" type="number" @bind="_editing!.PaymentDayPosition" />
+                            <div class="form-text">Días después del fin de período</div>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Posición 7° día</label>
+                            <input class="form-control" type="number" @bind="_editing!.SeventhDayPosition" placeholder="Opcional" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Ajuste quincena 16</label>
+                            <select class="form-select" @bind="_editing!.QuinceaAdjustType">
+                                <option value="LaborDays">Días laborados</option>
+                                <option value="NonLaborDays">Días no laborados</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-check mt-4">
+                                <input class="form-check-input" type="checkbox" @bind="_editing!.AdjustToCalendarMonth" />
+                                <label class="form-check-label">Ajustar al mes calendario</label>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-check mt-4">
+                                <input class="form-check-input" type="checkbox" @bind="_editing!.IsActive" />
+                                <label class="form-check-label">Activo</label>
+                            </div>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">Notas</label>
+                            <input class="form-control" @bind="_editing!.Notes" />
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" @onclick="CloseEditor">Cancelar</button>
+                    <button class="btn btn-primary" @onclick="SaveAsync" disabled="@_saving">
+                        @(_saving ? "Guardando…" : "Guardar")
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@if (_showGenerate)
+{
+    <div class="modal d-block" tabindex="-1" style="background:rgba(0,0,0,.4)">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Generar períodos — @_generateTarget?.Name</h5>
+                    <button class="btn-close" @onclick="() => _showGenerate = false"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Año fiscal *</label>
+                            <input class="form-control" type="number" @bind="_genYear" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Fecha de inicio *</label>
+                            <input class="form-control" type="date" @bind="_genStart" />
+                        </div>
+                        <div class="col-12">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" @bind="_genOverwrite" />
+                                <label class="form-check-label">Reemplazar períodos draft existentes del mismo año</label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" @onclick="() => _showGenerate = false">Cancelar</button>
+                    <button class="btn btn-success" @onclick="GenerateAsync" disabled="@_saving">
+                        @(_saving ? "Generando…" : "Generar")
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<PayrollPeriodTypeDto> _rows = new();
+    private PayrollPeriodTypeDto? _editing;
+    private PayrollPeriodTypeDto? _generateTarget;
+    private bool _showEditor, _showGenerate, _saving;
+    private string? _msg;
+    private bool _msgOk;
+    private int _genYear = DateTime.Today.Year;
+    private DateTime _genStart = new DateTime(DateTime.Today.Year, 1, 1);
+    private bool _genOverwrite;
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _rows = await Api.GetPeriodTypesAsync();
+    }
+
+    private void OpenNew()
+    {
+        _editing = new PayrollPeriodTypeDto { IsActive = true, QuinceaAdjustType = "LaborDays" };
+        _showEditor = true;
+    }
+
+    private void OpenEdit(PayrollPeriodTypeDto row)
+    {
+        _editing = new PayrollPeriodTypeDto
+        {
+            PayrollPeriodTypeId = row.PayrollPeriodTypeId,
+            Code = row.Code, Name = row.Name,
+            DaysPerPeriod = row.DaysPerPeriod, PeriodsPerYear = row.PeriodsPerYear,
+            PaymentDays = row.PaymentDays, WorkingDays = row.WorkingDays,
+            AdjustToCalendarMonth = row.AdjustToCalendarMonth,
+            QuinceaAdjustType = row.QuinceaAdjustType,
+            SeventhDayPosition = row.SeventhDayPosition,
+            PaymentDayPosition = row.PaymentDayPosition,
+            Notes = row.Notes, IsActive = row.IsActive
+        };
+        _showEditor = true;
+    }
+
+    private void OpenGenerate(PayrollPeriodTypeDto row)
+    {
+        _generateTarget = row;
+        _genYear = DateTime.Today.Year;
+        _genStart = new DateTime(DateTime.Today.Year, 1, 1);
+        _genOverwrite = false;
+        _showGenerate = true;
+    }
+
+    private void CloseEditor() { _showEditor = false; _editing = null; }
+
+    private async Task SaveAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_editing?.Code) || string.IsNullOrWhiteSpace(_editing.Name))
+        {
+            _msg = "Código y nombre son obligatorios."; _msgOk = false; return;
+        }
+        _saving = true;
+        try
+        {
+            var isNew = _editing!.PayrollPeriodTypeId == Guid.Empty;
+            var (ok, err) = isNew
+                ? await Api.CreatePeriodTypeAsync(_editing)
+                : await Api.UpdatePeriodTypeAsync(_editing.PayrollPeriodTypeId, _editing);
+            _msg = ok ? (isNew ? "Tipo creado." : "Tipo actualizado.") : err;
+            _msgOk = ok;
+            if (ok) { CloseEditor(); await LoadAsync(); }
+        }
+        finally { _saving = false; }
+    }
+
+    private async Task GenerateAsync()
+    {
+        if (_generateTarget is null) return;
+        _saving = true;
+        try
+        {
+            var (ok, count, err) = await Api.GeneratePeriodsAsync(
+                _generateTarget.PayrollPeriodTypeId, _genYear, _genStart, _genOverwrite);
+            _msg = ok ? $"Se generaron {count} períodos para {_genYear}." : err;
+            _msgOk = ok;
+            if (ok) _showGenerate = false;
+        }
+        finally { _saving = false; }
+    }
+}

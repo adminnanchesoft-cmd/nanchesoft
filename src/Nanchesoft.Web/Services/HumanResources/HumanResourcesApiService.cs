@@ -2148,7 +2148,13 @@ public sealed class PayrollPeriodTypeDto
     public string Name { get; set; } = string.Empty;
     public int DaysPerPeriod { get; set; }
     public int PeriodsPerYear { get; set; }
-    public string Notes { get; set; } = string.Empty;
+    public int PaymentDays { get; set; }
+    public int WorkingDays { get; set; }
+    public bool AdjustToCalendarMonth { get; set; }
+    public string QuinceaAdjustType { get; set; } = "LaborDays";
+    public int? SeventhDayPosition { get; set; }
+    public int PaymentDayPosition { get; set; }
+    public string? Notes { get; set; }
     public bool IsActive { get; set; }
 }
 

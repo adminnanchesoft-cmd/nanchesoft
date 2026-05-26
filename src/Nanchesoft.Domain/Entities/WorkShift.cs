@@ -18,4 +18,9 @@ public sealed class WorkShift : BaseEntity
     public int ToleranceMinutes { get; set; }
     public bool IsOvernight { get; set; }
     public string Notes { get; set; } = string.Empty;
+
+    // Campos operativos
+    public decimal HoursPerShift { get; set; }
+    public int MinutesForLateness { get; set; } = 10;
+    public string RestDays { get; set; } = "Saturday,Sunday";
 }
