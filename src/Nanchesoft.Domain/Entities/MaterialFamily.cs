@@ -13,7 +13,7 @@ public sealed class MaterialFamily
     [MaxLength(80)] public string InventoryGroup { get; set; } = string.Empty;
     [MaxLength(1200)] public string Notes { get; set; } = string.Empty;
     public bool IsActive { get; set; } = true;
-    public int? SilvaSoftComposicionId { get; set; }
+    public Guid? SilvaSoftComposicionId { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     [MaxLength(120)] public string? CreatedBy { get; set; }
     public DateTime? UpdatedAt { get; set; }
