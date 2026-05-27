@@ -192,8 +192,8 @@ public sealed class SilvaSoftSyncLogPagina
 
 public sealed class SilvaSoftRegistroVistaSubfamiliaPrevia
 {
-    public int? ClaseId { get; set; }
-    public int? ComposicionId { get; set; }
+    public Guid? ClaseId { get; set; }
+    public Guid? ComposicionId { get; set; }
     public string Codigo { get; set; } = string.Empty;
     public string Nombre { get; set; } = string.Empty;
     /// <summary>"nuevo" | "duplicado" | "invalido"</summary>
