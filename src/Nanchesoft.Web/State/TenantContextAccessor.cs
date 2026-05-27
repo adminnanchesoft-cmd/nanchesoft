@@ -1,29 +1,54 @@
+using System.Runtime.CompilerServices;
+
 namespace Nanchesoft.Web.State;
 
 /// <summary>
-/// Acceso al contexto del tenant que SÍ cruza scopes de DI gracias a AsyncLocal.
+/// Puente de contexto de tenant hacia ApiTenantScopeHandler, que vive en el scope
+/// de IHttpClientFactory (distinto al circuito Blazor).
 ///
-/// Existe porque <see cref="AppState"/> es Scoped y, en Blazor Server, el
-/// <c>IHttpClientFactory</c> resuelve los <c>DelegatingHandler</c> en SU PROPIO
-/// scope — distinto al del circuito Blazor — por lo que el handler ve un
-/// AppState vacío. AsyncLocal fluye con la cadena async, no con el scope DI,
-/// así que el handler sí puede leer el tenant del circuito que disparó la
-/// llamada HTTP.
+/// Estrategia dual:
+///   1. AsyncLocal  — funciona cuando el HTTP call ocurre en la misma cadena async
+///      que llamó Set() (mismo evento Blazor).
+///   2. ConditionalWeakTable keyed by SynchronizationContext — funciona entre
+///      eventos Blazor distintos del mismo circuito (login → navegación SPA →
+///      OnInitializedAsync). La clave es débil: se GC-colecta cuando el circuito
+///      desconecta, sin necesidad de limpieza explícita.
 /// </summary>
 public sealed class TenantContextAccessor
 {
-    private static readonly AsyncLocal<TenantContextSnapshot?> _current = new();
+    private static readonly AsyncLocal<TenantContextSnapshot?> _asyncCurrent = new();
+    private static readonly ConditionalWeakTable<SynchronizationContext, Holder> _circuitMap = new();
+
+    private sealed class Holder { public TenantContextSnapshot? Snapshot; }
 
     public TenantContextSnapshot? Current
     {
-        get => _current.Value;
-        set => _current.Value = value;
+        get
+        {
+            if (_asyncCurrent.Value is { } v) return v;
+            var sc = SynchronizationContext.Current;
+            if (sc is not null && _circuitMap.TryGetValue(sc, out var h)) return h.Snapshot;
+            return null;
+        }
+        set => _asyncCurrent.Value = value;
     }
 
     public void Set(Guid? tenantId, Guid? companyId, Guid? branchId, Guid? userId, bool isPlatformOwner)
-        => Current = new TenantContextSnapshot(tenantId, companyId, branchId, userId, isPlatformOwner);
+    {
+        var snapshot = new TenantContextSnapshot(tenantId, companyId, branchId, userId, isPlatformOwner);
+        _asyncCurrent.Value = snapshot;
+        var sc = SynchronizationContext.Current;
+        if (sc is not null)
+            _circuitMap.GetOrCreateValue(sc).Snapshot = snapshot;
+    }
 
-    public void Clear() => Current = null;
+    public void Clear()
+    {
+        _asyncCurrent.Value = null;
+        var sc = SynchronizationContext.Current;
+        if (sc is not null && _circuitMap.TryGetValue(sc, out var h))
+            h.Snapshot = null;
+    }
 }
 
 public sealed record TenantContextSnapshot(

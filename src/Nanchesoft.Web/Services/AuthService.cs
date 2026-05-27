@@ -103,7 +103,19 @@ public sealed class AuthService
     public async Task<bool> RestoreSessionAsync()
     {
         if (_authState.IsAuthenticated)
+        {
+            // Re-setear el contexto en el async context actual (que puede ser distinto
+            // al del login original). Esto garantiza que el SynchronizationContext del
+            // circuito quede registrado en TenantContextAccessor para todos los
+            // HTTP calls que sigan desde cualquier evento Blazor.
+            _tenantAccessor.Set(
+                _authState.TenantId,
+                _authState.CompanyId,
+                _appState.CurrentBranchId,
+                _authState.UserId,
+                _authState.IsPlatformOwner);
             return true;
+        }
 
         try
         {

@@ -53,11 +53,22 @@ public static class ProductCatalogOperationsEndpoints
 
     private static string N(string? value, bool upper = false) => string.IsNullOrWhiteSpace(value) ? string.Empty : (upper ? value.Trim().ToUpperInvariant() : value.Trim());
 
-    // Returns null for platform owners (see all); Guid.Empty when no company header is present (returns empty list); otherwise the company's ID.
-    private static Guid? GetCompanyFilter(HttpContext httpContext)
+    private static async Task<Guid?> GetCompanyFilterAsync(HttpContext httpContext, NanchesoftDbContext db)
     {
         if (ApiTenantScope.IsPlatformOwner(httpContext)) return null;
-        return ApiTenantScope.ResolveCompanyId(httpContext) ?? Guid.Empty;
+        var companyId = ApiTenantScope.ResolveCompanyId(httpContext);
+        if (companyId.HasValue) return companyId.Value;
+        var tenantId = ApiTenantScope.ResolveTenantId(httpContext);
+        if (tenantId.HasValue)
+        {
+            var id = await db.Companies.AsNoTracking()
+                .Where(x => x.TenantId == tenantId.Value && x.IsActive)
+                .OrderBy(x => x.CreatedAt)
+                .Select(x => (Guid?)x.Id)
+                .FirstOrDefaultAsync();
+            if (id.HasValue) return id.Value;
+        }
+        return Guid.Empty;
     }
 
     private static void MapProductionPhases(IEndpointRouteBuilder app)
@@ -108,7 +119,7 @@ public static class ProductCatalogOperationsEndpoints
         var g = app.MapGroup("/api/products/material-characteristics").WithTags("ProductCatalogOperations");
         g.MapGet("/", async (HttpContext httpContext, NanchesoftDbContext db) =>
         {
-            var companyId = GetCompanyFilter(httpContext);
+            var companyId = await GetCompanyFilterAsync(httpContext, db);
             var query = db.MaterialCharacteristics.AsNoTracking();
             if (companyId.HasValue)
                 query = query.Where(x => x.CompanyId == companyId.Value);
@@ -119,7 +130,7 @@ public static class ProductCatalogOperationsEndpoints
         });
         g.MapGet("/options", async (HttpContext httpContext, NanchesoftDbContext db) =>
         {
-            var companyId = GetCompanyFilter(httpContext);
+            var companyId = await GetCompanyFilterAsync(httpContext, db);
             var query = db.MaterialCharacteristics.AsNoTracking().Where(x => x.IsActive);
             if (companyId.HasValue)
                 query = query.Where(x => x.CompanyId == companyId.Value);
@@ -147,7 +158,7 @@ public static class ProductCatalogOperationsEndpoints
         var g = app.MapGroup("/api/products/material-sizes").WithTags("ProductCatalogOperations");
         g.MapGet("/", async (HttpContext httpContext, NanchesoftDbContext db) =>
         {
-            var companyId = GetCompanyFilter(httpContext);
+            var companyId = await GetCompanyFilterAsync(httpContext, db);
             var query = db.MaterialSizes.AsNoTracking();
             if (companyId.HasValue)
                 query = query.Where(x => x.CompanyId == companyId.Value);
@@ -158,7 +169,7 @@ public static class ProductCatalogOperationsEndpoints
         });
         g.MapGet("/options", async (HttpContext httpContext, NanchesoftDbContext db) =>
         {
-            var companyId = GetCompanyFilter(httpContext);
+            var companyId = await GetCompanyFilterAsync(httpContext, db);
             var query = db.MaterialSizes.AsNoTracking().Where(x => x.IsActive);
             if (companyId.HasValue)
                 query = query.Where(x => x.CompanyId == companyId.Value);
@@ -186,7 +197,7 @@ public static class ProductCatalogOperationsEndpoints
         var g = app.MapGroup("/api/products/material-families").WithTags("ProductCatalogOperations");
         g.MapGet("/", async (HttpContext httpContext, NanchesoftDbContext db) =>
         {
-            var companyId = GetCompanyFilter(httpContext);
+            var companyId = await GetCompanyFilterAsync(httpContext, db);
             var query = db.MaterialFamilies.AsNoTracking();
             if (companyId.HasValue)
                 query = query.Where(x => x.CompanyId == companyId.Value);
@@ -204,7 +215,7 @@ public static class ProductCatalogOperationsEndpoints
         var g = app.MapGroup("/api/products/material-subfamilies").WithTags("ProductCatalogOperations");
         g.MapGet("/", async (HttpContext httpContext, NanchesoftDbContext db) =>
         {
-            var companyId = GetCompanyFilter(httpContext);
+            var companyId = await GetCompanyFilterAsync(httpContext, db);
             IQueryable<MaterialSubfamily> query = db.MaterialSubfamilies.AsNoTracking().Include(x => x.MaterialFamily);
             if (companyId.HasValue)
                 query = query.Where(x => x.CompanyId == companyId.Value);
@@ -223,7 +234,7 @@ public static class ProductCatalogOperationsEndpoints
         var g = app.MapGroup("/api/products/material-items").WithTags("ProductCatalogOperations");
         g.MapGet("/", async (HttpContext httpContext, NanchesoftDbContext db) =>
         {
-            var companyId = GetCompanyFilter(httpContext);
+            var companyId = await GetCompanyFilterAsync(httpContext, db);
             var query = db.MaterialItems.AsNoTracking()
                 .Include(x => x.MaterialSubfamily)
                 .Include(x => x.MaterialCharacteristic)
@@ -294,7 +305,7 @@ public static class ProductCatalogOperationsEndpoints
         var g = app.MapGroup("/api/products/finished-products").WithTags("ProductCatalogOperations");
         g.MapGet("/", async (HttpContext httpContext, NanchesoftDbContext db) =>
         {
-            var companyId = GetCompanyFilter(httpContext);
+            var companyId = await GetCompanyFilterAsync(httpContext, db);
             var query = db.FinishedProducts.AsNoTracking()
                 .Include(x => x.ProductStyle).Include(x => x.ItemModel).Include(x => x.ItemBrand)
                 .Include(x => x.ProductLeatherType).Include(x => x.ProductColor).Include(x => x.ProductToeCap)
@@ -337,7 +348,7 @@ public static class ProductCatalogOperationsEndpoints
         var g = app.MapGroup("/api/products/product-components").WithTags("ProductCatalogOperations");
         g.MapGet("/", async (HttpContext httpContext, NanchesoftDbContext db) =>
         {
-            var companyId = GetCompanyFilter(httpContext);
+            var companyId = await GetCompanyFilterAsync(httpContext, db);
             var query = db.ProductComponents.AsNoTracking().Include(x => x.ConsumptionUnit).Include(x => x.ProductionPhase);
             IQueryable<ProductComponent> filtered = companyId.HasValue ? query.Where(x => x.CompanyId == companyId.Value) : query;
             return Results.Ok(await filtered.OrderBy(x => x.Code)
@@ -354,7 +365,7 @@ public static class ProductCatalogOperationsEndpoints
         var g = app.MapGroup("/api/products/finished-product-materials").WithTags("ProductCatalogOperations");
         g.MapGet("/", async (HttpContext httpContext, NanchesoftDbContext db) =>
         {
-            var companyId = GetCompanyFilter(httpContext);
+            var companyId = await GetCompanyFilterAsync(httpContext, db);
             var query = db.FinishedProductMaterials.AsNoTracking().Include(x => x.FinishedProduct).Include(x => x.ProductComponent).Include(x => x.MaterialItem);
             IQueryable<FinishedProductMaterial> filtered = companyId.HasValue ? query.Where(x => x.CompanyId == companyId.Value) : query;
             var rows = await filtered.OrderBy(x => x.CreatedAt)
@@ -371,7 +382,7 @@ public static class ProductCatalogOperationsEndpoints
         var g = app.MapGroup("/api/products/product-consumption-profiles").WithTags("ProductCatalogOperations");
         g.MapGet("/", async (HttpContext httpContext, NanchesoftDbContext db) =>
         {
-            var companyId = GetCompanyFilter(httpContext);
+            var companyId = await GetCompanyFilterAsync(httpContext, db);
             var query = db.ProductConsumptionProfiles.AsNoTracking().Include(x => x.FinishedProduct).Include(x => x.ProductComponent);
             IQueryable<ProductConsumptionProfile> filtered = companyId.HasValue ? query.Where(x => x.CompanyId == companyId.Value) : query;
             var rows = await filtered.OrderBy(x => x.CreatedAt)
@@ -555,7 +566,7 @@ public static class ProductCatalogOperationsEndpoints
 
         g.MapGet("/", async (HttpContext httpContext, NanchesoftDbContext db) =>
         {
-            var companyId = GetCompanyFilter(httpContext);
+            var companyId = await GetCompanyFilterAsync(httpContext, db);
             var query = db.MaterialSizeDistributions.AsNoTracking()
                 .Include(x => x.MaterialSubfamily)
                 .Include(x => x.ProductSizeRun)
@@ -706,7 +717,7 @@ public static class ProductCatalogOperationsEndpoints
     {
         app.MapGet("/api/products/material-families/options", async (HttpContext httpContext, NanchesoftDbContext db) =>
         {
-            var companyId = GetCompanyFilter(httpContext);
+            var companyId = await GetCompanyFilterAsync(httpContext, db);
             var query = db.MaterialFamilies.AsNoTracking();
             if (companyId.HasValue) query = query.Where(x => x.CompanyId == companyId.Value);
             return Results.Ok(await query.OrderBy(x => x.Code).Select(x => new MaterialFamilyOptionDto { MaterialFamilyId = x.Id, Code = x.Code, Name = x.Name }).ToListAsync());
@@ -714,7 +725,7 @@ public static class ProductCatalogOperationsEndpoints
 
         app.MapGet("/api/products/material-subfamilies/options", async (HttpContext httpContext, NanchesoftDbContext db) =>
         {
-            var companyId = GetCompanyFilter(httpContext);
+            var companyId = await GetCompanyFilterAsync(httpContext, db);
             var query = db.MaterialSubfamilies.AsNoTracking();
             if (companyId.HasValue) query = query.Where(x => x.CompanyId == companyId.Value);
             return Results.Ok(await query.OrderBy(x => x.Code).Select(x => new MaterialSubfamilyOptionDto { MaterialSubfamilyId = x.Id, Code = x.Code, Name = x.Name }).ToListAsync());
@@ -722,7 +733,7 @@ public static class ProductCatalogOperationsEndpoints
 
         app.MapGet("/api/products/material-items/options", async (HttpContext httpContext, NanchesoftDbContext db) =>
         {
-            var companyId = GetCompanyFilter(httpContext);
+            var companyId = await GetCompanyFilterAsync(httpContext, db);
             var query = db.MaterialItems.AsNoTracking();
             if (companyId.HasValue) query = query.Where(x => x.CompanyId == companyId.Value);
             return Results.Ok(await query.OrderBy(x => x.Code).Select(x => new MaterialItemOptionDto { MaterialItemId = x.Id, Code = x.Code, Name = x.Name }).ToListAsync());
@@ -730,7 +741,7 @@ public static class ProductCatalogOperationsEndpoints
 
         app.MapGet("/api/products/finished-products/options", async (HttpContext httpContext, NanchesoftDbContext db) =>
         {
-            var companyId = GetCompanyFilter(httpContext);
+            var companyId = await GetCompanyFilterAsync(httpContext, db);
             var query = db.FinishedProducts.AsNoTracking();
             if (companyId.HasValue) query = query.Where(x => x.CompanyId == companyId.Value);
             return Results.Ok(await query.OrderBy(x => x.Code).Select(x => new FinishedProductOptionDto { FinishedProductId = x.Id, Code = x.Code, Name = x.Name }).ToListAsync());
@@ -738,7 +749,7 @@ public static class ProductCatalogOperationsEndpoints
 
         app.MapGet("/api/products/product-components/options", async (HttpContext httpContext, NanchesoftDbContext db) =>
         {
-            var companyId = GetCompanyFilter(httpContext);
+            var companyId = await GetCompanyFilterAsync(httpContext, db);
             var query = db.ProductComponents.AsNoTracking().Include(x => x.ProductionPhase);
             IQueryable<ProductComponent> filtered = companyId.HasValue ? query.Where(x => x.CompanyId == companyId.Value) : query;
             return Results.Ok(await filtered.OrderBy(x => x.Code).Select(x => new ProductComponentOptionDto { ProductComponentId = x.Id, Code = x.Code, Name = x.Name, ProductionPhaseName = x.ProductionPhase != null ? x.ProductionPhase.Name : string.Empty }).ToListAsync());
