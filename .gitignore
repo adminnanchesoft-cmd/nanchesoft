@@ -12,3 +12,9 @@ Silvasoft/
 src/Nanchesoft.Api/publish-api/
 src/Nanchesoft.Web/publish-web/
 e2
+
+# Build output (no debe trackearse)
+src/Nanchesoft.Web/artifacts/
+**/artifacts/publish/
+**/bin/
+**/obj/
