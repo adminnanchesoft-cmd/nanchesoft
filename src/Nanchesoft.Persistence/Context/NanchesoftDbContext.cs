@@ -76,6 +76,7 @@ public sealed class NanchesoftDbContext : DbContext
 
     // Orange / Silvasoft product catalog operations
     public DbSet<ProductionPhase> ProductionPhases => Set<ProductionPhase>();
+    public DbSet<ProductionPhaseAutoLink> ProductionPhaseAutoLinks => Set<ProductionPhaseAutoLink>();
     public DbSet<MaterialCharacteristic> MaterialCharacteristics => Set<MaterialCharacteristic>();
     public DbSet<MaterialSize> MaterialSizes => Set<MaterialSize>();
     public DbSet<MaterialFamily> MaterialFamilies => Set<MaterialFamily>();
