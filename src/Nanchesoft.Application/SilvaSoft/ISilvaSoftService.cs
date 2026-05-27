@@ -54,4 +54,18 @@ public interface ISilvaSoftService
     Task<SilvaSoftTablaResultado> ObtenerClaseAsync(
         Guid empresaId, int top = 2000, CancellationToken ct = default);
 
+    /// <summary>
+    /// Consulta TOP {top} registros de la tabla Fraccion en SilvaSoft.
+    /// Fraccion representa las operaciones productivas (fases de fabricación).
+    /// </summary>
+    Task<SilvaSoftTablaResultado> ObtenerFraccionesAsync(
+        Guid empresaId, int top = 2000, CancellationToken ct = default);
+
+    /// <summary>
+    /// Consulta TOP {top} registros de la tabla Fraccion_Cadena en SilvaSoft.
+    /// Fraccion_Cadena define la regla de auto-replicación de destajos entre fases.
+    /// </summary>
+    Task<SilvaSoftTablaResultado> ObtenerFraccionCadenaAsync(
+        Guid empresaId, int top = 5000, CancellationToken ct = default);
+
 }
