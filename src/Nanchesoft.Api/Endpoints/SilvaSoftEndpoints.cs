@@ -183,9 +183,12 @@ public static class SilvaSoftEndpoints
 
         foreach (var reg in resultado.Registros)
         {
-            int? composicionId = null;
+            Guid? composicionId = null;
             if (colPk is not null && reg.Campos.TryGetValue(colPk, out var pkVal) && pkVal is not null)
-                _ = int.TryParse(pkVal.ToString(), out var p) ? composicionId = p : composicionId = null;
+            {
+                if (pkVal is Guid g) composicionId = g;
+                else if (Guid.TryParse(pkVal.ToString()?.Trim('"'), out var gp)) composicionId = gp;
+            }
 
             var codigo = colCodigo is not null
                 ? reg.Campos.GetValueOrDefault(colCodigo)?.ToString()?.Trim().ToUpperInvariant() ?? string.Empty
@@ -320,9 +323,12 @@ public static class SilvaSoftEndpoints
             foreach (var reg in resultado.Registros)
             {
                 // Leer composicionid (PK de SilvaSoft)
-                int? composicionId = null;
+                Guid? composicionId = null;
                 if (colPk is not null && reg.Campos.TryGetValue(colPk, out var pkVal) && pkVal is not null)
-                    _ = int.TryParse(pkVal.ToString(), out var parsedPk) ? composicionId = parsedPk : composicionId = null;
+                {
+                    if (pkVal is Guid g) composicionId = g;
+                    else if (Guid.TryParse(pkVal.ToString()?.Trim('"'), out var gp)) composicionId = gp;
+                }
 
                 var codigo = colCodigo is not null
                     ? reg.Campos.GetValueOrDefault(colCodigo)?.ToString()?.Trim().ToUpperInvariant() ?? string.Empty
@@ -499,13 +505,19 @@ public static class SilvaSoftEndpoints
 
         foreach (var reg in resultado.Registros)
         {
-            int? claseId = null;
+            Guid? claseId = null;
             if (colPk is not null && reg.Campos.TryGetValue(colPk, out var pkVal) && pkVal is not null)
-                _ = int.TryParse(pkVal.ToString(), out var p) ? claseId = p : claseId = null;
+            {
+                if (pkVal is Guid gCl) claseId = gCl;
+                else if (Guid.TryParse(pkVal.ToString()?.Trim('"'), out var gpCl)) claseId = gpCl;
+            }
 
-            int? composicionId = null;
+            Guid? composicionId = null;
             if (colComposicion is not null && reg.Campos.TryGetValue(colComposicion, out var cvVal) && cvVal is not null)
-                _ = int.TryParse(cvVal.ToString(), out var pc) ? composicionId = pc : composicionId = null;
+            {
+                if (cvVal is Guid gCv) composicionId = gCv;
+                else if (Guid.TryParse(cvVal.ToString()?.Trim('"'), out var gpCv)) composicionId = gpCv;
+            }
 
             var codigo = colCodigo is not null
                 ? reg.Campos.GetValueOrDefault(colCodigo)?.ToString()?.Trim().ToUpperInvariant() ?? string.Empty
@@ -622,13 +634,19 @@ public static class SilvaSoftEndpoints
 
             foreach (var reg in resultado.Registros)
             {
-                int? claseId = null;
+                Guid? claseId = null;
                 if (colPk is not null && reg.Campos.TryGetValue(colPk, out var pkVal) && pkVal is not null)
-                    _ = int.TryParse(pkVal.ToString(), out var p) ? claseId = p : claseId = null;
+                {
+                    if (pkVal is Guid gCl) claseId = gCl;
+                    else if (Guid.TryParse(pkVal.ToString()?.Trim('"'), out var gpCl)) claseId = gpCl;
+                }
 
-                int? composicionId = null;
+                Guid? composicionId = null;
                 if (colComposicion is not null && reg.Campos.TryGetValue(colComposicion, out var cvVal) && cvVal is not null)
-                    _ = int.TryParse(cvVal.ToString(), out var pc) ? composicionId = pc : composicionId = null;
+                {
+                    if (cvVal is Guid gCv) composicionId = gCv;
+                    else if (Guid.TryParse(cvVal.ToString()?.Trim('"'), out var gpCv)) composicionId = gpCv;
+                }
 
                 var codigo = colCodigo is not null
                     ? reg.Campos.GetValueOrDefault(colCodigo)?.ToString()?.Trim().ToUpperInvariant() ?? string.Empty
