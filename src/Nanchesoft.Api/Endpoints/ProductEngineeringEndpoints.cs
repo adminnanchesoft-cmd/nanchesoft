@@ -22,23 +22,55 @@ public static class ProductEngineeringEndpoints
         return app;
     }
 
-    private static async Task<(Guid? TenantId, Guid? CompanyId)> ResolveDefaultContextAsync(NanchesoftDbContext db)
+    private static async Task<(Guid? TenantId, Guid? CompanyId)> ResolveDefaultContextAsync(NanchesoftDbContext db, HttpContext httpContext)
     {
-        var company = await db.Companies.OrderBy(x => x.CreatedAt).Select(x => new { x.Id, x.TenantId }).FirstOrDefaultAsync();
+        var companyId = ApiTenantScope.ResolveCompanyId(httpContext);
+        if (companyId.HasValue)
+        {
+            var comp = await db.Companies.AsNoTracking()
+                .Where(x => x.Id == companyId.Value)
+                .Select(x => new { x.Id, x.TenantId })
+                .FirstOrDefaultAsync();
+            if (comp is not null) return (comp.TenantId, comp.Id);
+        }
+        var tenantId = ApiTenantScope.ResolveTenantId(httpContext);
+        if (tenantId.HasValue)
+        {
+            var comp = await db.Companies.AsNoTracking()
+                .Where(x => x.TenantId == tenantId.Value)
+                .OrderBy(x => x.CreatedAt)
+                .Select(x => new { x.Id, x.TenantId })
+                .FirstOrDefaultAsync();
+            if (comp is not null) return (comp.TenantId, comp.Id);
+        }
+        var company = await db.Companies.AsNoTracking()
+            .OrderBy(x => x.CreatedAt)
+            .Select(x => new { x.Id, x.TenantId })
+            .FirstOrDefaultAsync();
         return company is null ? (null, null) : (company.TenantId, company.Id);
     }
 
     private static string NormalizeUpper(string? value) => string.IsNullOrWhiteSpace(value) ? string.Empty : value.Trim().ToUpperInvariant();
-    private static string NormalizeText(string? value) => string.IsNullOrWhiteSpace(value) ? string.Empty : value.Trim();
+    private static string NormalizeText(string? value, string fallback = "") => string.IsNullOrWhiteSpace(value) ? fallback : value.Trim();
+
+    // Returns null for platform owners (see all); Guid.Empty when no company header is present (returns empty list); otherwise the company's ID.
+    private static Guid? GetCompanyFilter(HttpContext httpContext)
+    {
+        if (ApiTenantScope.IsPlatformOwner(httpContext)) return null;
+        return ApiTenantScope.ResolveCompanyId(httpContext) ?? Guid.Empty;
+    }
 
     private static void MapUnitConversions(IEndpointRouteBuilder app)
     {
         var group = app.MapGroup("/api/products/unit-conversions").WithTags("ProductEngineering");
-        group.MapGet("/", async (NanchesoftDbContext db) =>
+        group.MapGet("/", async (HttpContext httpContext, NanchesoftDbContext db) =>
         {
-            var rows = await db.UnitConversions.AsNoTracking()
+            var companyId = GetCompanyFilter(httpContext);
+            var query = db.UnitConversions.AsNoTracking()
                 .Include(x => x.FromUnit)
-                .Include(x => x.ToUnit)
+                .Include(x => x.ToUnit);
+            IQueryable<UnitConversion> filtered = companyId.HasValue ? query.Where(x => x.CompanyId == companyId.Value) : query;
+            var rows = await filtered
                 .OrderBy(x => x.FromUnit!.Code)
                 .ThenBy(x => x.ToUnit!.Code)
                 .Select(x => new UnitConversionDto
@@ -56,9 +88,9 @@ public static class ProductEngineeringEndpoints
                 }).ToListAsync();
             return Results.Ok(rows);
         });
-        group.MapPost("/", async (UnitConversionRequest request, NanchesoftDbContext db) =>
+        group.MapPost("/", async (UnitConversionRequest request, HttpContext httpContext, NanchesoftDbContext db) =>
         {
-            var ctx = await ResolveDefaultContextAsync(db);
+            var ctx = await ResolveDefaultContextAsync(db, httpContext);
             if (!ctx.TenantId.HasValue || !ctx.CompanyId.HasValue)
                 return Results.BadRequest(new { message = "No existe contexto para conversiones." });
             if (request.FromUnitId == Guid.Empty || request.ToUnitId == Guid.Empty)
@@ -109,11 +141,12 @@ public static class ProductEngineeringEndpoints
     private static void MapSizeRuns(IEndpointRouteBuilder app)
     {
         var group = app.MapGroup("/api/products/size-runs").WithTags("ProductEngineering");
-        group.MapGet("/", async (NanchesoftDbContext db) =>
+        group.MapGet("/", async (HttpContext httpContext, NanchesoftDbContext db) =>
         {
-            var rows = await db.ProductSizeRuns.AsNoTracking()
-                .Include(x => x.Sizes)
-                .OrderBy(x => x.Code)
+            var companyId = GetCompanyFilter(httpContext);
+            var query = db.ProductSizeRuns.AsNoTracking().Include(x => x.Sizes);
+            IQueryable<ProductSizeRun> filtered = companyId.HasValue ? query.Where(x => x.CompanyId == companyId.Value) : query;
+            var rows = await filtered.OrderBy(x => x.Code)
                 .Select(x => new ProductSizeRunDto
                 {
                     ProductSizeRunId = x.Id,
@@ -128,9 +161,9 @@ public static class ProductEngineeringEndpoints
                 }).ToListAsync();
             return Results.Ok(rows);
         });
-        group.MapPost("/", async (ProductSizeRunRequest request, NanchesoftDbContext db) =>
+        group.MapPost("/", async (ProductSizeRunRequest request, HttpContext httpContext, NanchesoftDbContext db) =>
         {
-            var ctx = await ResolveDefaultContextAsync(db);
+            var ctx = await ResolveDefaultContextAsync(db, httpContext);
             if (!ctx.TenantId.HasValue || !ctx.CompanyId.HasValue) return Results.BadRequest();
             var code = NormalizeUpper(request.Code);
             if (string.IsNullOrWhiteSpace(code) || string.IsNullOrWhiteSpace(request.Name)) return Results.BadRequest(new { message = "Code y Name son obligatorios." });
@@ -177,22 +210,42 @@ public static class ProductEngineeringEndpoints
             await db.SaveChangesAsync();
             return Results.Ok(new { success = true });
         });
-        group.MapGet("/options", async (NanchesoftDbContext db) => Results.Ok(
-            await db.ProductSizeRuns.AsNoTracking().Where(x => x.IsActive).OrderBy(x => x.Code)
-                .Select(x => new { ProductSizeRunId = x.Id, x.Code, x.Name }).ToListAsync()));
+        group.MapGet("/options", async (HttpContext httpContext, NanchesoftDbContext db) =>
+        {
+            var companyId = GetCompanyFilter(httpContext);
+            var query = db.ProductSizeRuns.AsNoTracking().Where(x => x.IsActive);
+            if (companyId.HasValue) query = query.Where(x => x.CompanyId == companyId.Value);
+            return Results.Ok(await query.OrderBy(x => x.Code)
+                .Select(x => new { ProductSizeRunId = x.Id, x.Code, x.Name }).ToListAsync());
+        });
     }
 
     private static void MapLastsOptions(IEndpointRouteBuilder app)
     {
-        app.MapGet("/api/products/lasts/options", async (NanchesoftDbContext db) => Results.Ok(
-            await db.ProductLasts.AsNoTracking().Where(x => x.IsActive).OrderBy(x => x.Code)
-                .Select(x => new { ProductLastId = x.Id, x.Code, x.Name }).ToListAsync())).WithTags("ProductEngineering");
-        app.MapGet("/api/products/lines/options", async (NanchesoftDbContext db) => Results.Ok(
-            await db.ProductLines.AsNoTracking().Where(x => x.IsActive).OrderBy(x => x.Code)
-                .Select(x => new { ProductLineId = x.Id, x.Code, x.Name }).ToListAsync())).WithTags("ProductEngineering");
-        app.MapGet("/api/products/families/options", async (NanchesoftDbContext db) => Results.Ok(
-            await db.ProductFamilies.AsNoTracking().Where(x => x.IsActive).OrderBy(x => x.Code)
-                .Select(x => new { ProductFamilyId = x.Id, x.Code, x.Name }).ToListAsync())).WithTags("ProductEngineering");
+        app.MapGet("/api/products/lasts/options", async (HttpContext httpContext, NanchesoftDbContext db) =>
+        {
+            var companyId = GetCompanyFilter(httpContext);
+            var query = db.ProductLasts.AsNoTracking().Where(x => x.IsActive);
+            if (companyId.HasValue) query = query.Where(x => x.CompanyId == companyId.Value);
+            return Results.Ok(await query.OrderBy(x => x.Code)
+                .Select(x => new { ProductLastId = x.Id, x.Code, x.Name }).ToListAsync());
+        }).WithTags("ProductEngineering");
+        app.MapGet("/api/products/lines/options", async (HttpContext httpContext, NanchesoftDbContext db) =>
+        {
+            var companyId = GetCompanyFilter(httpContext);
+            var query = db.ProductLines.AsNoTracking().Where(x => x.IsActive);
+            if (companyId.HasValue) query = query.Where(x => x.CompanyId == companyId.Value);
+            return Results.Ok(await query.OrderBy(x => x.Code)
+                .Select(x => new { ProductLineId = x.Id, x.Code, x.Name }).ToListAsync());
+        }).WithTags("ProductEngineering");
+        app.MapGet("/api/products/families/options", async (HttpContext httpContext, NanchesoftDbContext db) =>
+        {
+            var companyId = GetCompanyFilter(httpContext);
+            var query = db.ProductFamilies.AsNoTracking().Where(x => x.IsActive);
+            if (companyId.HasValue) query = query.Where(x => x.CompanyId == companyId.Value);
+            return Results.Ok(await query.OrderBy(x => x.Code)
+                .Select(x => new { ProductFamilyId = x.Id, x.Code, x.Name }).ToListAsync());
+        }).WithTags("ProductEngineering");
     }
 
     private static async Task ReplaceRunSizesAsync(NanchesoftDbContext db, Guid runId, string? definitions, string user)
@@ -232,73 +285,110 @@ public static class ProductEngineeringEndpoints
     private static void MapFamilies(IEndpointRouteBuilder app)
     {
         var group = app.MapGroup("/api/products/families").WithTags("ProductEngineering");
-        group.MapGet("/", async (NanchesoftDbContext db) => Results.Ok(await db.ProductFamilies.AsNoTracking().OrderBy(x => x.Code).Select(x => new ProductFamilyDto { ProductFamilyId = x.Id, CompanyId = x.CompanyId, Code = x.Code, Name = x.Name, StatisticsGroup = x.StatisticsGroup, IsFinishedProductFamily = x.IsFinishedProductFamily, IsActive = x.IsActive }).ToListAsync()));
-        group.MapPost("/", async (ProductFamilyRequest request, NanchesoftDbContext db) => await UpsertProductFamilyAsync(null, request, db));
-        group.MapPut("/{id:guid}", async (Guid id, ProductFamilyRequest request, NanchesoftDbContext db) => await UpsertProductFamilyAsync(id, request, db));
+        group.MapGet("/", async (HttpContext httpContext, NanchesoftDbContext db) =>
+        {
+            var companyId = GetCompanyFilter(httpContext);
+            var query = db.ProductFamilies.AsNoTracking();
+            if (companyId.HasValue) query = query.Where(x => x.CompanyId == companyId.Value);
+            return Results.Ok(await query.OrderBy(x => x.Code)
+                .Select(x => new ProductFamilyDto { ProductFamilyId = x.Id, CompanyId = x.CompanyId, Code = x.Code, Name = x.Name, StatisticsGroup = x.StatisticsGroup, IsFinishedProductFamily = x.IsFinishedProductFamily, IsActive = x.IsActive })
+                .ToListAsync());
+        });
+        group.MapPost("/", async (ProductFamilyRequest request, HttpContext httpContext, NanchesoftDbContext db) => await UpsertProductFamilyAsync(null, request, httpContext, db));
+        group.MapPut("/{id:guid}", async (Guid id, ProductFamilyRequest request, HttpContext httpContext, NanchesoftDbContext db) => await UpsertProductFamilyAsync(id, request, httpContext, db));
         group.MapDelete("/{id:guid}", async (Guid id, NanchesoftDbContext db) => await DeleteEntityAsync<ProductFamily>(db, id, x => db.ProductLines.AnyAsync(y => y.ProductFamilyId == x.Id), "La familia tiene líneas relacionadas."));
     }
 
     private static void MapLasts(IEndpointRouteBuilder app)
     {
         var group = app.MapGroup("/api/products/lasts").WithTags("ProductEngineering");
-        group.MapGet("/", async (NanchesoftDbContext db) => Results.Ok(await db.ProductLasts.AsNoTracking().OrderBy(x => x.Code).Select(x => new ProductLastDto { ProductLastId = x.Id, CompanyId = x.CompanyId, Code = x.Code, Name = x.Name, WidthReference = x.WidthReference, IsActive = x.IsActive }).ToListAsync()));
-        group.MapPost("/", async (ProductLastRequest request, NanchesoftDbContext db) => await UpsertProductLastAsync(null, request, db));
-        group.MapPut("/{id:guid}", async (Guid id, ProductLastRequest request, NanchesoftDbContext db) => await UpsertProductLastAsync(id, request, db));
+        group.MapGet("/", async (HttpContext httpContext, NanchesoftDbContext db) =>
+        {
+            var companyId = GetCompanyFilter(httpContext);
+            var query = db.ProductLasts.AsNoTracking();
+            if (companyId.HasValue) query = query.Where(x => x.CompanyId == companyId.Value);
+            return Results.Ok(await query.OrderBy(x => x.Code)
+                .Select(x => new ProductLastDto { ProductLastId = x.Id, CompanyId = x.CompanyId, Code = x.Code, Name = x.Name, WidthReference = x.WidthReference, IsActive = x.IsActive })
+                .ToListAsync());
+        });
+        group.MapPost("/", async (ProductLastRequest request, HttpContext httpContext, NanchesoftDbContext db) => await UpsertProductLastAsync(null, request, httpContext, db));
+        group.MapPut("/{id:guid}", async (Guid id, ProductLastRequest request, HttpContext httpContext, NanchesoftDbContext db) => await UpsertProductLastAsync(id, request, httpContext, db));
         group.MapDelete("/{id:guid}", async (Guid id, NanchesoftDbContext db) => await DeleteEntityAsync<ProductLast>(db, id, async x => await db.FinishedProducts.AnyAsync(y => y.ProductLastId == x.Id), "La horma está ligada a productos terminados."));
     }
 
     private static void MapLines(IEndpointRouteBuilder app)
     {
         var group = app.MapGroup("/api/products/lines").WithTags("ProductEngineering");
-        group.MapGet("/", async (NanchesoftDbContext db) =>
+        group.MapGet("/", async (HttpContext httpContext, NanchesoftDbContext db) =>
         {
-            var rows = await db.ProductLines.AsNoTracking().Include(x => x.ProductFamily).OrderBy(x => x.Code)
+            var companyId = GetCompanyFilter(httpContext);
+            var query = db.ProductLines.AsNoTracking().Include(x => x.ProductFamily);
+            IQueryable<ProductLine> filtered = companyId.HasValue ? query.Where(x => x.CompanyId == companyId.Value) : query;
+            var rows = await filtered.OrderBy(x => x.Code)
                 .Select(x => new ProductLineDto { ProductLineId = x.Id, CompanyId = x.CompanyId, ProductFamilyId = x.ProductFamilyId, ProductFamilyName = x.ProductFamily != null ? x.ProductFamily.Name : string.Empty, Code = x.Code, Name = x.Name, ShortName = x.ShortName, AllowsDiscount = x.AllowsDiscount, IsActive = x.IsActive }).ToListAsync();
             return Results.Ok(rows);
         });
-        group.MapPost("/", async (ProductLineRequest request, NanchesoftDbContext db) => await UpsertProductLineAsync(null, request, db));
-        group.MapPut("/{id:guid}", async (Guid id, ProductLineRequest request, NanchesoftDbContext db) => await UpsertProductLineAsync(id, request, db));
+        group.MapPost("/", async (ProductLineRequest request, HttpContext httpContext, NanchesoftDbContext db) => await UpsertProductLineAsync(null, request, httpContext, db));
+        group.MapPut("/{id:guid}", async (Guid id, ProductLineRequest request, HttpContext httpContext, NanchesoftDbContext db) => await UpsertProductLineAsync(id, request, httpContext, db));
         group.MapDelete("/{id:guid}", async (Guid id, NanchesoftDbContext db) => await DeleteEntityAsync<ProductLine>(db, id, x => db.ProductStyles.AnyAsync(y => y.ProductLineId == x.Id), "La línea tiene estilos relacionados."));
     }
 
     private static void MapStyles(IEndpointRouteBuilder app)
     {
         var group = app.MapGroup("/api/products/styles").WithTags("ProductEngineering");
-        group.MapGet("/", async (NanchesoftDbContext db) =>
+        group.MapGet("/", async (HttpContext httpContext, NanchesoftDbContext db) =>
         {
-            var rows = await db.ProductStyles.AsNoTracking().Include(x => x.ProductLine).OrderBy(x => x.Code)
+            var companyId = GetCompanyFilter(httpContext);
+            var query = db.ProductStyles.AsNoTracking().Include(x => x.ProductLine);
+            IQueryable<ProductStyle> filtered = companyId.HasValue ? query.Where(x => x.CompanyId == companyId.Value) : query;
+            var rows = await filtered.OrderBy(x => x.Code)
                 .Select(x => new ProductStyleDto { ProductStyleId = x.Id, CompanyId = x.CompanyId, ProductLineId = x.ProductLineId, ProductLineName = x.ProductLine != null ? x.ProductLine.Name : string.Empty, Code = x.Code, Name = x.Name, CustomerLabel1 = x.CustomerLabel1, CustomerLabel2 = x.CustomerLabel2, ColorLabel = x.ColorLabel, DieCutReference = x.DieCutReference, MaxLotSize = x.MaxLotSize, HasAuthorizedConsumption = x.HasAuthorizedConsumption, HandlesFractionsByStyle = x.HandlesFractionsByStyle, OutsourcedProcessName = x.OutsourcedProcessName, PhotoUrl = x.PhotoUrl, IsActive = x.IsActive }).ToListAsync();
             return Results.Ok(rows);
         });
-        group.MapPost("/", async (ProductStyleRequest request, NanchesoftDbContext db) => await UpsertProductStyleAsync(null, request, db));
-        group.MapPut("/{id:guid}", async (Guid id, ProductStyleRequest request, NanchesoftDbContext db) => await UpsertProductStyleAsync(id, request, db));
+        group.MapPost("/", async (ProductStyleRequest request, HttpContext httpContext, NanchesoftDbContext db) => await UpsertProductStyleAsync(null, request, httpContext, db));
+        group.MapPut("/{id:guid}", async (Guid id, ProductStyleRequest request, HttpContext httpContext, NanchesoftDbContext db) => await UpsertProductStyleAsync(id, request, httpContext, db));
         group.MapDelete("/{id:guid}", async (Guid id, NanchesoftDbContext db) => await DeleteEntityAsync<ProductStyle>(db, id, x => db.ItemEngineeringProfiles.AnyAsync(y => y.ProductStyleId == x.Id), "El estilo está ligado a perfiles de ingeniería."));
-        group.MapGet("/options", async (NanchesoftDbContext db) => Results.Ok(
-            await db.ProductStyles.AsNoTracking().Where(x => x.IsActive).OrderBy(x => x.Code)
-                .Select(x => new { ProductStyleId = x.Id, x.Code, x.Name }).ToListAsync()));
+        group.MapGet("/options", async (HttpContext httpContext, NanchesoftDbContext db) =>
+        {
+            var companyId = GetCompanyFilter(httpContext);
+            var query = db.ProductStyles.AsNoTracking().Where(x => x.IsActive);
+            if (companyId.HasValue) query = query.Where(x => x.CompanyId == companyId.Value);
+            return Results.Ok(await query.OrderBy(x => x.Code)
+                .Select(x => new { ProductStyleId = x.Id, x.Code, x.Name }).ToListAsync());
+        });
     }
 
     private static void MapEmbroideryPatterns(IEndpointRouteBuilder app)
     {
         var group = app.MapGroup("/api/products/embroidery-patterns").WithTags("ProductEngineering");
-        group.MapGet("/", async (NanchesoftDbContext db) => Results.Ok(await db.EmbroideryPatterns.AsNoTracking().OrderBy(x => x.Sequence).ThenBy(x => x.Code).Select(x => new EmbroideryPatternDto { EmbroideryPatternId = x.Id, CompanyId = x.CompanyId, Code = x.Code, Name = x.Name, Sequence = x.Sequence, IsActive = x.IsActive }).ToListAsync()));
-        group.MapPost("/", async (EmbroideryPatternRequest request, NanchesoftDbContext db) => await UpsertEmbroideryPatternAsync(null, request, db));
-        group.MapPut("/{id:guid}", async (Guid id, EmbroideryPatternRequest request, NanchesoftDbContext db) => await UpsertEmbroideryPatternAsync(id, request, db));
+        group.MapGet("/", async (HttpContext httpContext, NanchesoftDbContext db) =>
+        {
+            var companyId = GetCompanyFilter(httpContext);
+            var query = db.EmbroideryPatterns.AsNoTracking();
+            if (companyId.HasValue) query = query.Where(x => x.CompanyId == companyId.Value);
+            return Results.Ok(await query.OrderBy(x => x.Sequence).ThenBy(x => x.Code)
+                .Select(x => new EmbroideryPatternDto { EmbroideryPatternId = x.Id, CompanyId = x.CompanyId, Code = x.Code, Name = x.Name, Sequence = x.Sequence, IsActive = x.IsActive })
+                .ToListAsync());
+        });
+        group.MapPost("/", async (EmbroideryPatternRequest request, HttpContext httpContext, NanchesoftDbContext db) => await UpsertEmbroideryPatternAsync(null, request, httpContext, db));
+        group.MapPut("/{id:guid}", async (Guid id, EmbroideryPatternRequest request, HttpContext httpContext, NanchesoftDbContext db) => await UpsertEmbroideryPatternAsync(id, request, httpContext, db));
         group.MapDelete("/{id:guid}", async (Guid id, NanchesoftDbContext db) => await DeleteEntityAsync<EmbroideryPattern>(db, id, x => db.ItemEngineeringProfiles.AnyAsync(y => y.EmbroideryPatternId == x.Id), "El bordado está ligado a perfiles de ingeniería."));
     }
 
     private static void MapEngineeringProfiles(IEndpointRouteBuilder app)
     {
         var group = app.MapGroup("/api/products/item-engineering-profiles").WithTags("ProductEngineering");
-        group.MapGet("/", async (NanchesoftDbContext db) =>
+        group.MapGet("/", async (HttpContext httpContext, NanchesoftDbContext db) =>
         {
-            var rows = await db.ItemEngineeringProfiles.AsNoTracking()
+            var companyId = GetCompanyFilter(httpContext);
+            var query = db.ItemEngineeringProfiles.AsNoTracking()
                 .Include(x => x.Item)
                 .Include(x => x.ProductStyle)
                 .Include(x => x.ProductSizeRun)
                 .Include(x => x.EmbroideryPattern)
-                .Include(x => x.PrimaryMaterialItem)
-                .OrderBy(x => x.Item!.Code)
+                .Include(x => x.PrimaryMaterialItem);
+            IQueryable<ItemEngineeringProfile> filtered = companyId.HasValue ? query.Where(x => x.CompanyId == companyId.Value) : query;
+            var rows = await filtered.OrderBy(x => x.Item!.Code)
                 .Select(x => new ItemEngineeringProfileDto
                 {
                     ItemEngineeringProfileId = x.Id,
@@ -325,18 +415,20 @@ public static class ProductEngineeringEndpoints
                 }).ToListAsync();
             return Results.Ok(rows);
         });
-        group.MapPost("/", async (ItemEngineeringProfileRequest request, NanchesoftDbContext db) => await UpsertEngineeringProfileAsync(null, request, db));
-        group.MapPut("/{id:guid}", async (Guid id, ItemEngineeringProfileRequest request, NanchesoftDbContext db) => await UpsertEngineeringProfileAsync(id, request, db));
+        group.MapPost("/", async (ItemEngineeringProfileRequest request, HttpContext httpContext, NanchesoftDbContext db) => await UpsertEngineeringProfileAsync(null, request, httpContext, db));
+        group.MapPut("/{id:guid}", async (Guid id, ItemEngineeringProfileRequest request, HttpContext httpContext, NanchesoftDbContext db) => await UpsertEngineeringProfileAsync(id, request, httpContext, db));
         group.MapDelete("/{id:guid}", async (Guid id, NanchesoftDbContext db) => await DeleteEntityAsync<ItemEngineeringProfile>(db, id));
     }
 
 
     private static void MapItemOptions(IEndpointRouteBuilder app)
     {
-        app.MapGet("/api/products/items/options", async (NanchesoftDbContext db) =>
+        app.MapGet("/api/products/items/options", async (HttpContext httpContext, NanchesoftDbContext db) =>
         {
-            var rows = await db.Items.AsNoTracking()
-                .OrderBy(x => x.Code)
+            var companyId = GetCompanyFilter(httpContext);
+            var query = db.Items.AsNoTracking();
+            if (companyId.HasValue) query = query.Where(x => x.CompanyId == companyId.Value);
+            var rows = await query.OrderBy(x => x.Code)
                 .Select(x => new ItemOptionDto
                 {
                     ItemId = x.Id,
@@ -347,9 +439,9 @@ public static class ProductEngineeringEndpoints
         }).WithTags("ProductEngineering");
     }
 
-    private static async Task<IResult> UpsertProductFamilyAsync(Guid? id, ProductFamilyRequest request, NanchesoftDbContext db)
+    private static async Task<IResult> UpsertProductFamilyAsync(Guid? id, ProductFamilyRequest request, HttpContext httpContext, NanchesoftDbContext db)
     {
-        var ctx = await ResolveDefaultContextAsync(db);
+        var ctx = await ResolveDefaultContextAsync(db, httpContext);
         if (!ctx.TenantId.HasValue || !ctx.CompanyId.HasValue) return Results.BadRequest();
         var code = NormalizeUpper(request.Code);
         if (string.IsNullOrWhiteSpace(code) || string.IsNullOrWhiteSpace(request.Name)) return Results.BadRequest(new { message = "Code y Name son obligatorios." });
@@ -364,9 +456,9 @@ public static class ProductEngineeringEndpoints
         db.ProductFamilies.Add(created); await db.SaveChangesAsync(); return Results.Ok(new { success = true, id = created.Id });
     }
 
-    private static async Task<IResult> UpsertProductLastAsync(Guid? id, ProductLastRequest request, NanchesoftDbContext db)
+    private static async Task<IResult> UpsertProductLastAsync(Guid? id, ProductLastRequest request, HttpContext httpContext, NanchesoftDbContext db)
     {
-        var ctx = await ResolveDefaultContextAsync(db);
+        var ctx = await ResolveDefaultContextAsync(db, httpContext);
         if (!ctx.TenantId.HasValue || !ctx.CompanyId.HasValue) return Results.BadRequest();
         var code = NormalizeUpper(request.Code);
         if (string.IsNullOrWhiteSpace(code) || string.IsNullOrWhiteSpace(request.Name)) return Results.BadRequest(new { message = "Code y Name son obligatorios." });
@@ -381,9 +473,9 @@ public static class ProductEngineeringEndpoints
         db.ProductLasts.Add(created); await db.SaveChangesAsync(); return Results.Ok(new { success = true, id = created.Id });
     }
 
-    private static async Task<IResult> UpsertProductLineAsync(Guid? id, ProductLineRequest request, NanchesoftDbContext db)
+    private static async Task<IResult> UpsertProductLineAsync(Guid? id, ProductLineRequest request, HttpContext httpContext, NanchesoftDbContext db)
     {
-        var ctx = await ResolveDefaultContextAsync(db);
+        var ctx = await ResolveDefaultContextAsync(db, httpContext);
         if (!ctx.TenantId.HasValue || !ctx.CompanyId.HasValue) return Results.BadRequest();
         var code = NormalizeUpper(request.Code);
         if (string.IsNullOrWhiteSpace(code) || string.IsNullOrWhiteSpace(request.Name)) return Results.BadRequest(new { message = "Code y Name son obligatorios." });
@@ -398,13 +490,13 @@ public static class ProductEngineeringEndpoints
         db.ProductLines.Add(created); await db.SaveChangesAsync(); return Results.Ok(new { success = true, id = created.Id });
     }
 
-    private static async Task<IResult> UpsertProductStyleAsync(Guid? id, ProductStyleRequest request, NanchesoftDbContext db)
+    private static async Task<IResult> UpsertProductStyleAsync(Guid? id, ProductStyleRequest request, HttpContext httpContext, NanchesoftDbContext db)
     {
-        var ctx = await ResolveDefaultContextAsync(db);
+        var ctx = await ResolveDefaultContextAsync(db, httpContext);
         if (!ctx.TenantId.HasValue || !ctx.CompanyId.HasValue) return Results.BadRequest();
         var code = NormalizeUpper(request.Code);
         if (string.IsNullOrWhiteSpace(code) || string.IsNullOrWhiteSpace(request.Name)) return Results.BadRequest(new { message = "Code y Name son obligatorios." });
-        ProductStyle entity;
+        ProductStyle? entity;
         if (id.HasValue)
         {
             entity = await db.ProductStyles.FirstOrDefaultAsync(x => x.Id == id.Value);
@@ -421,9 +513,9 @@ public static class ProductEngineeringEndpoints
         return Results.Ok(new { success = true, id = entity.Id });
     }
 
-    private static async Task<IResult> UpsertEmbroideryPatternAsync(Guid? id, EmbroideryPatternRequest request, NanchesoftDbContext db)
+    private static async Task<IResult> UpsertEmbroideryPatternAsync(Guid? id, EmbroideryPatternRequest request, HttpContext httpContext, NanchesoftDbContext db)
     {
-        var ctx = await ResolveDefaultContextAsync(db);
+        var ctx = await ResolveDefaultContextAsync(db, httpContext);
         if (!ctx.TenantId.HasValue || !ctx.CompanyId.HasValue) return Results.BadRequest();
         var code = NormalizeUpper(request.Code);
         if (string.IsNullOrWhiteSpace(code) || string.IsNullOrWhiteSpace(request.Name)) return Results.BadRequest(new { message = "Code y Name son obligatorios." });
@@ -436,9 +528,9 @@ public static class ProductEngineeringEndpoints
         var created = new EmbroideryPattern { TenantId = ctx.TenantId.Value, CompanyId = ctx.CompanyId.Value, Code = code, Name = NormalizeText(request.Name), Sequence = request.Sequence, IsActive = request.IsActive, CreatedBy = "web-api" }; db.EmbroideryPatterns.Add(created); await db.SaveChangesAsync(); return Results.Ok(new { success = true, id = created.Id });
     }
 
-    private static async Task<IResult> UpsertEngineeringProfileAsync(Guid? id, ItemEngineeringProfileRequest request, NanchesoftDbContext db)
+    private static async Task<IResult> UpsertEngineeringProfileAsync(Guid? id, ItemEngineeringProfileRequest request, HttpContext httpContext, NanchesoftDbContext db)
     {
-        var ctx = await ResolveDefaultContextAsync(db);
+        var ctx = await ResolveDefaultContextAsync(db, httpContext);
         if (!ctx.TenantId.HasValue || !ctx.CompanyId.HasValue) return Results.BadRequest();
         if (request.ItemId == Guid.Empty) return Results.BadRequest(new { message = "ItemId es obligatorio." });
         ItemEngineeringProfile entity;

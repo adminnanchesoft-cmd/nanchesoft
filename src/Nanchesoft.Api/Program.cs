@@ -81,7 +81,10 @@ using (var scope = app.Services.CreateScope())
     await InitialDataSeeder.SeedAsync(dbContext);
     await CommercialTenantsSeeder.SeedAsync(dbContext);
     await ThirdPartiesProductsSeeder.SeedAsync(dbContext);
-    await ProductEngineeringFoundationSeeder.SeedAsync(dbContext);
+    if (app.Environment.IsDevelopment())
+    {
+        await ProductEngineeringFoundationSeeder.SeedAsync(dbContext);
+    }
     await PurchasesSeeder.SeedAsync(dbContext);
     await InventorySeeder.SeedAsync(dbContext);
     await SalesSeeder.SeedAsync(dbContext);
