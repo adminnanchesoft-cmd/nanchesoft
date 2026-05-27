@@ -119,15 +119,57 @@ public sealed class ProductionPhaseConfiguration : IEntityTypeConfiguration<Prod
 {
     public void Configure(EntityTypeBuilder<ProductionPhase> builder)
     {
-        builder.ToTable("production_phases");
-        builder.HasIndex(x => new { x.TenantId, x.Code }).IsUnique();
+        builder.ToTable("production_phases", "product");
+        builder.HasKey(x => x.Id);
+
         builder.Property(x => x.Code).HasMaxLength(40).IsRequired();
         builder.Property(x => x.Name).HasMaxLength(140).IsRequired();
-        builder.Property(x => x.Description).HasMaxLength(600);
+        builder.Property(x => x.Description).HasMaxLength(600).HasDefaultValue(string.Empty);
+        builder.Property(x => x.Sequence).HasDefaultValue(0);
+        builder.Property(x => x.IsActive).HasDefaultValue(true);
+
+        builder.Property(x => x.ClaveNumber).HasDefaultValue(0);
+        builder.Property(x => x.BaseCost).HasColumnType("numeric(18,4)").HasDefaultValue(0m);
+        builder.Property(x => x.CostType).HasMaxLength(20).HasDefaultValue("fixed");
+        builder.Property(x => x.BranchKey).HasDefaultValue(0);
+
+        builder.Ignore(x => x.DisplayText);
+
+        builder.HasIndex(x => new { x.CompanyId, x.Code }).IsUnique();
+        builder.HasIndex(x => new { x.CompanyId, x.IsActive });
+        builder.HasIndex(x => new { x.CompanyId, x.ClaveNumber });
+        builder.HasIndex(x => x.SilvasoftFraccionId);
+        builder.HasIndex(x => x.PhaseGroupId);
+
         builder.HasOne(x => x.Tenant)
             .WithMany()
             .HasForeignKey(x => x.TenantId)
             .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasOne(x => x.Company)
+            .WithMany()
+            .HasForeignKey(x => x.CompanyId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasOne(x => x.PhaseGroup)
+            .WithMany()
+            .HasForeignKey(x => x.PhaseGroupId)
+            .OnDelete(DeleteBehavior.SetNull);
+
+        builder.HasOne(x => x.PieceWorkLocation)
+            .WithMany()
+            .HasForeignKey(x => x.PieceWorkLocationId)
+            .OnDelete(DeleteBehavior.SetNull);
+
+        builder.HasOne(x => x.FactoryBranch)
+            .WithMany()
+            .HasForeignKey(x => x.FactoryBranchId)
+            .OnDelete(DeleteBehavior.SetNull);
+
+        builder.HasOne(x => x.ManufacturingType)
+            .WithMany()
+            .HasForeignKey(x => x.ManufacturingTypeId)
+            .OnDelete(DeleteBehavior.SetNull);
     }
 }
 
