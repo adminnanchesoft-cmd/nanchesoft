@@ -196,6 +196,118 @@ app.MapGet("/api/clase", async (int top = 2000) =>
     }
 });
 
+// ── GET /api/fraccion?top=2000 ────────────────────────────────────────────────
+app.MapGet("/api/fraccion", async (int top = 2000) =>
+{
+    top = Math.Clamp(top, 1, 5000);
+    const string tabla = "Fraccion";
+
+    if (string.IsNullOrWhiteSpace(connStr))
+        return Results.Ok(Falla("Sin cadena de conexión configurada.", tabla));
+
+    var sw = Stopwatch.StartNew();
+    try
+    {
+        await using var conn = new SqlConnection(connStr);
+        await conn.OpenAsync();
+
+        var columnas = await LeerColumnasAsync(conn, tabla);
+        if (columnas.Count == 0)
+        {
+            sw.Stop();
+            return Results.Ok(Falla($"La tabla '{tabla}' no existe en '{conn.Database}'.", tabla, conn.Database, sw.ElapsedMilliseconds));
+        }
+
+        var colList = string.Join(", ", columnas.Select(c => $"[{c.NombreColumna}]"));
+        var sql = $"SELECT TOP {top} {colList} FROM [{tabla}] ORDER BY [Secuencia], [Clave]";
+        var registros = new List<Dictionary<string, object?>>();
+
+        await using var cmd = new SqlCommand(sql, conn);
+        await using var reader = await cmd.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
+        {
+            var row = new Dictionary<string, object?>();
+            for (int i = 0; i < reader.FieldCount; i++)
+                row[reader.GetName(i)] = reader.IsDBNull(i) ? null : reader.GetValue(i);
+            registros.Add(row);
+        }
+        sw.Stop();
+
+        return Results.Ok(new
+        {
+            exitoso = true,
+            error = (string?)null,
+            tiempoMs = sw.ElapsedMilliseconds,
+            nombreTabla = tabla,
+            baseDatos = conn.Database,
+            total = registros.Count,
+            columnas,
+            registros
+        });
+    }
+    catch (Exception ex)
+    {
+        sw.Stop();
+        return Results.Ok(Falla(ex.Message, tabla, "", sw.ElapsedMilliseconds));
+    }
+});
+
+// ── GET /api/fraccion_cadena?top=5000 ─────────────────────────────────────────
+app.MapGet("/api/fraccion_cadena", async (int top = 5000) =>
+{
+    top = Math.Clamp(top, 1, 10000);
+    const string tabla = "Fraccion_Cadena";
+
+    if (string.IsNullOrWhiteSpace(connStr))
+        return Results.Ok(Falla("Sin cadena de conexión configurada.", tabla));
+
+    var sw = Stopwatch.StartNew();
+    try
+    {
+        await using var conn = new SqlConnection(connStr);
+        await conn.OpenAsync();
+
+        var columnas = await LeerColumnasAsync(conn, tabla);
+        if (columnas.Count == 0)
+        {
+            sw.Stop();
+            return Results.Ok(Falla($"La tabla '{tabla}' no existe en '{conn.Database}'.", tabla, conn.Database, sw.ElapsedMilliseconds));
+        }
+
+        var colList = string.Join(", ", columnas.Select(c => $"[{c.NombreColumna}]"));
+        var sql = $"SELECT TOP {top} {colList} FROM [{tabla}]";
+        var registros = new List<Dictionary<string, object?>>();
+
+        await using var cmd = new SqlCommand(sql, conn);
+        await using var reader = await cmd.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
+        {
+            var row = new Dictionary<string, object?>();
+            for (int i = 0; i < reader.FieldCount; i++)
+                row[reader.GetName(i)] = reader.IsDBNull(i) ? null : reader.GetValue(i);
+            registros.Add(row);
+        }
+        sw.Stop();
+
+        return Results.Ok(new
+        {
+            exitoso = true,
+            error = (string?)null,
+            tiempoMs = sw.ElapsedMilliseconds,
+            nombreTabla = tabla,
+            baseDatos = conn.Database,
+            total = registros.Count,
+            columnas,
+            registros
+        });
+    }
+    catch (Exception ex)
+    {
+        sw.Stop();
+        return Results.Ok(Falla(ex.Message, tabla, "", sw.ElapsedMilliseconds));
+    }
+});
+
 app.Run();
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
