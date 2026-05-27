@@ -43,6 +43,9 @@ public static class SilvaSoftEndpoints
         g.MapGet("/clase/vista-importacion",        GetVistaImportacionSubfamiliasAsync);
         g.MapPost("/clase/importar",                ImportarSubfamiliasAsync);
         g.MapGet("/logs",                           GetLogsAsync);
+        g.MapGet("/fracciones",                       GetFraccionesAsync);
+        g.MapGet("/fracciones/vista-importacion",     GetVistaImportacionFraccionesAsync);
+        g.MapGet("/fraccion-cadena",                  GetFraccionCadenaAsync);
 
         return app;
     }
@@ -697,6 +700,84 @@ public static class SilvaSoftEndpoints
     }
 
     // ── Helpers privados ──────────────────────────────────────────────────────
+
+    // ── GET /api/silvasoft/fracciones ─────────────────────────────────────────
+
+    private static async Task<IResult> GetFraccionesAsync(
+        HttpContext ctx, ISilvaSoftService svc, int top = 2000)
+    {
+        var empresaId = ApiTenantScope.ResolveCompanyId(ctx);
+        if (!empresaId.HasValue)
+            return Results.BadRequest(new { message = "No hay empresa activa." });
+        var resultado = await svc.ObtenerFraccionesAsync(empresaId.Value, top);
+        return Results.Ok(resultado);
+    }
+
+    // ── GET /api/silvasoft/fracciones/vista-importacion ───────────────────────
+
+    private static async Task<IResult> GetVistaImportacionFraccionesAsync(
+        HttpContext ctx, ISilvaSoftService svc, NanchesoftDbContext db, int top = 2000)
+    {
+        var empresaId = ApiTenantScope.ResolveCompanyId(ctx);
+        if (!empresaId.HasValue)
+            return Results.BadRequest(new { message = "No hay empresa activa." });
+
+        var resultado = await svc.ObtenerFraccionesAsync(empresaId.Value, top);
+        if (!resultado.Exitoso || resultado.Registros is null)
+            return Results.Ok(new { resultado.Exitoso, resultado.Error, items = Array.Empty<object>() });
+
+        var existenSilvasoftIds = (await db.ProductionPhases
+            .Where(p => p.CompanyId == empresaId.Value && p.SilvasoftFraccionId != null)
+            .Select(p => p.SilvasoftFraccionId!.Value)
+            .ToListAsync()).ToHashSet();
+
+        var existenPorClave = (await db.ProductionPhases
+            .Where(p => p.CompanyId == empresaId.Value)
+            .Select(p => p.ClaveNumber)
+            .ToListAsync()).ToHashSet();
+
+        var items = resultado.Registros.Select(r =>
+        {
+            var campos = r.Campos;
+            var fid = campos.TryGetValue("FraccionID", out var idVal) && idVal is Guid g ? (Guid?)g : null;
+            var clave = campos.TryGetValue("Clave", out var cVal) && cVal is int c ? c : 0;
+            var nombre = campos.TryGetValue("Nombre", out var nVal) ? nVal?.ToString() ?? "" : "";
+            var costo = campos.TryGetValue("Costo", out var ctVal) && ctVal is decimal dec ? dec : 0m;
+            var duplicado = (fid.HasValue && existenSilvasoftIds.Contains(fid.Value))
+                            || (clave > 0 && existenPorClave.Contains(clave));
+            return new
+            {
+                silvasoftFraccionId = fid,
+                claveNumber = clave,
+                code = clave > 0 ? clave.ToString() : nombre,
+                name = nombre.Trim(),
+                baseCost = costo,
+                sequence = campos.TryGetValue("Secuencia", out var sVal) && sVal is int s ? s : 0,
+                yaImportado = duplicado
+            };
+        }).ToList();
+
+        return Results.Ok(new
+        {
+            exitoso = true,
+            total = items.Count,
+            nuevos = items.Count(i => !i.yaImportado),
+            duplicados = items.Count(i => i.yaImportado),
+            items
+        });
+    }
+
+    // ── GET /api/silvasoft/fraccion-cadena ────────────────────────────────────
+
+    private static async Task<IResult> GetFraccionCadenaAsync(
+        HttpContext ctx, ISilvaSoftService svc, int top = 5000)
+    {
+        var empresaId = ApiTenantScope.ResolveCompanyId(ctx);
+        if (!empresaId.HasValue)
+            return Results.BadRequest(new { message = "No hay empresa activa." });
+        var resultado = await svc.ObtenerFraccionCadenaAsync(empresaId.Value, top);
+        return Results.Ok(resultado);
+    }
 
     private static string? FindColumnExact(List<SilvaSoftColumnaMeta> columnas, string nombre)
         => columnas.Select(c => c.NombreColumna)
