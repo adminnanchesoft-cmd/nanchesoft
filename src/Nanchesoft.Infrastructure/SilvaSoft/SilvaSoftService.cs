@@ -54,6 +54,136 @@ public sealed class SilvaSoftService : ISilvaSoftService
         return await ObtenerComposicionesDirectoAsync(empresaId, top, ct);
     }
 
+    // ── ObtenerClaseAsync ─────────────────────────────────────────────────────
+
+    public async Task<SilvaSoftTablaResultado> ObtenerClaseAsync(
+        Guid empresaId, int top = 2000, CancellationToken ct = default)
+    {
+        var agente = await _conexiones.ObtenerConfigAgenteAsync(empresaId, ct);
+        if (agente.HasValue)
+            return await ObtenerTablaViaAgenteAsync("clase", agente.Value.AgentUrl, agente.Value.AgentToken, empresaId, top, ct);
+
+        return await ObtenerTablaDirectoAsync("clase", empresaId, top, ct);
+    }
+
+    // ── ObtenerTablaViaAgenteAsync / ObtenerTablaDirectoAsync (genérico) ─────────
+
+    private async Task<SilvaSoftTablaResultado> ObtenerTablaViaAgenteAsync(
+        string nombreTabla, string agentUrl, string agentToken, Guid empresaId, int top, CancellationToken ct)
+    {
+        _logger.LogInformation("ObtenerTabla [{Tabla}] [{EmpresaId}]: usando agente {Url}", nombreTabla, empresaId, agentUrl);
+        var sw = Stopwatch.StartNew();
+        try
+        {
+            using var http = CrearHttpAgente(agentUrl, agentToken);
+            var res = await http.GetAsync($"/api/{nombreTabla}?top={top}", ct);
+            sw.Stop();
+            if (res.IsSuccessStatusCode)
+            {
+                var body = await res.Content.ReadFromJsonAsync<AgentComposicionResponse>(
+                    new JsonSerializerOptions { PropertyNameCaseInsensitive = true },
+                    cancellationToken: ct);
+
+                if (body is not null)
+                {
+                    return new SilvaSoftTablaResultado
+                    {
+                        Exitoso = body.Exitoso,
+                        Error = body.Error,
+                        NombreTabla = body.NombreTabla ?? nombreTabla,
+                        BaseDatos = body.BaseDatos ?? string.Empty,
+                        Total = body.Total,
+                        TiempoMs = sw.ElapsedMilliseconds,
+                        Columnas = body.Columnas?.Select(c => new SilvaSoftColumnaMeta
+                        {
+                            NombreColumna = c.NombreColumna,
+                            TipoDato = c.TipoDato,
+                            EsNullable = c.EsNullable,
+                            LongitudMax = c.LongitudMax,
+                            Ordinal = c.Ordinal
+                        }).ToList() ?? [],
+                        Registros = body.Registros?.Select(r => new SilvaSoftFilaDto
+                        {
+                            Campos = r.ToDictionary(
+                                kv => kv.Key,
+                                kv => kv.Value.ValueKind == JsonValueKind.Null ? (object?)null : kv.Value.GetRawText() as object)
+                        }).ToList() ?? []
+                    };
+                }
+            }
+            var raw = await res.Content.ReadAsStringAsync(ct);
+            return FallaTabla($"Error del agente ({(int)res.StatusCode}): {raw}", nombreTabla, sw.ElapsedMilliseconds);
+        }
+        catch (Exception ex)
+        {
+            sw.Stop();
+            _logger.LogError(ex, "ObtenerTabla [{Tabla}] [{EmpresaId}] vía agente: error en {Ms}ms", nombreTabla, empresaId, sw.ElapsedMilliseconds);
+            return FallaTabla($"No se pudo contactar el agente: {ex.Message}", nombreTabla, sw.ElapsedMilliseconds);
+        }
+    }
+
+    private async Task<SilvaSoftTablaResultado> ObtenerTablaDirectoAsync(
+        string nombreTabla, Guid empresaId, int top, CancellationToken ct)
+    {
+        var cs = await _conexiones.ObtenerCadenaConexionAsync(empresaId, ct);
+        if (string.IsNullOrEmpty(cs))
+            return FallaTabla("No hay configuración de conexión para esta empresa.", nombreTabla);
+
+        var sw = Stopwatch.StartNew();
+        try
+        {
+            await using var conn = new SqlConnection(cs);
+            await conn.OpenAsync(ct);
+
+            var columnas = await DetectarColumnasAsync(conn, nombreTabla, ct);
+            if (columnas.Count == 0)
+            {
+                sw.Stop();
+                return FallaTabla($"La tabla '{nombreTabla}' no existe en '{conn.Database}'.", nombreTabla, sw.ElapsedMilliseconds);
+            }
+
+            var columnList = string.Join(", ", columnas.Select(c => $"[{c.NombreColumna}]"));
+            var sql = $"SELECT TOP {top} {columnList} FROM [{nombreTabla}]";
+            var registros = new List<SilvaSoftFilaDto>();
+            await using var cmd = new SqlCommand(sql, conn);
+            await using var reader = await cmd.ExecuteReaderAsync(ct);
+            while (await reader.ReadAsync(ct))
+            {
+                var dto = new SilvaSoftFilaDto();
+                for (int i = 0; i < reader.FieldCount; i++)
+                    dto.Campos[reader.GetName(i)] = reader.IsDBNull(i) ? null : reader.GetValue(i);
+                registros.Add(dto);
+            }
+            sw.Stop();
+
+            return new SilvaSoftTablaResultado
+            {
+                Exitoso = true,
+                NombreTabla = nombreTabla,
+                BaseDatos = conn.Database,
+                Columnas = columnas,
+                Registros = registros,
+                Total = registros.Count,
+                TiempoMs = sw.ElapsedMilliseconds
+            };
+        }
+        catch (SqlException ex)
+        {
+            sw.Stop();
+            _logger.LogError(ex, "ObtenerTabla [{Tabla}] [{EmpresaId}]: error SQL {Number}", nombreTabla, empresaId, ex.Number);
+            return FallaTabla($"Error SQL Server ({ex.Number}): {ex.Message}", nombreTabla, sw.ElapsedMilliseconds);
+        }
+        catch (Exception ex)
+        {
+            sw.Stop();
+            _logger.LogError(ex, "ObtenerTabla [{Tabla}] [{EmpresaId}]: error inesperado", nombreTabla, empresaId);
+            return FallaTabla($"Error inesperado: {ex.Message}", nombreTabla, sw.ElapsedMilliseconds);
+        }
+    }
+
+    private static SilvaSoftTablaResultado FallaTabla(string error, string tabla, long ms = 0)
+        => new() { Exitoso = false, Error = error, NombreTabla = tabla, TiempoMs = ms };
+
     // ── Modo agente ───────────────────────────────────────────────────────────
 
     private async Task<(bool Exitoso, string Mensaje, long TiempoMs)> ProbarViaAgenteAsync(

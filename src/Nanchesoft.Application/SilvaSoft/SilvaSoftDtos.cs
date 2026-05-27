@@ -39,6 +39,27 @@ public sealed class SilvaSoftConexionRequest
     public string? AgentToken { get; set; }
 }
 
+// ─── Tabla genérica de SilvaSoft (composicion / clase) ───────────────────────
+
+/// <summary>DTO genérico para una fila de cualquier tabla de SilvaSoft leída dinámicamente.</summary>
+public sealed class SilvaSoftFilaDto
+{
+    public Dictionary<string, object?> Campos { get; set; } = [];
+}
+
+/// <summary>Resultado genérico de lectura de una tabla de SilvaSoft.</summary>
+public sealed class SilvaSoftTablaResultado
+{
+    public bool Exitoso { get; set; }
+    public string? Error { get; set; }
+    public long TiempoMs { get; set; }
+    public List<SilvaSoftColumnaMeta> Columnas { get; set; } = [];
+    public List<SilvaSoftFilaDto> Registros { get; set; } = [];
+    public int Total { get; set; }
+    public string NombreTabla { get; set; } = string.Empty;
+    public string BaseDatos { get; set; } = string.Empty;
+}
+
 // ─── Composición (tabla SQL Server de SilvaSoft) ──────────────────────────────
 
 /// <summary>
@@ -127,6 +148,21 @@ public sealed class SilvaSoftRegistroVistaPrevia
     public string? Razon { get; set; }
 }
 
+// ─── Resultado de importación ─────────────────────────────────────────────────
+
+/// <summary>Resultado de la importación real de familias de materiales desde SilvaSoft.</summary>
+public sealed class SilvaSoftImportResultadoDto
+{
+    public bool Exitoso { get; set; }
+    public string? Error { get; set; }
+    public int RegistrosLeidos { get; set; }
+    public int RegistrosImportados { get; set; }
+    public int RegistrosOmitidos { get; set; }
+    public int RegistrosInvalidos { get; set; }
+    public long TiempoMs { get; set; }
+    public List<string> Detalles { get; set; } = [];
+}
+
 // ─── Logs de sincronización ────────────────────────────────────────────────────
 
 public sealed class SilvaSoftSyncLogDto
@@ -150,4 +186,43 @@ public sealed class SilvaSoftSyncLogPagina
     public int Pagina { get; set; }
     public int TamanoPagina { get; set; }
     public List<SilvaSoftSyncLogDto> Registros { get; set; } = [];
+}
+
+// ─── Vista previa e importación de Subfamilias (tabla clase) ──────────────────
+
+public sealed class SilvaSoftRegistroVistaSubfamiliaPrevia
+{
+    public int? ClaseId { get; set; }
+    public int? ComposicionId { get; set; }
+    public string Codigo { get; set; } = string.Empty;
+    public string Nombre { get; set; } = string.Empty;
+    /// <summary>"nuevo" | "duplicado" | "invalido"</summary>
+    public string Estado { get; set; } = string.Empty;
+    public string? Razon { get; set; }
+    /// <summary>Nombre de la familia padre encontrada en Nanchesoft (o null si no se encontró).</summary>
+    public string? FamiliaPadre { get; set; }
+}
+
+public sealed class SilvaSoftVistaImportacionSubfamiliasDto
+{
+    public int TotalEnSilvaSoft { get; set; }
+    public int YaExistentesEnNanchesoft { get; set; }
+    public int NuevosParaImportar { get; set; }
+    public int RegistrosInvalidos { get; set; }
+    public int SinFamiliaPadre { get; set; }
+    public List<SilvaSoftMapeoColumna> Mapeo { get; set; } = [];
+    public List<SilvaSoftRegistroVistaSubfamiliaPrevia> VistaPrevia { get; set; } = [];
+}
+
+public sealed class SilvaSoftImportSubfamiliasResultadoDto
+{
+    public bool Exitoso { get; set; }
+    public string? Error { get; set; }
+    public int RegistrosLeidos { get; set; }
+    public int RegistrosImportados { get; set; }
+    public int RegistrosOmitidos { get; set; }
+    public int RegistrosInvalidos { get; set; }
+    public int SinFamiliaPadre { get; set; }
+    public long TiempoMs { get; set; }
+    public List<string> Detalles { get; set; } = [];
 }

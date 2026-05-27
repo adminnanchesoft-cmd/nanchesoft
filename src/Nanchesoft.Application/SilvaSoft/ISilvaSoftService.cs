@@ -41,9 +41,17 @@ public interface ISilvaSoftService
 
     /// <summary>
     /// Consulta TOP {top} registros de la tabla composicion en SilvaSoft.
-    /// Req. 16: detecta columnas dinámicamente — no falla si la estructura varía.
-    /// Incluye metadata de columnas para construir el DataGrid en el cliente.
+    /// Detecta columnas dinámicamente — no falla si la estructura varía.
     /// </summary>
     Task<SilvaSoftComposicionResultado> ObtenerComposicionesAsync(
         Guid empresaId, int top = 100, CancellationToken ct = default);
+
+    /// <summary>
+    /// Consulta TOP {top} registros de la tabla clase en SilvaSoft.
+    /// La tabla clase contiene las subfamilias de materiales.
+    /// PK: claseid. FK al padre: composicionid.
+    /// </summary>
+    Task<SilvaSoftTablaResultado> ObtenerClaseAsync(
+        Guid empresaId, int top = 2000, CancellationToken ct = default);
+
 }

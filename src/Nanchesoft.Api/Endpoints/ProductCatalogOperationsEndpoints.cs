@@ -205,10 +205,10 @@ public static class ProductCatalogOperationsEndpoints
         g.MapGet("/", async (HttpContext httpContext, NanchesoftDbContext db) =>
         {
             var companyId = GetCompanyFilter(httpContext);
-            var query = db.MaterialSubfamilies.AsNoTracking().Include(x => x.MaterialFamily);
+            IQueryable<MaterialSubfamily> query = db.MaterialSubfamilies.AsNoTracking().Include(x => x.MaterialFamily);
             if (companyId.HasValue)
-                query = (Microsoft.EntityFrameworkCore.Query.IIncludableQueryable<MaterialSubfamily, MaterialFamily?>)query.Where(x => x.CompanyId == companyId.Value);
-            var rows = await ((IQueryable<MaterialSubfamily>)query).OrderBy(x => x.Code)
+                query = query.Where(x => x.CompanyId == companyId.Value);
+            var rows = await query.OrderBy(x => x.Code)
                 .Select(x => new MaterialSubfamilyDto { MaterialSubfamilyId = x.Id, CompanyId = x.CompanyId, MaterialFamilyId = x.MaterialFamilyId, MaterialFamilyName = x.MaterialFamily != null ? x.MaterialFamily.Name : string.Empty, Code = x.Code, Name = x.Name, MaterialType = x.MaterialType, IsDirectMaterial = x.IsDirectMaterial, Notes = x.Notes, IsActive = x.IsActive })
                 .ToListAsync();
             return Results.Ok(rows);

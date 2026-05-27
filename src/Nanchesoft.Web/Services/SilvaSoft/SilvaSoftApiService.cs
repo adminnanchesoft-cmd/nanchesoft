@@ -109,6 +109,79 @@ public sealed class SilvaSoftApiService
         catch { return null; }
     }
 
+    public async Task<(bool Ok, SilvaSoftImportResultadoDto? Resultado, string Error)> ImportarFamiliasMaterialesAsync()
+    {
+        try
+        {
+            var res = await Client.PostAsync("/api/silvasoft/composicion/importar", null);
+            if (res.IsSuccessStatusCode)
+            {
+                var dto = await res.Content.ReadFromJsonAsync<SilvaSoftImportResultadoDto>();
+                return (true, dto, string.Empty);
+            }
+            var body = await res.Content.ReadAsStringAsync();
+            try
+            {
+                var err = JsonSerializer.Deserialize<JsonElement>(body);
+                var msg = err.TryGetProperty("detail", out var d) ? d.GetString()
+                        : err.TryGetProperty("message", out var m) ? m.GetString()
+                        : body;
+                return (false, null, msg ?? body);
+            }
+            catch { return (false, null, body); }
+        }
+        catch (Exception ex)
+        {
+            return (false, null, $"Sin respuesta de la API: {ex.Message}");
+        }
+    }
+
+    // ── Subfamilias (clase) ───────────────────────────────────────────────────
+
+    public async Task<SilvaSoftTablaResultado?> ObtenerClaseAsync(int top = 200)
+    {
+        try
+        {
+            return await Client.GetFromJsonAsync<SilvaSoftTablaResultado>(
+                $"/api/silvasoft/clase?top={top}");
+        }
+        catch { return null; }
+    }
+
+    public async Task<SilvaSoftVistaImportacionSubfamiliasDto?> ObtenerVistaImportacionSubfamiliasAsync()
+    {
+        try
+        {
+            return await Client.GetFromJsonAsync<SilvaSoftVistaImportacionSubfamiliasDto>(
+                "/api/silvasoft/clase/vista-importacion");
+        }
+        catch { return null; }
+    }
+
+    public async Task<(bool Ok, SilvaSoftImportSubfamiliasResultadoDto? Resultado, string Error)> ImportarSubfamiliasAsync()
+    {
+        try
+        {
+            var res = await Client.PostAsync("/api/silvasoft/clase/importar", null);
+            if (res.IsSuccessStatusCode)
+            {
+                var dto = await res.Content.ReadFromJsonAsync<SilvaSoftImportSubfamiliasResultadoDto>();
+                return (true, dto, string.Empty);
+            }
+            var body = await res.Content.ReadAsStringAsync();
+            try
+            {
+                var err = JsonSerializer.Deserialize<JsonElement>(body);
+                var msg = err.TryGetProperty("detail", out var d) ? d.GetString()
+                        : err.TryGetProperty("message", out var m) ? m.GetString()
+                        : body;
+                return (false, null, msg ?? body);
+            }
+            catch { return (false, null, body); }
+        }
+        catch (Exception ex) { return (false, null, $"Sin respuesta de la API: {ex.Message}"); }
+    }
+
     // ── Logs ──────────────────────────────────────────────────────────────────
 
     public async Task<SilvaSoftSyncLogPagina?> ObtenerLogsAsync(int pagina = 1, int tamano = 50)
@@ -213,6 +286,18 @@ public sealed class SilvaSoftRegistroVistaPrevia
     public string? Razon { get; set; }
 }
 
+public sealed class SilvaSoftImportResultadoDto
+{
+    public bool Exitoso { get; set; }
+    public string? Error { get; set; }
+    public int RegistrosLeidos { get; set; }
+    public int RegistrosImportados { get; set; }
+    public int RegistrosOmitidos { get; set; }
+    public int RegistrosInvalidos { get; set; }
+    public long TiempoMs { get; set; }
+    public List<string> Detalles { get; set; } = [];
+}
+
 public sealed class SilvaSoftSyncLogDto
 {
     public Guid Id { get; set; }
@@ -234,4 +319,58 @@ public sealed class SilvaSoftSyncLogPagina
     public int Pagina { get; set; }
     public int TamanoPagina { get; set; }
     public List<SilvaSoftSyncLogDto> Registros { get; set; } = [];
+}
+
+// ─── DTOs tabla clase (subfamilias) ──────────────────────────────────────────
+
+public sealed class SilvaSoftTablaResultado
+{
+    public bool Exitoso { get; set; }
+    public string? Error { get; set; }
+    public long TiempoMs { get; set; }
+    public List<SilvaSoftColumnaMeta> Columnas { get; set; } = [];
+    public List<SilvaSoftFilaDto> Registros { get; set; } = [];
+    public int Total { get; set; }
+    public string NombreTabla { get; set; } = string.Empty;
+    public string BaseDatos { get; set; } = string.Empty;
+}
+
+public sealed class SilvaSoftFilaDto
+{
+    public Dictionary<string, JsonElement> Campos { get; set; } = [];
+}
+
+public sealed class SilvaSoftRegistroVistaSubfamiliaPrevia
+{
+    public int? ClaseId { get; set; }
+    public int? ComposicionId { get; set; }
+    public string Codigo { get; set; } = string.Empty;
+    public string Nombre { get; set; } = string.Empty;
+    public string Estado { get; set; } = string.Empty;
+    public string? Razon { get; set; }
+    public string? FamiliaPadre { get; set; }
+}
+
+public sealed class SilvaSoftVistaImportacionSubfamiliasDto
+{
+    public int TotalEnSilvaSoft { get; set; }
+    public int YaExistentesEnNanchesoft { get; set; }
+    public int NuevosParaImportar { get; set; }
+    public int RegistrosInvalidos { get; set; }
+    public int SinFamiliaPadre { get; set; }
+    public List<SilvaSoftMapeoColumna> Mapeo { get; set; } = [];
+    public List<SilvaSoftRegistroVistaSubfamiliaPrevia> VistaPrevia { get; set; } = [];
+}
+
+public sealed class SilvaSoftImportSubfamiliasResultadoDto
+{
+    public bool Exitoso { get; set; }
+    public string? Error { get; set; }
+    public int RegistrosLeidos { get; set; }
+    public int RegistrosImportados { get; set; }
+    public int RegistrosOmitidos { get; set; }
+    public int RegistrosInvalidos { get; set; }
+    public int SinFamiliaPadre { get; set; }
+    public long TiempoMs { get; set; }
+    public List<string> Detalles { get; set; } = [];
 }

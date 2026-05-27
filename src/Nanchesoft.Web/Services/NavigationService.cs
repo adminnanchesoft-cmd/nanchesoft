@@ -58,6 +58,7 @@ public sealed class NavigationService
             new() { Title = "Integraciones", Items = [
                 new NavigationMenuItem { Title = "SilvaSoft — Configuración", Route = "/integraciones/silvasoft/config", Badge = "SS" },
                 new NavigationMenuItem { Title = "SilvaSoft — Familias de materiales", Route = "/integraciones/silvasoft/familias-materiales", Badge = "SS" },
+                new NavigationMenuItem { Title = "SilvaSoft — Subfamilias de materiales", Route = "/integraciones/silvasoft/subfamilias", Badge = "SS" },
                 new NavigationMenuItem { Title = "SilvaSoft — Logs", Route = "/integraciones/silvasoft/logs", Badge = "LOG" }
             ] }
         };

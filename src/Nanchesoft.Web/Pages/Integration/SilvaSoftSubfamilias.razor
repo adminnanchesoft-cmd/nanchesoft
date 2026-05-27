@@ -1,31 +1,29 @@
-@page "/integraciones/silvasoft/familias-materiales"
+@page "/integraciones/silvasoft/subfamilias"
 @rendermode InteractiveServer
 @implements IAsyncDisposable
 @using Microsoft.JSInterop
 @using System.Text.Json
 @using Nanchesoft.Web.Services.SilvaSoft
-@using Nanchesoft.Web.Services.Catalogs
 @inject SilvaSoftApiService SilvaSoft
 @inject IJSRuntime JS
 
-<PageTitle>SilvaSoft — Familias de materiales</PageTitle>
+<PageTitle>SilvaSoft — Subfamilias de materiales</PageTitle>
 
 <div class="ns-catalog-page">
 
-    @* ── Encabezado ─────────────────────────────────────────────── *@
     <div class="ns-catalog-header">
         <div>
             <div class="ns-catalog-eyebrow">Nanchesoft ERP · Integración SilvaSoft</div>
-            <h1 class="ns-catalog-title">Familias de materiales</h1>
+            <h1 class="ns-catalog-title">Subfamilias de materiales</h1>
             <p class="ns-catalog-subtitle">
-                Vista previa de la tabla <code>composicion</code> de SilvaSoft SQL Server.
-                Mapea las columnas y valida duplicados antes de importar.
+                Vista previa de la tabla <code>clase</code> de SilvaSoft SQL Server.
+                Requiere que las <a href="/integraciones/silvasoft/familias-materiales">familias</a>
+                ya estén importadas para vincular la familia padre.
             </p>
         </div>
-        <div class="ns-catalog-badge">SilvaSoft · DevExtreme 25.1.6</div>
+        <div class="ns-catalog-badge">SilvaSoft · clase → MaterialSubfamily</div>
     </div>
 
-    @* ── Indicadores de estado ──────────────────────────────────── *@
     @if (_resultado is not null && _resultado.Exitoso)
     {
         <div class="ns-kpi-grid" style="margin-bottom:16px">
@@ -52,43 +50,32 @@
         </div>
     }
 
-    @* ── Barra de acciones ──────────────────────────────────────── *@
     <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;align-items:center">
-        <button class="ns-btn ns-btn--primary" @onclick="ConsultarSilvaSoftAsync" disabled="@_cargando">
+        <button class="ns-btn ns-btn--primary" @onclick="ConsultarAsync" disabled="@_cargando">
             @if (_cargando) { <span class="spinner-border spinner-border-sm me-1"></span> }
             @(_resultado is null ? "Consultar SilvaSoft" : "Actualizar datos")
         </button>
 
         @if (_resultado is not null && _resultado.Exitoso)
         {
-            <button class="ns-btn ns-btn--outline" @onclick="MostrarVistaImportacionAsync" disabled="@_cargandoVista">
+            <button class="ns-btn ns-btn--outline" @onclick="MostrarVistaAsync" disabled="@_cargandoVista">
                 @if (_cargandoVista) { <span class="spinner-border spinner-border-sm me-1"></span> }
-                Importar a familias de materiales
+                Importar subfamilias
             </button>
-        }
-
-        @if (_resultado is not null)
-        {
-            <span class="text-muted small">
-                Servidor: <strong>@_resultado.BaseDatos</strong> ·
-                Tiempo: <strong>@_resultado.TiempoMs ms</strong>
-            </span>
         }
     </div>
 
-    @* ── Mensaje de error ───────────────────────────────────────── *@
     @if (_resultado is not null && !_resultado.Exitoso)
     {
         <div style="padding:16px;border-radius:12px;background:#fff1f2;color:#991b1b;border:1px solid #fecdd3;margin-bottom:16px">
             <strong>Error al conectar con SilvaSoft:</strong><br />
             @_resultado.Error
-            <div style="margin-top:8px;font-size:0.85rem">
+            <div style="margin-top:8px;font-size:.85rem">
                 Verifique la <a href="/integraciones/silvasoft/config">configuración de conexión</a>.
             </div>
         </div>
     }
 
-    @* ── DataGrid DevExtreme ────────────────────────────────────── *@
     @if (_resultado is not null && _resultado.Exitoso)
     {
         <div id="@_gridId"></div>
@@ -104,34 +91,34 @@
             <div style="font-size:1.1rem;font-weight:600;margin-bottom:6px">Sin datos cargados</div>
             <div style="font-size:.9rem">
                 Haz clic en <strong>Consultar SilvaSoft</strong> para leer la tabla
-                <code>composicion</code> desde el servidor SQL Server.
+                <code>clase</code> desde el servidor SQL Server.
             </div>
         </div>
     }
 
 </div>
 
-@* ── Panel de vista previa de importación ──────────────────────── *@
 @if (_mostrandoVista && _vista is not null)
 {
-    <div class="ns-modal-overlay" @onclick="CerrarVista" style="position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1000;display:flex;align-items:center;justify-content:center">
-        <div class="ns-modal" @onclick:stopPropagation style="background:#fff;border-radius:16px;max-width:820px;width:95%;max-height:90vh;overflow:auto;padding:32px;box-shadow:0 20px 60px rgba(0,0,0,.25)">
+    <div class="ns-modal-overlay" @onclick="CerrarVista"
+         style="position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1000;display:flex;align-items:center;justify-content:center">
+        <div class="ns-modal" @onclick:stopPropagation
+             style="background:#fff;border-radius:16px;max-width:860px;width:95%;max-height:90vh;overflow:auto;padding:32px;box-shadow:0 20px 60px rgba(0,0,0,.25)">
 
             <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px">
                 <div>
-                    <h2 style="margin:0 0 4px 0;font-size:1.25rem">Vista previa de importación</h2>
+                    <h2 style="margin:0 0 4px 0;font-size:1.25rem">Vista previa — Subfamilias</h2>
                     <p style="margin:0;color:#64748b;font-size:.9rem">
-                        Análisis de los @_vista.TotalEnSilvaSoft registros de SilvaSoft
-                        contra las familias de materiales existentes en Nanchesoft.
+                        Análisis de @_vista.TotalEnSilvaSoft registros de la tabla <code>clase</code>
+                        contra las subfamilias existentes en Nanchesoft.
                     </p>
                 </div>
                 <button class="ns-btn ns-btn--outline ns-btn--sm" @onclick="CerrarVista">✕ Cerrar</button>
             </div>
 
-            @* KPIs de la vista *@
             <div class="ns-kpi-grid" style="margin-bottom:24px">
                 <div class="ns-kpi-card ns-kpi-card-success">
-                    <div class="ns-kpi-label">Nuevos para importar</div>
+                    <div class="ns-kpi-label">Nuevas para importar</div>
                     <div class="ns-kpi-value" style="color:#059669">@_vista.NuevosParaImportar</div>
                 </div>
                 <div class="ns-kpi-card">
@@ -139,8 +126,8 @@
                     <div class="ns-kpi-value" style="color:#d97706">@_vista.YaExistentesEnNanchesoft</div>
                 </div>
                 <div class="ns-kpi-card">
-                    <div class="ns-kpi-label">Sin código (inválidos)</div>
-                    <div class="ns-kpi-value" style="color:#dc2626">@_vista.RegistrosInvalidos</div>
+                    <div class="ns-kpi-label">Sin familia padre</div>
+                    <div class="ns-kpi-value" style="color:#dc2626">@_vista.SinFamiliaPadre</div>
                 </div>
                 <div class="ns-kpi-card">
                     <div class="ns-kpi-label">Total en SilvaSoft</div>
@@ -148,9 +135,18 @@
                 </div>
             </div>
 
-            @* Mapeo de columnas *@
+            @if (_vista.SinFamiliaPadre > 0)
+            {
+                <div style="margin-bottom:16px;padding:12px 16px;background:#fef3c7;border:1px solid #fde68a;border-radius:8px;color:#92400e;font-size:.88rem">
+                    <strong>Atención:</strong> @_vista.SinFamiliaPadre subfamilias no tienen su familia padre importada en Nanchesoft.
+                    <a href="/integraciones/silvasoft/familias-materiales" style="color:#92400e;text-decoration:underline">
+                        Importa las familias primero
+                    </a> para que el vínculo funcione correctamente.
+                </div>
+            }
+
             <h3 style="font-size:1rem;margin-bottom:10px">Mapeo de columnas</h3>
-            <div class="ns-table-wrap" style="margin-bottom:24px;max-height:200px;overflow:auto">
+            <div class="ns-table-wrap" style="margin-bottom:24px;max-height:180px;overflow:auto">
                 <table class="ns-table" style="font-size:.85rem">
                     <thead>
                         <tr>
@@ -168,23 +164,15 @@
                                 <td class="text-muted">@m.TipoDato</td>
                                 <td>
                                     @if (m.Mapeado)
-                                    {
-                                        <span style="color:#059669;font-weight:600">@m.CampoDestino</span>
-                                    }
+                                    { <span style="color:#059669;font-weight:600">@m.CampoDestino</span> }
                                     else
-                                    {
-                                        <span class="text-muted">—</span>
-                                    }
+                                    { <span class="text-muted">—</span> }
                                 </td>
                                 <td>
                                     @if (m.Mapeado)
-                                    {
-                                        <span class="ns-badge ns-badge--green">mapeado</span>
-                                    }
+                                    { <span class="ns-badge ns-badge--green">mapeado</span> }
                                     else
-                                    {
-                                        <span class="ns-badge">sin mapeo</span>
-                                    }
+                                    { <span class="ns-badge">sin mapeo</span> }
                                 </td>
                             </tr>
                         }
@@ -192,14 +180,16 @@
                 </table>
             </div>
 
-            @* Vista previa de registros (primeros 50) *@
             <h3 style="font-size:1rem;margin-bottom:10px">Vista previa (primeros 50 registros)</h3>
-            <div class="ns-table-wrap" style="max-height:260px;overflow:auto">
+            <div class="ns-table-wrap" style="max-height:240px;overflow:auto">
                 <table class="ns-table" style="font-size:.85rem">
                     <thead>
                         <tr>
+                            <th>claseId</th>
+                            <th>composicionId</th>
                             <th>Código</th>
                             <th>Nombre</th>
+                            <th>Familia padre</th>
                             <th>Estado</th>
                             <th>Razón</th>
                         </tr>
@@ -208,8 +198,16 @@
                         @foreach (var r in _vista.VistaPrevia)
                         {
                             <tr>
+                                <td class="text-muted small">@r.ClaseId</td>
+                                <td class="text-muted small">@r.ComposicionId</td>
                                 <td><code>@r.Codigo</code></td>
                                 <td>@r.Nombre</td>
+                                <td>
+                                    @if (r.FamiliaPadre is not null)
+                                    { <span style="color:#059669">@r.FamiliaPadre</span> }
+                                    else
+                                    { <span class="text-danger small">no importada</span> }
+                                </td>
                                 <td>
                                     @switch (r.Estado)
                                     {
@@ -235,27 +233,30 @@
             {
                 <div style="margin-top:24px;padding:16px;background:#eff6ff;border-radius:10px;border:1px solid #bfdbfe;color:#1e40af;text-align:center">
                     <span class="spinner-border spinner-border-sm me-2"></span>
-                    Importando familias de materiales desde SilvaSoft…
+                    Importando subfamilias desde SilvaSoft…
                 </div>
             }
             else if (_resultadoImport is not null)
             {
-                <div style="margin-top:24px;padding:16px;border-radius:10px;border:1px solid @(_resultadoImport.Exitoso ? "#bbf7d0" : "#fecdd3");background:@(_resultadoImport.Exitoso ? "#f0fdf4" : "#fff1f2");color:@(_resultadoImport.Exitoso ? "#166534" : "#991b1b")">
+                <div style="margin-top:24px;padding:16px;border-radius:10px;
+                            border:1px solid @(_resultadoImport.Exitoso ? "#bbf7d0" : "#fecdd3");
+                            background:@(_resultadoImport.Exitoso ? "#f0fdf4" : "#fff1f2");
+                            color:@(_resultadoImport.Exitoso ? "#166534" : "#991b1b")">
                     <strong>@(_resultadoImport.Exitoso ? "Importación completada" : "Error en importación")</strong>
                     @if (_resultadoImport.Exitoso)
                     {
                         <div class="ns-kpi-grid" style="margin-top:12px">
                             <div class="ns-kpi-card ns-kpi-card-success">
-                                <div class="ns-kpi-label">Importados</div>
+                                <div class="ns-kpi-label">Importadas</div>
                                 <div class="ns-kpi-value" style="color:#059669">@_resultadoImport.RegistrosImportados</div>
                             </div>
                             <div class="ns-kpi-card">
-                                <div class="ns-kpi-label">Omitidos (dup.)</div>
+                                <div class="ns-kpi-label">Omitidas (dup.)</div>
                                 <div class="ns-kpi-value" style="color:#d97706">@_resultadoImport.RegistrosOmitidos</div>
                             </div>
                             <div class="ns-kpi-card">
-                                <div class="ns-kpi-label">Inválidos</div>
-                                <div class="ns-kpi-value" style="color:#dc2626">@_resultadoImport.RegistrosInvalidos</div>
+                                <div class="ns-kpi-label">Sin padre</div>
+                                <div class="ns-kpi-value" style="color:#dc2626">@_resultadoImport.SinFamiliaPadre</div>
                             </div>
                             <div class="ns-kpi-card">
                                 <div class="ns-kpi-label">Tiempo</div>
@@ -276,12 +277,12 @@
             else
             {
                 <div style="margin-top:24px;display:flex;gap:12px;align-items:center;flex-wrap:wrap">
-                    <button class="ns-btn ns-btn--primary" @onclick="ConfirmarImportacionAsync" disabled="@_importando">
-                        Confirmar importación a Familias de materiales
+                    <button class="ns-btn ns-btn--primary" @onclick="ConfirmarImportacionAsync" disabled="@(_importando || _vista.NuevosParaImportar == 0)">
+                        Confirmar importación de subfamilias
                     </button>
                     <span class="text-muted small">
-                        Se importarán <strong>@_vista!.NuevosParaImportar</strong> familias nuevas,
-                        omitiendo <strong>@_vista!.YaExistentesEnNanchesoft</strong> duplicados.
+                        Se importarán <strong>@_vista.NuevosParaImportar</strong> subfamilias nuevas,
+                        omitiendo <strong>@_vista.YaExistentesEnNanchesoft</strong> duplicados.
                     </span>
                 </div>
             }
@@ -290,38 +291,24 @@
 }
 
 @code {
-    private readonly string _gridId = $"ss-fm-grid-{Guid.NewGuid():N}";
-    private SilvaSoftComposicionResultado? _resultado;
-    private SilvaSoftVistaImportacionDto? _vista;
-    private SilvaSoftImportResultadoDto? _resultadoImport;
+    private readonly string _gridId = $"ss-sf-grid-{Guid.NewGuid():N}";
+    private SilvaSoftTablaResultado? _resultado;
+    private SilvaSoftVistaImportacionSubfamiliasDto? _vista;
+    private SilvaSoftImportSubfamiliasResultadoDto? _resultadoImport;
     private bool _cargando;
     private bool _cargandoVista;
     private bool _mostrandoVista;
     private bool _importando;
-    private bool _gridRenderizado;
-    private DotNetObjectReference<SilvaSoftFamiliasMateriales>? _ref;
+    private DotNetObjectReference<SilvaSoftSubfamilias>? _ref;
 
-    protected override void OnInitialized()
-    {
-        _ref = DotNetObjectReference.Create(this);
-    }
+    protected override void OnInitialized() => _ref = DotNetObjectReference.Create(this);
 
-    // ── Consultar datos de SilvaSoft ──────────────────────────────
-
-    private async Task ConsultarSilvaSoftAsync()
+    private async Task ConsultarAsync()
     {
         _cargando = true;
-        _gridRenderizado = false;
         StateHasChanged();
-
-        try
-        {
-            _resultado = await SilvaSoft.ObtenerComposicionAsync(top: 100);
-        }
-        finally
-        {
-            _cargando = false;
-        }
+        try { _resultado = await SilvaSoft.ObtenerClaseAsync(top: 200); }
+        finally { _cargando = false; }
 
         if (_resultado?.Exitoso == true)
         {
@@ -329,81 +316,52 @@
             await Task.Yield();
             await RenderizarGridAsync();
         }
-        else
-        {
-            await InvokeAsync(StateHasChanged);
-        }
+        else await InvokeAsync(StateHasChanged);
     }
-
-    // ── Renderizar DevExtreme DataGrid ────────────────────────────
 
     private async Task RenderizarGridAsync()
     {
         if (_resultado is null || !_resultado.Exitoso) return;
-
         try
         {
-            // Construir definición compatible con nsCrudGrid.renderCrudGrid
             var columns = _resultado.Columnas.Select(c => new
             {
-                dataField = c.NombreColumna,
-                caption = c.NombreColumna,
-                dataType = c.TipoDevExtreme,
-                allowEditing = false,
-                allowFiltering = true,
-                allowSorting = true,
-                visible = true,
-                showInGrid = true,
+                dataField = c.NombreColumna, caption = c.NombreColumna,
+                dataType = c.TipoDevExtreme, allowEditing = false,
+                allowFiltering = true, allowSorting = true, visible = true, showInGrid = true,
                 width = c.TipoDevExtreme == "number" ? 120 : 160
             }).ToList();
 
-            // Convertir registros a lista de diccionarios (formato esperado por nsCrudGrid)
             var rows = _resultado.Registros.Select((reg, idx) =>
             {
                 var dict = new Dictionary<string, object?> { ["_rowIdx"] = idx };
                 foreach (var kv in reg.Campos)
-                {
-                    dict[kv.Key] = kv.Value.ValueKind == System.Text.Json.JsonValueKind.Null
-                        ? null
-                        : kv.Value.ValueKind == System.Text.Json.JsonValueKind.Number
-                            ? kv.Value.GetDouble()
-                            : (object?)kv.Value.GetString();
-                }
+                    dict[kv.Key] = kv.Value.ValueKind == System.Text.Json.JsonValueKind.Null ? null
+                        : kv.Value.ValueKind == System.Text.Json.JsonValueKind.Number ? kv.Value.GetDouble()
+                        : (object?)kv.Value.GetString();
                 return dict;
             }).ToList();
 
             var definition = new
             {
-                catalogKey = "silvasoft-composicion",
+                catalogKey = "silvasoft-clase",
                 title = $"SilvaSoft · {_resultado.NombreTabla} ({_resultado.BaseDatos})",
                 subtitle = $"{_resultado.Total} registros · {_resultado.TiempoMs}ms",
-                keyExpr = "_rowIdx",
-                allowCreate = false,
-                allowUpdate = false,
-                allowDelete = false,
-                allowImport = false,
-                totalCount = _resultado.Total,
-                columns,
-                rows
+                keyExpr = "_rowIdx", allowCreate = false, allowUpdate = false,
+                allowDelete = false, allowImport = false,
+                totalCount = _resultado.Total, columns, rows
             };
-
             await JS.InvokeVoidAsync("nsCrudGrid.renderCrudGrid", _gridId, definition, _ref);
-            _gridRenderizado = true;
         }
-        catch (Exception ex)
-        {
-            Console.Error.WriteLine($"[SilvaSoft] Error al renderizar grid: {ex.Message}");
-        }
+        catch (Exception ex) { Console.Error.WriteLine($"[SilvaSoft/clase] Grid error: {ex.Message}"); }
     }
 
-    // ── Vista previa de importación ───────────────────────────────
-
-    private async Task MostrarVistaImportacionAsync()
+    private async Task MostrarVistaAsync()
     {
         _cargandoVista = true;
         try
         {
-            _vista = await SilvaSoft.ObtenerVistaImportacionAsync();
+            _vista = await SilvaSoft.ObtenerVistaImportacionSubfamiliasAsync();
             if (_vista is not null) _mostrandoVista = true;
         }
         finally { _cargandoVista = false; }
@@ -411,41 +369,23 @@
 
     private void CerrarVista() => _mostrandoVista = false;
 
-    // ── Importación real ──────────────────────────────────────────────
-
     private async Task ConfirmarImportacionAsync()
     {
-        _importando = true;
-        _resultadoImport = null;
+        _importando = true; _resultadoImport = null;
         StateHasChanged();
-
         try
         {
-            var (ok, resultado, error) = await SilvaSoft.ImportarFamiliasMaterialesAsync();
-            _resultadoImport = resultado ?? new SilvaSoftImportResultadoDto
+            var (ok, resultado, error) = await SilvaSoft.ImportarSubfamiliasAsync();
+            _resultadoImport = resultado ?? new SilvaSoftImportSubfamiliasResultadoDto
             {
-                Exitoso = false,
-                Error = error
+                Exitoso = false, Error = error
             };
         }
-        finally
-        {
-            _importando = false;
-            _mostrandoVista = false;
-        }
+        finally { _importando = false; _mostrandoVista = false; }
     }
-
-    // ── Callbacks desde JS (futuro uso: selección de filas, etc.) ─
 
     [JSInvokable]
-    public void OnGridEvent(string eventName, string payload)
-    {
-        // Reservado para interacciones futuras desde el DataGrid
-        // (ej: seleccionar registros para importar)
-        Console.WriteLine($"[SilvaSoft Grid] {eventName}: {payload}");
-    }
-
-    // ── Lifecycle ─────────────────────────────────────────────────
+    public void OnGridEvent(string eventName, string payload) { }
 
     public async ValueTask DisposeAsync()
     {
