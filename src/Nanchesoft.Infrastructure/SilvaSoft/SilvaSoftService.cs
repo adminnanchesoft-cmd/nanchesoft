@@ -66,6 +66,28 @@ public sealed class SilvaSoftService : ISilvaSoftService
         return await ObtenerTablaDirectoAsync("clase", empresaId, top, ct);
     }
 
+    // ── ObtenerFraccionesAsync ────────────────────────────────────────────────
+
+    public async Task<SilvaSoftTablaResultado> ObtenerFraccionesAsync(
+        Guid empresaId, int top = 2000, CancellationToken ct = default)
+    {
+        var agente = await _conexiones.ObtenerConfigAgenteAsync(empresaId, ct);
+        if (agente.HasValue)
+            return await ObtenerTablaViaAgenteAsync("fraccion", agente.Value.AgentUrl, agente.Value.AgentToken, empresaId, top, ct);
+        return await ObtenerTablaDirectoAsync("Fraccion", empresaId, top, ct);
+    }
+
+    // ── ObtenerFraccionCadenaAsync ────────────────────────────────────────────
+
+    public async Task<SilvaSoftTablaResultado> ObtenerFraccionCadenaAsync(
+        Guid empresaId, int top = 5000, CancellationToken ct = default)
+    {
+        var agente = await _conexiones.ObtenerConfigAgenteAsync(empresaId, ct);
+        if (agente.HasValue)
+            return await ObtenerTablaViaAgenteAsync("fraccion_cadena", agente.Value.AgentUrl, agente.Value.AgentToken, empresaId, top, ct);
+        return await ObtenerTablaDirectoAsync("Fraccion_Cadena", empresaId, top, ct);
+    }
+
     // ── ObtenerTablaViaAgenteAsync / ObtenerTablaDirectoAsync (genérico) ─────────
 
     private async Task<SilvaSoftTablaResultado> ObtenerTablaViaAgenteAsync(
