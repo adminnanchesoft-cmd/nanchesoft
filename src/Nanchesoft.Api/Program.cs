@@ -39,6 +39,7 @@ var defaultConnection = Environment.GetEnvironmentVariable("NANCHESOFT_TEST_DB")
 builder.Services.AddDbContext<NanchesoftDbContext>(options =>
     options.UseNpgsql(defaultConnection));
 builder.Services.AddSingleton<IPasswordHasher, PasswordHasher>();
+builder.Services.AddSingleton<IJwtTokenService, JwtTokenService>();
 builder.Services.AddScoped<INomPayrollIncidentTypeRepository, NomPayrollIncidentTypeRepository>();
 builder.Services.AddScoped<INomPayrollIncidentTypeService, NomPayrollIncidentTypeService>();
 
@@ -111,7 +112,7 @@ using (var scope = app.Services.CreateScope())
     await ProductionSeeder.SeedAsync(dbContext);
 }
 
-app.MapPost("/api/auth/login", async (AuthLoginRequest request, NanchesoftDbContext db, IPasswordHasher passwordHasher) =>
+app.MapPost("/api/auth/login", async (AuthLoginRequest request, NanchesoftDbContext db, IPasswordHasher passwordHasher, IJwtTokenService jwtTokenService) =>
 {
     var usernameOrEmail = (request.UsernameOrEmail ?? string.Empty).Trim();
     var password = request.Password ?? string.Empty;
@@ -183,10 +184,26 @@ app.MapPost("/api/auth/login", async (AuthLoginRequest request, NanchesoftDbCont
         || string.Equals(x.Code, "SYSTEM_ADMIN", StringComparison.OrdinalIgnoreCase)
         || string.Equals(x.Code, "OWNER", StringComparison.OrdinalIgnoreCase));
 
+    var accessToken = jwtTokenService.GenerateAccessToken(
+        user.Id, user.Username, user.Email, effectiveTenantId, isPlatformOwner);
+    var refreshTokenValue = jwtTokenService.GenerateRefreshToken();
+
+    var session = new Nanchesoft.Domain.Entities.UserSession
+    {
+        TenantId = effectiveTenantId,
+        UserId = user.Id,
+        RefreshToken = refreshTokenValue,
+        ExpiresAt = DateTime.UtcNow.AddDays(7),
+        IsActive = true,
+        CreatedBy = "auth-login"
+    };
+    db.UserSessions.Add(session);
+    await db.SaveChangesAsync();
+
     return Results.Ok(new
     {
-        token = "demo-token",
-        refreshToken = "demo-refresh-token",
+        token = accessToken,
+        refreshToken = refreshTokenValue,
         userId = user.Id,
         username = user.Username,
         email = user.Email,
@@ -227,6 +244,37 @@ app.MapPost("/api/auth/change-password", async (AuthChangePasswordRequest reques
     await db.SaveChangesAsync();
 
     return Results.Ok(new { message = "Contraseña actualizada correctamente." });
+});
+
+app.MapPost("/api/auth/refresh", async (AuthRefreshRequest request, NanchesoftDbContext db, IJwtTokenService jwtTokenService) =>
+{
+    if (string.IsNullOrWhiteSpace(request.RefreshToken))
+        return Results.BadRequest(new { message = "Refresh token requerido." });
+
+    var session = await db.UserSessions
+        .FirstOrDefaultAsync(x => x.RefreshToken == request.RefreshToken && x.IsActive && x.RevokedAt == null);
+
+    if (session is null || session.ExpiresAt < DateTime.UtcNow)
+        return Results.Unauthorized();
+
+    var user = await db.Users.AsNoTracking().FirstOrDefaultAsync(x => x.Id == session.UserId && x.IsActive && !x.IsLocked);
+    if (user is null)
+        return Results.Unauthorized();
+
+    var roleCodes = await (
+        from ur in db.UserRoles.AsNoTracking()
+        join r in db.Roles.AsNoTracking() on ur.RoleId equals r.Id
+        where ur.UserId == user.Id && ur.IsActive
+        select r.Code).ToListAsync();
+    var isPlatformOwner = roleCodes.Any(c =>
+        string.Equals(c, "PLATFORM_OWNER", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(c, "SYSTEM_ADMIN", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(c, "OWNER", StringComparison.OrdinalIgnoreCase));
+
+    var newAccessToken = jwtTokenService.GenerateAccessToken(
+        user.Id, user.Username, user.Email, session.TenantId, isPlatformOwner);
+
+    return Results.Ok(new { token = newAccessToken });
 });
 
 app.MapPostalCodeEndpoints();
@@ -349,4 +397,9 @@ public sealed class AuthChangePasswordRequest
     public string CurrentPassword { get; set; } = string.Empty;
     public string NewPassword { get; set; } = string.Empty;
     public string ConfirmPassword { get; set; } = string.Empty;
+}
+
+public sealed class AuthRefreshRequest
+{
+    public string RefreshToken { get; set; } = string.Empty;
 }
