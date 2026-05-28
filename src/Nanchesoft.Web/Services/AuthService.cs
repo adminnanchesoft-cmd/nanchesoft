@@ -72,6 +72,45 @@ public sealed class AuthService
     }
 
 
+    public async Task<LoginResult> LoginWithGoogleAsync(string idToken)
+    {
+        var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
+
+        var response = await client.PostAsJsonAsync("/api/auth/google", new { idToken });
+
+        if (!response.IsSuccessStatusCode)
+        {
+            var error = await TryReadErrorMessageAsync(response);
+            return new LoginResult
+            {
+                Success = false,
+                ErrorMessage = error ?? "Tu cuenta de Google no está registrada o el acceso no está permitido."
+            };
+        }
+
+        var payload = await response.Content.ReadFromJsonAsync<LoginResponse>();
+
+        if (payload is null)
+        {
+            return new LoginResult
+            {
+                Success = false,
+                ErrorMessage = "Respuesta inválida del servidor."
+            };
+        }
+
+        ApplyPayload(payload);
+        await PersistSessionAsync();
+
+        return new LoginResult
+        {
+            Success = true,
+            RequiresTenantSelection = payload.RequiresTenantSelection,
+            IsPlatformOwner = payload.IsPlatformOwner,
+            MustChangePassword = payload.MustChangePassword
+        };
+    }
+
     public async Task<ChangePasswordResult> ChangePasswordAsync(Guid userId, string currentPassword, string newPassword, string confirmPassword)
     {
         var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
