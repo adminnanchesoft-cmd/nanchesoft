@@ -19,6 +19,7 @@ public sealed class AuthState
     public string Email { get; set; } = string.Empty;
     public string FirstName { get; set; } = string.Empty;
     public string LastName { get; set; } = string.Empty;
+    public string AvatarUrl { get; set; } = string.Empty;
 
     public string FullName
     {
@@ -152,6 +153,7 @@ public sealed class AuthState
         Email = string.Empty;
         FirstName = string.Empty;
         LastName = string.Empty;
+        AvatarUrl = string.Empty;
         _displayName = "Invitado";
         _accessToken = string.Empty;
         RefreshToken = string.Empty;
