@@ -15,6 +15,7 @@ public sealed class User : BaseEntity
     public string PasswordHash { get; set; } = string.Empty;
     public string? Phone { get; set; }
     public string? AvatarUrl { get; set; }
+    public DateTime? BirthDate { get; set; }
 
     public UserStatus Status { get; set; } = UserStatus.Active;
     public bool MustChangePassword { get; set; } = true;
