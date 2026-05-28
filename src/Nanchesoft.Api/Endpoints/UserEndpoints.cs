@@ -3,6 +3,7 @@ using Nanchesoft.Api.Auth;
 using Nanchesoft.Domain.Entities;
 using Nanchesoft.Domain.Enums;
 using Nanchesoft.Persistence.Context;
+using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.Processing;
 
 namespace Nanchesoft.Api.Endpoints;
@@ -344,7 +345,7 @@ public static class UserEndpoints
                 .Crop(new SixLabors.ImageSharp.Rectangle(x, y, size, size))
                 .Resize(256, 256));
             var encoder = new SixLabors.ImageSharp.Formats.Jpeg.JpegEncoder { Quality = 85 };
-            await image.SaveAsync(filePath, encoder);
+            await image.SaveAsJpegAsync(filePath, encoder);
         }
 
         user.AvatarUrl = $"/uploads/users/{id}.jpg";
