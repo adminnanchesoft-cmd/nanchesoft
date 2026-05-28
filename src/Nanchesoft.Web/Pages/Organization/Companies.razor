@@ -1,6 +1,208 @@
 @page "/organization/companies"
+@using System.Net.Http.Json
+@using Microsoft.AspNetCore.Components.Forms
+@using Nanchesoft.Web.Services.Companies
+@inject Nanchesoft.Web.State.AppState AppState
+@inject CompanyApiService CompanyApi
+@inject IHttpClientFactory HttpClientFactory
 
 <PageTitle>Empresas | Nanchesoft</PageTitle>
 
+<div class="ns-logo-panel">
+    <div class="ns-logo-panel__avatar">
+        @if (!string.IsNullOrWhiteSpace(_currentLogoUrl))
+        {
+            <img src="@_currentLogoUrl" alt="Logo" referrerpolicy="no-referrer" />
+        }
+        else
+        {
+            <span class="ns-logo-panel__initials">@GetInitials(AppState.CurrentCompanyName)</span>
+        }
+    </div>
+    <div class="ns-logo-panel__info">
+        <div class="ns-logo-panel__eyebrow">Logo de la empresa</div>
+        <div class="ns-logo-panel__name">@(string.IsNullOrWhiteSpace(AppState.CurrentCompanyName) ? "Sin empresa" : AppState.CurrentCompanyName)</div>
+        @if (!AppState.CurrentCompanyId.HasValue)
+        {
+            <div class="ns-logo-panel__hint">Selecciona una empresa para administrar su logo.</div>
+        }
+        else
+        {
+            <label class="ns-logo-panel__btn">
+                <span>@(_uploading ? "Subiendo…" : "Cambiar logo")</span>
+                <InputFile OnChange="OnLogoSelected" accept="image/*" disabled="@_uploading" />
+            </label>
+        }
+        @if (!string.IsNullOrEmpty(_message))
+        {
+            <div class="ns-logo-panel__alert ns-logo-panel__alert--@_messageKind">@_message</div>
+        }
+    </div>
+</div>
+
 <CatalogCrudPage CatalogKey="companies" />
 
+<style>
+    .ns-logo-panel {
+        display: flex;
+        gap: 18px;
+        align-items: center;
+        padding: 18px 20px;
+        margin-bottom: 18px;
+        background: #fff;
+        border: 1px solid #e2e8f0;
+        border-radius: 14px;
+        box-shadow: 0 6px 18px rgba(11, 31, 60, .05);
+    }
+    .ns-logo-panel__avatar {
+        width: 72px;
+        height: 72px;
+        border-radius: 14px;
+        overflow: hidden;
+        flex: 0 0 auto;
+        background: linear-gradient(135deg, #16a34a, #15803d);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        color: #fff;
+        font-size: 1.5rem;
+        font-weight: 800;
+    }
+    .ns-logo-panel__avatar img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        display: block;
+    }
+    .ns-logo-panel__info { flex: 1; min-width: 0; }
+    .ns-logo-panel__eyebrow {
+        font-size: .72rem;
+        text-transform: uppercase;
+        letter-spacing: .04em;
+        color: #51637c;
+        font-weight: 700;
+    }
+    .ns-logo-panel__name {
+        font-size: 1.1rem;
+        font-weight: 800;
+        color: #0b1f3c;
+        margin: 2px 0 8px;
+    }
+    .ns-logo-panel__hint { color: #7888a0; font-size: .88rem; }
+    .ns-logo-panel__btn {
+        position: relative;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        height: 38px;
+        padding: 0 14px;
+        border: 1px solid #dce4ee;
+        border-radius: 10px;
+        background: #fff;
+        color: #1f3350;
+        font-weight: 700;
+        font-size: .88rem;
+        cursor: pointer;
+        overflow: hidden;
+    }
+    .ns-logo-panel__btn:hover { background: #f8fafc; border-color: #b9c6d8; }
+    .ns-logo-panel__btn :global(input[type="file"]) {
+        position: absolute;
+        inset: 0;
+        opacity: 0;
+        cursor: pointer;
+    }
+    .ns-logo-panel__alert {
+        margin-top: 10px;
+        padding: 9px 12px;
+        border-radius: 10px;
+        font-size: .85rem;
+        font-weight: 600;
+    }
+    .ns-logo-panel__alert--success {
+        color: #166534; background: #f0fdf4; border: 1px solid #bbf7d0;
+    }
+    .ns-logo-panel__alert--error {
+        color: #b91c1c; background: #fef2f2; border: 1px solid #fecaca;
+    }
+</style>
+
+@code {
+    private string? _currentLogoUrl;
+    private bool _uploading;
+    private string? _message;
+    private string _messageKind = "success";
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        await LoadCurrentLogoAsync();
+    }
+
+    private async Task LoadCurrentLogoAsync()
+    {
+        if (!AppState.CurrentCompanyId.HasValue) return;
+        try
+        {
+            var client = HttpClientFactory.CreateClient("Nanchesoft.Api");
+            var companies = await client.GetFromJsonAsync<List<CompanyRowDto>>("/api/organization/companies");
+            var company = companies?.FirstOrDefault(x => x.CompanyId == AppState.CurrentCompanyId.Value);
+            _currentLogoUrl = company?.LogoUrl;
+            StateHasChanged();
+        }
+        catch
+        {
+            // si falla la lectura, simplemente no se muestra el logo
+        }
+    }
+
+    private async Task OnLogoSelected(InputFileChangeEventArgs e)
+    {
+        if (!AppState.CurrentCompanyId.HasValue) return;
+        var file = e.File;
+        if (file is null) return;
+
+        _uploading = true;
+        _message = null;
+        StateHasChanged();
+
+        try
+        {
+            using var stream = file.OpenReadStream(maxAllowedSize: 5 * 1024 * 1024);
+            var result = await CompanyApi.UploadLogoAsync(
+                AppState.CurrentCompanyId.Value, stream, file.Name, file.ContentType);
+
+            if (result.Success)
+            {
+                _currentLogoUrl = result.LogoUrl;
+                _message = "Logo actualizado.";
+                _messageKind = "success";
+            }
+            else
+            {
+                _message = result.ErrorMessage ?? "No fue posible subir el logo.";
+                _messageKind = "error";
+            }
+        }
+        catch (Exception ex)
+        {
+            _message = "Error al procesar la imagen: " + ex.Message;
+            _messageKind = "error";
+        }
+        finally
+        {
+            _uploading = false;
+            StateHasChanged();
+        }
+    }
+
+    private static string GetInitials(string? name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return "—";
+        var t = name.Trim();
+        var parts = t.Split(new[] { ' ', '-', '_' }, StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length >= 2)
+            return (parts[0][0].ToString() + parts[1][0].ToString()).ToUpperInvariant();
+        return t.Length >= 2 ? t.Substring(0, 2).ToUpperInvariant() : t.ToUpperInvariant();
+    }
+}
