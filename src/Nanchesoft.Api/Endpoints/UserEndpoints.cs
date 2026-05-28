@@ -314,6 +314,10 @@ public static class UserEndpoints
         var tenantId = ApiTenantScope.ResolveTenantId(httpContext);
         var isPlatformOwner = ApiTenantScope.IsPlatformOwner(httpContext);
 
+        var callerUserId = ApiTenantScope.ResolveUserId(httpContext);
+        if (!isPlatformOwner && (callerUserId is null || callerUserId.Value != id))
+            return Results.StatusCode(403);
+
         var user = await db.Users.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id);
         if (user is null)
             return Results.NotFound(new { message = "Usuario no encontrado." });
@@ -341,6 +345,10 @@ public static class UserEndpoints
     {
         var tenantId = ApiTenantScope.ResolveTenantId(httpContext);
         var isPlatformOwner = ApiTenantScope.IsPlatformOwner(httpContext);
+
+        var callerUserId = ApiTenantScope.ResolveUserId(httpContext);
+        if (!isPlatformOwner && (callerUserId is null || callerUserId.Value != id))
+            return Results.StatusCode(403);
 
         var user = await db.Users.FirstOrDefaultAsync(x => x.Id == id);
         if (user is null)
@@ -379,6 +387,10 @@ public static class UserEndpoints
     {
         var tenantId = ApiTenantScope.ResolveTenantId(httpContext);
         var isPlatformOwner = ApiTenantScope.IsPlatformOwner(httpContext);
+
+        var callerUserId = ApiTenantScope.ResolveUserId(httpContext);
+        if (!isPlatformOwner && (callerUserId is null || callerUserId.Value != id))
+            return Results.StatusCode(403);
 
         if (file is null || file.Length == 0)
             return Results.BadRequest(new { message = "No se recibió ninguna imagen." });
