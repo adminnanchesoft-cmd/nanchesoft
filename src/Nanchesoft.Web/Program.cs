@@ -33,7 +33,11 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Services
     .AddRazorComponents()
-    .AddInteractiveServerComponents();
+    .AddInteractiveServerComponents()
+    .AddHubOptions(options =>
+    {
+        options.MaximumReceiveMessageSize = 5 * 1024 * 1024; // 5 MB (suficiente para fotos de perfil)
+    });
 
 builder.Services.AddHttpContextAccessor();
 
