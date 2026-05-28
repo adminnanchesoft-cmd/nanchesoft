@@ -44,6 +44,7 @@ public static class TenantEndpoints
                 PlanId = x.PlanId,
                 PlanName = x.Plan != null ? x.Plan.Name : string.Empty,
                 Status = x.Status.ToString(),
+                LogoUrl = x.LogoUrl,
                 IsActive = x.IsActive,
                 CompaniesCount = db.Companies.Count(y => y.TenantId == x.Id),
                 UsersCount = db.Users.Count(y => y.TenantId == x.Id)
@@ -374,6 +375,7 @@ public sealed class TenantListItemDto
     public Guid PlanId { get; set; }
     public string PlanName { get; set; } = string.Empty;
     public string Status { get; set; } = string.Empty;
+    public string? LogoUrl { get; set; }
     public bool IsActive { get; set; }
     public int CompaniesCount { get; set; }
     public int UsersCount { get; set; }
