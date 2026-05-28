@@ -1,3 +1,4 @@
+using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Nanchesoft.Web.Services.Catalogs;
@@ -176,6 +177,56 @@ public sealed class CompanyApiService
         return await GetCatalogAsync();
     }
 
+    public async Task<LogoUploadResult> UploadLogoAsync(Guid companyId, Stream stream, string fileName, string contentType)
+    {
+        var client = _httpClientFactory.CreateClient("Nanchesoft.Api");
+
+        using var content = new MultipartFormDataContent();
+        var streamContent = new StreamContent(stream);
+        streamContent.Headers.ContentType = new MediaTypeHeaderValue(contentType);
+        content.Add(streamContent, "file", fileName);
+
+        var response = await client.PostAsync($"/api/organization/companies/{companyId:D}/logo", content);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            var err = await TryReadErrorMessageAsync(response);
+            return new LogoUploadResult
+            {
+                Success = false,
+                ErrorMessage = err ?? "No fue posible subir el logo."
+            };
+        }
+
+        var payload = await response.Content.ReadFromJsonAsync<LogoUploadResponse>();
+        if (payload is null)
+        {
+            return new LogoUploadResult { Success = false, ErrorMessage = "Respuesta inválida del servidor." };
+        }
+
+        return new LogoUploadResult
+        {
+            Success = true,
+            LogoUrl = payload.LogoUrl
+        };
+    }
+
+    private static async Task<string?> TryReadErrorMessageAsync(HttpResponseMessage response)
+    {
+        try
+        {
+            var body = await response.Content.ReadAsStringAsync();
+            if (string.IsNullOrWhiteSpace(body)) return null;
+            using var doc = JsonDocument.Parse(body);
+            if (doc.RootElement.TryGetProperty("message", out var message))
+                return message.GetString();
+        }
+        catch
+        {
+        }
+        return null;
+    }
+
     private CreateOrUpdateCompanyRequest MapRequest(JsonElement payload)
     {
         var request = new CreateOrUpdateCompanyRequest
@@ -325,7 +376,20 @@ public sealed class CompanyRowDto
     public string LegalName { get; set; } = string.Empty;
     public string Rfc { get; set; } = string.Empty;
     public string TimeZone { get; set; } = string.Empty;
+    public string? LogoUrl { get; set; }
     public bool IsActive { get; set; }
+}
+
+public sealed class LogoUploadResult
+{
+    public bool Success { get; set; }
+    public string? ErrorMessage { get; set; }
+    public string? LogoUrl { get; set; }
+}
+
+internal sealed class LogoUploadResponse
+{
+    public string LogoUrl { get; set; } = string.Empty;
 }
 
 public sealed class CompanyTenantLookupDto
