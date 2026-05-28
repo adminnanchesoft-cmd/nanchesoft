@@ -20,6 +20,7 @@ public static class UserEndpoints
         group.MapPost("/", CreateUserAsync);
         group.MapPost("/{id:guid}/avatar", UploadAvatarAsync).DisableAntiforgery();
         group.MapPut("/{id:guid}", UpdateUserAsync);
+        group.MapPut("/{id:guid}/profile", UpdateOwnProfileAsync);
         group.MapDelete("/{id:guid}", DeleteUserAsync);
 
         return app;
@@ -304,6 +305,43 @@ public static class UserEndpoints
         return Results.Ok(new { success = true });
     }
 
+    private static async Task<IResult> UpdateOwnProfileAsync(
+        Guid id,
+        UpdateOwnProfileRequest request,
+        HttpContext httpContext,
+        NanchesoftDbContext db)
+    {
+        var tenantId = ApiTenantScope.ResolveTenantId(httpContext);
+        var isPlatformOwner = ApiTenantScope.IsPlatformOwner(httpContext);
+
+        var user = await db.Users.FirstOrDefaultAsync(x => x.Id == id);
+        if (user is null)
+            return Results.NotFound(new { message = "Usuario no encontrado." });
+        if (!isPlatformOwner && tenantId.HasValue && user.TenantId != tenantId.Value)
+            return Results.NotFound(new { message = "Usuario no encontrado." });
+
+        var firstName = (request.FirstName ?? string.Empty).Trim();
+        var lastName = (request.LastName ?? string.Empty).Trim();
+        if (string.IsNullOrWhiteSpace(firstName) || string.IsNullOrWhiteSpace(lastName))
+            return Results.BadRequest(new { message = "Nombre y apellido son obligatorios." });
+
+        user.FirstName = firstName;
+        user.LastName = lastName;
+        user.Phone = string.IsNullOrWhiteSpace(request.Phone) ? null : request.Phone.Trim();
+        user.BirthDate = request.BirthDate;
+
+        await db.SaveChangesAsync();
+
+        return Results.Ok(new
+        {
+            firstName = user.FirstName,
+            lastName = user.LastName,
+            phone = user.Phone ?? string.Empty,
+            birthDate = user.BirthDate,
+            displayName = user.GetDisplayName()
+        });
+    }
+
     private static async Task<IResult> UploadAvatarAsync(
         Guid id,
         IFormFile file,
@@ -407,4 +445,12 @@ public sealed class CreateOrUpdateUserRequest
     public bool MustChangePassword { get; set; } = true;
     public bool IsLocked { get; set; }
     public bool IsActive { get; set; } = true;
+}
+
+public sealed class UpdateOwnProfileRequest
+{
+    public string? FirstName { get; set; }
+    public string? LastName { get; set; }
+    public string? Phone { get; set; }
+    public DateTime? BirthDate { get; set; }
 }
