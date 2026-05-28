@@ -64,6 +64,7 @@ builder.Services.AddScoped<CompanyApiService>();
 builder.Services.AddScoped<BranchApiService>();
 builder.Services.AddScoped<WarehouseApiService>();
 builder.Services.AddScoped<UserApiService>();
+builder.Services.AddScoped<ProfileApiService>();
 builder.Services.AddScoped<RoleApiService>();
 builder.Services.AddScoped<PermissionApiService>();
 builder.Services.AddScoped<SessionApiService>();
