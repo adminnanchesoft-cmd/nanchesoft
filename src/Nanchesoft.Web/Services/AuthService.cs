@@ -238,6 +238,7 @@ public sealed class AuthService
         _authState.Email = payload.Email;
         _authState.FirstName = payload.FirstName;
         _authState.LastName = payload.LastName;
+        _authState.AvatarUrl = payload.AvatarUrl ?? string.Empty;
         _authState.RoleName = string.IsNullOrWhiteSpace(payload.RoleName) ? "Tenant admin" : payload.RoleName;
         _authState.IsPlatformOwner = payload.IsPlatformOwner;
         _authState.MustChangePassword = payload.MustChangePassword;
@@ -326,6 +327,7 @@ public sealed class AuthService
         public string Email { get; set; } = string.Empty;
         public string FirstName { get; set; } = string.Empty;
         public string LastName { get; set; } = string.Empty;
+        public string AvatarUrl { get; set; } = string.Empty;
         public string RoleName { get; set; } = string.Empty;
         public Guid? UserId { get; set; }
         public Guid? TenantId { get; set; }
