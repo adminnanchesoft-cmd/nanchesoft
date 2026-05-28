@@ -3,6 +3,7 @@ using Nanchesoft.Api.Auth;
 using Nanchesoft.Domain.Entities;
 using Nanchesoft.Domain.Enums;
 using Nanchesoft.Persistence.Context;
+using SixLabors.ImageSharp.Processing;
 
 namespace Nanchesoft.Api.Endpoints;
 
@@ -16,6 +17,7 @@ public static class UserEndpoints
         group.MapGet("/tenants", GetTenantsAsync);
         group.MapGet("/roles", GetRolesAsync);
         group.MapPost("/", CreateUserAsync);
+        group.MapPost("/{id:guid}/avatar", UploadAvatarAsync).DisableAntiforgery();
         group.MapPut("/{id:guid}", UpdateUserAsync);
         group.MapDelete("/{id:guid}", DeleteUserAsync);
 
@@ -299,6 +301,56 @@ public static class UserEndpoints
         db.Users.Remove(user);
         await db.SaveChangesAsync();
         return Results.Ok(new { success = true });
+    }
+
+    private static async Task<IResult> UploadAvatarAsync(
+        Guid id,
+        IFormFile file,
+        HttpContext httpContext,
+        NanchesoftDbContext db,
+        IConfiguration configuration)
+    {
+        var tenantId = ApiTenantScope.ResolveTenantId(httpContext);
+        var isPlatformOwner = ApiTenantScope.IsPlatformOwner(httpContext);
+
+        if (file is null || file.Length == 0)
+            return Results.BadRequest(new { message = "No se recibió ninguna imagen." });
+
+        const long maxBytes = 5 * 1024 * 1024;
+        if (file.Length > maxBytes)
+            return Results.BadRequest(new { message = "La imagen no debe superar 5 MB." });
+
+        var allowed = new[] { "image/jpeg", "image/png", "image/webp" };
+        if (!allowed.Contains(file.ContentType))
+            return Results.BadRequest(new { message = "Formato no permitido. Usa JPG, PNG o WEBP." });
+
+        var user = await db.Users.FirstOrDefaultAsync(x => x.Id == id);
+        if (user is null)
+            return Results.NotFound(new { message = "Usuario no encontrado." });
+        if (!isPlatformOwner && tenantId.HasValue && user.TenantId != tenantId.Value)
+            return Results.NotFound(new { message = "Usuario no encontrado." });
+
+        var root = configuration["Uploads:RootPath"] ?? "/opt/nanchesoft/uploads";
+        var usersDir = Path.Combine(root, "users");
+        Directory.CreateDirectory(usersDir);
+        var filePath = Path.Combine(usersDir, $"{id}.jpg");
+
+        using (var image = await SixLabors.ImageSharp.Image.LoadAsync(file.OpenReadStream()))
+        {
+            var size = Math.Min(image.Width, image.Height);
+            var x = (image.Width - size) / 2;
+            var y = (image.Height - size) / 2;
+            image.Mutate(ctx => ctx
+                .Crop(new SixLabors.ImageSharp.Rectangle(x, y, size, size))
+                .Resize(256, 256));
+            var encoder = new SixLabors.ImageSharp.Formats.Jpeg.JpegEncoder { Quality = 85 };
+            await image.SaveAsync(filePath, encoder);
+        }
+
+        user.AvatarUrl = $"/uploads/users/{id}.jpg";
+        await db.SaveChangesAsync();
+
+        return Results.Ok(new { avatarUrl = user.AvatarUrl });
     }
 
     private static UserStatus ResolveStatus(bool isActive, bool isLocked)
