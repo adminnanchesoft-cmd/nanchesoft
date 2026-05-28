@@ -401,7 +401,7 @@ app.MapPost("/api/auth/google", async (AuthGoogleRequest request, NanchesoftDbCo
         branchId = branch?.Id,
         branchName = branch?.Name ?? string.Empty,
         requiresTenantSelection = false,
-        mustChangePassword = user.MustChangePassword
+        mustChangePassword = false
     });
 });
 
