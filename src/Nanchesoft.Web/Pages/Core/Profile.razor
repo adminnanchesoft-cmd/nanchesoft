@@ -1,14 +1,467 @@
 @page "/profile"
-
+@using Microsoft.AspNetCore.Components.Forms
+@using Nanchesoft.Web.Services.Security
 @inject AuthState AuthState
+@inject AuthService AuthService
+@inject ProfileApiService ProfileApi
 
-<PageTitle>Perfil | Nanchesoft</PageTitle>
+<PageTitle>Mi perfil | Nanchesoft</PageTitle>
 
-<div class="ns-dashboard-grid">
-    <div class="ns-card">
-        <h1>Mi perfil</h1>
-        <p><strong>Usuario:</strong> @AuthState.DisplayName</p>
-        <p><strong>Autenticado:</strong> @AuthState.IsAuthenticated</p>
-        <p><strong>Token cargado:</strong> @(!string.IsNullOrWhiteSpace(AuthState.Token))</p>
-    </div>
+<div class="ns-profile">
+    <header class="ns-profile__hero">
+        <div class="ns-profile__avatar">
+            @if (!string.IsNullOrWhiteSpace(_previewAvatarUrl))
+            {
+                <img src="@_previewAvatarUrl" alt="@AuthState.DisplayName" referrerpolicy="no-referrer" />
+            }
+            else if (!string.IsNullOrWhiteSpace(AuthState.AvatarUrl))
+            {
+                <img src="@AuthState.AvatarUrl" alt="@AuthState.DisplayName" referrerpolicy="no-referrer" />
+            }
+            else
+            {
+                <span class="ns-profile__avatar-initials">@GetInitials()</span>
+            }
+        </div>
+
+        <div class="ns-profile__head">
+            <h1>@AuthState.DisplayName</h1>
+            <p>@AuthState.Email · @AuthState.RoleName</p>
+            <div class="ns-profile__avatar-actions">
+                <label class="ns-profile__btn ns-profile__btn--secondary">
+                    <span>@(_uploadingAvatar ? "Subiendo…" : "Cambiar foto")</span>
+                    <InputFile OnChange="OnAvatarSelected" accept="image/*" disabled="@_uploadingAvatar" />
+                </label>
+            </div>
+            @if (!string.IsNullOrEmpty(_avatarMessage))
+            {
+                <div class="ns-profile__alert ns-profile__alert--@_avatarMessageKind">@_avatarMessage</div>
+            }
+        </div>
+    </header>
+
+    <section class="ns-profile__card">
+        <h2 class="ns-profile__card-title">Información personal</h2>
+        <p class="ns-profile__card-sub">Solo tú puedes editar estos datos.</p>
+
+        @if (_loading)
+        {
+            <div class="ns-profile__loading">Cargando…</div>
+        }
+        else
+        {
+            <div class="ns-profile__grid">
+                <div class="ns-profile__field">
+                    <label>Nombre</label>
+                    <input type="text" @bind="_firstName" placeholder="Tu nombre" />
+                </div>
+                <div class="ns-profile__field">
+                    <label>Apellidos</label>
+                    <input type="text" @bind="_lastName" placeholder="Tus apellidos" />
+                </div>
+                <div class="ns-profile__field">
+                    <label>Teléfono</label>
+                    <input type="tel" @bind="_phone" placeholder="Opcional" />
+                </div>
+                <div class="ns-profile__field">
+                    <label>Fecha de nacimiento</label>
+                    <input type="date" @bind="_birthDate" />
+                </div>
+                <div class="ns-profile__field ns-profile__field--full">
+                    <label>Correo electrónico</label>
+                    <input type="email" value="@AuthState.Email" readonly />
+                    <small>Para cambiar el correo contacta al administrador.</small>
+                </div>
+            </div>
+
+            @if (!string.IsNullOrEmpty(_formMessage))
+            {
+                <div class="ns-profile__alert ns-profile__alert--@_formMessageKind">@_formMessage</div>
+            }
+
+            <div class="ns-profile__actions">
+                <button type="button" class="ns-profile__btn ns-profile__btn--primary"
+                        @onclick="SaveAsync" disabled="@_saving">
+                    @(_saving ? "Guardando…" : "Guardar cambios")
+                </button>
+            </div>
+        }
+    </section>
 </div>
+
+<style>
+    .ns-profile {
+        max-width: 880px;
+        margin: 0 auto;
+        padding: 32px 24px 64px;
+        color: #0b1f3c;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Inter", system-ui, sans-serif;
+    }
+
+    .ns-profile__hero {
+        display: flex;
+        align-items: center;
+        gap: 24px;
+        background: #fff;
+        border: 1px solid #e2e8f0;
+        border-radius: 22px;
+        padding: 26px;
+        box-shadow: 0 12px 30px rgba(11, 31, 60, .06);
+        margin-bottom: 26px;
+    }
+
+    .ns-profile__avatar {
+        width: 96px;
+        height: 96px;
+        border-radius: 50%;
+        overflow: hidden;
+        flex: 0 0 auto;
+        background: linear-gradient(135deg, #14c8ff, #0078d4);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        color: #fff;
+        font-size: 2rem;
+        font-weight: 800;
+        letter-spacing: .5px;
+        box-shadow: 0 12px 24px rgba(0, 120, 212, .22);
+    }
+
+    .ns-profile__avatar img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        display: block;
+    }
+
+    .ns-profile__head h1 {
+        margin: 0;
+        font-size: 1.7rem;
+        font-weight: 800;
+        letter-spacing: -.02em;
+    }
+
+    .ns-profile__head p {
+        margin: 4px 0 14px;
+        color: #51637c;
+        font-size: .92rem;
+    }
+
+    .ns-profile__avatar-actions {
+        display: inline-flex;
+        gap: 10px;
+    }
+
+    .ns-profile__btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        height: 40px;
+        padding: 0 16px;
+        border-radius: 12px;
+        border: 1px solid #dce4ee;
+        background: #fff;
+        color: #1f3350;
+        font-size: .9rem;
+        font-weight: 700;
+        cursor: pointer;
+        transition: background .14s ease, border-color .14s ease, transform .14s ease;
+        position: relative;
+        overflow: hidden;
+    }
+
+    .ns-profile__btn:hover {
+        background: #f8fafc;
+        border-color: #b9c6d8;
+    }
+
+    .ns-profile__btn--secondary :global(input[type="file"]) {
+        position: absolute;
+        inset: 0;
+        opacity: 0;
+        cursor: pointer;
+    }
+
+    .ns-profile__btn--primary {
+        height: 46px;
+        color: #fff;
+        border: 0;
+        padding: 0 22px;
+        background: linear-gradient(135deg, #14c8ff 0%, #0078d4 100%);
+        box-shadow: 0 12px 26px rgba(0, 120, 212, .26);
+    }
+
+    .ns-profile__btn--primary:hover:not(:disabled) {
+        filter: brightness(1.05);
+        transform: translateY(-1px);
+    }
+
+    .ns-profile__btn:disabled {
+        opacity: .7;
+        cursor: wait;
+    }
+
+    .ns-profile__card {
+        background: #fff;
+        border: 1px solid #e2e8f0;
+        border-radius: 22px;
+        padding: 28px;
+        box-shadow: 0 12px 30px rgba(11, 31, 60, .06);
+    }
+
+    .ns-profile__card-title {
+        margin: 0;
+        font-size: 1.2rem;
+        font-weight: 800;
+        letter-spacing: -.01em;
+    }
+
+    .ns-profile__card-sub {
+        margin: 4px 0 22px;
+        color: #51637c;
+        font-size: .88rem;
+    }
+
+    .ns-profile__loading {
+        padding: 24px 0;
+        text-align: center;
+        color: #51637c;
+    }
+
+    .ns-profile__grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px 18px;
+    }
+
+    .ns-profile__field {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+    }
+
+    .ns-profile__field--full {
+        grid-column: 1 / -1;
+    }
+
+    .ns-profile__field label {
+        font-size: .82rem;
+        font-weight: 700;
+        color: #1f3350;
+    }
+
+    .ns-profile__field input {
+        height: 46px;
+        padding: 0 14px;
+        border-radius: 12px;
+        border: 1px solid #dce4ee;
+        background: #fff;
+        color: #0b1f3c;
+        font-size: .95rem;
+        outline: none;
+        transition: border-color .14s ease, box-shadow .14s ease;
+    }
+
+    .ns-profile__field input:focus {
+        border-color: #14c8ff;
+        box-shadow: 0 0 0 4px rgba(20, 200, 255, .14);
+    }
+
+    .ns-profile__field input[readonly] {
+        background: #f7f9fc;
+        color: #51637c;
+    }
+
+    .ns-profile__field small {
+        color: #7888a0;
+        font-size: .75rem;
+    }
+
+    .ns-profile__alert {
+        margin-top: 18px;
+        padding: 12px 14px;
+        border-radius: 12px;
+        font-size: .88rem;
+        font-weight: 600;
+    }
+
+    .ns-profile__alert--success {
+        color: #166534;
+        background: #f0fdf4;
+        border: 1px solid #bbf7d0;
+    }
+
+    .ns-profile__alert--error {
+        color: #b91c1c;
+        background: #fef2f2;
+        border: 1px solid #fecaca;
+    }
+
+    .ns-profile__actions {
+        margin-top: 22px;
+        display: flex;
+        justify-content: flex-end;
+    }
+
+    @@media (max-width: 640px) {
+        .ns-profile__hero {
+            flex-direction: column;
+            align-items: flex-start;
+        }
+
+        .ns-profile__grid {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
+
+@code {
+    private string _firstName = string.Empty;
+    private string _lastName = string.Empty;
+    private string _phone = string.Empty;
+    private DateTime? _birthDate;
+
+    private bool _loading = true;
+    private bool _saving;
+    private bool _uploadingAvatar;
+
+    private string? _formMessage;
+    private string _formMessageKind = "success";
+
+    private string? _avatarMessage;
+    private string _avatarMessageKind = "success";
+
+    private string? _previewAvatarUrl;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+
+        await AuthService.RestoreSessionAsync();
+        await LoadProfileAsync();
+    }
+
+    private async Task LoadProfileAsync()
+    {
+        _loading = true;
+        StateHasChanged();
+        try
+        {
+            var profile = await ProfileApi.GetMyProfileAsync();
+            if (profile is not null)
+            {
+                _firstName = profile.FirstName ?? string.Empty;
+                _lastName = profile.LastName ?? string.Empty;
+                _phone = profile.Phone ?? string.Empty;
+                _birthDate = profile.BirthDate;
+            }
+            else
+            {
+                _firstName = AuthState.FirstName;
+                _lastName = AuthState.LastName;
+            }
+        }
+        finally
+        {
+            _loading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        if (_saving) return;
+
+        if (string.IsNullOrWhiteSpace(_firstName) || string.IsNullOrWhiteSpace(_lastName))
+        {
+            _formMessage = "Nombre y apellido son obligatorios.";
+            _formMessageKind = "error";
+            return;
+        }
+
+        _saving = true;
+        _formMessage = null;
+        StateHasChanged();
+
+        try
+        {
+            var result = await ProfileApi.UpdateAsync(new UpdateProfileRequest
+            {
+                FirstName = _firstName.Trim(),
+                LastName = _lastName.Trim(),
+                Phone = string.IsNullOrWhiteSpace(_phone) ? null : _phone.Trim(),
+                BirthDate = _birthDate
+            });
+
+            if (result.Success)
+            {
+                _formMessage = "Cambios guardados.";
+                _formMessageKind = "success";
+                if (result.Profile is not null)
+                {
+                    _phone = result.Profile.Phone ?? string.Empty;
+                    _birthDate = result.Profile.BirthDate;
+                }
+            }
+            else
+            {
+                _formMessage = result.ErrorMessage ?? "No fue posible guardar.";
+                _formMessageKind = "error";
+            }
+        }
+        finally
+        {
+            _saving = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task OnAvatarSelected(InputFileChangeEventArgs e)
+    {
+        var file = e.File;
+        if (file is null) return;
+
+        _uploadingAvatar = true;
+        _avatarMessage = null;
+        StateHasChanged();
+
+        try
+        {
+            using var stream = file.OpenReadStream(maxAllowedSize: 5 * 1024 * 1024);
+            var result = await ProfileApi.UploadAvatarAsync(stream, file.Name, file.ContentType);
+
+            if (result.Success)
+            {
+                _previewAvatarUrl = result.AvatarUrl;
+                _avatarMessage = "Foto actualizada.";
+                _avatarMessageKind = "success";
+            }
+            else
+            {
+                _avatarMessage = result.ErrorMessage ?? "No fue posible subir la imagen.";
+                _avatarMessageKind = "error";
+            }
+        }
+        catch (Exception ex)
+        {
+            _avatarMessage = "Error al leer el archivo: " + ex.Message;
+            _avatarMessageKind = "error";
+        }
+        finally
+        {
+            _uploadingAvatar = false;
+            StateHasChanged();
+        }
+    }
+
+    private string GetInitials()
+    {
+        var name = AuthState.DisplayName ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(name)) return "?";
+        var parts = name.Trim().Split(new[] { ' ', '-', '_' }, StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length >= 2)
+            return (parts[0][0].ToString() + parts[1][0].ToString()).ToUpperInvariant();
+        return name.Length >= 2 ? name.Substring(0, 2).ToUpperInvariant() : name.ToUpperInvariant();
+    }
+}
