@@ -291,6 +291,7 @@ public sealed class AuthService
                 Email = _authState.Email,
                 FirstName = _authState.FirstName,
                 LastName = _authState.LastName,
+                AvatarUrl = _authState.AvatarUrl,
                 RoleName = _authState.RoleName,
                 UserId = _authState.UserId,
                 TenantId = _authState.TenantId,
