@@ -278,6 +278,8 @@ public sealed class AuthService
         return null;
     }
 
+    public Task RefreshPersistedSessionAsync() => PersistSessionAsync();
+
     private async Task PersistSessionAsync()
     {
         try
