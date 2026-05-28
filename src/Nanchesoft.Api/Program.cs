@@ -277,6 +277,134 @@ app.MapPost("/api/auth/refresh", async (AuthRefreshRequest request, NanchesoftDb
     return Results.Ok(new { token = newAccessToken });
 });
 
+app.MapPost("/api/auth/google", async (AuthGoogleRequest request, NanchesoftDbContext db, IJwtTokenService jwtTokenService, IConfiguration configuration) =>
+{
+    if (string.IsNullOrWhiteSpace(request.IdToken))
+        return Results.BadRequest(new { message = "Token de Google requerido." });
+
+    var googleClientId = configuration["GoogleAuth:ClientId"]
+        ?? "612605020381-r0jpre14i07at9cegusvgpdp5ai066oi.apps.googleusercontent.com";
+
+    Google.Apis.Auth.GoogleJsonWebSignature.Payload payload;
+    try
+    {
+        var settings = new Google.Apis.Auth.GoogleJsonWebSignature.ValidationSettings
+        {
+            Audience = new[] { googleClientId }
+        };
+        payload = await Google.Apis.Auth.GoogleJsonWebSignature.ValidateAsync(request.IdToken, settings);
+    }
+    catch
+    {
+        return Results.Unauthorized();
+    }
+
+    var email = (payload.Email ?? string.Empty).Trim();
+    if (string.IsNullOrWhiteSpace(email))
+        return Results.Unauthorized();
+
+    var user = await db.Users
+        .AsNoTracking()
+        .FirstOrDefaultAsync(x => x.Email == email && x.IsActive && !x.IsLocked);
+
+    if (user is null)
+        return Results.Json(new { message = "Tu cuenta de Google no está registrada en Nanchesoft. Contacta a tu administrador." }, statusCode: 401);
+
+    var tenant = await db.Tenants
+        .AsNoTracking()
+        .FirstOrDefaultAsync(x => x.Id == user.TenantId && x.IsActive);
+
+    if (tenant is null)
+    {
+        tenant = await (
+            from ur in db.UserRoles.AsNoTracking()
+            join r in db.Roles.AsNoTracking() on ur.RoleId equals r.Id
+            join t in db.Tenants.AsNoTracking() on r.TenantId equals t.Id
+            where ur.UserId == user.Id && ur.IsActive && t.IsActive
+            orderby t.Name
+            select t)
+            .FirstOrDefaultAsync();
+    }
+
+    var effectiveTenantId = tenant?.Id ?? user.TenantId;
+
+    var company = await db.Companies
+        .AsNoTracking()
+        .Where(x => x.TenantId == effectiveTenantId && x.IsActive)
+        .OrderBy(x => x.Name)
+        .FirstOrDefaultAsync();
+
+    var branch = company is null
+        ? null
+        : await db.Branches
+            .AsNoTracking()
+            .Where(x => x.TenantId == effectiveTenantId && x.CompanyId == company.Id && x.IsActive)
+            .OrderBy(x => x.Name)
+            .FirstOrDefaultAsync();
+
+    var roleInfos = await (
+        from ur in db.UserRoles.AsNoTracking()
+        join r in db.Roles.AsNoTracking() on ur.RoleId equals r.Id
+        where ur.UserId == user.Id && ur.IsActive
+        orderby r.IsSystemRole descending, r.Name
+        select new
+        {
+            r.Code,
+            r.Name
+        })
+        .ToListAsync();
+
+    var roleInfo = roleInfos.FirstOrDefault();
+
+    var trackedUser = await db.Users.FirstAsync(x => x.Id == user.Id);
+    trackedUser.LastLoginAt = DateTime.UtcNow;
+    await db.SaveChangesAsync();
+
+    var isPlatformOwner = roleInfos.Any(x =>
+        string.Equals(x.Code, "PLATFORM_OWNER", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(x.Code, "SYSTEM_ADMIN", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(x.Code, "OWNER", StringComparison.OrdinalIgnoreCase));
+
+    var accessToken = jwtTokenService.GenerateAccessToken(
+        user.Id, user.Username, user.Email, effectiveTenantId, isPlatformOwner);
+    var refreshTokenValue = jwtTokenService.GenerateRefreshToken();
+
+    var session = new Nanchesoft.Domain.Entities.UserSession
+    {
+        TenantId = effectiveTenantId,
+        UserId = user.Id,
+        RefreshToken = refreshTokenValue,
+        ExpiresAt = DateTime.UtcNow.AddDays(7),
+        IsActive = true,
+        CreatedBy = "auth-google"
+    };
+    db.UserSessions.Add(session);
+    await db.SaveChangesAsync();
+
+    return Results.Ok(new
+    {
+        token = accessToken,
+        refreshToken = refreshTokenValue,
+        userId = user.Id,
+        username = user.Username,
+        email = user.Email,
+        displayName = string.IsNullOrWhiteSpace(user.GetDisplayName()) ? user.Username : user.GetDisplayName(),
+        firstName = user.FirstName,
+        lastName = user.LastName,
+        roleName = roleInfo?.Name ?? "Tenant admin",
+        isPlatformOwner,
+        tenantId = effectiveTenantId,
+        tenantCode = tenant?.Code ?? string.Empty,
+        tenantName = tenant?.Name ?? string.Empty,
+        companyId = company?.Id,
+        companyName = company?.Name ?? string.Empty,
+        branchId = branch?.Id,
+        branchName = branch?.Name ?? string.Empty,
+        requiresTenantSelection = false,
+        mustChangePassword = user.MustChangePassword
+    });
+});
+
 app.MapPostalCodeEndpoints();
 app.MapCompanyEndpoints();
 app.MapBranchEndpoints();
@@ -402,4 +530,9 @@ public sealed class AuthChangePasswordRequest
 public sealed class AuthRefreshRequest
 {
     public string RefreshToken { get; set; } = string.Empty;
+}
+
+public sealed class AuthGoogleRequest
+{
+    public string IdToken { get; set; } = string.Empty;
 }
