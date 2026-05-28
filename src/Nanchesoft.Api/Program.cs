@@ -361,6 +361,15 @@ app.MapPost("/api/auth/google", async (AuthGoogleRequest request, NanchesoftDbCo
 
     var trackedUser = await db.Users.FirstAsync(x => x.Id == user.Id);
     trackedUser.LastLoginAt = DateTime.UtcNow;
+
+    // Rellenar SOLO campos vacíos con datos de Google (no pisar lo que el usuario ya tiene)
+    if (string.IsNullOrWhiteSpace(trackedUser.AvatarUrl) && !string.IsNullOrWhiteSpace(payload.Picture))
+        trackedUser.AvatarUrl = payload.Picture;
+    if (string.IsNullOrWhiteSpace(trackedUser.FirstName) && !string.IsNullOrWhiteSpace(payload.GivenName))
+        trackedUser.FirstName = payload.GivenName.Trim();
+    if (string.IsNullOrWhiteSpace(trackedUser.LastName) && !string.IsNullOrWhiteSpace(payload.FamilyName))
+        trackedUser.LastName = payload.FamilyName.Trim();
+
     await db.SaveChangesAsync();
 
     var isPlatformOwner = roleInfos.Any(x =>
@@ -394,6 +403,7 @@ app.MapPost("/api/auth/google", async (AuthGoogleRequest request, NanchesoftDbCo
         displayName = string.IsNullOrWhiteSpace(user.GetDisplayName()) ? user.Username : user.GetDisplayName(),
         firstName = user.FirstName,
         lastName = user.LastName,
+        avatarUrl = trackedUser.AvatarUrl ?? string.Empty,
         roleName = roleInfo?.Name ?? "Tenant admin",
         isPlatformOwner,
         tenantId = effectiveTenantId,
