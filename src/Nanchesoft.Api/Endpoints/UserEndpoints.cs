@@ -19,6 +19,7 @@ public static class UserEndpoints
         group.MapGet("/roles", GetRolesAsync);
         group.MapPost("/", CreateUserAsync);
         group.MapPost("/{id:guid}/avatar", UploadAvatarAsync).DisableAntiforgery();
+        group.MapGet("/{id:guid}/profile", GetOwnProfileAsync);
         group.MapPut("/{id:guid}", UpdateUserAsync);
         group.MapPut("/{id:guid}/profile", UpdateOwnProfileAsync);
         group.MapDelete("/{id:guid}", DeleteUserAsync);
@@ -303,6 +304,33 @@ public static class UserEndpoints
         db.Users.Remove(user);
         await db.SaveChangesAsync();
         return Results.Ok(new { success = true });
+    }
+
+    private static async Task<IResult> GetOwnProfileAsync(
+        Guid id,
+        HttpContext httpContext,
+        NanchesoftDbContext db)
+    {
+        var tenantId = ApiTenantScope.ResolveTenantId(httpContext);
+        var isPlatformOwner = ApiTenantScope.IsPlatformOwner(httpContext);
+
+        var user = await db.Users.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id);
+        if (user is null)
+            return Results.NotFound(new { message = "Usuario no encontrado." });
+        if (!isPlatformOwner && tenantId.HasValue && user.TenantId != tenantId.Value)
+            return Results.NotFound(new { message = "Usuario no encontrado." });
+
+        return Results.Ok(new
+        {
+            userId = user.Id,
+            firstName = user.FirstName,
+            lastName = user.LastName,
+            displayName = user.GetDisplayName(),
+            email = user.Email,
+            phone = user.Phone ?? string.Empty,
+            birthDate = user.BirthDate,
+            avatarUrl = user.AvatarUrl ?? string.Empty
+        });
     }
 
     private static async Task<IResult> UpdateOwnProfileAsync(
