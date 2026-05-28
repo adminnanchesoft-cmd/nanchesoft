@@ -38,6 +38,15 @@ public sealed class ApiTenantScopeHandler : DelegatingHandler
         {
             request.Headers.Add("X-Is-Platform-Owner", isPlatformOwner ? "true" : "false");
         }
+        // Agregar el JWT como Bearer (aditivo, no reemplaza los headers X-*)
+        var token = _authState.Token;
+        if (!string.IsNullOrWhiteSpace(token)
+            && token != "demo-token"
+            && request.Headers.Authorization is null)
+        {
+            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+        }
+
         return base.SendAsync(request, cancellationToken);
     }
 
