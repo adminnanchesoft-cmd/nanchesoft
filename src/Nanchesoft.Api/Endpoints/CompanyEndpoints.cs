@@ -1,6 +1,8 @@
 using Microsoft.EntityFrameworkCore;
 using Nanchesoft.Domain.Entities;
 using Nanchesoft.Persistence.Context;
+using SixLabors.ImageSharp;
+using SixLabors.ImageSharp.Processing;
 
 namespace Nanchesoft.Api.Endpoints;
 
@@ -13,6 +15,7 @@ public static class CompanyEndpoints
         group.MapGet("/", GetCompaniesAsync);
         group.MapGet("/tenants", GetTenantsAsync);
         group.MapPost("/", CreateCompanyAsync);
+        group.MapPost("/{id:guid}/logo", UploadCompanyLogoAsync).DisableAntiforgery();
         group.MapPut("/{id:guid}", UpdateCompanyAsync);
         group.MapDelete("/{id:guid}", DeleteCompanyAsync);
 
@@ -249,6 +252,58 @@ public static class CompanyEndpoints
         db.Companies.Remove(company);
         await db.SaveChangesAsync();
         return Results.Ok(new { success = true });
+    }
+
+    private static async Task<IResult> UploadCompanyLogoAsync(
+        Guid id,
+        IFormFile file,
+        HttpContext httpContext,
+        NanchesoftDbContext db,
+        IConfiguration configuration)
+    {
+        var isPlatformOwner = ApiTenantScope.IsPlatformOwner(httpContext);
+        var tenantId = ApiTenantScope.ResolveTenantId(httpContext);
+        if (!isPlatformOwner && tenantId is null)
+            return Results.StatusCode(403);
+
+        if (file is null || file.Length == 0)
+            return Results.BadRequest(new { message = "No se recibió ninguna imagen." });
+
+        const long maxBytes = 5 * 1024 * 1024;
+        if (file.Length > maxBytes)
+            return Results.BadRequest(new { message = "La imagen no debe superar 5 MB." });
+
+        var allowed = new[] { "image/jpeg", "image/png", "image/webp" };
+        if (!allowed.Contains(file.ContentType))
+            return Results.BadRequest(new { message = "Formato no permitido. Usa JPG, PNG o WEBP." });
+
+        var company = await db.Companies.FirstOrDefaultAsync(x => x.Id == id);
+        if (company is null)
+            return Results.NotFound(new { message = "No se encontró la empresa." });
+        if (!isPlatformOwner && tenantId.HasValue && company.TenantId != tenantId.Value)
+            return Results.NotFound(new { message = "No se encontró la empresa." });
+
+        var root = configuration["Uploads:RootPath"] ?? "/opt/nanchesoft/uploads";
+        var companiesDir = Path.Combine(root, "companies");
+        Directory.CreateDirectory(companiesDir);
+        var filePath = Path.Combine(companiesDir, $"{id}.jpg");
+
+        using (var image = await Image.LoadAsync(file.OpenReadStream()))
+        {
+            var size = Math.Min(image.Width, image.Height);
+            var x = (image.Width - size) / 2;
+            var y = (image.Height - size) / 2;
+            image.Mutate(ctx => ctx
+                .Crop(new Rectangle(x, y, size, size))
+                .Resize(256, 256));
+            var encoder = new SixLabors.ImageSharp.Formats.Jpeg.JpegEncoder { Quality = 85 };
+            await image.SaveAsJpegAsync(filePath, encoder);
+        }
+
+        company.LogoUrl = $"/uploads/companies/{id}.jpg";
+        await db.SaveChangesAsync();
+
+        return Results.Ok(new { logoUrl = company.LogoUrl });
     }
 
     private static async Task<Tenant?> ResolveTenantAsync(CreateOrUpdateCompanyRequest request, NanchesoftDbContext db)
