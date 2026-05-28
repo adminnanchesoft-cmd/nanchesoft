@@ -1,3 +1,4 @@
+using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Nanchesoft.Web.Services.Catalogs;
@@ -120,6 +121,56 @@ public sealed class TenantApiService
         var response = await client.DeleteAsync($"/api/core/tenants/{key}");
         await EnsureSuccessAsync(response);
         return await GetCatalogAsync();
+    }
+
+    public async Task<LogoUploadResult> UploadLogoAsync(Guid tenantId, Stream stream, string fileName, string contentType)
+    {
+        var client = CreatePlatformClient();
+
+        using var content = new MultipartFormDataContent();
+        var streamContent = new StreamContent(stream);
+        streamContent.Headers.ContentType = new MediaTypeHeaderValue(contentType);
+        content.Add(streamContent, "file", fileName);
+
+        var response = await client.PostAsync($"/api/core/tenants/{tenantId:D}/logo", content);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            var err = await TryReadErrorMessageAsync(response);
+            return new LogoUploadResult
+            {
+                Success = false,
+                ErrorMessage = err ?? "No fue posible subir el logo."
+            };
+        }
+
+        var payload = await response.Content.ReadFromJsonAsync<LogoUploadResponse>();
+        if (payload is null)
+        {
+            return new LogoUploadResult { Success = false, ErrorMessage = "Respuesta inválida del servidor." };
+        }
+
+        return new LogoUploadResult
+        {
+            Success = true,
+            LogoUrl = payload.LogoUrl
+        };
+    }
+
+    private static async Task<string?> TryReadErrorMessageAsync(HttpResponseMessage response)
+    {
+        try
+        {
+            var body = await response.Content.ReadAsStringAsync();
+            if (string.IsNullOrWhiteSpace(body)) return null;
+            using var doc = JsonDocument.Parse(body);
+            if (doc.RootElement.TryGetProperty("message", out var message))
+                return message.GetString();
+        }
+        catch
+        {
+        }
+        return null;
     }
 
     private static CreateOrUpdateTenantRequest MapRequest(JsonElement payload)
@@ -255,9 +306,22 @@ public sealed class TenantRowDto
     public Guid PlanId { get; set; }
     public string PlanName { get; set; } = string.Empty;
     public string Status { get; set; } = string.Empty;
+    public string? LogoUrl { get; set; }
     public bool IsActive { get; set; }
     public int CompaniesCount { get; set; }
     public int UsersCount { get; set; }
+}
+
+public sealed class LogoUploadResult
+{
+    public bool Success { get; set; }
+    public string? ErrorMessage { get; set; }
+    public string? LogoUrl { get; set; }
+}
+
+internal sealed class LogoUploadResponse
+{
+    public string LogoUrl { get; set; } = string.Empty;
 }
 
 public sealed class TenantPlanLookupDto
