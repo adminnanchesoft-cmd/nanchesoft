@@ -4,6 +4,7 @@
 @inject AuthState AuthState
 @inject AuthService AuthService
 @inject ProfileApiService ProfileApi
+@inject IJSRuntime JS
 
 <PageTitle>Mi perfil | Nanchesoft</PageTitle>
 
@@ -32,10 +33,34 @@
                     <span>@(_uploadingAvatar ? "Subiendo…" : "Cambiar foto")</span>
                     <InputFile OnChange="OnAvatarSelected" accept="image/*" disabled="@_uploadingAvatar" />
                 </label>
+                <button type="button" class="ns-profile__cambtn" @onclick="OpenCameraAsync" disabled="@(_uploadingAvatar || _cameraOpen)">
+                    Tomar foto
+                </button>
             </div>
             @if (!string.IsNullOrEmpty(_avatarMessage))
             {
                 <div class="ns-profile__alert ns-profile__alert--@_avatarMessageKind">@_avatarMessage</div>
+            }
+            @if (_cameraOpen)
+            {
+                <div class="ns-profile__camera">
+                    @if (string.IsNullOrEmpty(_capturedImage))
+                    {
+                        <video id="ns-camera-video" class="ns-profile__camera-video" playsinline></video>
+                        <div class="ns-profile__camera-actions">
+                            <button type="button" @onclick="CaptureAsync">Capturar</button>
+                            <button type="button" @onclick="CloseCameraAsync">Cancelar</button>
+                        </div>
+                    }
+                    else
+                    {
+                        <img src="@_capturedImage" class="ns-profile__camera-preview" alt="Vista previa" />
+                        <div class="ns-profile__camera-actions">
+                            <button type="button" @onclick="UseCapturedAsync" disabled="@_uploadingAvatar">@(_uploadingAvatar ? "Subiendo…" : "Usar esta foto")</button>
+                            <button type="button" @onclick="RetakeAsync" disabled="@_uploadingAvatar">Repetir</button>
+                        </div>
+                    }
+                </div>
             }
         </div>
     </header>
@@ -314,6 +339,39 @@
             grid-template-columns: 1fr;
         }
     }
+
+    .ns-profile__camera {
+        margin-top: 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        align-items: center;
+    }
+    .ns-profile__camera-video,
+    .ns-profile__camera-preview {
+        width: 240px;
+        height: 240px;
+        border-radius: 12px;
+        object-fit: cover;
+        background: #000;
+    }
+    .ns-profile__camera-actions {
+        display: flex;
+        gap: 8px;
+    }
+    .ns-profile__camera-actions button {
+        padding: 8px 16px;
+        border-radius: 8px;
+        border: 1px solid #d0d7e2;
+        background: #fff;
+        cursor: pointer;
+        font-weight: 600;
+    }
+    .ns-profile__camera-actions button:first-child {
+        background: #2563eb;
+        color: #fff;
+        border-color: #2563eb;
+    }
 </style>
 
 @code {
@@ -325,6 +383,8 @@
     private bool _loading = true;
     private bool _saving;
     private bool _uploadingAvatar;
+    private bool _cameraOpen;
+    private string? _capturedImage;
 
     private string? _formMessage;
     private string _formMessageKind = "success";
@@ -453,6 +513,90 @@
             _uploadingAvatar = false;
             StateHasChanged();
         }
+    }
+
+    private async Task OpenCameraAsync()
+    {
+        _capturedImage = null;
+        _cameraOpen = true;
+        _avatarMessage = null;
+        StateHasChanged();
+        await Task.Delay(50);
+        var result = await JS.InvokeAsync<CameraStartResult>("nsCamera.start", "ns-camera-video");
+        if (result is null || !result.Ok)
+        {
+            _cameraOpen = false;
+            _avatarMessage = result?.Error ?? "No se pudo acceder a la cámara.";
+            _avatarMessageKind = "error";
+            StateHasChanged();
+        }
+    }
+
+    private async Task CaptureAsync()
+    {
+        _capturedImage = await JS.InvokeAsync<string>("nsCamera.capture", "ns-camera-video");
+        await JS.InvokeVoidAsync("nsCamera.stop");
+        StateHasChanged();
+    }
+
+    private async Task RetakeAsync()
+    {
+        _capturedImage = null;
+        StateHasChanged();
+        await Task.Delay(50);
+        await JS.InvokeAsync<CameraStartResult>("nsCamera.start", "ns-camera-video");
+    }
+
+    private async Task CloseCameraAsync()
+    {
+        await JS.InvokeVoidAsync("nsCamera.stop");
+        _cameraOpen = false;
+        _capturedImage = null;
+        StateHasChanged();
+    }
+
+    private async Task UseCapturedAsync()
+    {
+        if (string.IsNullOrEmpty(_capturedImage) || _uploadingAvatar) return;
+        _uploadingAvatar = true;
+        _avatarMessage = null;
+        StateHasChanged();
+        try
+        {
+            var base64 = _capturedImage.Contains(',') ? _capturedImage.Substring(_capturedImage.IndexOf(',') + 1) : _capturedImage;
+            var bytes = Convert.FromBase64String(base64);
+            using var stream = new MemoryStream(bytes);
+            var result = await ProfileApi.UploadAvatarAsync(stream, "camara.jpg", "image/jpeg");
+            if (result.Success)
+            {
+                _previewAvatarUrl = result.AvatarUrl;
+                _avatarMessage = "Foto actualizada.";
+                _avatarMessageKind = "success";
+                _cameraOpen = false;
+                _capturedImage = null;
+            }
+            else
+            {
+                _avatarMessage = result.ErrorMessage ?? "No fue posible subir la imagen.";
+                _avatarMessageKind = "error";
+            }
+        }
+        catch (Exception ex)
+        {
+            _avatarMessage = "Error al procesar la foto: " + ex.Message;
+            _avatarMessageKind = "error";
+        }
+        finally
+        {
+            _uploadingAvatar = false;
+            StateHasChanged();
+        }
+    }
+
+    private sealed class CameraStartResult
+    {
+        public bool Ok { get; set; }
+        public string? Error { get; set; }
     }
 
     private string GetInitials()
