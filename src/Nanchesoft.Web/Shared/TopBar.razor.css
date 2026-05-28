@@ -8,11 +8,10 @@
     position: relative;
     display: inline-flex;
     align-items: center;
-    gap: 8px;
-    padding: 4px 10px 4px 4px;
+    padding: 2px;
     border-radius: 999px;
-    background: rgba(255, 255, 255, .08);
-    cursor: default;
+    background: transparent;
+    cursor: pointer;
     transition: background .15s ease;
     outline: none;
 }
@@ -41,10 +40,7 @@
 .ns-tb3__ctx--branch .ns-tb3__ctx-avatar { background: linear-gradient(135deg, #9333ea, #7e22ce); }
 
 .ns-tb3__ctx-label {
-    display: flex;
-    flex-direction: column;
-    line-height: 1.1;
-    max-width: 120px;
+    display: none;
 }
 
 .ns-tb3__ctx-eyebrow {
