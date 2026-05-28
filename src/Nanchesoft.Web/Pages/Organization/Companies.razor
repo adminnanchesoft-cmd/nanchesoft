@@ -145,7 +145,7 @@
         try
         {
             var client = HttpClientFactory.CreateClient("Nanchesoft.Api");
-            var companies = await client.GetFromJsonAsync<List<CompanyRowDto>>("/api/organization/companies");
+            var companies = await client.GetFromJsonAsync<List<Nanchesoft.Web.Services.Companies.CompanyRowDto>>("/api/organization/companies");
             var company = companies?.FirstOrDefault(x => x.CompanyId == AppState.CurrentCompanyId.Value);
             _currentLogoUrl = company?.LogoUrl;
             StateHasChanged();
