@@ -5,30 +5,23 @@
 
 <PageTitle>Acceso seguro | Nanchesoft Cloud ERP</PageTitle>
 
-<div class="ns-login3-card">
-    <div class="ns-login3-mobile-logo" aria-hidden="true">
-        <img src="images/nanchesoft-cloud-login.webp" alt="" />
+<div class="ns-loginlight">
+    <div class="ns-loginlight__logo">
+        <img src="images/brand/nanchesoft_full_light.svg" alt="Nanchesoft Cloud" />
     </div>
 
-    <div class="ns-login3-card__head">
-        <div class="ns-login3-card__badge">
-            <span class="ns-login3-card__badge-dot"></span>
-            ERP Cloud para crecer con control
-        </div>
-        <h2 class="ns-login3-card__title">Inicia sesión y toma el control</h2>
-        <p class="ns-login3-card__sub">
-            Entra a Nanchesoft para convertir ventas, compras, inventario, bancos y cobranza
-            en información útil para vender más, operar mejor y crecer con orden.
-        </p>
+    <div class="ns-loginlight__head">
+        <h2 class="ns-loginlight__title">Inicia sesión</h2>
+        <p class="ns-loginlight__sub">Entra a tu cuenta para continuar.</p>
     </div>
 
-    <EditForm Model="@model" OnValidSubmit="HandleLoginAsync" class="ns-login3-card__body">
+    <EditForm Model="@model" OnValidSubmit="HandleLoginAsync" class="ns-loginlight__body">
         <DataAnnotationsValidator />
 
-        <div class="ns-login3-field">
-            <label class="ns-login3-field__label" for="ns-login-user">Usuario o correo</label>
-            <div class="ns-login3-field__wrap">
-                <span class="ns-login3-field__icon" aria-hidden="true">
+        <div class="ns-loginlight__field">
+            <label class="ns-loginlight__label" for="ns-login-user">Usuario o correo</label>
+            <div class="ns-loginlight__wrap">
+                <span class="ns-loginlight__icon" aria-hidden="true">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
                         <circle cx="12" cy="8" r="4" />
                         <path d="M4 21c0-4.4 3.6-8 8-8s8 3.6 8 8" />
@@ -36,21 +29,21 @@
                 </span>
                 <input id="ns-login-user"
                        @bind="model.UsernameOrEmail"
-                       class="ns-login3-field__input"
+                       class="ns-loginlight__input"
                        autocomplete="username"
                        placeholder="usuario@empresa.com" />
             </div>
         </div>
 
-        <div class="ns-login3-field">
-            <div class="ns-login3-field__row">
-                <label class="ns-login3-field__label" for="ns-login-pass">Contraseña</label>
-                <a class="ns-login3-field__link" href="#" @onclick:preventDefault="true" @onclick="ForgotPassword">
+        <div class="ns-loginlight__field">
+            <div class="ns-loginlight__field-row">
+                <label class="ns-loginlight__label" for="ns-login-pass">Contraseña</label>
+                <a class="ns-loginlight__link" href="#" @onclick:preventDefault="true" @onclick="ForgotPassword">
                     ¿Necesitas ayuda?
                 </a>
             </div>
-            <div class="ns-login3-field__wrap">
-                <span class="ns-login3-field__icon" aria-hidden="true">
+            <div class="ns-loginlight__wrap">
+                <span class="ns-loginlight__icon" aria-hidden="true">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
                         <rect x="4" y="11" width="16" height="10" rx="2" />
                         <path d="M8 11V7a4 4 0 0 1 8 0v4" />
@@ -60,10 +53,10 @@
                        @bind="model.Password"
                        @bind:event="oninput"
                        type="@(_showPassword ? "text" : "password")"
-                       class="ns-login3-field__input"
+                       class="ns-loginlight__input"
                        autocomplete="current-password"
                        placeholder="Contraseña" />
-                <button type="button" class="ns-login3-field__eye" @onclick="TogglePassword" aria-label="@(_showPassword ? "Ocultar contraseña" : "Mostrar contraseña")">
+                <button type="button" class="ns-loginlight__eye" @onclick="TogglePassword" aria-label="@(_showPassword ? "Ocultar contraseña" : "Mostrar contraseña")">
                     @if (_showPassword)
                     {
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
@@ -84,252 +77,139 @@
             </div>
         </div>
 
-        <label class="ns-login3-card__remember">
+        <label class="ns-loginlight__remember">
             <input type="checkbox" @bind="model.RememberMe" />
-            <span class="ns-login3-card__remember-box" aria-hidden="true">
+            <span class="ns-loginlight__remember-box" aria-hidden="true">
                 <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
             </span>
-            <span class="ns-login3-card__remember-text">Mantener mi sesión en este dispositivo</span>
+            Mantener mi sesión en este dispositivo
         </label>
 
         @if (!string.IsNullOrWhiteSpace(errorMessage))
         {
-            <div class="ns-login3-alert ns-login3-alert--error" role="alert">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></svg>
+            <div class="ns-loginlight__alert ns-loginlight__alert--error" role="alert">
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></svg>
                 <span>@errorMessage</span>
             </div>
         }
 
-        <button type="submit" class="ns-login3-submit" disabled="@isLoading">
+        <button type="submit" class="ns-loginlight__submit" disabled="@isLoading">
             @if (isLoading)
             {
-                <span class="ns-login3-submit__spin" aria-hidden="true"></span>
-                <span>Verificando acceso...</span>
+                <span class="ns-loginlight__spin" aria-hidden="true"></span>
+                <span>Entrando…</span>
             }
             else
             {
                 <span>Entrar a Nanchesoft Cloud</span>
-                <svg class="ns-login3-submit__arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14" /><path d="M13 6l6 6-6 6" /></svg>
+                <svg class="ns-loginlight__arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14" /><path d="M13 6l6 6-6 6" /></svg>
             }
         </button>
     </EditForm>
-
-    <div class="ns-login3-growth" aria-label="Motivos para usar Nanchesoft">
-        <div class="ns-login3-growth__item">
-            <span class="ns-login3-growth__icon" aria-hidden="true">
-                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5" /></svg>
-            </span>
-            <div>
-                <strong>Vende mejor</strong>
-                <span>Tu equipo atiende con datos de clientes, inventario, precios y cobranza en el mismo lugar.</span>
-            </div>
-        </div>
-        <div class="ns-login3-growth__item">
-            <span class="ns-login3-growth__icon" aria-hidden="true">
-                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5" /></svg>
-            </span>
-            <div>
-                <strong>Controla mejor</strong>
-                <span>Compras, almacenes, bancos, CxC, CxP y permisos trabajan conectados.</span>
-            </div>
-        </div>
-        <div class="ns-login3-growth__item">
-            <span class="ns-login3-growth__icon" aria-hidden="true">
-                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5" /></svg>
-            </span>
-            <div>
-                <strong>Crece mejor</strong>
-                <span>Multiempresa, multisucursal y reportes para escalar sin perder visibilidad.</span>
-            </div>
-        </div>
-    </div>
-
-    <div class="ns-login3-card__foot">
-        <div>
-            <strong>¿Tu empresa sigue operando con información dispersa?</strong>
-            <span>Nanchesoft te ayuda a ordenar la operación para crecer con datos, control y seguimiento.</span>
-        </div>
-        <a href="https://nanchesoft.com/contact" target="_blank" rel="noopener">Quiero una demo</a>
-    </div>
 </div>
 
 <style>
     /* ========================================================
-       NANCHESOFT LOGIN · Formulario comercial premium
+       NANCHESOFT LOGIN · Tema claro premium estilo Apple
        ======================================================== */
 
-    .ns-login3-card {
+    .ns-loginlight {
         position: relative;
-        padding: 30px;
-        border-radius: 30px;
-        color: #eaf6ff;
-        background:
-            linear-gradient(180deg, rgba(7, 18, 37, .82), rgba(3, 8, 22, .76)),
-            radial-gradient(circle at 18% 0%, rgba(20, 200, 255, .18), transparent 34%);
-        border: 1px solid rgba(219, 234, 254, .16);
-        box-shadow:
-            0 34px 90px rgba(0, 0, 0, .36),
-            inset 0 1px 0 rgba(255, 255, 255, .11);
-        backdrop-filter: blur(22px);
-        -webkit-backdrop-filter: blur(22px);
-        animation: ns-login3-rise .44s cubic-bezier(.16, 1, .3, 1) both;
-        overflow: hidden;
-    }
-
-    .ns-login3-card::before {
-        content: "";
-        position: absolute;
-        inset: 0 0 auto 0;
-        height: 3px;
-        background: linear-gradient(90deg, transparent, #64e7ff, #0078d4, #64e7ff, transparent);
-        opacity: .95;
-    }
-
-    .ns-login3-card::after {
-        content: "";
-        position: absolute;
-        right: -90px;
-        top: -100px;
-        width: 210px;
-        height: 210px;
-        border-radius: 50%;
-        background: radial-gradient(circle, rgba(20, 200, 255, .23), transparent 68%);
-        pointer-events: none;
-    }
-
-    @@keyframes ns-login3-rise {
-        from { opacity: 0; transform: translateY(14px) scale(.985); }
-        to   { opacity: 1; transform: translateY(0) scale(1); }
-    }
-
-    .ns-login3-mobile-logo {
-        display: none;
-        position: relative;
-        z-index: 1;
-        margin: -6px 0 20px;
-        border-radius: 22px;
-        overflow: hidden;
-        border: 1px solid rgba(100, 231, 255, .20);
-        box-shadow: 0 22px 56px rgba(0, 0, 0, .30);
-    }
-
-    .ns-login3-mobile-logo img {
-        display: block;
         width: 100%;
-        aspect-ratio: 3 / 1.55;
-        object-fit: cover;
-        object-position: center 38%;
+        animation: ns-loginlight-rise .4s cubic-bezier(.16, 1, .3, 1) both;
     }
 
-    .ns-login3-card__head {
-        position: relative;
-        z-index: 1;
-        margin-bottom: 24px;
+    @@keyframes ns-loginlight-rise {
+        from { opacity: 0; transform: translateY(12px); }
+        to   { opacity: 1; transform: translateY(0); }
     }
 
-    .ns-login3-card__badge {
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
-        margin-bottom: 15px;
-        padding: 7px 11px;
-        border-radius: 999px;
-        background: rgba(20, 200, 255, .11);
-        border: 1px solid rgba(100, 231, 255, .20);
-        color: #bff3ff;
-        font-size: .75rem;
-        font-weight: 900;
-        letter-spacing: .01em;
+    .ns-loginlight__logo {
+        display: none;
+        margin-bottom: 22px;
+        text-align: center;
     }
 
-    .ns-login3-card__badge-dot {
-        width: 7px;
-        height: 7px;
-        border-radius: 50%;
-        background: #34d399;
-        box-shadow: 0 0 0 4px rgba(52, 211, 153, .15), 0 0 22px rgba(52, 211, 153, .56);
+    .ns-loginlight__logo img {
+        height: 56px;
+        width: auto;
     }
 
-    .ns-login3-card__title {
+    .ns-loginlight__head {
+        margin-bottom: 26px;
+    }
+
+    .ns-loginlight__title {
         margin: 0;
-        color: #fff;
+        color: #0b1f3c;
         font-size: 2rem;
-        font-weight: 950;
-        letter-spacing: -.048em;
-        line-height: 1.05;
-        text-wrap: balance;
+        font-weight: 850;
+        letter-spacing: -.03em;
     }
 
-    .ns-login3-card__sub {
-        margin: 11px 0 0;
-        color: rgba(226, 242, 255, .76);
+    .ns-loginlight__sub {
+        margin: 8px 0 0;
+        color: #51637c;
         font-size: .96rem;
-        line-height: 1.58;
-        font-weight: 510;
+        font-weight: 500;
     }
 
-    .ns-login3-card__body {
-        position: relative;
-        z-index: 1;
+    .ns-loginlight__body {
         display: flex;
         flex-direction: column;
         gap: 16px;
     }
 
-    .ns-login3-field {
+    .ns-loginlight__field {
         display: flex;
         flex-direction: column;
         gap: 7px;
     }
 
-    .ns-login3-field__row {
+    .ns-loginlight__field-row {
         display: flex;
         align-items: center;
         justify-content: space-between;
         gap: 12px;
     }
 
-    .ns-login3-field__label {
-        color: rgba(226, 242, 255, .90);
+    .ns-loginlight__label {
+        color: #1f3350;
         font-size: .82rem;
-        font-weight: 850;
-        letter-spacing: -.005em;
+        font-weight: 750;
     }
 
-    .ns-login3-field__link {
-        color: #64e7ff;
+    .ns-loginlight__link {
+        color: #0078d4;
         font-size: .8rem;
-        font-weight: 800;
+        font-weight: 700;
         text-decoration: none;
         transition: color .14s ease;
     }
 
-    .ns-login3-field__link:hover {
-        color: #bff3ff;
+    .ns-loginlight__link:hover {
+        color: #14c8ff;
         text-decoration: underline;
     }
 
-    .ns-login3-field__wrap {
+    .ns-loginlight__wrap {
         position: relative;
         display: grid;
         grid-template-columns: 44px minmax(0, 1fr) auto;
         align-items: center;
-        height: 50px;
-        background: rgba(255, 255, 255, .92);
-        border: 1px solid rgba(219, 234, 254, .22);
-        border-radius: 16px;
-        transition: border-color .14s ease, box-shadow .14s ease, transform .14s ease, background .14s ease;
-        overflow: hidden;
-    }
-
-    .ns-login3-field__wrap:focus-within {
+        height: 52px;
         background: #fff;
-        border-color: rgba(100, 231, 255, .84);
-        box-shadow: 0 0 0 4px rgba(20, 200, 255, .13), 0 18px 34px rgba(0, 0, 0, .18);
-        transform: translateY(-1px);
+        border: 1px solid #dce4ee;
+        border-radius: 14px;
+        transition: border-color .14s ease, box-shadow .14s ease;
     }
 
-    .ns-login3-field__icon {
+    .ns-loginlight__wrap:focus-within {
+        border-color: #14c8ff;
+        box-shadow: 0 0 0 4px rgba(20, 200, 255, .14);
+    }
+
+    .ns-loginlight__icon {
         display: inline-flex;
         align-items: center;
         justify-content: center;
@@ -337,305 +217,169 @@
         color: #0078d4;
     }
 
-    .ns-login3-field__input {
+    .ns-loginlight__input {
         min-width: 0;
         width: 100%;
         height: 100%;
         border: 0;
         outline: 0;
         background: transparent;
-        color: #071225;
+        color: #0b1f3c;
         font-size: .96rem;
-        font-weight: 650;
-        letter-spacing: -.01em;
+        font-weight: 600;
     }
 
-    .ns-login3-field__input::placeholder {
-        color: #94a3b8;
-        font-weight: 520;
+    .ns-loginlight__input::placeholder {
+        color: #9aa9bd;
+        font-weight: 450;
     }
 
-    .ns-login3-field__eye {
+    .ns-loginlight__eye {
         width: 42px;
         height: 42px;
         margin-right: 4px;
         border: 0;
-        border-radius: 12px;
+        border-radius: 11px;
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        color: #64748b;
+        color: #7888a0;
         background: transparent;
         cursor: pointer;
         transition: background .14s ease, color .14s ease;
     }
 
-    .ns-login3-field__eye:hover {
+    .ns-loginlight__eye:hover {
         color: #0078d4;
-        background: rgba(0, 120, 212, .08);
+        background: rgba(0, 120, 212, .07);
     }
 
-    .ns-login3-card__remember {
+    .ns-loginlight__remember {
         display: inline-flex;
         align-items: center;
         gap: 9px;
-        color: rgba(226, 242, 255, .76);
-        font-size: .82rem;
-        font-weight: 650;
+        color: #51637c;
+        font-size: .84rem;
+        font-weight: 600;
         cursor: pointer;
         user-select: none;
     }
 
-    .ns-login3-card__remember input {
+    .ns-loginlight__remember input {
         position: absolute;
         opacity: 0;
         pointer-events: none;
     }
 
-    .ns-login3-card__remember-box {
-        width: 18px;
-        height: 18px;
+    .ns-loginlight__remember-box {
+        width: 19px;
+        height: 19px;
         border-radius: 6px;
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        color: #061125;
-        background: rgba(255,255,255,.14);
-        border: 1px solid rgba(219, 234, 254, .28);
-        transition: background .14s ease, border-color .14s ease, color .14s ease;
+        color: #fff;
+        background: #fff;
+        border: 1.5px solid #cbd5e1;
+        transition: background .14s ease, border-color .14s ease;
         flex: 0 0 auto;
     }
 
-    .ns-login3-card__remember-box svg {
+    .ns-loginlight__remember-box svg {
         opacity: 0;
         transform: scale(.7);
         transition: opacity .14s ease, transform .14s ease;
     }
 
-    .ns-login3-card__remember input:checked + .ns-login3-card__remember-box {
-        background: linear-gradient(135deg, #64e7ff, #20a8ff);
+    .ns-loginlight__remember input:checked + .ns-loginlight__remember-box {
+        background: linear-gradient(135deg, #14c8ff, #0078d4);
         border-color: transparent;
-        color: #061125;
     }
 
-    .ns-login3-card__remember input:checked + .ns-login3-card__remember-box svg {
+    .ns-loginlight__remember input:checked + .ns-loginlight__remember-box svg {
         opacity: 1;
         transform: scale(1);
     }
 
-    .ns-login3-alert {
+    .ns-loginlight__alert {
         display: grid;
         grid-template-columns: auto 1fr;
         gap: 10px;
         align-items: flex-start;
         padding: 12px 13px;
-        border-radius: 15px;
+        border-radius: 12px;
         font-size: .84rem;
-        font-weight: 700;
+        font-weight: 650;
         line-height: 1.42;
     }
 
-    .ns-login3-alert--error {
-        color: #fecaca;
-        background: rgba(127, 29, 29, .26);
-        border: 1px solid rgba(248, 113, 113, .28);
+    .ns-loginlight__alert--error {
+        color: #b91c1c;
+        background: #fef2f2;
+        border: 1px solid #fecaca;
     }
 
-    .ns-login3-alert svg {
+    .ns-loginlight__alert svg {
         margin-top: 1px;
         flex: 0 0 auto;
     }
 
-    .ns-login3-submit {
+    .ns-loginlight__submit {
         position: relative;
         height: 52px;
+        margin-top: 4px;
         border: 0;
-        border-radius: 17px;
+        border-radius: 14px;
         display: inline-flex;
         align-items: center;
         justify-content: center;
         gap: 10px;
-        color: #02101d;
-        background: linear-gradient(135deg, #e6faff 0%, #64e7ff 38%, #20a8ff 100%);
-        box-shadow: 0 18px 42px rgba(20, 200, 255, .25), inset 0 1px 0 rgba(255,255,255,.52);
+        color: #fff;
+        background: linear-gradient(135deg, #14c8ff 0%, #0078d4 100%);
+        box-shadow: 0 14px 30px rgba(0, 120, 212, .26);
         font-size: .97rem;
-        font-weight: 950;
+        font-weight: 800;
         letter-spacing: -.01em;
         cursor: pointer;
         transition: transform .15s ease, box-shadow .15s ease, filter .15s ease;
-        overflow: hidden;
     }
 
-    .ns-login3-submit::before {
-        content: "";
-        position: absolute;
-        inset: 0;
-        transform: translateX(-120%);
-        background: linear-gradient(90deg, transparent, rgba(255,255,255,.42), transparent);
-        transition: transform .48s ease;
-    }
-
-    .ns-login3-submit:hover:not(:disabled) {
+    .ns-loginlight__submit:hover:not(:disabled) {
         transform: translateY(-1px);
-        filter: brightness(1.04);
-        box-shadow: 0 24px 54px rgba(20, 200, 255, .32), inset 0 1px 0 rgba(255,255,255,.58);
+        filter: brightness(1.05);
+        box-shadow: 0 20px 40px rgba(0, 120, 212, .32);
     }
 
-    .ns-login3-submit:hover:not(:disabled)::before {
-        transform: translateX(120%);
-    }
-
-    .ns-login3-submit:disabled {
+    .ns-loginlight__submit:disabled {
         cursor: wait;
         opacity: .82;
-        filter: saturate(.85);
     }
 
-    .ns-login3-submit__arrow {
+    .ns-loginlight__arrow {
         transition: transform .15s ease;
     }
 
-    .ns-login3-submit:hover:not(:disabled) .ns-login3-submit__arrow {
+    .ns-loginlight__submit:hover:not(:disabled) .ns-loginlight__arrow {
         transform: translateX(3px);
     }
 
-    .ns-login3-submit__spin {
+    .ns-loginlight__spin {
         width: 17px;
         height: 17px;
-        border: 2px solid rgba(2, 16, 29, .24);
-        border-top-color: #02101d;
+        border: 2px solid rgba(255, 255, 255, .4);
+        border-top-color: #fff;
         border-radius: 999px;
-        animation: ns-login3-spin .75s linear infinite;
+        animation: ns-loginlight-spin .75s linear infinite;
     }
 
-    @@keyframes ns-login3-spin {
+    @@keyframes ns-loginlight-spin {
         to { transform: rotate(360deg); }
     }
 
-    .ns-login3-growth {
-        position: relative;
-        z-index: 1;
-        display: grid;
-        gap: 10px;
-        margin-top: 20px;
-        padding: 14px;
-        border-radius: 20px;
-        background: rgba(255, 255, 255, .065);
-        border: 1px solid rgba(255, 255, 255, .105);
-        box-shadow: inset 0 1px 0 rgba(255,255,255,.06);
-    }
-
-    .ns-login3-growth__item {
-        display: grid;
-        grid-template-columns: auto 1fr;
-        gap: 11px;
-        align-items: flex-start;
-    }
-
-    .ns-login3-growth__icon {
-        width: 28px;
-        height: 28px;
-        border-radius: 10px;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        color: #061125;
-        background: linear-gradient(135deg, #9ff5ff, #20a8ff);
-        box-shadow: 0 10px 24px rgba(20, 200, 255, .18);
-    }
-
-    .ns-login3-growth__item strong {
-        display: block;
-        margin-bottom: 2px;
-        color: #fff;
-        font-size: .88rem;
-        font-weight: 900;
-    }
-
-    .ns-login3-growth__item span {
-        display: block;
-        color: rgba(226, 242, 255, .72);
-        font-size: .79rem;
-        line-height: 1.42;
-    }
-
-    .ns-login3-card__foot {
-        position: relative;
-        z-index: 1;
-        display: grid;
-        grid-template-columns: 1fr auto;
-        gap: 16px;
-        align-items: center;
-        margin-top: 20px;
-        padding-top: 18px;
-        border-top: 1px solid rgba(219, 234, 254, .14);
-    }
-
-    .ns-login3-card__foot strong,
-    .ns-login3-card__foot span {
-        display: block;
-    }
-
-    .ns-login3-card__foot strong {
-        margin-bottom: 4px;
-        color: #fff;
-        font-size: .88rem;
-        font-weight: 900;
-        letter-spacing: -.01em;
-    }
-
-    .ns-login3-card__foot span {
-        color: rgba(226, 242, 255, .68);
-        font-size: .78rem;
-        line-height: 1.4;
-    }
-
-    .ns-login3-card__foot a {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        min-height: 38px;
-        padding: 0 14px;
-        border-radius: 999px;
-        color: #bff3ff;
-        border: 1px solid rgba(100, 231, 255, .25);
-        background: rgba(20, 200, 255, .08);
-        text-decoration: none;
-        font-size: .8rem;
-        font-weight: 900;
-        white-space: nowrap;
-        transition: background .14s ease, color .14s ease, border-color .14s ease;
-    }
-
-    .ns-login3-card__foot a:hover {
-        color: #fff;
-        border-color: rgba(100, 231, 255, .46);
-        background: rgba(20, 200, 255, .14);
-    }
-
+    /* En móvil/tablet (cuando se oculta la columna del logo), mostrar el logo dentro de la tarjeta */
     @@media (max-width: 1120px) {
-        .ns-login3-mobile-logo {
+        .ns-loginlight__logo {
             display: block;
-        }
-    }
-
-    @@media (max-width: 520px) {
-        .ns-login3-card {
-            padding: 24px 18px;
-            border-radius: 24px;
-        }
-
-        .ns-login3-card__title {
-            font-size: 1.65rem;
-        }
-
-        .ns-login3-card__foot {
-            grid-template-columns: 1fr;
-            align-items: stretch;
-        }
-
-        .ns-login3-card__foot a {
-            width: 100%;
         }
     }
 </style>
