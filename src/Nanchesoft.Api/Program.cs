@@ -303,6 +303,7 @@ app.MapPost("/api/auth/google", async (AuthGoogleRequest request, NanchesoftDbCo
     }
 
     var email = (payload.Email ?? string.Empty).Trim();
+    Console.WriteLine($"[GOOGLE-DEBUG] Email={payload.Email} | Picture={payload.Picture} | Name={payload.Name} | GivenName={payload.GivenName} | FamilyName={payload.FamilyName}");
     if (string.IsNullOrWhiteSpace(email))
         return Results.Unauthorized();
 
