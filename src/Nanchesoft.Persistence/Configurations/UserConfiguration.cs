@@ -18,6 +18,7 @@ public sealed class UserConfiguration : IEntityTypeConfiguration<User>
         builder.Property(x => x.LastName).HasMaxLength(100).IsRequired();
         builder.Property(x => x.PasswordHash).HasMaxLength(500).IsRequired();
         builder.Property(x => x.Phone).HasMaxLength(50);
+        builder.Property(x => x.AvatarUrl).HasMaxLength(500);
 
         builder.HasIndex(x => x.Username).IsUnique().HasDatabaseName("ix_users_username_global");
         builder.HasIndex(x => x.Email).IsUnique().HasDatabaseName("ix_users_email_global");
