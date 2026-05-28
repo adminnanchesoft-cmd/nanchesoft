@@ -19,7 +19,7 @@ public sealed class UserConfiguration : IEntityTypeConfiguration<User>
         builder.Property(x => x.PasswordHash).HasMaxLength(500).IsRequired();
         builder.Property(x => x.Phone).HasMaxLength(50);
 
-        builder.HasIndex(x => new { x.TenantId, x.Username }).IsUnique();
-        builder.HasIndex(x => new { x.TenantId, x.Email }).IsUnique();
+        builder.HasIndex(x => x.Username).IsUnique().HasDatabaseName("ix_users_username_global");
+        builder.HasIndex(x => x.Email).IsUnique().HasDatabaseName("ix_users_email_global");
     }
 }
