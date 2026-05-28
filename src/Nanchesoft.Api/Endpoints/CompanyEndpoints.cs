@@ -51,6 +51,7 @@ public static class CompanyEndpoints
                 LegalName = x.LegalName,
                 Rfc = x.TaxId,
                 TimeZone = x.Timezone,
+                LogoUrl = x.LogoUrl,
                 IsActive = x.IsActive
             })
             .ToListAsync();
@@ -326,6 +327,7 @@ public sealed class CompanyListItemDto
     public string LegalName { get; set; } = string.Empty;
     public string Rfc { get; set; } = string.Empty;
     public string TimeZone { get; set; } = string.Empty;
+    public string? LogoUrl { get; set; }
     public bool IsActive { get; set; }
 }
 
