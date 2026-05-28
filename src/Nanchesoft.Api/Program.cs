@@ -82,7 +82,10 @@ using (var scope = app.Services.CreateScope())
     dbContext.Database.EnsureCreated();
     await SubscriptionControlSeeder.EnsureAsync(dbContext);
     await InitialDataSeeder.SeedAsync(dbContext);
-    await CommercialTenantsSeeder.SeedAsync(dbContext);
+    if (app.Environment.IsDevelopment())
+    {
+        await CommercialTenantsSeeder.SeedAsync(dbContext);
+    }
     await ThirdPartiesProductsSeeder.SeedAsync(dbContext);
     if (app.Environment.IsDevelopment())
     {
