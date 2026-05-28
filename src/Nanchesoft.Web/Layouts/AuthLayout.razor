@@ -1,128 +1,39 @@
 @inherits LayoutComponentBase
 
-<div class="ns-auth3">
-    <div class="ns-auth3__ambient ns-auth3__ambient--one" aria-hidden="true"></div>
-    <div class="ns-auth3__ambient ns-auth3__ambient--two" aria-hidden="true"></div>
-
-    <header class="ns-auth3__topbar">
-        <a class="ns-auth3__brand" href="https://nanchesoft.com" target="_blank" rel="noopener" aria-label="Nanchesoft Cloud">
-            <span class="ns-auth3__brand-logo" aria-hidden="true">
-                <img src="images/nanchesoft-cloud-login.webp" alt="" />
-            </span>
-            <span class="ns-auth3__brand-copy">
-                <strong>Nanchesoft Cloud</strong>
-                <small>ERP para crecer con control</small>
-            </span>
+<div class="ns-authlight">
+    <header class="ns-authlight__topbar">
+        <a class="ns-authlight__brand" href="https://nanchesoft.com" target="_blank" rel="noopener" aria-label="Nanchesoft Cloud">
+            <img class="ns-authlight__brand-logo" src="images/brand/nanchesoft_full_light.svg" alt="Nanchesoft Cloud" />
         </a>
 
-        <div class="ns-auth3__top-actions">
-            <span class="ns-auth3__top-pill">
-                <span class="ns-auth3__top-pill-dot"></span>
+        <div class="ns-authlight__top-actions">
+            <span class="ns-authlight__top-pill">
+                <span class="ns-authlight__top-pill-dot"></span>
                 Ventas · Inventario · Finanzas · Reportes
             </span>
-            <a class="ns-auth3__demo-link" href="https://nanchesoft.com/contact" target="_blank" rel="noopener">
+            <a class="ns-authlight__demo-link" href="https://nanchesoft.com/contact" target="_blank" rel="noopener">
                 Solicitar una demo
             </a>
         </div>
     </header>
 
-    <div class="ns-auth3__shell">
-        <section class="ns-auth3__hero" aria-label="Beneficios de Nanchesoft ERP Cloud">
-            <div class="ns-auth3__hero-copy">
-                <div class="ns-auth3__eyebrow">
-                    <span></span>
-                    ERP Cloud para empresas que quieren vender más y operar mejor
-                </div>
-
-                <h1 class="ns-auth3__title">
-                    Crece, controla y vende mejor desde una sola plataforma.
-                </h1>
-
-                <p class="ns-auth3__lead">
-                    Nanchesoft conecta ventas, compras, inventario, bancos, cobranza, pagos y reportes
-                    para que tu empresa deje de trabajar con información suelta y empiece a decidir con datos claros.
-                </p>
-
-                <div class="ns-auth3__promise-grid">
-                    <article class="ns-auth3__promise">
-                        <div class="ns-auth3__promise-icon" aria-hidden="true">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="M3 17h18" />
-                                <path d="M7 17V9" />
-                                <path d="M12 17V5" />
-                                <path d="M17 17v-6" />
-                            </svg>
-                        </div>
-                        <div>
-                            <strong>Vende con más claridad</strong>
-                            <span>Consulta clientes, productos, existencias y cobranza antes de tomar decisiones comerciales.</span>
-                        </div>
-                    </article>
-
-                    <article class="ns-auth3__promise">
-                        <div class="ns-auth3__promise-icon" aria-hidden="true">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="M21 16V8a2 2 0 0 0-1-1.73L13 2.27a2 2 0 0 0-2 0L4 6.27A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z" />
-                                <path d="M3.3 7 12 12l8.7-5" />
-                                <path d="M12 22V12" />
-                            </svg>
-                        </div>
-                        <div>
-                            <strong>Controla tu operación</strong>
-                            <span>Ordena almacenes, movimientos, sucursales, permisos y procesos sin mezclar información.</span>
-                        </div>
-                    </article>
-
-                    <article class="ns-auth3__promise">
-                        <div class="ns-auth3__promise-icon" aria-hidden="true">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="M12 2 4 6v6c0 5 3.4 8.4 8 10 4.6-1.6 8-5 8-10V6l-8-4Z" />
-                                <path d="m9 12 2 2 4-5" />
-                            </svg>
-                        </div>
-                        <div>
-                            <strong>Crece sin perder visibilidad</strong>
-                            <span>Multiempresa, multisucursal y multiusuario para acompañar el crecimiento de tu negocio.</span>
-                        </div>
-                    </article>
-                </div>
-            </div>
-
-            <div class="ns-auth3__visual" aria-label="Logotipo Nanchesoft Cloud">
-                <div class="ns-auth3__visual-glow" aria-hidden="true"></div>
-                <img src="images/nanchesoft-cloud-login.webp" alt="Nanchesoft Cloud - Controla, vende y crece desde la nube" />
-                <div class="ns-auth3__visual-caption">
-                    <strong>Controla, vende y crece desde la nube.</strong>
-                    <span>Un ERP moderno para convertir operación diaria en decisiones rentables.</span>
-                </div>
-            </div>
-
-            <div class="ns-auth3__metrics" aria-label="Razones para elegir Nanchesoft">
-                <div>
-                    <strong>Una sola verdad</strong>
-                    <span>Tu equipo trabaja con la misma información.</span>
-                </div>
-                <div>
-                    <strong>Menos errores</strong>
-                    <span>Menos captura repetida y más trazabilidad.</span>
-                </div>
-                <div>
-                    <strong>Más control</strong>
-                    <span>Roles, permisos y reportes por empresa.</span>
-                </div>
+    <div class="ns-authlight__shell">
+        <section class="ns-authlight__hero" aria-label="Nanchesoft Cloud">
+            <div class="ns-authlight__hero-logo">
+                <img src="images/brand/nanchesoft_full_light.svg" alt="Nanchesoft Cloud - Controla, vende y crece desde la nube" />
             </div>
         </section>
 
-        <main class="ns-auth3__form-side">
-            <div class="ns-auth3__form-panel">
+        <main class="ns-authlight__form-side">
+            <div class="ns-authlight__form-panel">
                 @Body
             </div>
         </main>
     </div>
 
-    <footer class="ns-auth3__footer">
+    <footer class="ns-authlight__footer">
         <span>© @DateTime.Now.Year Nanchesoft Cloud · ERP para empresas mexicanas</span>
-        <span class="ns-auth3__footer-links">
+        <span class="ns-authlight__footer-links">
             <a href="https://nanchesoft.com/contact" target="_blank" rel="noopener">Contacto</a>
             <span aria-hidden="true">·</span>
             <a href="https://nanchesoft.com/privacy" target="_blank" rel="noopener">Privacidad</a>
@@ -134,457 +45,162 @@
 
 <style>
     /* ========================================================
-       NANCHESOFT AUTH · Login comercial premium con logotipo
+       NANCHESOFT AUTH · Tema claro premium estilo Apple
        ======================================================== */
 
-    .ns-auth3 {
-        --ns-bg-950: #030816;
-        --ns-bg-900: #071225;
-        --ns-bg-850: #0a1830;
-        --ns-bg-800: #10233f;
+    .ns-authlight {
+        --ns-bg: #f5f7fa;
+        --ns-bg-soft: #eef2f7;
+        --ns-card: #ffffff;
         --ns-blue-700: #0b4ea2;
         --ns-blue-500: #0078d4;
         --ns-cyan-400: #14c8ff;
         --ns-cyan-300: #64e7ff;
-        --ns-ink-50: #f8fafc;
-        --ns-ink-100: #eef6ff;
-        --ns-ink-200: #dbeafe;
-        --ns-ink-300: #b8c8dc;
-        --ns-ink-400: #8fa5bd;
-        --ns-ink-500: #66788e;
-        --ns-success: #34d399;
+        --ns-ink-900: #0b1f3c;
+        --ns-ink-700: #1f3350;
+        --ns-ink-500: #51637c;
+        --ns-ink-400: #7888a0;
+        --ns-line: #e2e8f0;
+        --ns-success: #16a34a;
 
         position: relative;
         min-height: 100vh;
         display: flex;
         flex-direction: column;
         overflow: hidden;
-        color: var(--ns-ink-50);
+        color: var(--ns-ink-900);
         background:
-            radial-gradient(circle at 14% 18%, rgba(0, 120, 212, .34), transparent 34%),
-            radial-gradient(circle at 78% 10%, rgba(20, 200, 255, .22), transparent 28%),
-            linear-gradient(135deg, #030816 0%, #071225 42%, #0c2445 100%);
+            radial-gradient(circle at 12% 14%, rgba(20, 200, 255, .10), transparent 38%),
+            radial-gradient(circle at 86% 8%, rgba(0, 120, 212, .08), transparent 32%),
+            linear-gradient(180deg, #f7f9fc 0%, #eef2f7 100%);
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Inter", system-ui, sans-serif;
         -webkit-font-smoothing: antialiased;
     }
 
-    .ns-auth3::before {
-        content: "";
-        position: absolute;
-        inset: 0;
-        pointer-events: none;
-        opacity: .34;
-        background-image:
-            linear-gradient(rgba(255,255,255,.045) 1px, transparent 1px),
-            linear-gradient(90deg, rgba(255,255,255,.045) 1px, transparent 1px);
-        background-size: 46px 46px;
-        mask-image: radial-gradient(circle at 44% 30%, black 0%, transparent 72%);
-    }
-
-    .ns-auth3::after {
-        content: "";
-        position: absolute;
-        inset: auto -14% -28% -14%;
-        height: 42vh;
-        background: radial-gradient(ellipse at center, rgba(20, 200, 255, .24), transparent 70%);
-        pointer-events: none;
-    }
-
-    .ns-auth3__ambient {
-        position: absolute;
-        width: 430px;
-        height: 430px;
-        border-radius: 999px;
-        filter: blur(28px);
-        pointer-events: none;
-        opacity: .42;
-    }
-
-    .ns-auth3__ambient--one {
-        left: -120px;
-        top: 140px;
-        background: radial-gradient(circle, rgba(20, 200, 255, .5), transparent 67%);
-    }
-
-    .ns-auth3__ambient--two {
-        right: -160px;
-        top: 90px;
-        background: radial-gradient(circle, rgba(0, 120, 212, .56), transparent 68%);
-    }
-
-    .ns-auth3__topbar {
+    .ns-authlight__topbar {
         position: relative;
         z-index: 4;
-        min-height: 74px;
+        min-height: 72px;
         display: flex;
         align-items: center;
         justify-content: space-between;
         gap: 18px;
         padding: 12px 34px;
-        border-bottom: 1px solid rgba(148, 163, 184, .18);
-        background: rgba(3, 8, 22, .58);
+        border-bottom: 1px solid var(--ns-line);
+        background: rgba(255, 255, 255, .72);
         backdrop-filter: blur(18px);
         -webkit-backdrop-filter: blur(18px);
     }
 
-    .ns-auth3__brand {
+    .ns-authlight__brand {
         display: inline-flex;
         align-items: center;
-        gap: 12px;
-        min-width: 0;
-        color: #fff;
         text-decoration: none;
     }
 
-    .ns-auth3__brand-logo {
-        width: 48px;
-        height: 48px;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        overflow: hidden;
-        border-radius: 16px;
-        border: 1px solid rgba(100, 231, 255, .34);
-        background: linear-gradient(135deg, rgba(10, 29, 62, .9), rgba(3, 8, 22, .92));
-        box-shadow: 0 16px 38px rgba(0, 120, 212, .28), inset 0 1px 0 rgba(255,255,255,.16);
-        flex: 0 0 auto;
+    .ns-authlight__brand-logo {
+        height: 42px;
+        width: auto;
+        display: block;
     }
 
-    .ns-auth3__brand-logo img {
-        width: 92px;
-        height: 62px;
-        object-fit: cover;
-        object-position: 42% 30%;
-        transform: scale(1.32);
-    }
-
-    .ns-auth3__brand-copy {
-        display: flex;
-        flex-direction: column;
-        gap: 1px;
-        line-height: 1.1;
-    }
-
-    .ns-auth3__brand-copy strong {
-        font-size: 1rem;
-        font-weight: 900;
-        letter-spacing: -.02em;
-    }
-
-    .ns-auth3__brand-copy small {
-        color: rgba(219, 234, 254, .72);
-        font-size: .75rem;
-        font-weight: 650;
-    }
-
-    .ns-auth3__top-actions {
+    .ns-authlight__top-actions {
         display: inline-flex;
         align-items: center;
         justify-content: flex-end;
         gap: 12px;
-        min-width: 0;
     }
 
-    .ns-auth3__top-pill {
+    .ns-authlight__top-pill {
         display: inline-flex;
         align-items: center;
         gap: 8px;
         height: 36px;
         padding: 0 14px;
         border-radius: 999px;
-        color: rgba(226, 242, 255, .88);
-        background: rgba(255, 255, 255, .065);
-        border: 1px solid rgba(255, 255, 255, .13);
+        color: var(--ns-ink-700);
+        background: #fff;
+        border: 1px solid var(--ns-line);
         font-size: .78rem;
-        font-weight: 750;
+        font-weight: 700;
         white-space: nowrap;
+        box-shadow: 0 1px 2px rgba(15, 35, 80, .04);
     }
 
-    .ns-auth3__top-pill-dot {
+    .ns-authlight__top-pill-dot {
         width: 8px;
         height: 8px;
         border-radius: 50%;
         background: var(--ns-success);
-        box-shadow: 0 0 0 4px rgba(52, 211, 153, .16);
+        box-shadow: 0 0 0 4px rgba(22, 163, 74, .14);
     }
 
-    .ns-auth3__demo-link {
+    .ns-authlight__demo-link {
         display: inline-flex;
         align-items: center;
         justify-content: center;
         min-height: 38px;
         padding: 0 16px;
         border-radius: 999px;
-        color: #03111f;
+        color: #fff;
         text-decoration: none;
         font-size: .82rem;
-        font-weight: 900;
-        background: linear-gradient(135deg, #e6faff, #65e7ff 46%, #20a8ff 100%);
-        box-shadow: 0 16px 34px rgba(20, 200, 255, .18);
+        font-weight: 800;
+        background: linear-gradient(135deg, #14c8ff 0%, #0078d4 100%);
+        box-shadow: 0 10px 24px rgba(0, 120, 212, .22);
         transition: transform .16s ease, box-shadow .16s ease, filter .16s ease;
         white-space: nowrap;
     }
 
-    .ns-auth3__demo-link:hover {
+    .ns-authlight__demo-link:hover {
         transform: translateY(-1px);
-        filter: brightness(1.04);
-        box-shadow: 0 20px 44px rgba(20, 200, 255, .26);
+        filter: brightness(1.05);
+        box-shadow: 0 14px 30px rgba(0, 120, 212, .30);
     }
 
-    .ns-auth3__shell {
+    .ns-authlight__shell {
         position: relative;
         z-index: 2;
         flex: 1;
         display: grid;
-        grid-template-columns: minmax(620px, 1.16fr) minmax(430px, .84fr);
-        gap: 0;
-        min-height: calc(100vh - 122px);
+        grid-template-columns: 1.05fr .95fr;
+        min-height: calc(100vh - 120px);
     }
 
-    .ns-auth3__hero {
-        position: relative;
-        display: grid;
-        grid-template-columns: minmax(0, 1fr);
-        align-content: center;
-        gap: 26px;
-        padding: 44px 58px 42px;
-    }
-
-    .ns-auth3__hero-copy {
-        max-width: 920px;
-    }
-
-    .ns-auth3__eyebrow {
-        display: inline-flex;
-        align-items: center;
-        gap: 10px;
-        margin-bottom: 18px;
-        padding: 9px 13px;
-        border-radius: 999px;
-        color: #bff3ff;
-        background: rgba(20, 200, 255, .085);
-        border: 1px solid rgba(100, 231, 255, .19);
-        font-size: .78rem;
-        font-weight: 850;
-        letter-spacing: .015em;
-    }
-
-    .ns-auth3__eyebrow span {
-        width: 8px;
-        height: 8px;
-        border-radius: 999px;
-        background: var(--ns-cyan-300);
-        box-shadow: 0 0 0 5px rgba(100, 231, 255, .12), 0 0 22px rgba(100, 231, 255, .72);
-    }
-
-    .ns-auth3__title {
-        margin: 0;
-        max-width: 920px;
-        color: #fff;
-        font-size: clamp(2.7rem, 5vw, 5.3rem);
-        line-height: .96;
-        letter-spacing: -.068em;
-        font-weight: 950;
-        text-wrap: balance;
-        text-shadow: 0 22px 70px rgba(0, 0, 0, .32);
-    }
-
-    .ns-auth3__lead {
-        max-width: 790px;
-        margin: 20px 0 0;
-        color: rgba(226, 242, 255, .82);
-        font-size: clamp(1rem, 1.4vw, 1.2rem);
-        line-height: 1.62;
-        font-weight: 520;
-    }
-
-    .ns-auth3__promise-grid {
-        display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: 14px;
-        max-width: 960px;
-        margin-top: 28px;
-    }
-
-    .ns-auth3__promise {
+    .ns-authlight__hero {
         position: relative;
         display: flex;
-        gap: 12px;
-        min-height: 142px;
-        padding: 18px;
-        border-radius: 22px;
-        background: linear-gradient(180deg, rgba(255,255,255,.108), rgba(255,255,255,.055));
-        border: 1px solid rgba(219, 234, 254, .15);
-        box-shadow: inset 0 1px 0 rgba(255,255,255,.10), 0 24px 58px rgba(0, 0, 0, .18);
-        backdrop-filter: blur(16px);
-        -webkit-backdrop-filter: blur(16px);
-        overflow: hidden;
-    }
-
-    .ns-auth3__promise::before {
-        content: "";
-        position: absolute;
-        inset: 0 0 auto 0;
-        height: 2px;
-        background: linear-gradient(90deg, transparent, rgba(100, 231, 255, .62), transparent);
-    }
-
-    .ns-auth3__promise-icon {
-        width: 38px;
-        height: 38px;
-        display: inline-flex;
         align-items: center;
         justify-content: center;
-        border-radius: 14px;
-        color: #78ecff;
-        background: rgba(20, 200, 255, .11);
-        border: 1px solid rgba(100, 231, 255, .22);
-        flex: 0 0 auto;
+        padding: 44px 58px;
     }
 
-    .ns-auth3__promise-icon svg {
-        width: 20px;
-        height: 20px;
+    .ns-authlight__hero-logo {
+        max-width: 560px;
+        width: 100%;
     }
 
-    .ns-auth3__promise strong {
-        display: block;
-        margin-bottom: 7px;
-        color: #fff;
-        font-size: .98rem;
-        line-height: 1.15;
-        font-weight: 900;
-        letter-spacing: -.018em;
-    }
-
-    .ns-auth3__promise span {
-        display: block;
-        color: rgba(226, 242, 255, .72);
-        font-size: .84rem;
-        line-height: 1.48;
-        font-weight: 500;
-    }
-
-    .ns-auth3__visual {
-        position: relative;
-        max-width: 840px;
-        border-radius: 34px;
-        overflow: hidden;
-        border: 1px solid rgba(100, 231, 255, .21);
-        background: rgba(3, 8, 22, .58);
-        box-shadow:
-            0 34px 90px rgba(0, 0, 0, .42),
-            0 0 0 1px rgba(255,255,255,.05) inset,
-            0 0 80px rgba(0, 120, 212, .18);
-    }
-
-    .ns-auth3__visual-glow {
-        position: absolute;
-        inset: auto 12% -28% 12%;
-        height: 42%;
-        border-radius: 999px;
-        background: radial-gradient(ellipse at center, rgba(20, 200, 255, .45), transparent 72%);
-        filter: blur(18px);
-        z-index: 1;
-        pointer-events: none;
-    }
-
-    .ns-auth3__visual img {
-        display: block;
+    .ns-authlight__hero-logo img {
         width: 100%;
         height: auto;
-        aspect-ratio: 3 / 2;
-        object-fit: cover;
-        object-position: center center;
-        transform: scale(1.01);
-    }
-
-    .ns-auth3__visual-caption {
-        position: absolute;
-        left: 20px;
-        right: 20px;
-        bottom: 18px;
-        z-index: 2;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 18px;
-        padding: 15px 17px;
-        border-radius: 22px;
-        background: rgba(3, 8, 22, .62);
-        border: 1px solid rgba(255, 255, 255, .14);
-        backdrop-filter: blur(16px);
-        -webkit-backdrop-filter: blur(16px);
-    }
-
-    .ns-auth3__visual-caption strong {
-        color: #fff;
-        font-size: .98rem;
-        font-weight: 900;
-        letter-spacing: -.02em;
-    }
-
-    .ns-auth3__visual-caption span {
-        max-width: 390px;
-        color: rgba(226, 242, 255, .78);
-        font-size: .78rem;
-        line-height: 1.35;
-        text-align: right;
-    }
-
-    .ns-auth3__metrics {
-        display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: 1px;
-        max-width: 840px;
-        overflow: hidden;
-        border-radius: 24px;
-        border: 1px solid rgba(255, 255, 255, .13);
-        background: rgba(255, 255, 255, .08);
-        box-shadow: inset 0 1px 0 rgba(255,255,255,.08);
-    }
-
-    .ns-auth3__metrics div {
-        min-height: 92px;
-        padding: 18px;
-        background: rgba(3, 8, 22, .27);
-    }
-
-    .ns-auth3__metrics strong {
         display: block;
-        margin-bottom: 6px;
-        color: #fff;
-        font-size: .92rem;
-        font-weight: 900;
+        filter: drop-shadow(0 28px 60px rgba(11, 31, 60, .12));
     }
 
-    .ns-auth3__metrics span {
-        display: block;
-        color: rgba(226, 242, 255, .72);
-        font-size: .79rem;
-        line-height: 1.38;
-    }
-
-    .ns-auth3__form-side {
+    .ns-authlight__form-side {
         position: relative;
         display: flex;
         align-items: center;
         justify-content: center;
-        padding: 38px 34px;
-        border-left: 1px solid rgba(255, 255, 255, .10);
-        background:
-            radial-gradient(circle at 60% 12%, rgba(100, 231, 255, .12), transparent 32%),
-            linear-gradient(180deg, rgba(255, 255, 255, .09), rgba(255, 255, 255, .035));
-        backdrop-filter: blur(6px);
-        -webkit-backdrop-filter: blur(6px);
+        padding: 38px 44px;
     }
 
-    .ns-auth3__form-panel {
+    .ns-authlight__form-panel {
         width: 100%;
-        max-width: 470px;
+        max-width: 440px;
     }
 
-    .ns-auth3__footer {
+    .ns-authlight__footer {
         position: relative;
         z-index: 3;
         min-height: 48px;
@@ -593,90 +209,62 @@
         justify-content: space-between;
         gap: 16px;
         padding: 12px 34px;
-        color: rgba(219, 234, 254, .62);
-        border-top: 1px solid rgba(148, 163, 184, .16);
-        background: rgba(3, 8, 22, .62);
+        color: var(--ns-ink-400);
+        border-top: 1px solid var(--ns-line);
+        background: rgba(255, 255, 255, .72);
         backdrop-filter: blur(16px);
         -webkit-backdrop-filter: blur(16px);
         font-size: .76rem;
         font-weight: 600;
     }
 
-    .ns-auth3__footer-links {
+    .ns-authlight__footer-links {
         display: inline-flex;
         align-items: center;
         gap: 8px;
     }
 
-    .ns-auth3__footer a {
-        color: rgba(226, 242, 255, .74);
+    .ns-authlight__footer a {
+        color: var(--ns-ink-500);
         text-decoration: none;
-        font-weight: 750;
+        font-weight: 700;
         transition: color .15s ease;
     }
 
-    .ns-auth3__footer a:hover {
-        color: var(--ns-cyan-300);
-    }
-
-    @@media (max-width: 1320px) {
-        .ns-auth3__shell {
-            grid-template-columns: minmax(560px, 1fr) minmax(410px, .76fr);
-        }
-
-        .ns-auth3__hero {
-            padding: 38px 38px 36px;
-        }
-
-        .ns-auth3__promise-grid {
-            grid-template-columns: 1fr;
-        }
-
-        .ns-auth3__promise {
-            min-height: auto;
-        }
+    .ns-authlight__footer a:hover {
+        color: var(--ns-blue-500);
     }
 
     @@media (max-width: 1120px) {
-        .ns-auth3__shell {
+        .ns-authlight__shell {
             grid-template-columns: 1fr;
             min-height: auto;
         }
 
-        .ns-auth3__hero {
+        .ns-authlight__hero {
             display: none;
         }
 
-        .ns-auth3__form-side {
-            min-height: calc(100vh - 122px);
-            border-left: 0;
-            padding: 54px 22px;
+        .ns-authlight__form-side {
+            min-height: calc(100vh - 120px);
+            padding: 48px 22px;
         }
     }
 
     @@media (max-width: 760px) {
-        .ns-auth3__topbar {
+        .ns-authlight__topbar {
             padding: 10px 16px;
         }
 
-        .ns-auth3__brand-logo {
-            width: 42px;
-            height: 42px;
-            border-radius: 14px;
+        .ns-authlight__brand-logo {
+            height: 34px;
         }
 
-        .ns-auth3__brand-copy small,
-        .ns-auth3__top-pill {
+        .ns-authlight__top-pill {
             display: none;
         }
 
-        .ns-auth3__demo-link {
-            min-height: 34px;
-            padding: 0 12px;
-            font-size: .76rem;
-        }
-
-        .ns-auth3__footer {
+        .ns-authlight__footer {
             flex-direction: column;
             justify-content: center;
             gap: 6px;
@@ -686,19 +274,8 @@
     }
 
     @@media (max-width: 430px) {
-        .ns-auth3__brand-copy strong {
-            max-width: 128px;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-        }
-
-        .ns-auth3__demo-link {
+        .ns-authlight__demo-link {
             display: none;
-        }
-
-        .ns-auth3__form-side {
-            padding: 28px 14px;
         }
     }
 </style>
