@@ -28,11 +28,20 @@
     width: 28px;
     height: 28px;
     border-radius: 50%;
+    overflow: hidden;
     font-size: .72rem;
     font-weight: 800;
     color: #fff;
     letter-spacing: .3px;
     flex: 0 0 auto;
+}
+
+.ns-tb3__ctx-avatar-img {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    object-fit: cover;
+    display: block;
 }
 
 .ns-tb3__ctx--tenant .ns-tb3__ctx-avatar { background: linear-gradient(135deg, #2563eb, #1d4ed8); }
