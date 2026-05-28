@@ -12,6 +12,7 @@ public sealed class Company : BaseEntity
     public string LegalName { get; set; } = string.Empty;
     public string TaxId { get; set; } = string.Empty;
     public string Timezone { get; set; } = "America/Mexico_City";
+    public string? LogoUrl { get; set; }
 
     public ICollection<Branch> Branches { get; set; } = new List<Branch>();
 }
