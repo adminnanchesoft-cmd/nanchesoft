@@ -18,3 +18,7 @@ src/Nanchesoft.Web/artifacts/
 **/artifacts/publish/
 **/bin/
 **/obj/
+
+# Archivos comprimidos (artefactos, no se trackean)
+*.zip
+*.suo
