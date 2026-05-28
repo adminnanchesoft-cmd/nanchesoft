@@ -176,7 +176,16 @@
         <span class="ns-tb3__divider" aria-hidden="true"></span>
 
         <button type="button" class="ns-tb3__userpill ns-tb3__ctx" @onclick="ToggleUserMenu">
-            <span class="ns-tb3__avatar">@GetAbbrev(DisplayName)</span>
+            <span class="ns-tb3__avatar">
+                @if (!string.IsNullOrWhiteSpace(AuthState.AvatarUrl))
+                {
+                    <img src="@AuthState.AvatarUrl" alt="@DisplayName" class="ns-tb3__avatar-img" referrerpolicy="no-referrer" />
+                }
+                else
+                {
+                    @GetAbbrev(DisplayName)
+                }
+            </span>
             <svg class="ns-tb3__userpill-caret" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
                 <path d="M6 9 L12 15 L18 9" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path>
             </svg>
