@@ -1,4 +1,5 @@
 using Nanchesoft.Api.Ai;
+using Nanchesoft.Api.Auth;
 using Nanchesoft.Api.Endpoints;
 using Microsoft.EntityFrameworkCore;
 using Nanchesoft.Application.PayrollIncidentTypes;
@@ -37,6 +38,7 @@ var defaultConnection = Environment.GetEnvironmentVariable("NANCHESOFT_TEST_DB")
 
 builder.Services.AddDbContext<NanchesoftDbContext>(options =>
     options.UseNpgsql(defaultConnection));
+builder.Services.AddSingleton<IPasswordHasher, PasswordHasher>();
 builder.Services.AddScoped<INomPayrollIncidentTypeRepository, NomPayrollIncidentTypeRepository>();
 builder.Services.AddScoped<INomPayrollIncidentTypeService, NomPayrollIncidentTypeService>();
 
@@ -109,7 +111,7 @@ using (var scope = app.Services.CreateScope())
     await ProductionSeeder.SeedAsync(dbContext);
 }
 
-app.MapPost("/api/auth/login", async (AuthLoginRequest request, NanchesoftDbContext db) =>
+app.MapPost("/api/auth/login", async (AuthLoginRequest request, NanchesoftDbContext db, IPasswordHasher passwordHasher) =>
 {
     var usernameOrEmail = (request.UsernameOrEmail ?? string.Empty).Trim();
     var password = request.Password ?? string.Empty;
@@ -121,7 +123,7 @@ app.MapPost("/api/auth/login", async (AuthLoginRequest request, NanchesoftDbCont
             x.IsActive &&
             !x.IsLocked);
 
-    if (user is null || password != "Admin123*")
+    if (user is null || !passwordHasher.Verify(password, user.PasswordHash))
     {
         return Results.Unauthorized();
     }
@@ -202,6 +204,28 @@ app.MapPost("/api/auth/login", async (AuthLoginRequest request, NanchesoftDbCont
         branchName = branch?.Name ?? string.Empty,
         requiresTenantSelection = false
     });
+});
+
+app.MapPost("/api/auth/change-password", async (AuthChangePasswordRequest request, NanchesoftDbContext db, IPasswordHasher passwordHasher) =>
+{
+    if (request.NewPassword != request.ConfirmPassword)
+        return Results.BadRequest(new { message = "Las contraseñas no coinciden." });
+
+    if (string.IsNullOrWhiteSpace(request.NewPassword) || request.NewPassword.Length < 8)
+        return Results.BadRequest(new { message = "La nueva contraseña debe tener al menos 8 caracteres." });
+
+    var user = await db.Users.FirstOrDefaultAsync(x => x.Id == request.UserId);
+    if (user is null)
+        return Results.BadRequest(new { message = "Usuario no encontrado." });
+
+    if (!passwordHasher.Verify(request.CurrentPassword, user.PasswordHash))
+        return Results.BadRequest(new { message = "La contraseña actual es incorrecta." });
+
+    user.PasswordHash = passwordHasher.Hash(request.NewPassword);
+    user.MustChangePassword = false;
+    await db.SaveChangesAsync();
+
+    return Results.Ok(new { message = "Contraseña actualizada correctamente." });
 });
 
 app.MapPostalCodeEndpoints();
@@ -316,4 +340,12 @@ public sealed class AuthLoginRequest
 {
     public string UsernameOrEmail { get; set; } = string.Empty;
     public string Password { get; set; } = string.Empty;
+}
+
+public sealed class AuthChangePasswordRequest
+{
+    public Guid UserId { get; set; }
+    public string CurrentPassword { get; set; } = string.Empty;
+    public string NewPassword { get; set; } = string.Empty;
+    public string ConfirmPassword { get; set; } = string.Empty;
 }
