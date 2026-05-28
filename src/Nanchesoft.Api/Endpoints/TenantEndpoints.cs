@@ -2,6 +2,8 @@ using Microsoft.EntityFrameworkCore;
 using Nanchesoft.Domain.Entities;
 using Nanchesoft.Domain.Enums;
 using Nanchesoft.Persistence.Context;
+using SixLabors.ImageSharp;
+using SixLabors.ImageSharp.Processing;
 
 namespace Nanchesoft.Api.Endpoints;
 
@@ -16,6 +18,7 @@ public static class TenantEndpoints
         group.MapGet("/selector", GetSelectorAsync);
         group.MapPost("/", CreateTenantAsync);
         group.MapPost("/{id:guid}/seed-roles", SeedRolesAsync);
+        group.MapPost("/{id:guid}/logo", UploadTenantLogoAsync).DisableAntiforgery();
         group.MapPut("/{id:guid}", UpdateTenantAsync);
         group.MapDelete("/{id:guid}", DeleteTenantAsync);
 
@@ -286,6 +289,54 @@ public static class TenantEndpoints
         return Results.Ok(new { success = true });
     }
 
+
+    private static async Task<IResult> UploadTenantLogoAsync(
+        Guid id,
+        IFormFile file,
+        HttpContext httpContext,
+        NanchesoftDbContext db,
+        IConfiguration configuration)
+    {
+        if (!IsPlatformOwner(httpContext))
+            return Results.StatusCode(403);
+
+        if (file is null || file.Length == 0)
+            return Results.BadRequest(new { message = "No se recibió ninguna imagen." });
+
+        const long maxBytes = 5 * 1024 * 1024;
+        if (file.Length > maxBytes)
+            return Results.BadRequest(new { message = "La imagen no debe superar 5 MB." });
+
+        var allowed = new[] { "image/jpeg", "image/png", "image/webp" };
+        if (!allowed.Contains(file.ContentType))
+            return Results.BadRequest(new { message = "Formato no permitido. Usa JPG, PNG o WEBP." });
+
+        var tenant = await db.Tenants.FirstOrDefaultAsync(x => x.Id == id);
+        if (tenant is null)
+            return Results.NotFound(new { message = "No se encontró el tenant." });
+
+        var root = configuration["Uploads:RootPath"] ?? "/opt/nanchesoft/uploads";
+        var tenantsDir = Path.Combine(root, "tenants");
+        Directory.CreateDirectory(tenantsDir);
+        var filePath = Path.Combine(tenantsDir, $"{id}.jpg");
+
+        using (var image = await Image.LoadAsync(file.OpenReadStream()))
+        {
+            var size = Math.Min(image.Width, image.Height);
+            var x = (image.Width - size) / 2;
+            var y = (image.Height - size) / 2;
+            image.Mutate(ctx => ctx
+                .Crop(new Rectangle(x, y, size, size))
+                .Resize(256, 256));
+            var encoder = new SixLabors.ImageSharp.Formats.Jpeg.JpegEncoder { Quality = 85 };
+            await image.SaveAsJpegAsync(filePath, encoder);
+        }
+
+        tenant.LogoUrl = $"/uploads/tenants/{id}.jpg";
+        await db.SaveChangesAsync();
+
+        return Results.Ok(new { logoUrl = tenant.LogoUrl });
+    }
 
     private static bool IsPlatformOwner(HttpContext httpContext)
     {
