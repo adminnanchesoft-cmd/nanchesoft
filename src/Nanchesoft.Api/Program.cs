@@ -202,7 +202,8 @@ app.MapPost("/api/auth/login", async (AuthLoginRequest request, NanchesoftDbCont
         companyName = company?.Name ?? string.Empty,
         branchId = branch?.Id,
         branchName = branch?.Name ?? string.Empty,
-        requiresTenantSelection = false
+        requiresTenantSelection = false,
+        mustChangePassword = user.MustChangePassword
     });
 });
 
