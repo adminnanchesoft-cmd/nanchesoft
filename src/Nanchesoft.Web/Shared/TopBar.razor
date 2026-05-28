@@ -141,20 +141,34 @@
 
         <span class="ns-tb3__divider" aria-hidden="true"></span>
 
-        <div class="ns-tb3__contextchips" role="group" aria-label="Contexto activo">
-            <span class="ns-tb3__contextchip" title="Tenant">
-                <span class="ns-tb3__contextchip-eyebrow">Tenant</span>
-                <span class="ns-tb3__contextchip-value">@TenantName</span>
+        <div class="ns-tb3__ctxcluster" role="group" aria-label="Contexto activo">
+            <span class="ns-tb3__ctx ns-tb3__ctx--tenant" tabindex="0">
+                <span class="ns-tb3__ctx-avatar" aria-hidden="true">@GetAbbrev(TenantName)</span>
+                <span class="ns-tb3__ctx-label">
+                    <span class="ns-tb3__ctx-eyebrow">Tenant</span>
+                    <span class="ns-tb3__ctx-value">@TenantName</span>
+                </span>
+                <span class="ns-tb3__ctx-tip" role="tooltip">Tenant: @TenantName</span>
             </span>
-            <span class="ns-tb3__contextchip" title="Empresa">
-                <span class="ns-tb3__contextchip-eyebrow">Empresa</span>
-                <span class="ns-tb3__contextchip-value">@CompanyName</span>
+
+            <span class="ns-tb3__ctx ns-tb3__ctx--company" tabindex="0">
+                <span class="ns-tb3__ctx-avatar" aria-hidden="true">@GetAbbrev(CompanyName)</span>
+                <span class="ns-tb3__ctx-label">
+                    <span class="ns-tb3__ctx-eyebrow">Empresa</span>
+                    <span class="ns-tb3__ctx-value">@CompanyName</span>
+                </span>
+                <span class="ns-tb3__ctx-tip" role="tooltip">Empresa: @CompanyName</span>
             </span>
+
             @if (HasBranch)
             {
-                <span class="ns-tb3__contextchip" title="Sucursal">
-                    <span class="ns-tb3__contextchip-eyebrow">Sucursal</span>
-                    <span class="ns-tb3__contextchip-value">@BranchName</span>
+                <span class="ns-tb3__ctx ns-tb3__ctx--branch" tabindex="0">
+                    <span class="ns-tb3__ctx-avatar" aria-hidden="true">@GetAbbrev(BranchName)</span>
+                    <span class="ns-tb3__ctx-label">
+                        <span class="ns-tb3__ctx-eyebrow">Sucursal</span>
+                        <span class="ns-tb3__ctx-value">@BranchName</span>
+                    </span>
+                    <span class="ns-tb3__ctx-tip" role="tooltip">Sucursal: @BranchName</span>
                 </span>
             }
         </div>
@@ -349,6 +363,18 @@
         UserMenuOpen = false;
         await AuthService.LogoutAsync();
         NavigationManager.NavigateTo("/login", forceLoad: true);
+    }
+
+    private static string GetAbbrev(string? name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return "—";
+        var trimmed = name.Trim();
+        var parts = trimmed.Split(new[] { ' ', '-', '_' }, StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length >= 2)
+            return (parts[0][0].ToString() + parts[1][0].ToString()).ToUpperInvariant();
+        return trimmed.Length >= 2
+            ? trimmed.Substring(0, 2).ToUpperInvariant()
+            : trimmed.ToUpperInvariant();
     }
 
     private static string Resolve(string? primary, string? fallback, string emptyText)
