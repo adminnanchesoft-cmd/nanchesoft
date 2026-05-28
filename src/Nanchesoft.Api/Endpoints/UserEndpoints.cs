@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Nanchesoft.Api.Auth;
 using Nanchesoft.Domain.Entities;
 using Nanchesoft.Domain.Enums;
 using Nanchesoft.Persistence.Context;
@@ -105,7 +106,7 @@ public static class UserEndpoints
         return Results.Ok(roles);
     }
 
-    private static async Task<IResult> CreateUserAsync(HttpContext httpContext, CreateOrUpdateUserRequest request, NanchesoftDbContext db)
+    private static async Task<IResult> CreateUserAsync(HttpContext httpContext, CreateOrUpdateUserRequest request, NanchesoftDbContext db, IPasswordHasher passwordHasher)
     {
         var tenantScopeId = ApiTenantScope.ResolveTenantId(httpContext);
         if (!ApiTenantScope.IsPlatformOwner(httpContext) && tenantScopeId.HasValue)
@@ -147,7 +148,7 @@ public static class UserEndpoints
             FirstName = firstName,
             LastName = lastName,
             Phone = phone,
-            PasswordHash = "Admin123*",
+            PasswordHash = passwordHasher.Hash("Admin123*"),
             MustChangePassword = request.MustChangePassword,
             IsLocked = request.IsLocked,
             IsActive = request.IsActive,
