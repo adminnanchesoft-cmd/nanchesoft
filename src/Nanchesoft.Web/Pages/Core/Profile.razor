@@ -33,7 +33,7 @@
                     <span>@(_uploadingAvatar ? "Subiendo…" : "Cambiar foto")</span>
                     <InputFile OnChange="OnAvatarSelected" accept="image/*" disabled="@_uploadingAvatar" />
                 </label>
-                <button type="button" class="ns-profile__cambtn" @onclick="OpenCameraAsync" disabled="@(_uploadingAvatar || _cameraOpen)">
+                <button type="button" class="ns-profile__btn ns-profile__btn--secondary" @onclick="OpenCameraAsync" disabled="@(_uploadingAvatar || _cameraOpen)">
                     Tomar foto
                 </button>
             </div>
