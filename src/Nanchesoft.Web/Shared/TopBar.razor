@@ -9,6 +9,7 @@
 @inject AppState AppState
 @inject AuthService AuthService
 @inject IJSRuntime JS
+@inject IHttpClientFactory HttpClientFactory
 
 <header class="ns-azure-topbar ns-azure-topbar--enhanced ns-tb3" @onclick:stopPropagation="true">
     <div class="ns-azure-topbar__left ns-tb3__left">
@@ -143,7 +144,14 @@
 
         <div class="ns-tb3__ctxcluster" role="group" aria-label="Contexto activo">
             <span class="ns-tb3__ctx ns-tb3__ctx--tenant" tabindex="0">
-                <span class="ns-tb3__ctx-avatar" aria-hidden="true">@GetAbbrev(TenantName)</span>
+                @if (!string.IsNullOrWhiteSpace(_tenantLogoUrl))
+                {
+                    <span class="ns-tb3__ctx-avatar"><img src="@_tenantLogoUrl" alt="@TenantName" class="ns-tb3__ctx-avatar-img" referrerpolicy="no-referrer" /></span>
+                }
+                else
+                {
+                    <span class="ns-tb3__ctx-avatar" aria-hidden="true">@GetAbbrev(TenantName)</span>
+                }
                 <span class="ns-tb3__ctx-label">
                     <span class="ns-tb3__ctx-eyebrow">Tenant</span>
                     <span class="ns-tb3__ctx-value">@TenantName</span>
@@ -152,7 +160,14 @@
             </span>
 
             <span class="ns-tb3__ctx ns-tb3__ctx--company" tabindex="0">
-                <span class="ns-tb3__ctx-avatar" aria-hidden="true">@GetAbbrev(CompanyName)</span>
+                @if (!string.IsNullOrWhiteSpace(_companyLogoUrl))
+                {
+                    <span class="ns-tb3__ctx-avatar"><img src="@_companyLogoUrl" alt="@CompanyName" class="ns-tb3__ctx-avatar-img" referrerpolicy="no-referrer" /></span>
+                }
+                else
+                {
+                    <span class="ns-tb3__ctx-avatar" aria-hidden="true">@GetAbbrev(CompanyName)</span>
+                }
                 <span class="ns-tb3__ctx-label">
                     <span class="ns-tb3__ctx-eyebrow">Empresa</span>
                     <span class="ns-tb3__ctx-value">@CompanyName</span>
@@ -247,10 +262,18 @@
     private bool HasResultsOrSuggestions =>
         SearchFocused && (SearchResults.Count > 0 || (string.IsNullOrWhiteSpace(SearchText) && Recents.Count > 0));
 
+    private string? _tenantLogoUrl;
+    private string? _companyLogoUrl;
+
     protected override void OnInitialized()
     {
         AuthState.OnChange += HandleStateChanged;
         RefreshRecents();
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadContextLogosAsync();
     }
 
     public void Dispose()
@@ -261,6 +284,52 @@
     private void HandleStateChanged()
     {
         _ = InvokeAsync(StateHasChanged);
+        _ = InvokeAsync(LoadContextLogosAsync);
+    }
+
+    private async Task LoadContextLogosAsync()
+    {
+        try
+        {
+            if (AppState.CurrentCompanyId.HasValue)
+            {
+                var client = HttpClientFactory.CreateClient("Nanchesoft.Api");
+                var companies = await client.GetFromJsonAsync<List<Nanchesoft.Web.Services.Companies.CompanyRowDto>>("/api/organization/companies");
+                var company = companies?.FirstOrDefault(x => x.CompanyId == AppState.CurrentCompanyId.Value);
+                _companyLogoUrl = company?.LogoUrl;
+            }
+            else
+            {
+                _companyLogoUrl = null;
+            }
+        }
+        catch
+        {
+            // si falla, no se muestra el logo
+        }
+
+        try
+        {
+            if (AuthState.IsPlatformOwner && AppState.CurrentTenantId.HasValue)
+            {
+                var client = HttpClientFactory.CreateClient("Nanchesoft.Api");
+                client.DefaultRequestHeaders.Remove("X-Nanchesoft-Platform-Owner");
+                client.DefaultRequestHeaders.Add("X-Nanchesoft-Platform-Owner", "true");
+                var tenants = await client.GetFromJsonAsync<List<Nanchesoft.Web.Services.Platform.TenantRowDto>>("/api/core/tenants");
+                var tenant = tenants?.FirstOrDefault(x => x.TenantId == AppState.CurrentTenantId.Value);
+                _tenantLogoUrl = tenant?.LogoUrl;
+            }
+            else
+            {
+                _tenantLogoUrl = null;
+            }
+        }
+        catch
+        {
+            // si falla, no se muestra el logo
+        }
+
+        StateHasChanged();
     }
 
     private void RefreshRecents()
