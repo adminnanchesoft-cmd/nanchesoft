@@ -8,6 +8,7 @@ public sealed class Tenant : BaseEntity
     public string Code { get; set; } = string.Empty;
     public string Name { get; set; } = string.Empty;
     public string LegalName { get; set; } = string.Empty;
+    public string? LogoUrl { get; set; }
     public TenantStatus Status { get; set; } = TenantStatus.Active;
 
     public Guid PlanId { get; set; }
